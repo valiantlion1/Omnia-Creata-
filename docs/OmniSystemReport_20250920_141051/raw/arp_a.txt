@@ -1,0 +1,39 @@
+﻿
+Interface: 192.168.1.199 --- 0x11
+  Internet Address      Physical Address      Type
+  192.168.1.1           80-ea-0b-73-f7-58     dynamic   
+  192.168.1.255         ff-ff-ff-ff-ff-ff     static    
+  224.0.0.22            01-00-5e-00-00-16     static    
+  224.0.0.251           01-00-5e-00-00-fb     static    
+  224.0.0.252           01-00-5e-00-00-fc     static    
+  224.184.149.15        01-00-5e-38-95-0f     static    
+  225.176.117.89        01-00-5e-30-75-59     static    
+  227.225.175.170       01-00-5e-61-af-aa     static    
+  231.0.64.236          01-00-5e-00-40-ec     static    
+  231.249.60.114        01-00-5e-79-3c-72     static    
+  232.32.0.0            01-00-5e-20-00-00     static    
+  234.47.127.96         01-00-5e-2f-7f-60     static    
+  236.26.84.34          01-00-5e-1a-54-22     static    
+  236.228.240.3         01-00-5e-64-f0-03     static    
+  239.192.152.143       01-00-5e-40-98-8f     static    
+  239.255.255.250       01-00-5e-7f-ff-fa     static    
+  255.255.255.255       ff-ff-ff-ff-ff-ff     static    
+
+Interface: 172.22.128.1 --- 0x18
+  Internet Address      Physical Address      Type
+  172.22.143.255        ff-ff-ff-ff-ff-ff     static    
+  224.0.0.22            01-00-5e-00-00-16     static    
+  224.0.0.251           01-00-5e-00-00-fb     static    
+  224.184.149.15        01-00-5e-38-95-0f     static    
+  225.176.117.89        01-00-5e-30-75-59     static    
+  227.225.175.170       01-00-5e-61-af-aa     static    
+  231.0.64.236          01-00-5e-00-40-ec     static    
+  231.249.60.114        01-00-5e-79-3c-72     static    
+  232.32.0.0            01-00-5e-20-00-00     static    
+  234.47.127.96         01-00-5e-2f-7f-60     static    
+  236.26.84.34          01-00-5e-1a-54-22     static    
+  236.228.240.3         01-00-5e-64-f0-03     static    
+  239.192.152.143       01-00-5e-40-98-8f     static    
+  239.255.255.250       01-00-5e-7f-ff-fa     static    
+  255.255.255.255       ff-ff-ff-ff-ff-ff     static    
+

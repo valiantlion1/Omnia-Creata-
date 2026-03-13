@@ -1,0 +1,268 @@
+{
+  "common": {
+    "appTitle": "Omnia Creata Studio",
+    "tagline": "Estudio Creativo de IA",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "confirm": "Confirmar",
+    "yes": "Sí",
+    "no": "No"
+  },
+  "navigation": {
+    "home": "Inicio",
+    "studio": "Estudio",
+    "gallery": "Galería",
+    "community": "Comunidad",
+    "profile": "Perfil",
+    "settings": "Configuración",
+    "features": "Características",
+    "pricing": "Precios",
+    "support": "Soporte"
+  },
+  "landing": {
+    "enterStudio": "Entrar al Estudio",
+    "heroTitle": "Crea el",
+    "heroTitleHighlight": "Futuro",
+    "heroDescription": "Experimenta el estudio de IA moderno con Omnia Creata. De prompt a imagen, resultados profesionales con un clic. Controles compactos, vista previa instantánea.",
+    "getStarted": "Comenzar",
+    "learnMore": "Saber más"
+  },
+  "home": {
+    "heroSlides": {
+      "slide1": {
+        "title": "Descubre tu Creatividad con IA",
+        "subtitle": "Transforma tu imaginación en realidad con Omnia Creata Studio",
+        "description": "Crea imágenes de calidad profesional con los modelos de IA más avanzados. Creatividad ilimitada, posibilidades ilimitadas.",
+        "cta": "Comenzar Ahora"
+      },
+      "slide2": {
+        "title": "Resultados Profesionales, Fácil de Usar",
+        "subtitle": "Plataforma de grado profesional con tecnología de vanguardia",
+        "description": "Generación de imágenes rápida y segura con modelos de IA locales. Tus datos se quedan contigo, tu privacidad está protegida.",
+        "cta": "Explorar Características"
+      },
+      "slide3": {
+        "title": "Crece con el Poder de la Comunidad",
+        "subtitle": "Aprende y desarrolla con miles de creadores",
+        "description": "Lleva tu creatividad al siguiente nivel con plantillas, consejos y trabajos inspiradores.",
+        "cta": "Unirse a la Comunidad"
+      }
+    },
+    "features": {
+      "title": "¿Por qué Omnia Creata?",
+      "subtitle": "Descubre tu creatividad con la plataforma de generación de imágenes con IA más avanzada",
+      "feature1": {
+        "title": "Rápido y Potente",
+        "description": "Genera imágenes de calidad profesional en segundos con modelos de IA locales"
+      },
+      "feature2": {
+        "title": "Seguro y Privado",
+        "description": "Tus datos se quedan completamente contigo. Tu privacidad es nuestra prioridad"
+      },
+      "feature3": {
+        "title": "Creatividad Ilimitada",
+        "description": "Empuja los límites de tu imaginación con miles de modelos y plantillas"
+      }
+    },
+    "pricing": {
+      "title": "Elige tu Plan Perfecto",
+      "subtitle": "Opciones de membresía flexibles diseñadas para tus necesidades",
+      "popular": "Más Popular",
+      "plans": {
+        "eco": {
+          "name": "Eco",
+          "description": "Perfecto para empezar",
+          "features": [
+            "100 créditos/mes",
+            "Modelos básicos",
+            "Calidad estándar",
+            "Soporte de comunidad",
+            "Plantillas básicas"
+          ],
+          "cta": "Comenzar Gratis"
+        },
+        "pro": {
+          "name": "Pro",
+          "description": "Para creadores",
+          "features": [
+            "1000 créditos/mes",
+            "Todos los modelos",
+            "Alta calidad",
+            "Soporte prioritario",
+            "Configuraciones avanzadas",
+            "Plantillas premium",
+            "Descarga masiva"
+          ],
+          "cta": "Elegir Plan"
+        },
+        "studio": {
+          "name": "Studio",
+          "description": "Para profesionales",
+          "features": [
+            "2500 créditos/mes",
+            "Modelos ilimitados",
+            "Calidad ultra",
+            "Soporte 24/7",
+            "Acceso API",
+            "Uso comercial",
+            "Modelos personalizados",
+            "Procesamiento prioritario"
+          ],
+          "cta": "Elegir Plan"
+        }
+      }
+    },
+    "templates": {
+      "title": "Plantillas Listas",
+      "subtitle": "Configuraciones preoptimizadas para resultados profesionales",
+      "categories": {
+        "all": "Todas",
+        "portrait": "Retrato",
+        "landscape": "Paisaje",
+        "anime": "Anime",
+        "scifi": "Ciencia Ficción",
+        "fantasy": "Fantasía",
+        "abstract": "Abstracto"
+      },
+      "templateList": {
+        "portraitPhoto": {
+          "name": "Fotografía de Retrato",
+          "description": "Configuraciones optimizadas para fotos de retrato profesionales"
+        },
+        "landscapePhoto": {
+          "name": "Fotografía de Paisaje",
+          "description": "Configuraciones ideales para fotos de naturaleza y paisajes"
+        },
+        "animeStyle": {
+          "name": "Estilo Anime",
+          "description": "Configuraciones especiales para personajes de anime y manga"
+        },
+        "cyberpunk": {
+          "name": "Cyberpunk",
+          "description": "Visuales futuristas y temáticos de cyberpunk"
+        },
+        "fantasyArt": {
+          "name": "Arte de Fantasía",
+          "description": "Plantilla para mundos mágicos y de fantasía"
+        },
+        "minimalist": {
+          "name": "Minimalista",
+          "description": "Diseños limpios y minimalistas"
+        }
+      },
+      "useTemplate": "Usar Plantilla",
+      "usageCount": "usos"
+    },
+    "community": {
+      "title": "De la Galería de la Comunidad",
+      "subtitle": "Inspírate con trabajos increíbles creados por nuestros usuarios",
+      "viewAll": "Ver Galería Completa"
+    },
+    "cta": {
+      "title": "¿Listo para Descubrir tu Creatividad?",
+      "subtitle": "Experimenta el poder de la generación de imágenes con IA con Omnia Creata Studio. Comienza ahora y convierte tu imaginación en realidad.",
+      "startFree": "Comenzar Gratis",
+      "exploreFeatures": "Explorar Características"
+    }
+  },
+  "studio": {
+    "title": "Estudio",
+    "subtitle": "Crea imágenes con modelos de IA locales",
+    "modelSelection": "Selección de Modelo",
+    "settings": "Configuraciones",
+    "imageEditing": "Edición de Imagen",
+    "preview": "Panel de Vista Previa",
+    "prompt": {
+      "positive": "Prompt Positivo",
+      "negative": "Prompt Negativo",
+      "placeholder": "Describe la imagen que quieres crear en detalle...",
+      "negativePlaceholder": "Especifica elementos que no quieres...",
+      "suggestions": "Sugerencias de Prompt",
+      "categories": {
+        "portrait": "Retrato",
+        "landscape": "Paisaje",
+        "fantasy": "Fantasía",
+        "scifi": "Ciencia Ficción",
+        "anime": "Anime"
+      }
+    },
+    "generation": {
+      "aspectRatio": "Relación de Aspecto",
+      "steps": "Pasos",
+      "cfgScale": "Escala CFG",
+      "seed": "Semilla",
+      "randomize": "Aleatorizar",
+      "sampler": "Muestreador",
+      "scheduler": "Programador",
+      "generate": "Generar Imagen",
+      "generating": "Generando...",
+      "progress": "Progreso",
+      "selectModel": "¡Por favor selecciona un modelo y prompt!",
+      "error": "¡Error de generación de imagen!"
+    },
+    "editing": {
+      "hdr": "HDR",
+      "brightness": "Brillo",
+      "contrast": "Contraste",
+      "whitePoint": "Punto Blanco",
+      "saturation": "Saturación",
+      "vibrance": "Vibración",
+      "reset": "Restablecer"
+    },
+    "previewPanel": {
+      "placeholder": "La imagen aparecerá aquí",
+      "instruction": "Selecciona un modelo y escribe un prompt para comenzar"
+    }
+  },
+  "profile": {
+    "title": "Perfil",
+    "subtitle": "Gestiona la información de tu cuenta y configuraciones",
+    "tabs": {
+      "profile": "Perfil",
+      "membership": "Membresía",
+      "settings": "Configuraciones",
+      "history": "Historial"
+    },
+    "profileTab": {
+      "displayName": "Nombre de Visualización",
+      "username": "Nombre de Usuario",
+      "email": "Correo Electrónico",
+      "memberSince": "Miembro desde",
+      "editProfile": "Editar Perfil",
+      "totalImages": "Imágenes Totales",
+      "remainingCredits": "Créditos Restantes",
+      "totalCreditsUsed": "Créditos Totales Usados",
+      "favoriteModel": "Modelo Favorito"
+    },
+    "membershipTab": {
+      "currentPlan": "Tu Plan Actual",
+      "otherPlans": "Otros Planes",
+      "upgrade": "Actualizar"
+    },
+    "settingsTab": {
+      "accountSettings": "Configuraciones de Cuenta",
+      "emailNotifications": "Notificaciones por Correo",
+      "autoSave": "Guardado Automático",
+      "autoSaveDesc": "Guardar automáticamente las imágenes generadas",
+      "privateImages": "Imágenes Privadas",
+      "privateImagesDesc": "Mantener las imágenes generadas privadas",
+      "security": "Seguridad",
+      "changePassword": "Cambiar Contraseña",
+      "twoFactor": "Autenticación de Dos Factores"
+    },
+    "historyTab": {
+      "recentActivity": "Actividad Reciente",
+      "imageCreated": "Imagen creada",
+      "hoursAgo": "horas atrás"
+    }
+  }
+}

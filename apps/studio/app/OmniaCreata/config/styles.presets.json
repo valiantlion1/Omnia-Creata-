@@ -1,0 +1,28 @@
+{
+  "categories": [
+    "photoreal", "cinematic", "product/portrait", "fashion", "anime", "illustration", "concept", "cyberpunk", "minimal", "retro/film", "low-poly"
+  ],
+  "presets": [
+    {
+      "name": "Photoreal – Clean Studio",
+      "category": "photoreal",
+      "prompt": "ultra-detailed, clean studio lighting, 85mm lens, f/1.8 shallow depth of field, realistic skin texture, soft shadows, color-accurate, calibrated white balance",
+      "negative": "overprocessed, plastic skin, low-res, jpeg artifacts, blurry, blown highlights, harsh shadows",
+      "params": { "steps": 28, "sampler": "DPM++ 2M Karras", "cfg": 5.5, "size": "1024x1024" }
+    },
+    {
+      "name": "Cinematic – Moody",
+      "category": "cinematic",
+      "prompt": "cinematic scene, moody lighting, volumetric fog, 35mm lens, film grain, dramatic contrast, color grading teal & orange",
+      "negative": "flat lighting, washed out colors, low dynamic range, banding",
+      "params": { "steps": 30, "sampler": "DPM++ 2M Karras", "cfg": 6.5, "size": "1024x1024" }
+    },
+    {
+      "name": "Anime – Clean Lines",
+      "category": "anime",
+      "prompt": "clean lineart, vibrant colors, cel shading, expressive eyes, dynamic composition, high contrast",
+      "negative": "muddy colors, messy lineart, low-res, off-model",
+      "params": { "steps": 24, "sampler": "Euler a", "cfg": 6.0, "size": "1024x1024" }
+    }
+  ]
+}

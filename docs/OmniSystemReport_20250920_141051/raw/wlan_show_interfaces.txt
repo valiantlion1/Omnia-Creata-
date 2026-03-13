@@ -1,0 +1,29 @@
+﻿
+There is 1 interface on the system: 
+
+    Name                   : Wi-Fi
+    Description            : MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter
+    GUID                   : a61bb5dc-b9e5-419a-8c93-fb3dc635e7fe
+    Physical address       : c0:bf:be:5b:46:3d
+    Interface type         : Primary
+    State                  : connected
+    SSID                   : ugabuga5G
+    AP BSSID               : 80:ea:0b:73:f7:5a
+    Band                   : 5 GHz
+    Channel                : 104
+    Connected Akm-cipher   : [ akm = 00-0f-ac:02, cipher =  00-0f-ac:04 ]
+    Network type           : Infrastructure
+    Radio type             : 802.11ax
+    Authentication         : WPA2-Personal
+    Cipher                 : CCMP
+    Connection mode        : Auto Connect
+    Receive rate (Mbps)    : 1201
+    Transmit rate (Mbps)   : 1201
+    Signal                 : 79% 
+    Rssi                   : -57
+    Profile                : ugabuga5G 
+    QoS MSCS Configured         : 0
+    QoS Map Configured          : 0
+    QoS Map Allowed by Policy   : 0
+
+

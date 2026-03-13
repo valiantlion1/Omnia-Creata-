@@ -1,0 +1,65 @@
+{
+  "default": "noir_teal",
+  "themes": [
+    {
+      "id": "noir_teal",
+      "name": "Noir Teal",
+      "vars": {
+        "--bg": "#0b0f14",
+        "--panel": "#0f1720b3",
+        "--text": "#e5e7eb",
+        "--muted": "#9ca3af",
+        "--accent": "#14b8a6",
+        "--accent-2": "#7c3aed"
+      }
+    },
+    {
+      "id": "electric_violet",
+      "name": "Electric Violet",
+      "vars": {
+        "--bg": "#0d0a12",
+        "--panel": "#151021b3",
+        "--text": "#f3f4f6",
+        "--muted": "#a3a3a3",
+        "--accent": "#a78bfa",
+        "--accent-2": "#22d3ee"
+      }
+    },
+    {
+      "id": "solar_amber",
+      "name": "Solar Amber",
+      "vars": {
+        "--bg": "#0f0b07",
+        "--panel": "#1a130db3",
+        "--text": "#f8fafc",
+        "--muted": "#a8a29e",
+        "--accent": "#f59e0b",
+        "--accent-2": "#10b981"
+      }
+    },
+    {
+      "id": "frost_cyan",
+      "name": "Frost Cyan",
+      "vars": {
+        "--bg": "#061017",
+        "--panel": "#0b1a22b3",
+        "--text": "#e6f6ff",
+        "--muted": "#94a3b8",
+        "--accent": "#06b6d4",
+        "--accent-2": "#8b5cf6"
+      }
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "vars": {
+        "--bg": "#f7fafc",
+        "--panel": "#ffffffcc",
+        "--text": "#0b0f14",
+        "--muted": "#4b5563",
+        "--accent": "#0ea5e9",
+        "--accent-2": "#7c3aed"
+      }
+    }
+  ]
+}

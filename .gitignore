@@ -1,0 +1,42 @@
+# OMNIACREATA Root GitIgnore
+
+# Large binary files
+*.hprof
+gradle-temp/
+*.jar
+
+# System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+
+# Build and Temp folders
+temp/
+backups/
+archive/
+
+# Node/Python specifics
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables
+.env
+.env.local
+
+# Operating System Logs
+*.log
+
+# Android build folders
+build/
+.gradle/
+.idea/
+

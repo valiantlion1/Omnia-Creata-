@@ -1,0 +1,652 @@
+{
+  "common": {
+    "appTitle": "Omnia Creata",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "close": "Close"
+  },
+  "navigation": {
+    "production": "Production",
+    "promptStudio": "Prompt Studio",
+    "models": "Models",
+    "explore": "Explore",
+    "gallery": "Gallery",
+    "settings": "Settings",
+    "txt2img": "Text to Image",
+    "img2img": "Image to Image",
+    "lora": "LoRA",
+    "presets": "Presets"
+  },
+  "nav": {
+    "home": "Home",
+    "studio": "Studio",
+    "models": "Models",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "home": {
+    "heroSlides": {
+      "slide1": {
+        "title": "Discover Your Creativity with AI",
+        "subtitle": "Transform your imagination into reality with Omnia Creata Studio",
+        "description": "Create professional-quality images with the most advanced AI models. Unlimited creativity, unlimited possibilities.",
+        "cta": "Get Started Now"
+      },
+      "slide2": {
+        "title": "Professional AI Image Generation",
+        "subtitle": "Advanced tools for creative professionals",
+        "description": "Access cutting-edge AI models with professional-grade controls and customization options.",
+        "cta": "Explore Studio"
+      },
+      "slide3": {
+        "title": "Your Creative Vision, Realized",
+        "subtitle": "From concept to creation in seconds",
+        "description": "Turn your ideas into stunning visuals with our intuitive AI-powered creative suite.",
+        "cta": "Start Creating"
+      }
+    },
+    "features": {
+      "title": "Why Choose Omnia Creata?",
+      "subtitle": "Powerful features designed for creators",
+      "items": {
+        "localProcessing": {
+          "title": "Local Processing",
+          "description": "Your data stays on your device. Complete privacy and security."
+        },
+        "advancedModels": {
+          "title": "Advanced AI Models",
+          "description": "Access to the latest and most powerful image generation models."
+        },
+        "professionalTools": {
+          "title": "Professional Tools",
+          "description": "Fine-tune every aspect of your creations with advanced controls."
+        },
+        "unlimitedCreation": {
+          "title": "Unlimited Creation",
+          "description": "No limits on generations. Create as much as you want."
+        }
+      }
+    },
+    "community": {
+      "title": "Community Showcase",
+      "subtitle": "Discover amazing creations from our community",
+      "images": {
+        "0": {
+          "title": "Digital Art Masterpiece"
+        },
+        "1": {
+          "title": "Fantasy Landscape"
+        },
+        "2": {
+          "title": "Space Adventure"
+        },
+        "3": {
+          "title": "Portrait Study"
+        },
+        "4": {
+          "title": "Abstract Creation"
+        },
+        "5": {
+          "title": "Surreal Art"
+        }
+      }
+    },
+    "templates": {
+      "title": "Quick Start Templates",
+      "subtitle": "Get started quickly with pre-configured templates",
+      "items": {
+        "0": {
+          "name": "Portrait Studio",
+          "description": "Professional portrait generation with perfect lighting"
+        },
+        "1": {
+          "name": "Landscape Master",
+          "description": "Breathtaking natural landscapes and scenery"
+        },
+        "2": {
+          "name": "Anime Style",
+          "description": "Beautiful anime and manga-style characters"
+        },
+        "3": {
+          "name": "Sci-Fi Worlds",
+          "description": "Futuristic scenes and technology"
+        },
+        "4": {
+          "name": "Fantasy Realm",
+          "description": "Magical creatures and fantasy worlds"
+        },
+        "5": {
+          "name": "Abstract Art",
+          "description": "Creative abstract and artistic compositions"
+        },
+        "portrait": {
+          "title": "Portrait",
+          "description": "Professional portrait generation"
+        },
+        "landscape": {
+          "title": "Landscape",
+          "description": "Beautiful landscape scenes"
+        },
+        "abstract": {
+          "title": "Abstract",
+          "description": "Creative abstract art"
+        },
+        "fantasy": {
+          "title": "Fantasy",
+          "description": "Magical fantasy worlds"
+        }
+      }
+    },
+    "cta": {
+      "title": "Ready to Create?",
+      "subtitle": "Join thousands of creators using Omnia Creata",
+      "description": "Join thousands of creators using Omnia Creata to bring their imagination to life",
+      "button": "Start Creating Now",
+      "startFree": "Start Free",
+      "exploreFeatures": "Explore Features"
+    },
+    "features": {
+      "title": "Why Choose Omnia Creata?",
+      "subtitle": "Powerful features designed for creators",
+      "items": {
+        "0": {
+          "title": "Local Processing",
+          "description": "Your data stays on your device. Complete privacy and security."
+        },
+        "1": {
+          "title": "Advanced AI Models",
+          "description": "Access to the latest and most powerful image generation models."
+        },
+        "2": {
+          "title": "Professional Tools",
+          "description": "Fine-tune every aspect of your creations with advanced controls."
+        },
+        "3": {
+          "title": "Unlimited Creation",
+          "description": "No limits on generations. Create as much as you want."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Choose Your Plan",
+      "subtitle": "Select the perfect plan for your creative needs",
+      "popular": "Most Popular",
+      "startFree": "Start Free",
+      "selectPlan": "Select Plan",
+      "eco": {
+        "name": "Eco",
+        "price": "Free",
+        "period": "forever",
+        "description": "Perfect for getting started",
+        "features": [
+          "Basic AI models",
+          "10 generations per day",
+          "Standard resolution",
+          "Community support",
+          "Personal use only"
+        ]
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$19",
+        "period": "per month",
+        "description": "For serious creators",
+        "features": [
+          "All AI models",
+          "Unlimited generations",
+          "High resolution output",
+          "Priority support",
+          "Commercial use rights",
+          "Advanced settings",
+          "Batch processing"
+        ]
+      },
+      "studio": {
+        "name": "Studio",
+        "price": "$49",
+        "period": "per month",
+        "description": "For professional studios",
+        "features": [
+          "Everything in Pro",
+          "Team collaboration",
+          "API access",
+          "Custom models",
+          "White-label options",
+          "Dedicated support",
+          "Enterprise features",
+          "SLA guarantee"
+        ]
+      }
+    },
+    "templates": {
+      "title": "Quick Start Templates",
+      "subtitle": "Get started quickly with pre-configured templates",
+      "uses": "uses",
+      "useTemplate": "Use Template",
+      "categories": {
+        "all": "All",
+        "portrait": "Portrait",
+        "landscape": "Landscape",
+        "anime": "Anime",
+        "scifi": "Sci-Fi",
+        "fantasy": "Fantasy",
+        "abstract": "Abstract"
+      },
+      "items": {
+        "0": {
+          "name": "Portrait Studio",
+          "description": "Professional portrait generation with perfect lighting"
+        },
+        "1": {
+          "name": "Landscape Master",
+          "description": "Breathtaking natural landscapes and scenery"
+        },
+        "2": {
+          "name": "Anime Style",
+          "description": "Beautiful anime and manga-style characters"
+        },
+        "3": {
+          "name": "Sci-Fi Worlds",
+          "description": "Futuristic scenes and technology"
+        },
+        "4": {
+          "name": "Fantasy Realm",
+          "description": "Magical creatures and fantasy worlds"
+        },
+        "5": {
+          "name": "Abstract Art",
+          "description": "Creative abstract and artistic compositions"
+        },
+        "portrait": {
+          "title": "Portrait",
+          "description": "Professional portrait generation"
+        },
+        "landscape": {
+          "title": "Landscape",
+          "description": "Beautiful landscape scenes"
+        },
+        "abstract": {
+          "title": "Abstract",
+          "description": "Creative abstract art"
+        },
+        "fantasy": {
+          "title": "Fantasy",
+          "description": "Magical fantasy worlds"
+        }
+      }
+    },
+    "footer": {
+      "tagline": "Made for creators"
+    }
+  },
+  "models": {
+    "title": "AI Models",
+    "subtitle": "Manage and discover AI models for image generation",
+    "tabs": {
+      "installed": "Installed",
+      "discover": "Discover",
+      "settings": "Settings"
+    },
+    "installed": {
+      "title": "Installed Models",
+      "subtitle": "Models ready to use on your system",
+      "empty": {
+        "title": "No models installed",
+        "description": "Download models from the Discover tab to get started",
+        "action": "Browse Models"
+      },
+      "actions": {
+        "use": "Use in Studio",
+        "details": "View Details",
+        "delete": "Delete"
+      }
+    },
+    "discover": {
+      "title": "Discover Models",
+      "subtitle": "Find and download new AI models",
+      "categories": {
+        "all": "All",
+        "realistic": "Realistic",
+        "artistic": "Artistic",
+        "anime": "Anime",
+        "fantasy": "Fantasy"
+      },
+      "searchOnline": {
+        "title": "Search and Download from Internet",
+        "placeholder": "Model repository or URL",
+        "search": "Search",
+        "description": "Results will be listed here and can be downloaded with one click. (coming soon)"
+      },
+      "actions": {
+        "download": "Download",
+        "downloading": "Downloading...",
+        "install": "Install",
+        "installed": "Installed"
+      }
+    },
+    "settings": {
+      "title": "Model Settings",
+      "subtitle": "Configure model storage and preferences",
+      "storage": {
+        "title": "Storage Location",
+        "description": "Choose where to store downloaded models",
+        "browse": "Browse",
+        "current": "Current: {{path}}"
+      },
+      "cache": {
+        "title": "Cache Management",
+        "description": "Manage model cache and temporary files",
+        "clear": "Clear Cache",
+        "size": "Cache size: {{size}}"
+      }
+    }
+  },
+  "studio": {
+    "composer": "Composer",
+    "header": {
+      "description": "Create visuals with local AI models"
+    },
+    "modelSelection": {
+      "title": "Model Selection"
+    },
+    "prompt": {
+      "title": "Prompt",
+      "positive": "Positive Prompt",
+      "positivePlaceholder": "Describe the image you want to create in detail...",
+      "negative": "Negative Prompt",
+      "negativePlaceholder": "What you don't want in the image...",
+      "suggestions": {
+        "title": "Suggestions"
+      }
+    },
+    "generation": {
+      "title": "Generation Settings",
+      "aspectRatio": "Aspect Ratio",
+      "aspectRatios": {
+        "square": "Square (1:1)",
+        "portrait": "Portrait (3:4)",
+        "landscape": "Landscape (4:3)",
+        "wide": "Wide (16:9)",
+        "mobile": "Mobile (9:16)"
+      },
+      "steps": "Steps",
+      "guidance": "Guidance Scale",
+      "seed": "Seed",
+      "randomSeed": "Random",
+      "batchSize": "Batch Size",
+      "sampler": "Sampler",
+      "scheduler": "Scheduler",
+      "selectModel": "Please select a model and enter a prompt.",
+      "error": "Image generation error!",
+      "instruction": "Select a model and write a prompt to begin",
+      "generating": "Generating",
+      "generate": "Generate"
+    },
+    "imageEditing": {
+      "title": "Image Editing",
+      "brightness": "Brightness",
+      "contrast": "Contrast",
+      "whitePoint": "White Point",
+      "saturation": "Saturation",
+      "vibrance": "Vibrance",
+      "reset": "Reset"
+    },
+    "preview": {
+      "title": "Preview",
+      "placeholder": "Your generated images will appear here",
+      "instruction": "Select a model and write a prompt to begin"
+    }
+  },
+  "productionPanel": {
+    "aiInterpretation": "AI Interpretation",
+    "on": "On",
+    "off": "Off",
+    "plan": "Plan",
+    "model": "Model",
+    "lora": "LoRA",
+    "style": "Style",
+    "substyle": "Substyle",
+    "pose": "Pose",
+    "resolution": {
+      "title": "Resolution",
+      "quickSelect": "Quick Select",
+      "advanced": "Advanced",
+      "width": "Width",
+      "height": "Height",
+      "tip": "Higher resolutions take longer to generate"
+    },
+    "steps": "Steps",
+    "cfg": "CFG Scale",
+    "generating": "Generating...",
+    "generate": "Generate",
+    "pleaseEnterPrompt": "Please enter a prompt",
+    "llmPlanFailed": "LLM plan failed",
+    "generationFailed": "Generation failed"
+  },
+  "controlsPanel": {
+    "pleaseEnterPrompt": "Please enter a prompt"
+  },
+  "modelManager": {
+    "title": "Model Manager",
+    "subtitle": "Manage your AI models",
+    "category": "Category",
+    "searchLocal": "Search Local Models",
+    "searchPlaceholder": "Search models...",
+    "search": "Search",
+    "use": "Use",
+    "download": "Download",
+    "noResults": "No models found",
+    "searchOnline": {
+      "title": "Search Online Models",
+      "placeholder": "Model repository or URL",
+      "search": "Search",
+      "description": "Results will be listed here and can be downloaded with one click. (coming soon)"
+    }
+  },
+  "queue": {
+    "title": "Generation Queue",
+    "subtitle": "Manage your generation tasks",
+    "job": "Job",
+    "pending": "Pending"
+  },
+  "landing": {
+    "header": {
+      "enterStudio": "Enter Studio"
+    },
+    "hero": {
+      "title": "Create Amazing Art with",
+      "titleHighlight": "AI Power",
+      "description": "Transform your imagination into stunning visuals with our advanced AI image generation platform. Create, edit, and perfect your artistic vision.",
+      "enterStudio": "Enter Studio",
+      "exploreFeatures": "Explore Features"
+    },
+    "showcase": {
+      "title": "Community Showcase",
+      "description": "Discover amazing creations from our talented community",
+      "images": {
+        "cyberpunkWarrior": "Cyberpunk Warrior",
+        "mysticalForest": "Mystical Forest",
+        "neonDreams": "Neon Dreams",
+        "ancientTemple": "Ancient Temple"
+      },
+      "viewAll": "View All"
+    },
+    "templates": {
+      "title": "Quick Start Templates",
+      "description": "Get started quickly with our pre-configured templates",
+      "items": {
+        "animePortrait": {
+          "name": "Anime Portrait",
+          "desc": "Beautiful anime-style character portraits"
+        },
+        "cyberpunkCity": {
+          "name": "Cyberpunk City",
+          "desc": "Futuristic neon-lit cityscapes"
+        },
+        "fantasyArt": {
+          "name": "Fantasy Art",
+          "desc": "Magical worlds and creatures"
+        },
+        "realisticPhoto": {
+          "name": "Realistic Photo",
+          "desc": "Photorealistic images and portraits"
+        },
+        "abstractDesign": {
+          "name": "Abstract Design",
+          "desc": "Creative abstract compositions"
+        },
+        "logoBrand": {
+          "name": "Logo & Brand",
+          "desc": "Professional logos and branding"
+        }
+      },
+      "categories": {
+        "character": "Character",
+        "landscape": "Landscape",
+        "fantasy": "Fantasy",
+        "photo": "Photo",
+        "art": "Art",
+        "design": "Design"
+      },
+      "useTemplate": "Use Template"
+    },
+    "features": {
+      "title": "Powerful Features",
+      "description": "Everything you need to create stunning AI art",
+      "items": {
+        "compactControls": {
+          "title": "Compact Controls",
+          "desc": "Intuitive interface with all tools at your fingertips"
+        },
+        "instantPreview": {
+          "title": "Instant Preview",
+          "desc": "See your creations come to life in real-time"
+        },
+        "modernInterface": {
+          "title": "Modern Interface",
+          "desc": "Beautiful, responsive design that works everywhere"
+        }
+      }
+    },
+    "reviews": {
+      "title": "What Our Users Say",
+      "description": "Join thousands of satisfied creators",
+      "items": {
+        "user1": {
+          "name": "Alex Chen",
+          "role": "Digital Artist",
+          "comment": "This platform has revolutionized my creative workflow. The AI models are incredibly powerful and easy to use."
+        },
+        "user2": {
+          "name": "Sarah Johnson",
+          "role": "Creative Director",
+          "comment": "The quality of generated images is outstanding. It's become an essential tool for our design team."
+        },
+        "user3": {
+          "name": "Mike Rodriguez",
+          "role": "Freelance Designer",
+          "comment": "I love how intuitive the interface is. I can focus on creativity instead of struggling with complex tools."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Choose Your Plan",
+      "plans": {
+        "eco": {
+          "name": "Eco",
+          "price": "Free",
+          "features": [
+            "Basic AI models",
+            "10 generations per day",
+            "Community support"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "price": "$19/mo",
+          "features": [
+            "All AI models",
+            "Unlimited generations",
+            "Priority support"
+          ]
+        },
+        "studio": {
+          "name": "Studio",
+          "price": "$49/mo",
+          "features": [
+            "Everything in Pro",
+            "Team collaboration",
+            "API access"
+          ]
+        }
+      },
+      "selectPlan": "Select Plan"
+    },
+    "footer": {
+      "tagline": "Made for creators"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Manage your account information and settings",
+    "tabs": {
+      "profile": "Profile",
+      "membership": "Membership",
+      "settings": "Settings",
+      "history": "History"
+    },
+    "mockData": {
+      "displayName": "Creative Artist"
+    },
+    "memberSince": "Member since:",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "stats": {
+      "totalImages": "Total Images",
+      "favorites": "Favorites",
+      "shared": "Shared",
+      "downloads": "Downloads"
+    },
+    "editProfileInfo": "Edit Profile Information",
+    "displayName": "Display Name",
+    "username": "Username",
+    "email": "Email",
+    "currentPlan": "Your Current Plan",
+    "remainingCredits": "Remaining Credits",
+    "creditUsage": "Credit Usage",
+    "otherPlans": "Other Plans",
+    "creditsPerMonth": "credits/month",
+    "upgrade": "Upgrade",
+    "accountSettings": "Account Settings",
+    "emailNotifications": "Email Notifications",
+    "emailNotificationsDesc": "Receive updates about your account",
+    "autoSave": "Auto Save",
+    "autoSaveDesc": "Automatically save your work",
+    "privacyMode": "Privacy Mode",
+    "privacyModeDesc": "Keep generated images private",
+    "security": "Security",
+    "changePassword": "Change Password",
+    "changePasswordDesc": "Enhance your account security",
+    "twoFactorAuth": "Two-Factor Authentication",
+    "twoFactorAuthDesc": "Protect your account with an extra security layer",
+    "recentActivities": "Recent Activities",
+    "imageCreated": "Image created",
+    "hoursAgo": "{{count}} hours ago",
+    "credits": "credits",
+    "plans": {
+      "features": {
+        "basicModels": "Basic AI models",
+        "advancedModels": "Advanced AI models",
+        "prioritySupport": "Priority support",
+        "commercialUse": "Commercial use rights"
+      }
+    }
+  }
+}

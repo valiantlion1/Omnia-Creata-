@@ -1,0 +1,268 @@
+{
+  "common": {
+    "appTitle": "Omnia Creata Studio",
+    "tagline": "AI クリエイティブスタジオ",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "back": "戻る",
+    "next": "次へ",
+    "previous": "前へ",
+    "confirm": "確認",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "navigation": {
+    "home": "ホーム",
+    "studio": "スタジオ",
+    "gallery": "ギャラリー",
+    "community": "コミュニティ",
+    "profile": "プロフィール",
+    "settings": "設定",
+    "features": "機能",
+    "pricing": "料金",
+    "support": "サポート"
+  },
+  "landing": {
+    "enterStudio": "スタジオに入る",
+    "heroTitle": "未来を",
+    "heroTitleHighlight": "創造",
+    "heroDescription": "Omnia Creataで最新のAIスタジオを体験してください。プロンプトから画像まで、ワンクリックでプロフェッショナルな結果。コンパクトなコントロール、瞬時のプレビュー。",
+    "getStarted": "始める",
+    "learnMore": "詳細を見る"
+  },
+  "home": {
+    "heroSlides": {
+      "slide1": {
+        "title": "AIで創造性を発見",
+        "subtitle": "Omnia Creata Studioで想像力を現実に変える",
+        "description": "最先端のAIモデルでプロ品質の画像を作成。無限の創造性、無限の可能性。",
+        "cta": "今すぐ始める"
+      },
+      "slide2": {
+        "title": "プロフェッショナルな結果、簡単操作",
+        "subtitle": "最先端技術を搭載したプロフェッショナルレベルのプラットフォーム",
+        "description": "ローカルAIモデルで高速かつ安全な画像生成。あなたのデータはあなたのもの、プライバシーは保護されます。",
+        "cta": "機能を探索"
+      },
+      "slide3": {
+        "title": "コミュニティの力で成長",
+        "subtitle": "何千ものクリエイターと一緒に学び、発展",
+        "description": "テンプレート、ヒント、インスピレーションあふれる作品で創造性を次のレベルへ。",
+        "cta": "コミュニティに参加"
+      }
+    },
+    "features": {
+      "title": "なぜOmnia Creataなのか？",
+      "subtitle": "最先端のAI画像生成プラットフォームで創造性を発見",
+      "feature1": {
+        "title": "高速で強力",
+        "description": "ローカルAIモデルで数秒でプロ品質の画像を生成"
+      },
+      "feature2": {
+        "title": "安全でプライベート",
+        "description": "あなたのデータは完全にあなたのもの。プライバシーが最優先"
+      },
+      "feature3": {
+        "title": "無限の創造性",
+        "description": "何千ものモデルとテンプレートで想像力の限界を押し広げる"
+      }
+    },
+    "pricing": {
+      "title": "完璧なプランを選択",
+      "subtitle": "あなたのニーズに合わせて設計された柔軟なサブスクリプションオプション",
+      "popular": "最も人気",
+      "plans": {
+        "eco": {
+          "name": "エコ",
+          "description": "始めるのに最適",
+          "features": [
+            "100クレジット/月",
+            "基本モデル",
+            "標準品質",
+            "コミュニティサポート",
+            "基本テンプレート"
+          ],
+          "cta": "無料で始める"
+        },
+        "pro": {
+          "name": "プロ",
+          "description": "クリエイター向け",
+          "features": [
+            "1000クレジット/月",
+            "全モデル",
+            "高品質",
+            "優先サポート",
+            "高度な設定",
+            "プレミアムテンプレート",
+            "一括ダウンロード"
+          ],
+          "cta": "プランを選択"
+        },
+        "studio": {
+          "name": "スタジオ",
+          "description": "プロフェッショナル向け",
+          "features": [
+            "2500クレジット/月",
+            "無制限モデル",
+            "ウルトラ品質",
+            "24/7サポート",
+            "APIアクセス",
+            "商用利用",
+            "カスタムモデル",
+            "優先処理"
+          ],
+          "cta": "プランを選択"
+        }
+      }
+    },
+    "templates": {
+      "title": "既製テンプレート",
+      "subtitle": "プロフェッショナルな結果のための事前最適化設定",
+      "categories": {
+        "all": "すべて",
+        "portrait": "ポートレート",
+        "landscape": "風景",
+        "anime": "アニメ",
+        "scifi": "SF",
+        "fantasy": "ファンタジー",
+        "abstract": "抽象"
+      },
+      "templateList": {
+        "portraitPhoto": {
+          "name": "ポートレート写真",
+          "description": "プロフェッショナルなポートレート写真用に最適化された設定"
+        },
+        "landscapePhoto": {
+          "name": "風景写真",
+          "description": "自然と風景写真に理想的な設定"
+        },
+        "animeStyle": {
+          "name": "アニメスタイル",
+          "description": "アニメとマンガキャラクター用の特別設定"
+        },
+        "cyberpunk": {
+          "name": "サイバーパンク",
+          "description": "未来的でサイバーパンクテーマのビジュアル"
+        },
+        "fantasyArt": {
+          "name": "ファンタジーアート",
+          "description": "魔法とファンタジー世界のテンプレート"
+        },
+        "minimalist": {
+          "name": "ミニマリスト",
+          "description": "クリーンでミニマリストなデザイン"
+        }
+      },
+      "useTemplate": "テンプレートを使用",
+      "usageCount": "使用回数"
+    },
+    "community": {
+      "title": "コミュニティギャラリーから",
+      "subtitle": "ユーザーが作成した素晴らしい作品からインスピレーションを得る",
+      "viewAll": "全ギャラリーを表示"
+    },
+    "cta": {
+      "title": "創造性を発見する準備はできましたか？",
+      "subtitle": "Omnia Creata StudioでAI画像生成の力を体験してください。今すぐ始めて、想像力を現実に変えましょう。",
+      "startFree": "無料で始める",
+      "exploreFeatures": "機能を探索"
+    }
+  },
+  "studio": {
+    "title": "スタジオ",
+    "subtitle": "ローカルAIモデルで画像を作成",
+    "modelSelection": "モデル選択",
+    "settings": "設定",
+    "imageEditing": "画像編集",
+    "preview": "プレビューパネル",
+    "prompt": {
+      "positive": "ポジティブプロンプト",
+      "negative": "ネガティブプロンプト",
+      "placeholder": "作成したい画像を詳細に説明してください...",
+      "negativePlaceholder": "含めたくない要素を指定してください...",
+      "suggestions": "プロンプト提案",
+      "categories": {
+        "portrait": "ポートレート",
+        "landscape": "風景",
+        "fantasy": "ファンタジー",
+        "scifi": "SF",
+        "anime": "アニメ"
+      }
+    },
+    "generation": {
+      "aspectRatio": "アスペクト比",
+      "steps": "ステップ",
+      "cfgScale": "CFGスケール",
+      "seed": "シード",
+      "randomize": "ランダム化",
+      "sampler": "サンプラー",
+      "scheduler": "スケジューラー",
+      "generate": "画像を生成",
+      "generating": "生成中...",
+      "progress": "進行状況",
+      "selectModel": "モデルとプロンプトを選択してください！",
+      "error": "画像生成エラー！"
+    },
+    "editing": {
+      "hdr": "HDR",
+      "brightness": "明度",
+      "contrast": "コントラスト",
+      "whitePoint": "ホワイトポイント",
+      "saturation": "彩度",
+      "vibrance": "鮮やかさ",
+      "reset": "リセット"
+    },
+    "previewPanel": {
+      "placeholder": "画像がここに表示されます",
+      "instruction": "モデルを選択してプロンプトを書いて開始"
+    }
+  },
+  "profile": {
+    "title": "プロフィール",
+    "subtitle": "アカウント情報と設定を管理",
+    "tabs": {
+      "profile": "プロフィール",
+      "membership": "メンバーシップ",
+      "settings": "設定",
+      "history": "履歴"
+    },
+    "profileTab": {
+      "displayName": "表示名",
+      "username": "ユーザー名",
+      "email": "メール",
+      "memberSince": "メンバー開始日",
+      "editProfile": "プロフィール編集",
+      "totalImages": "総画像数",
+      "remainingCredits": "残りクレジット",
+      "totalCreditsUsed": "使用総クレジット",
+      "favoriteModel": "お気に入りモデル"
+    },
+    "membershipTab": {
+      "currentPlan": "現在のプラン",
+      "otherPlans": "その他のプラン",
+      "upgrade": "アップグレード"
+    },
+    "settingsTab": {
+      "accountSettings": "アカウント設定",
+      "emailNotifications": "メール通知",
+      "autoSave": "自動保存",
+      "autoSaveDesc": "生成された画像を自動保存",
+      "privateImages": "プライベート画像",
+      "privateImagesDesc": "生成された画像を非公開に保つ",
+      "security": "セキュリティ",
+      "changePassword": "パスワード変更",
+      "twoFactor": "二要素認証"
+    },
+    "historyTab": {
+      "recentActivity": "最近のアクティビティ",
+      "imageCreated": "画像が作成されました",
+      "hoursAgo": "時間前"
+    }
+  }
+}

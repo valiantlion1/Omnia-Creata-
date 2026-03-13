@@ -1,0 +1,304 @@
+﻿Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Dengeli)
+  GUID Alias: SCHEME_BALANCED
+  Subgroup GUID: 0012ee47-9041-4b5d-9b77-535fba8b1442  (Sabit disk)
+    GUID Alias: SUB_DISK
+    Power Setting GUID: 6738e2c4-e8a5-4a42-b16a-e040e769756e  (Sabit diski kapatmak için beklenecek süre)
+      GUID Alias: DISKIDLE
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0xffffffff
+      Possible Settings increment: 0x00000001
+      Possible Settings units: saniye bekle
+    Current AC Power Setting Index: 0x0000001e
+    Current DC Power Setting Index: 0x0000001e
+
+  Subgroup GUID: 02f815b5-a5cf-4c84-bf20-649d1f75d3d8  (Internet Explorer)
+    Power Setting GUID: 4c793e7d-a264-42e1-87d3-7a0d2f523ccd  (JavaScript Zamanlayıcı Sıklığı)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: En Fazla Güç Tasarrufu
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: En Yüksek Performans
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000000
+
+  Subgroup GUID: 0d7dbae2-4294-402a-ba8e-26777e8488cd  (Masaüstü arka plan ayarları)
+    Power Setting GUID: 309dce9b-bef4-4119-9921-a851fb12f0f4  (Slayt gösterisi)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kullanılabilir
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Duraklatıldı
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000001
+
+  Subgroup GUID: 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1  (Kablosuz Bağdaştırıcı Ayarları)
+    Power Setting GUID: 12bbebe6-58d6-4636-95bb-3217ef867c1a  (Güç Tasarrufu Modu)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: En Yüksek Performans
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Düşük Güç Tasarrufu
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Orta Düzeyde Güç Tasarrufu
+      Possible Setting Index: 003
+      Possible Setting Friendly Name: En Fazla Güç Tasarrufu
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000002
+
+  Subgroup GUID: 238c9fa8-0aad-41ed-83f4-97be242c8f20  (Uyku)
+    GUID Alias: SUB_SLEEP
+    Power Setting GUID: 29f6c1db-86da-48c5-9fdb-f2b67b1f44da  (Uykudan Önce Bekleme)
+      GUID Alias: STANDBYIDLE
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0xffffffff
+      Possible Settings increment: 0x00000001
+      Possible Settings units: saniye bekle
+    Current AC Power Setting Index: 0x000000b4
+    Current DC Power Setting Index: 0x000000b4
+
+    Power Setting GUID: 94ac6d29-73ce-41a6-809f-6363ba21b47e  (Karma uyumaya izin ver)
+      GUID Alias: HYBRIDSLEEP
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kapalı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Açık
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000001
+
+    Power Setting GUID: 9d7815a6-7ee4-497e-8888-515a05f02364  (Hazırda beklemeden önce geçecek süre)
+      GUID Alias: HIBERNATEIDLE
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0xffffffff
+      Possible Settings increment: 0x00000001
+      Possible Settings units: saniye bekle
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x7fffffff
+
+    Power Setting GUID: bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d  (Uyandırma zamanlayıcılarına izin ver)
+      GUID Alias: RTCWAKE
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Devre Dışı Bırak
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Etkinleştir
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Sadece Önemli Uyandırma Zamanlayıcıları
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000000
+
+  Subgroup GUID: 2a737441-1930-4402-8d77-b2bebba308a3  (USB ayarları)
+    Power Setting GUID: 48e6b7a6-50f5-4782-a5d4-53bb8f07e226  (USB seçmeli askıya alma ayarı)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Devre dışı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Etkin
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000001
+
+  Subgroup GUID: 4f971e89-eebd-4455-a8de-9e59040e7347  (Güç düğmeleri ve kapak)
+    GUID Alias: SUB_BUTTONS
+    Power Setting GUID: a7066653-8d6c-40a8-910e-a1f54b84c7e5  (Başlat menüsü güç düğmesi)
+      GUID Alias: UIBUTTON_ACTION
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Uyku
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Hazırda Beklet
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Kapat
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000000
+
+  Subgroup GUID: 501a4d13-42af-4429-9fd1-a8218c268e20  (PCI Express)
+    GUID Alias: SUB_PCIEXPRESS
+    Power Setting GUID: ee12f906-d277-404b-b6da-e5fa1a576df5  (Bağlantı Durumu Güç Yönetimi)
+      GUID Alias: ASPM
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kapalı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Orta derece güç ayarları
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: En fazla güç tasarrufu
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000002
+
+  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (İşlemci güç yönetimi)
+    GUID Alias: SUB_PROCESSOR
+    Power Setting GUID: 893dee8e-2bef-41e0-89c6-b55d0929964c  (En düşük işlemci durumu)
+      GUID Alias: PROCTHROTTLEMIN
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000050
+    Current DC Power Setting Index: 0x00000005
+
+    Power Setting GUID: bc5038f7-23e0-4960-96da-33abaf5935ec  (En yüksek işlemci durumu)
+      GUID Alias: PROCTHROTTLEMAX
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000064
+    Current DC Power Setting Index: 0x00000064
+
+  Subgroup GUID: 7516b95f-f776-4464-8c53-06167f40cc99  (Ekran)
+    GUID Alias: SUB_VIDEO
+    Power Setting GUID: 3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e  (Ekranı kapatmak için beklenecek süre)
+      GUID Alias: VIDEOIDLE
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0xffffffff
+      Possible Settings increment: 0x00000001
+      Possible Settings units: saniye bekle
+    Current AC Power Setting Index: 0x000000b4
+    Current DC Power Setting Index: 0x000000b4
+
+    Power Setting GUID: aded5e82-b909-4619-9949-f5d71dac0bcb  (Ekran parlaklığı)
+      GUID Alias: VIDEONORMALLEVEL
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000064
+    Current DC Power Setting Index: 0x00000064
+
+    Power Setting GUID: f1fbfde2-a960-4165-9f88-50667911ce96  (Kararan ekran parlaklığı)
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000032
+    Current DC Power Setting Index: 0x00000032
+
+    Power Setting GUID: fbd9aa66-9553-4097-ba44-ed6e9d65eab8  (Uyarlamalı parlaklığı etkinleştir)
+      GUID Alias: ADAPTBRIGHT
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kapalı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Açık
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000000
+
+  Subgroup GUID: 9596fb26-9850-41fd-ac3e-f7c3c00afd4b  (Multimedya ayarları)
+    Power Setting GUID: 03680956-93bc-4294-bba6-4e0f09bb717f  (Medya paylaşırken)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Bilgisayarın uyku moduna geçmesine izin ver
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Uyku durumuna geçmeyi engelle
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Bilgisayarın Uzakta Modu'na girmesine izin ver
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000000
+
+    Power Setting GUID: 10778347-1370-4ee0-8bbd-33bdacaade49  (Video kayıttan yürütme kalitesi sapması)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Video kayıttan yürütme güç tasarrufu sapması
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Video kayıttan yürütme performans sapması
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000000
+
+    Power Setting GUID: 34c7b99f-9a6d-4b3c-8dc7-b6693b78cef4  (Video yürütülürken)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Video kalitesini iyileştir
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Dengeli
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Güç tasarrufunu iyileştir
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000001
+
+  Subgroup GUID: c763b4ec-0e50-4b6b-9bed-2b92a6ee884e  (AMD Power Slider)
+    Power Setting GUID: 7ec1751b-60ed-4588-afb5-9819d3d77d90  (Overlay)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Pil tasarrufu
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Daha iyi pil
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Daha iyi performans
+      Possible Setting Index: 003
+      Possible Setting Friendly Name: En iyi performans
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000002
+
+  Subgroup GUID: e276e160-7cb0-43c6-b20b-73f5dce39954  (Değiştirilebilir Dinamik Grafikler)
+    Power Setting GUID: a1662ab2-9d34-4e53-ba8b-2639b9e20857  (Genel Ayarlar)
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Güç tasarruflu grafikleri zorla
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Güç tasarrufunu en iyi duruma getir
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Performansı en iyi duruma getir
+      Possible Setting Index: 003
+      Possible Setting Friendly Name: Performansı en üst düzeye getir
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000001
+
+  Subgroup GUID: e73a048d-bf27-4f12-9731-8b2076e8891f  (Pil)
+    GUID Alias: SUB_BATTERY
+    Power Setting GUID: 5dbb7c9f-38e9-40d2-9749-4f8a0e9f640f  (Kritik pil bildirimi)
+      GUID Alias: BATFLAGSCRIT
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kapalı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Açık
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000001
+
+    Power Setting GUID: 637ea02f-bbcb-4015-8e2c-a1c7b9c0b546  (Kritik pil eylemi)
+      GUID Alias: BATACTIONCRIT
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Hiçbir şey yapma
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Uyku
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Hazırda Beklet
+      Possible Setting Index: 003
+      Possible Setting Friendly Name: Kapat
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000002
+
+    Power Setting GUID: 8183ba9a-e910-48da-8769-14ae6dc1170a  (Düşük pil düzeyi)
+      GUID Alias: BATLEVELLOW
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000006
+    Current DC Power Setting Index: 0x00000006
+
+    Power Setting GUID: 9a66d8d7-4ff7-4ef9-b5a2-5a326ca2a469  (Kritik pil düzeyi)
+      GUID Alias: BATLEVELCRIT
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000002
+
+    Power Setting GUID: bcded951-187b-4d05-bccc-f7e51960c258  (Düşük pil bildirisi)
+      GUID Alias: BATFLAGSLOW
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Kapalı
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Açık
+    Current AC Power Setting Index: 0x00000001
+    Current DC Power Setting Index: 0x00000001
+
+    Power Setting GUID: d8742dcb-3e6a-4b3c-b3fe-374623cdcf06  (Düşük pil eylemi)
+      GUID Alias: BATACTIONLOW
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Hiçbir şey yapma
+      Possible Setting Index: 001
+      Possible Setting Friendly Name: Uyku
+      Possible Setting Index: 002
+      Possible Setting Friendly Name: Hazırda Beklet
+      Possible Setting Index: 003
+      Possible Setting Friendly Name: Kapat
+    Current AC Power Setting Index: 0x00000000
+    Current DC Power Setting Index: 0x00000000
+
+    Power Setting GUID: f3c5027d-cd16-4930-aa6b-90db844a8f00  (Pil düzeyini koru)
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000004
+    Current DC Power Setting Index: 0x00000004
+
+

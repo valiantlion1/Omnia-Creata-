@@ -1,0 +1,212 @@
+{
+  "presets": {
+    "realistic": {
+      "name": "Realistic",
+      "description": "Photorealistic images with professional quality",
+      "baseModel": "sd_xl_base_1.0.safetensors",
+      "loras": [
+        {
+          "name": "realistic_vision_xl.safetensors",
+          "weight": 0.8
+        }
+      ],
+      "vae": "vae-ft-mse-840000.safetensors",
+      "sampler": "DPM++ 2M Karras",
+      "steps": 36,
+      "cfg": 7.0,
+      "upscaler": "4x-UltraSharp.pth",
+      "resolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "negativePrompt": "blurry, low quality, distorted, deformed, ugly, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, bad hands, three hands, fused fingers, too many fingers, disconnected limbs, malformed, mutated, bad body, unnatural body proportions",
+      "enhancementPrompts": [
+        "photorealistic",
+        "high quality",
+        "detailed",
+        "professional photography",
+        "cinematic lighting",
+        "sharp focus",
+        "8k uhd",
+        "dslr"
+      ]
+    },
+    "anime": {
+      "name": "Anime",
+      "description": "High-quality anime and manga style artwork",
+      "baseModel": "animagine_xl_3.1.safetensors",
+      "loras": [
+        {
+          "name": "anime_style_xl.safetensors",
+          "weight": 0.75
+        }
+      ],
+      "vae": "animeVAE.safetensors",
+      "sampler": "Euler a",
+      "steps": 32,
+      "cfg": 6.5,
+      "upscaler": "4x-AnimeSharp.pth",
+      "resolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "negativePrompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name, realistic, 3d, photorealistic",
+      "enhancementPrompts": [
+        "anime style",
+        "manga",
+        "detailed anime art",
+        "vibrant colors",
+        "studio quality",
+        "cel shading",
+        "masterpiece",
+        "best quality"
+      ]
+    },
+    "ultra": {
+      "name": "Ultra Quality",
+      "description": "Maximum quality with advanced techniques",
+      "baseModel": "juggernaut_xl_v9.safetensors",
+      "loras": [
+        {
+          "name": "detail_tweaker_xl.safetensors",
+          "weight": 0.8
+        },
+        {
+          "name": "add_detail_xl.safetensors",
+          "weight": 0.6
+        }
+      ],
+      "vae": "sdxl_vae.safetensors",
+      "sampler": "DPM++ 2M Karras",
+      "steps": 42,
+      "cfg": 7.5,
+      "upscaler": "4x-UltraSharp.pth",
+      "tiledUpscale": true,
+      "refiner": {
+        "model": "sd_xl_refiner_1.0.safetensors",
+        "steps": 10,
+        "strength": 0.3
+      },
+      "resolution": {
+        "width": 1024,
+        "height": 1024
+      },
+      "negativePrompt": "low quality, worst quality, normal quality, lowres, blurry, text, watermark, logo, banner, extra digits, cropped, jpeg artifacts, signature, username, error, duplicate, ugly, monochrome, horror, geometry, mutation, disgusting",
+      "enhancementPrompts": [
+        "ultra high quality",
+        "masterpiece",
+        "extremely detailed",
+        "cinematic lighting",
+        "award-winning",
+        "professional",
+        "8k uhd",
+        "hdr",
+        "volumetric lighting"
+      ]
+    }
+  },
+  "keywordMappings": {
+    "wet|droplet|pool|bikini|shiny|water|rain|splash": [
+      {
+        "name": "wet_effect_xl.safetensors",
+        "weight": 0.75
+      },
+      {
+        "name": "pbr_specular_xl.safetensors",
+        "weight": 0.6
+      }
+    ],
+    "city|rooftop|night|skyline|urban|neon|cyberpunk": [
+      {
+        "name": "night_city_tone_xl.safetensors",
+        "weight": 0.8
+      }
+    ],
+    "portrait|face|headshot|closeup|person|character": [
+      {
+        "name": "portrait_helper_xl.safetensors",
+        "weight": 0.7
+      }
+    ],
+    "landscape|nature|mountain|forest|outdoor|scenery": [
+      {
+        "name": "landscape_xl.safetensors",
+        "weight": 0.75
+      }
+    ],
+    "fantasy|magic|dragon|wizard|medieval|castle": [
+      {
+        "name": "fantasy_xl.safetensors",
+        "weight": 0.8
+      }
+    ],
+    "scifi|robot|spaceship|futuristic|technology|alien": [
+      {
+        "name": "scifi_xl.safetensors",
+        "weight": 0.75
+      }
+    ],
+    "horror|scary|dark|gothic|creepy|monster": [
+      {
+        "name": "dark_theme_xl.safetensors",
+        "weight": 0.7
+      }
+    ],
+    "cute|kawaii|chibi|adorable|sweet|innocent": [
+      {
+        "name": "cute_style_xl.safetensors",
+        "weight": 0.8
+      }
+    ]
+  },
+  "assetPaths": {
+    "local": {
+      "models": "C:/AI/models/checkpoints",
+      "loras": "C:/AI/models/loras",
+      "vaes": "C:/AI/models/vae",
+      "upscalers": "C:/AI/models/upscale_models",
+      "embeddings": "C:/AI/models/embeddings"
+    },
+    "huggingface": {
+      "baseUrl": "https://huggingface.co",
+      "cacheDir": "C:/AI/models/hf_cache",
+      "readOnly": true
+    }
+  },
+  "defaults": {
+    "preset": "realistic",
+    "loraWeight": 0.75,
+    "resolution": {
+      "width": 1024,
+      "height": 1024
+    },
+    "steps": 30,
+    "cfg": 7.0,
+    "sampler": "DPM++ 2M Karras",
+    "upscale": true,
+    "watermark": true
+  },
+  "validation": {
+    "maxSteps": 100,
+    "minSteps": 10,
+    "maxCfg": 20.0,
+    "minCfg": 1.0,
+    "maxResolution": 2048,
+    "minResolution": 256,
+    "maxLoras": 5,
+    "supportedSamplers": [
+      "DPM++ 2M Karras",
+      "DPM++ SDE Karras",
+      "Euler a",
+      "Euler",
+      "LMS",
+      "Heun",
+      "DPM2",
+      "DPM2 a",
+      "DPM++ 2S a",
+      "DPM++ 2M",
+      "DDIM",
+      "PLMS"
+    ]
+  }
+}

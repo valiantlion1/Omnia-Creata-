@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Omnia Preset",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "category",
+    "tokens"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_\\-\\.]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "neg": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "default": 1.0
+    },
+    "apply_mode": {
+      "type": "string",
+      "enum": [
+        "append",
+        "params",
+        "tag-only"
+      ],
+      "default": "append"
+    },
+    "params_patch": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "integer"
+        },
+        "cfg": {
+          "type": "number"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "seed_lock": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "safe_gate": {
+      "type": "string",
+      "enum": [
+        "nsfw",
+        "none"
+      ],
+      "default": "none"
+    }
+  },
+  "additionalProperties": false
+}

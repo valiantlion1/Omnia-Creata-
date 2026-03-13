@@ -1,0 +1,147 @@
+{
+  "providers": {
+    "native": {
+      "name": "native",
+      "baseUrl": "",
+      "timeout": 300,
+      "retries": 1,
+      "rateLimit": 10,
+      "costEstimate": 0.0,
+      "priority": 0,
+      "enabled": true,
+      "description": "Direct GPU generation using local models (RTX 4060)"
+    },
+    "comfyui": {
+      "name": "comfyui",
+      "baseUrl": "http://127.0.0.1:8188",
+      "timeout": 300,
+      "retries": 2,
+      "rateLimit": 10,
+      "costEstimate": 0.0,
+      "priority": 1,
+      "enabled": true,
+      "description": "Local ComfyUI instance for high-quality image generation"
+    },
+    "huggingface": {
+      "name": "huggingface",
+      "baseUrl": "https://api-inference.huggingface.co",
+      "timeout": 60,
+      "retries": 3,
+      "rateLimit": 30,
+      "costEstimate": 0.01,
+      "priority": 2,
+      "enabled": true,
+      "description": "Hugging Face Inference API for cloud-based generation"
+    },
+    "pollinations": {
+      "name": "pollinations",
+      "baseUrl": "https://image.pollinations.ai",
+      "timeout": 60,
+      "retries": 3,
+      "rateLimit": 0,
+      "costEstimate": 0.0,
+      "priority": 3,
+      "enabled": true,
+      "description": "Pollinations.ai for zero-configuration free image generation"
+    },
+    "gemini": {
+      "name": "gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "timeout": 30,
+      "retries": 3,
+      "rateLimit": 60,
+      "costEstimate": 0.002,
+      "priority": 1,
+      "enabled": true,
+      "description": "Google Gemini for prompt enhancement and analysis"
+    },
+    "openrouter": {
+      "name": "openrouter",
+      "baseUrl": "https://openrouter.ai",
+      "timeout": 45,
+      "retries": 3,
+      "rateLimit": 50,
+      "costEstimate": 0.005,
+      "priority": 2,
+      "enabled": true,
+      "description": "OpenRouter for LLM-based prompt enhancement"
+    },
+    "openai": {
+      "name": "openai",
+      "baseUrl": "https://api.openai.com",
+      "timeout": 30,
+      "retries": 3,
+      "rateLimit": 60,
+      "costEstimate": 0.01,
+      "priority": 3,
+      "enabled": false,
+      "description": "OpenAI API for prompt enhancement (optional)"
+    },
+    "stability": {
+      "name": "stability",
+      "baseUrl": "https://api.stability.ai",
+      "timeout": 60,
+      "retries": 3,
+      "rateLimit": 20,
+      "costEstimate": 0.04,
+      "priority": 3,
+      "enabled": false,
+      "description": "Stability AI for high-quality image generation (optional)"
+    }
+  },
+  "fallback": {
+    "strategy": "local_first",
+    "imageGeneration": [
+      "native",
+      "comfyui",
+      "huggingface",
+      "pollinations"
+    ],
+    "promptEnhancement": [
+      "gemini",
+      "openrouter"
+    ],
+    "maxRetries": 3,
+    "retryDelay": 1000,
+    "circuitBreakerThreshold": 5,
+    "circuitBreakerTimeout": 60000
+  },
+  "healthCheck": {
+    "interval": 60,
+    "timeout": 10,
+    "endpoints": {
+      "comfyui": "/system_stats",
+      "huggingface": "/models/runwayml/stable-diffusion-v1-5",
+      "pollinations": "/",
+      "gemini": "/v1beta/models/gemini-1.5-flash:generateContent",
+      "openrouter": "/api/v1/models",
+      "openai": "/v1/models",
+      "stability": "/v1/user/account"
+    }
+  },
+  "models": {
+    "default": {
+      "image": "stabilityai/stable-diffusion-xl-base-1.0",
+      "llm": "gemini-1.5-flash"
+    },
+    "comfyui": {
+      "checkpoint": "sd_xl_base_1.0.safetensors",
+      "vae": "sdxl_vae.safetensors",
+      "upscaler": "4x-UltraSharp.pth"
+    },
+    "huggingface": {
+      "realistic": "stabilityai/stable-diffusion-xl-base-1.0",
+      "anime": "SG161222/RealVisXL_V3.0_Turbo",
+      "ultra": "playgroundai/playground-v2.5-1024px-aesthetic"
+    },
+    "gemini": {
+      "fast": "gemini-1.5-flash",
+      "pro": "gemini-1.5-pro"
+    },
+    "openrouter": {
+      "fast": "anthropic/claude-3-haiku",
+      "balanced": "anthropic/claude-3.5-sonnet",
+      "pro": "openai/gpt-4o"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+﻿System Report for DESKTOP-GR8VMTR - 20250920_133945
+OS: Windows 10 Pro 2009 (64 bit)
+CPU: AMD Ryzen 5 7640HS w/ Radeon 760M Graphics     
+Total RAM (approx): 13.79 GB
+GPU: AMD Radeon(TM) Graphics
+Disks:
+ - SK hynix BC901 HFS001TEJ9X108N / Size: 953.87 GB / Type: SSD
+Upgrade Hints:
+ - RAM approx: 13.79 GB across 2 slot(s). SMBIOS MaxCapacity approx: 64 GB.
+ - You can likely increase RAM up to the SMBIOS limit (verify with board manual). Use matched pairs for best performance.
+ - GPU(s): AMD Radeon(TM) Graphics; NVIDIA GeForce RTX 4060 Laptop GPU. For gaming/perf, upgrading GPU is usually the biggest win. Ensure PSU wattage, case clearance, and PCIe slot compatibility.
+ - Storage: If any HDD is present, moving OS/apps to NVMe SSD gives a big speedup. Check available M.2 slots and SATA bays.
+ - PSU: When adding a stronger GPU or multiple drives, confirm PSU capacity and connectors (80 PLUS recommended).
+ - BIOS: Update BIOS before CPU or memory upgrades for best compatibility.
+

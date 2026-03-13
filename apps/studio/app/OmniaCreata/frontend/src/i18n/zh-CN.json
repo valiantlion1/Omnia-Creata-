@@ -1,0 +1,268 @@
+{
+  "common": {
+    "appTitle": "Omnia Creata Studio",
+    "tagline": "AI 创意工作室",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "confirm": "确认",
+    "yes": "是",
+    "no": "否"
+  },
+  "navigation": {
+    "home": "首页",
+    "studio": "工作室",
+    "gallery": "画廊",
+    "community": "社区",
+    "profile": "个人资料",
+    "settings": "设置",
+    "features": "功能",
+    "pricing": "定价",
+    "support": "支持"
+  },
+  "landing": {
+    "enterStudio": "进入工作室",
+    "heroTitle": "创造",
+    "heroTitleHighlight": "未来",
+    "heroDescription": "使用 Omnia Creata 体验现代 AI 工作室。从提示到图像，一键获得专业结果。紧凑控制，即时预览。",
+    "getStarted": "开始使用",
+    "learnMore": "了解更多"
+  },
+  "home": {
+    "heroSlides": {
+      "slide1": {
+        "title": "用 AI 发现你的创造力",
+        "subtitle": "使用 Omnia Creata Studio 将想象力变为现实",
+        "description": "使用最先进的 AI 模型创建专业品质的图像。无限创造力，无限可能。",
+        "cta": "立即开始"
+      },
+      "slide2": {
+        "title": "专业结果，易于使用",
+        "subtitle": "配备尖端技术的专业级平台",
+        "description": "使用本地 AI 模型快速安全地生成图像。您的数据属于您，隐私受到保护。",
+        "cta": "探索功能"
+      },
+      "slide3": {
+        "title": "借助社区力量成长",
+        "subtitle": "与数千名创作者一起学习和发展",
+        "description": "通过模板、技巧和鼓舞人心的作品将您的创造力提升到新水平。",
+        "cta": "加入社区"
+      }
+    },
+    "features": {
+      "title": "为什么选择 Omnia Creata？",
+      "subtitle": "使用最先进的 AI 图像生成平台发现您的创造力",
+      "feature1": {
+        "title": "快速强大",
+        "description": "使用本地 AI 模型在几秒钟内生成专业品质的图像"
+      },
+      "feature2": {
+        "title": "安全私密",
+        "description": "您的数据完全属于您。隐私是我们的首要任务"
+      },
+      "feature3": {
+        "title": "无限创造力",
+        "description": "使用数千种模型和模板突破想象力的界限"
+      }
+    },
+    "pricing": {
+      "title": "选择您的完美计划",
+      "subtitle": "为您的需求量身定制的灵活订阅选项",
+      "popular": "最受欢迎",
+      "plans": {
+        "eco": {
+          "name": "经济版",
+          "description": "入门的完美选择",
+          "features": [
+            "100 积分/月",
+            "基础模型",
+            "标准质量",
+            "社区支持",
+            "基础模板"
+          ],
+          "cta": "免费开始"
+        },
+        "pro": {
+          "name": "专业版",
+          "description": "为创作者而设",
+          "features": [
+            "1000 积分/月",
+            "所有模型",
+            "高质量",
+            "优先支持",
+            "高级设置",
+            "高级模板",
+            "批量下载"
+          ],
+          "cta": "选择计划"
+        },
+        "studio": {
+          "name": "工作室版",
+          "description": "为专业人士而设",
+          "features": [
+            "2500 积分/月",
+            "无限模型",
+            "超高质量",
+            "24/7 支持",
+            "API 访问",
+            "商业使用",
+            "自定义模型",
+            "优先处理"
+          ],
+          "cta": "选择计划"
+        }
+      }
+    },
+    "templates": {
+      "title": "现成模板",
+      "subtitle": "为专业结果预优化的设置",
+      "categories": {
+        "all": "全部",
+        "portrait": "肖像",
+        "landscape": "风景",
+        "anime": "动漫",
+        "scifi": "科幻",
+        "fantasy": "奇幻",
+        "abstract": "抽象"
+      },
+      "templateList": {
+        "portraitPhoto": {
+          "name": "肖像摄影",
+          "description": "为专业肖像摄影优化的设置"
+        },
+        "landscapePhoto": {
+          "name": "风景摄影",
+          "description": "自然和风景摄影的理想设置"
+        },
+        "animeStyle": {
+          "name": "动漫风格",
+          "description": "动漫和漫画角色的特殊设置"
+        },
+        "cyberpunk": {
+          "name": "赛博朋克",
+          "description": "未来主义和赛博朋克主题视觉"
+        },
+        "fantasyArt": {
+          "name": "奇幻艺术",
+          "description": "魔法和奇幻世界的模板"
+        },
+        "minimalist": {
+          "name": "极简主义",
+          "description": "简洁的极简主义设计"
+        }
+      },
+      "useTemplate": "使用模板",
+      "usageCount": "使用次数"
+    },
+    "community": {
+      "title": "来自社区画廊",
+      "subtitle": "从我们用户创作的精彩作品中获得灵感",
+      "viewAll": "查看完整画廊"
+    },
+    "cta": {
+      "title": "准备好发现您的创造力了吗？",
+      "subtitle": "使用 Omnia Creata Studio 体验 AI 图像生成的力量。立即开始，将您的想象力变为现实。",
+      "startFree": "免费开始",
+      "exploreFeatures": "探索功能"
+    }
+  },
+  "studio": {
+    "title": "工作室",
+    "subtitle": "使用本地 AI 模型创建图像",
+    "modelSelection": "模型选择",
+    "settings": "设置",
+    "imageEditing": "图像编辑",
+    "preview": "预览面板",
+    "prompt": {
+      "positive": "正面提示",
+      "negative": "负面提示",
+      "placeholder": "详细描述您想要创建的图像...",
+      "negativePlaceholder": "指定您不想要的元素...",
+      "suggestions": "提示建议",
+      "categories": {
+        "portrait": "肖像",
+        "landscape": "风景",
+        "fantasy": "奇幻",
+        "scifi": "科幻",
+        "anime": "动漫"
+      }
+    },
+    "generation": {
+      "aspectRatio": "宽高比",
+      "steps": "步数",
+      "cfgScale": "CFG 比例",
+      "seed": "种子",
+      "randomize": "随机化",
+      "sampler": "采样器",
+      "scheduler": "调度器",
+      "generate": "生成图像",
+      "generating": "生成中...",
+      "progress": "进度",
+      "selectModel": "请选择模型和提示！",
+      "error": "图像生成错误！"
+    },
+    "editing": {
+      "hdr": "HDR",
+      "brightness": "亮度",
+      "contrast": "对比度",
+      "whitePoint": "白点",
+      "saturation": "饱和度",
+      "vibrance": "鲜艳度",
+      "reset": "重置"
+    },
+    "previewPanel": {
+      "placeholder": "图像将显示在这里",
+      "instruction": "选择模型并编写提示开始"
+    }
+  },
+  "profile": {
+    "title": "个人资料",
+    "subtitle": "管理您的账户信息和设置",
+    "tabs": {
+      "profile": "个人资料",
+      "membership": "会员",
+      "settings": "设置",
+      "history": "历史"
+    },
+    "profileTab": {
+      "displayName": "显示名称",
+      "username": "用户名",
+      "email": "邮箱",
+      "memberSince": "成为会员时间",
+      "editProfile": "编辑个人资料",
+      "totalImages": "总图像数",
+      "remainingCredits": "剩余积分",
+      "totalCreditsUsed": "已使用总积分",
+      "favoriteModel": "最喜欢的模型"
+    },
+    "membershipTab": {
+      "currentPlan": "您当前的计划",
+      "otherPlans": "其他计划",
+      "upgrade": "升级"
+    },
+    "settingsTab": {
+      "accountSettings": "账户设置",
+      "emailNotifications": "邮件通知",
+      "autoSave": "自动保存",
+      "autoSaveDesc": "自动保存生成的图像",
+      "privateImages": "私人图像",
+      "privateImagesDesc": "保持生成的图像私密",
+      "security": "安全",
+      "changePassword": "更改密码",
+      "twoFactor": "双因素认证"
+    },
+    "historyTab": {
+      "recentActivity": "最近活动",
+      "imageCreated": "图像已创建",
+      "hoursAgo": "小时前"
+    }
+  }
+}

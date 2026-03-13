@@ -1,0 +1,94 @@
+  - Bölüm 1: Vizyon & Amaç
+    - 🌍 Büyük Resim (Makro Vizyon)
+    - 🎯 Ana Hedefler
+    - 🚀 Farklılaştırıcı Özellikler
+    - 💡 Omnia Felsefesi
+  - Bölüm 2: Kullanıcı Yolculuğu
+    - 🔎 Keşif Aşaması
+    - ⬇️ İndirme & İlk Açılış
+    - 📝 Kayıt / Hesap Açma
+    - 🚀 İlk Fayda (Wow Moment)
+    - 🔄 Günlük Kullanım
+    - 🔐 Güven ve Kontrol
+  - Bölüm 3: Ürün Özellikleri (Revize)
+    - 🏠 Ana Ekran (Dashboard)
+    - 🖼️ Galeri Modu
+    - 📱 Uygulama Klasörleme
+    - 📂 Dosya Yönetimi
+    - 🎨 Temalar & Kişiselleştirme
+    - 📲 Widget & Bildirimler
+    - ☁️ Bulut Entegrasyonu (Opsiyonel)
+    - 🔒 Güvenlik & Onay Mekanizması
+  - Bölüm 4: Teknoloji & Mimari
+    - ⚙️ Genel Yaklaşım
+    - 📱 Local İşlemler (Telefon Üzerinde)
+    - ☁️ Cloud İşlemler (Sunucu / API)
+    - 🔐 Güvenlik & Yetkilendirme
+    - 📊 Veri Akışı
+    - 🧩 Modüler Mimari
+    - 🚀 Ölçeklenebilirlik Planı
+    - 🎯 Sonuç
+- Bölüm 5: Güvenlik, Gizlilik & Hukuki Çerçeve
+  - 🔒 Genel Güvenlik İlkeleri
+  - 🛡️ Uygulama İçi Güvenlik
+  - 👀 Kullanıcı Gizliliği
+  - 📜 Hukuki Çerçeve
+    - Terms of Service (Kullanım Koşulları)
+    - Privacy Policy (Gizlilik Sözleşmesi)
+    - EULA (End User License Agreement – Son Kullanıcı Lisans Sözleşmesi)
+  - 🧭 Ekstra Katmanlar
+- Bölüm 6: Kullanıcı Deneyimi & UI/UX
+  - 🎨 Tasarım Prensipleri
+  - 📱 Ana Ekran (Dashboard)
+  - 🤖 AI Kişisel Asistan
+  - 🔍 Navigasyon & Akış
+  - 🖼️ Görsel Elemanlar
+  - 🧑‍💻 Kullanıcı Deneyimi
+  - 🏆 Oyunlaştırma
+  - 🔌 Offline Mod
+- Bölüm 7: Gelir Modeli & Monetizasyon (Revize)
+  - 💰 Genel Strateji
+  - 🆓 Ücretsiz Versiyon (Free Tier)
+  - ⭐ Premium Versiyon (Abonelik)
+  - 👨‍👩‍👧‍👦 Aile Paketi (Family Plan)
+  - 🎓 Öğrenci İndirimi
+  - 🔧 “Pro Tools” Add-on Paketi
+  - 📺 Reklam Geliri (Free Kullanıcılar İçin)
+  - 🏢 Kurumsal Lisanslama (B2B)
+    - Kurumsal Premium Özellikler
+  - 🎯 Ek Gelir Modelleri
+  - 📊 Büyüme ve Ölçeklenme Planı
+- Omnia Master Plan Kitabı
+- 🎯 Genel Çerçeve
+- 🔑 İki Yol: Manuel & Otomatik Pazarlama
+  - 1. Manuel (Senin Yapabileceğin Basit Adımlar)
+  - 2. Otomatik (AI + Botlar ile)
+- 📈 Büyüme Aşamaları
+  - Aşama 1: MVP Lansmanı
+  - Aşama 2: Viral & Organik Yayılım
+  - Aşama 3: Oyunlaştırma ile Büyüme (Revize)
+  - Aşama 4: Global Yayılım
+- 📊 Ölçüm ve KPI’lar
+- ⚙️ Teknik Riskler
+- 💰 Finansal Riskler
+- 🔒 Güvenlik Riskleri
+- 🧑‍💻 Yönetimsel Riskler
+- 📈 Ölçeklenebilirlik Stratejisi
+- 🧩 Ekstra Riskler & Önlemler
+- UZUN VADELİ VİZYON
+  - 1) 12–18 Ay Vizyonu
+  - 2) 24–36 Ay Vizyonu
+  - 3) Teknik İlkeler
+  - 4) Ticari Hedefler
+  - 5) Ekipleşme Yol Haritası
+  - 6) Açık Riskler & Hipotezler
+  - KAPANIŞ (North Star)
+- EKLER
+  - A. Terimler Sözlüğü (Kısa)
+  - B. Model & API Matrisi + Seçim Politikası
+  - C. TRAE Prompt Kütüphanesi (Örnekler)
+  - D. Hata Yönetimi, Oran Sınırı (Rate Limit) ve Geri Alma
+  - E. Veri Şeması (SQLite) & Telemetri Planı
+  - F. UI Kit & Design Tokens
+  - G. Uyum & Belgeler (Özet)
+  - H. Yayın & Bakım Checklist

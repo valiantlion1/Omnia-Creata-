@@ -1,0 +1,219 @@
+/* ═══════════════════════════════════════════════════
+   Omnia Creata Studio — Premium Theme System
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  /* Base dark background */
+  --bg: 8 8 16;
+  --bg-secondary: 14 14 24;
+  --bg-tertiary: 20 20 32;
+  --fg: 248 250 252;
+  --fg-secondary: 203 213 225;
+  --fg-muted: 110 120 140;
+
+  /* Default: Midnight (deep purple-blue) */
+  --primary: 124 58 237;
+  /* violet-600 */
+  --primary-light: 167 139 250;
+  /* violet-400 */
+  --primary-dark: 76 29 149;
+  /* violet-900 */
+  --accent: 99 102 241;
+  /* indigo-500 */
+  --accent-light: 165 180 252;
+  /* indigo-300 */
+
+  /* Gradient stops */
+  --gradient-from: 124 58 237;
+  /* violet */
+  --gradient-via: 99 102 241;
+  /* indigo */
+  --gradient-to: 59 130 246;
+  /* blue */
+
+  /* Success/Error */
+  --success: 34 197 94;
+  --error: 239 68 68;
+  --warning: 250 204 21;
+
+  /* Legacy support */
+  --goldA: 167 139 250;
+  --goldB: 99 102 241;
+}
+
+/* ── Theme: Cyberpunk ────────────────────── */
+.theme-cyberpunk {
+  --bg: 5 5 12;
+  --bg-secondary: 10 12 20;
+  --bg-tertiary: 15 18 28;
+
+  --primary: 0 255 255;
+  --primary-light: 103 255 255;
+  --primary-dark: 0 150 150;
+  --accent: 255 0 128;
+  --accent-light: 255 100 170;
+
+  --gradient-from: 0 255 255;
+  --gradient-via: 128 0 255;
+  --gradient-to: 255 0 128;
+
+  --goldA: 0 255 255;
+  --goldB: 255 0 128;
+}
+
+/* ── Theme: Sunset ───────────────────────── */
+.theme-sunset {
+  --bg: 12 8 8;
+  --bg-secondary: 18 12 12;
+  --bg-tertiary: 24 16 16;
+
+  --primary: 249 115 22;
+  --primary-light: 251 146 60;
+  --primary-dark: 194 65 12;
+  --accent: 239 68 68;
+  --accent-light: 252 165 165;
+
+  --gradient-from: 249 115 22;
+  --gradient-via: 239 68 68;
+  --gradient-to: 236 72 153;
+
+  --goldA: 251 146 60;
+  --goldB: 239 68 68;
+}
+
+/* ── Theme: Ocean ────────────────────────── */
+.theme-ocean {
+  --bg: 5 10 18;
+  --bg-secondary: 8 16 28;
+  --bg-tertiary: 12 22 38;
+
+  --primary: 6 182 212;
+  --primary-light: 103 232 249;
+  --primary-dark: 8 120 150;
+  --accent: 59 130 246;
+  --accent-light: 147 197 253;
+
+  --gradient-from: 6 182 212;
+  --gradient-via: 59 130 246;
+  --gradient-to: 99 102 241;
+
+  --goldA: 103 232 249;
+  --goldB: 59 130 246;
+}
+
+/* ── Theme: Emerald ──────────────────────── */
+.theme-emerald {
+  --bg: 5 12 8;
+  --bg-secondary: 8 18 12;
+  --bg-tertiary: 12 24 16;
+
+  --primary: 16 185 129;
+  --primary-light: 52 211 153;
+  --primary-dark: 6 95 70;
+  --accent: 34 197 94;
+  --accent-light: 134 239 172;
+
+  --gradient-from: 16 185 129;
+  --gradient-via: 34 197 94;
+  --gradient-to: 74 222 128;
+
+  --goldA: 52 211 153;
+  --goldB: 34 197 94;
+}
+
+/* ── Theme: Royal (violet-fuchsia) ───────── */
+.theme-royal {
+  --bg: 10 5 15;
+  --bg-secondary: 16 8 24;
+  --bg-tertiary: 22 12 32;
+
+  --primary: 168 85 247;
+  --primary-light: 192 132 252;
+  --primary-dark: 107 33 168;
+  --accent: 236 72 153;
+  --accent-light: 244 114 182;
+
+  --gradient-from: 168 85 247;
+  --gradient-via: 217 70 239;
+  --gradient-to: 236 72 153;
+
+  --goldA: 192 132 252;
+  --goldB: 236 72 153;
+}
+
+/* ── Theme: Aurora (Borealis) ────────────── */
+.theme-aurora {
+  --bg: 5 8 15;
+  --bg-secondary: 8 14 24;
+  --bg-tertiary: 12 20 32;
+
+  --primary: 34 211 238;
+  --primary-light: 103 232 249;
+  --primary-dark: 22 78 99;
+  --accent: 52 211 153;
+  --accent-light: 110 231 183;
+
+  --gradient-from: 34 211 238;
+  --gradient-via: 52 211 153;
+  --gradient-to: 167 139 250;
+
+  --goldA: 103 232 249;
+  --goldB: 52 211 153;
+}
+
+/* ── Theme: Dusk (warm gold) ─────────────── */
+.theme-dusk {
+  --bg: 12 10 8;
+  --bg-secondary: 18 15 10;
+  --bg-tertiary: 24 20 14;
+
+  --primary: 217 167 45;
+  --primary-light: 250 204 21;
+  --primary-dark: 133 77 14;
+  --accent: 99 102 241;
+  --accent-light: 165 180 252;
+
+  --gradient-from: 217 167 45;
+  --gradient-via: 250 204 21;
+  --gradient-to: 99 102 241;
+
+  --goldA: 217 167 45;
+  --goldB: 250 204 21;
+}
+
+/* ── Base Styles ─────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--fg));
+  transition: background-color .5s ease, color .3s ease;
+}
+
+.dark {
+  /* keep dark base */
+}
+
+/* Theme transition for all elements */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: .4s;
+  transition-timing-function: ease;
+}
+
+/* Exclude elements where transition causes issues */
+input,
+textarea,
+select,
+button,
+a,
+[class*="animate"],
+[class*="transition"] {
+  transition-property: none;
+}

@@ -1,0 +1,11 @@
+﻿Omni System Report - DESKTOP-GR8VMTR - 20250920_141051
+OS: Windows 10 Pro 2009 (64 bit) Build:26100.1.amd64fre.ge_release.240331-1435
+CPU: AMD Ryzen 5 7640HS w/ Radeon 760M Graphics       Cores:6  Threads:12
+RAM Total: 13.79 GB  Slots: 2  SMBIOS MaxCapacity: 64 GB
+GPU(s): AMD Radeon(TM) Graphics; NVIDIA GeForce RTX 4060 Laptop GPU
+Volumes:
+ - - NTFS Size:0.71 GB Free:0.11 GB Health:Healthy
+ - - FAT32 Size:0.09 GB Free:0.04 GB Health:Healthy
+ - C NTFS Size:953.04 GB Free:245.72 GB Health:Healthy
+Artifacts: JSON/TXT/HTML + raw/ (dxdiag, drivers, powercfg, wlan, firewall, etc.)
+

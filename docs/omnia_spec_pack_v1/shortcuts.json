@@ -1,0 +1,18 @@
+{
+  "generate": {
+    "win": "Ctrl+Enter",
+    "mac": "Cmd+Enter"
+  },
+  "toggle_nsfw": {
+    "win": "Ctrl+Alt+N",
+    "mac": "Cmd+Alt+N"
+  },
+  "open_prompt_studio": {
+    "win": "Ctrl+Shift+P",
+    "mac": "Cmd+Shift+P"
+  },
+  "popout_preview": {
+    "win": "Ctrl+Shift+O",
+    "mac": "Cmd+Shift+O"
+  }
+}

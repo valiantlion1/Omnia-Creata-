@@ -1,0 +1,23 @@
+{
+  "order_left": [
+    "model",
+    "presetLibrary",
+    "styles",
+    "references"
+  ],
+  "order_center": [
+    "prompt",
+    "params",
+    "advanced",
+    "actions"
+  ],
+  "order_right": [
+    "summary",
+    "gallery",
+    "history"
+  ],
+  "visible": {
+    "gallery": true,
+    "history": true
+  }
+}

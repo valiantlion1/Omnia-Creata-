@@ -1,0 +1,182 @@
+[
+  {
+    "id": "photo_realistic_portrait",
+    "name": "Realistic Portrait",
+    "category": "Photography",
+    "tags": [
+      "realistic",
+      "portrait"
+    ],
+    "tokens": [
+      "photorealistic",
+      "85mm lens",
+      "skin detail",
+      "natural lighting"
+    ],
+    "neg": [
+      "watermark",
+      "text"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "photo_cinematic",
+    "name": "Cinematic",
+    "category": "Photography",
+    "tags": [
+      "cinematic"
+    ],
+    "tokens": [
+      "cinematic",
+      "film grain",
+      "moody lighting",
+      "anamorphic bokeh"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "photo_macro",
+    "name": "Macro",
+    "category": "Photography",
+    "tags": [
+      "macro"
+    ],
+    "tokens": [
+      "macro photography",
+      "extreme detail",
+      "shallow depth of field"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "paint_oil",
+    "name": "Oil Painting",
+    "category": "Painting",
+    "tags": [
+      "painting",
+      "oil"
+    ],
+    "tokens": [
+      "oil painting",
+      "impasto",
+      "rich pigment",
+      "varnish sheen"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "design_isometric",
+    "name": "Isometric",
+    "category": "Design",
+    "tags": [
+      "isometric",
+      "vector"
+    ],
+    "tokens": [
+      "isometric view",
+      "vector",
+      "flat shading"
+    ],
+    "weight": 1.0,
+    "apply_mode": "tag-only",
+    "safe_gate": "none"
+  },
+  {
+    "id": "texture_canvas",
+    "name": "Canvas Texture",
+    "category": "Texture",
+    "tags": [
+      "texture"
+    ],
+    "tokens": [
+      "canvas texture",
+      "painted look",
+      "subtle brush strokes"
+    ],
+    "weight": 1.0,
+    "apply_mode": "tag-only",
+    "safe_gate": "none"
+  },
+  {
+    "id": "anime_cel",
+    "name": "Anime — Cel Shade",
+    "category": "Anime",
+    "tags": [
+      "anime",
+      "cel"
+    ],
+    "tokens": [
+      "cel shading",
+      "clean lineart",
+      "vibrant colors"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "color_teal_orange",
+    "name": "Teal & Orange",
+    "category": "Color",
+    "tags": [
+      "grading"
+    ],
+    "tokens": [
+      "teal and orange grading",
+      "cinematic contrast"
+    ],
+    "weight": 1.0,
+    "apply_mode": "append",
+    "safe_gate": "none"
+  },
+  {
+    "id": "nsfw_realistic_soft",
+    "name": "NSFW Realistic — Soft",
+    "category": "NSFW",
+    "tags": [
+      "nsfw",
+      "realistic"
+    ],
+    "tokens": [
+      "studio lighting",
+      "skin tone balance",
+      "subtle highlights"
+    ],
+    "neg": [
+      "watermark",
+      "text"
+    ],
+    "weight": 0.9,
+    "apply_mode": "append",
+    "safe_gate": "nsfw"
+  },
+  {
+    "id": "nsfw_anime_soft",
+    "name": "NSFW Anime — Soft",
+    "category": "NSFW",
+    "tags": [
+      "nsfw",
+      "anime"
+    ],
+    "tokens": [
+      "clean lineart",
+      "soft shading",
+      "delicate palette"
+    ],
+    "neg": [
+      "watermark",
+      "text"
+    ],
+    "weight": 0.9,
+    "apply_mode": "append",
+    "safe_gate": "nsfw"
+  }
+]

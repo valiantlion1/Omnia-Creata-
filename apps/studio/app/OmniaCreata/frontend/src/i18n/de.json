@@ -1,0 +1,268 @@
+{
+  "common": {
+    "appTitle": "Omnia Creata Studio",
+    "tagline": "KI-Kreativstudio",
+    "loading": "Lädt...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Vorherige",
+    "confirm": "Bestätigen",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "navigation": {
+    "home": "Startseite",
+    "studio": "Studio",
+    "gallery": "Galerie",
+    "community": "Community",
+    "profile": "Profil",
+    "settings": "Einstellungen",
+    "features": "Funktionen",
+    "pricing": "Preise",
+    "support": "Support"
+  },
+  "landing": {
+    "enterStudio": "Studio betreten",
+    "heroTitle": "Erschaffe die",
+    "heroTitleHighlight": "Zukunft",
+    "heroDescription": "Erleben Sie das moderne KI-Studio mit Omnia Creata. Von Prompt zu Bild, professionelle Ergebnisse mit einem Klick. Kompakte Steuerung, sofortige Vorschau.",
+    "getStarted": "Loslegen",
+    "learnMore": "Mehr erfahren"
+  },
+  "home": {
+    "heroSlides": {
+      "slide1": {
+        "title": "Entdecken Sie Ihre Kreativität mit KI",
+        "subtitle": "Verwandeln Sie Ihre Vorstellungskraft in Realität mit Omnia Creata Studio",
+        "description": "Erstellen Sie professionelle Bilder mit den fortschrittlichsten KI-Modellen. Unbegrenzte Kreativität, unbegrenzte Möglichkeiten.",
+        "cta": "Jetzt starten"
+      },
+      "slide2": {
+        "title": "Professionelle Ergebnisse, einfach zu verwenden",
+        "subtitle": "Professionelle Plattform mit modernster Technologie",
+        "description": "Schnelle und sichere Bildgenerierung mit lokalen KI-Modellen. Ihre Daten bleiben bei Ihnen, Ihre Privatsphäre ist geschützt.",
+        "cta": "Funktionen erkunden"
+      },
+      "slide3": {
+        "title": "Wachsen Sie mit der Community-Kraft",
+        "subtitle": "Lernen und entwickeln Sie sich mit Tausenden von Kreativen",
+        "description": "Bringen Sie Ihre Kreativität mit Vorlagen, Tipps und inspirierenden Werken auf die nächste Stufe.",
+        "cta": "Community beitreten"
+      }
+    },
+    "features": {
+      "title": "Warum Omnia Creata?",
+      "subtitle": "Entdecken Sie Ihre Kreativität mit der fortschrittlichsten KI-gestützten Bildgenerierungsplattform",
+      "feature1": {
+        "title": "Schnell und kraftvoll",
+        "description": "Generieren Sie professionelle Bilder in Sekunden mit lokalen KI-Modellen"
+      },
+      "feature2": {
+        "title": "Sicher und privat",
+        "description": "Ihre Daten bleiben vollständig bei Ihnen. Ihre Privatsphäre ist unsere Priorität"
+      },
+      "feature3": {
+        "title": "Unbegrenzte Kreativität",
+        "description": "Erweitern Sie die Grenzen Ihrer Vorstellungskraft mit Tausenden von Modellen und Vorlagen"
+      }
+    },
+    "pricing": {
+      "title": "Wählen Sie Ihren perfekten Plan",
+      "subtitle": "Flexible Mitgliedschaftsoptionen für Ihre Bedürfnisse",
+      "popular": "Beliebteste",
+      "plans": {
+        "eco": {
+          "name": "Eco",
+          "description": "Perfekt für den Einstieg",
+          "features": [
+            "100 Credits/Monat",
+            "Grundmodelle",
+            "Standardqualität",
+            "Community-Support",
+            "Grundvorlagen"
+          ],
+          "cta": "Kostenlos starten"
+        },
+        "pro": {
+          "name": "Pro",
+          "description": "Für Kreative",
+          "features": [
+            "1000 Credits/Monat",
+            "Alle Modelle",
+            "Hohe Qualität",
+            "Prioritätssupport",
+            "Erweiterte Einstellungen",
+            "Premium-Vorlagen",
+            "Bulk-Download"
+          ],
+          "cta": "Plan wählen"
+        },
+        "studio": {
+          "name": "Studio",
+          "description": "Für Profis",
+          "features": [
+            "2500 Credits/Monat",
+            "Unbegrenzte Modelle",
+            "Ultra-Qualität",
+            "24/7 Support",
+            "API-Zugang",
+            "Kommerzielle Nutzung",
+            "Benutzerdefinierte Modelle",
+            "Prioritätsverarbeitung"
+          ],
+          "cta": "Plan wählen"
+        }
+      }
+    },
+    "templates": {
+      "title": "Fertige Vorlagen",
+      "subtitle": "Voroptimierte Einstellungen für professionelle Ergebnisse",
+      "categories": {
+        "all": "Alle",
+        "portrait": "Porträt",
+        "landscape": "Landschaft",
+        "anime": "Anime",
+        "scifi": "Sci-Fi",
+        "fantasy": "Fantasy",
+        "abstract": "Abstrakt"
+      },
+      "templateList": {
+        "portraitPhoto": {
+          "name": "Porträtfotografie",
+          "description": "Optimierte Einstellungen für professionelle Porträtfotos"
+        },
+        "landscapePhoto": {
+          "name": "Landschaftsfotografie",
+          "description": "Ideale Einstellungen für Natur- und Landschaftsfotos"
+        },
+        "animeStyle": {
+          "name": "Anime-Stil",
+          "description": "Spezielle Einstellungen für Anime- und Manga-Charaktere"
+        },
+        "cyberpunk": {
+          "name": "Cyberpunk",
+          "description": "Futuristische und Cyberpunk-Themen-Visuals"
+        },
+        "fantasyArt": {
+          "name": "Fantasy-Kunst",
+          "description": "Vorlage für magische und Fantasy-Welten"
+        },
+        "minimalist": {
+          "name": "Minimalistisch",
+          "description": "Saubere und minimalistische Designs"
+        }
+      },
+      "useTemplate": "Vorlage verwenden",
+      "usageCount": "Verwendungen"
+    },
+    "community": {
+      "title": "Aus der Community-Galerie",
+      "subtitle": "Lassen Sie sich von erstaunlichen Werken unserer Benutzer inspirieren",
+      "viewAll": "Vollständige Galerie anzeigen"
+    },
+    "cta": {
+      "title": "Bereit, Ihre Kreativität zu entdecken?",
+      "subtitle": "Erleben Sie die Kraft der KI-gestützten Bildgenerierung mit Omnia Creata Studio. Starten Sie jetzt und verwandeln Sie Ihre Vorstellungskraft in Realität.",
+      "startFree": "Kostenlos starten",
+      "exploreFeatures": "Funktionen erkunden"
+    }
+  },
+  "studio": {
+    "title": "Studio",
+    "subtitle": "Erstellen Sie Bilder mit lokalen KI-Modellen",
+    "modelSelection": "Modellauswahl",
+    "settings": "Einstellungen",
+    "imageEditing": "Bildbearbeitung",
+    "preview": "Vorschau-Panel",
+    "prompt": {
+      "positive": "Positiver Prompt",
+      "negative": "Negativer Prompt",
+      "placeholder": "Beschreiben Sie das Bild, das Sie erstellen möchten, detailliert...",
+      "negativePlaceholder": "Geben Sie Elemente an, die Sie nicht möchten...",
+      "suggestions": "Prompt-Vorschläge",
+      "categories": {
+        "portrait": "Porträt",
+        "landscape": "Landschaft",
+        "fantasy": "Fantasy",
+        "scifi": "Sci-Fi",
+        "anime": "Anime"
+      }
+    },
+    "generation": {
+      "aspectRatio": "Seitenverhältnis",
+      "steps": "Schritte",
+      "cfgScale": "CFG-Skala",
+      "seed": "Seed",
+      "randomize": "Zufällig",
+      "sampler": "Sampler",
+      "scheduler": "Scheduler",
+      "generate": "Bild generieren",
+      "generating": "Generiere...",
+      "progress": "Fortschritt",
+      "selectModel": "Bitte wählen Sie ein Modell und einen Prompt!",
+      "error": "Bildgenerierungsfehler!"
+    },
+    "editing": {
+      "hdr": "HDR",
+      "brightness": "Helligkeit",
+      "contrast": "Kontrast",
+      "whitePoint": "Weißpunkt",
+      "saturation": "Sättigung",
+      "vibrance": "Lebendigkeit",
+      "reset": "Zurücksetzen"
+    },
+    "previewPanel": {
+      "placeholder": "Bild wird hier erscheinen",
+      "instruction": "Wählen Sie ein Modell und schreiben Sie einen Prompt, um zu beginnen"
+    }
+  },
+  "profile": {
+    "title": "Profil",
+    "subtitle": "Verwalten Sie Ihre Kontoinformationen und Einstellungen",
+    "tabs": {
+      "profile": "Profil",
+      "membership": "Mitgliedschaft",
+      "settings": "Einstellungen",
+      "history": "Verlauf"
+    },
+    "profileTab": {
+      "displayName": "Anzeigename",
+      "username": "Benutzername",
+      "email": "E-Mail",
+      "memberSince": "Mitglied seit",
+      "editProfile": "Profil bearbeiten",
+      "totalImages": "Gesamte Bilder",
+      "remainingCredits": "Verbleibende Credits",
+      "totalCreditsUsed": "Gesamte verwendete Credits",
+      "favoriteModel": "Lieblingsmodell"
+    },
+    "membershipTab": {
+      "currentPlan": "Ihr aktueller Plan",
+      "otherPlans": "Andere Pläne",
+      "upgrade": "Upgrade"
+    },
+    "settingsTab": {
+      "accountSettings": "Kontoeinstellungen",
+      "emailNotifications": "E-Mail-Benachrichtigungen",
+      "autoSave": "Automatisches Speichern",
+      "autoSaveDesc": "Generierte Bilder automatisch speichern",
+      "privateImages": "Private Bilder",
+      "privateImagesDesc": "Generierte Bilder privat halten",
+      "security": "Sicherheit",
+      "changePassword": "Passwort ändern",
+      "twoFactor": "Zwei-Faktor-Authentifizierung"
+    },
+    "historyTab": {
+      "recentActivity": "Letzte Aktivität",
+      "imageCreated": "Bild erstellt",
+      "hoursAgo": "Stunden her"
+    }
+  }
+}
