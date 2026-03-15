@@ -1,0 +1,1 @@
+# Placeholder for static_mode_switch.py

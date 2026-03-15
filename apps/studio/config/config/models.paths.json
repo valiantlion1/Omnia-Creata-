@@ -1,0 +1,11 @@
+{
+  "root": "c:\\AI\\models",
+  "paths": {
+    "checkpoints": "c:\\AI\\models\\checkpoints",
+    "controlnet": "c:\\AI\\models\\controlnet",
+    "ipadapter": "c:\\AI\\models\\ipadapter",
+    "vae": "c:\\AI\\models\\vae",
+    "upscale_models": "c:\\AI\\models\\upscale_models",
+    "lora": "c:\\AI\\models\\lora"
+  }
+}

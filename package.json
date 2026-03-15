@@ -1,0 +1,14 @@
+{
+  "name": "omnia-creata-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Root manifest and validation scripts for the Omnia Creata monorepo.",
+  "packageManager": "npm@10.9.3",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "repo:inventory": "node scripts/repo-inventory.mjs",
+    "repo:check": "node scripts/repo-check.mjs"
+  }
+}

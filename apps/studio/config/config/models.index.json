@@ -1,0 +1,134 @@
+{
+  "generated_at": 1755727315,
+  "root": "c:\\AI\\models",
+  "sets": {
+    "checkpoints": [
+      {
+        "name": "animagine-xl-4.0.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\animagine-xl-4.0.safetensors",
+        "type": "checkpoints",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 6617.01,
+        "modified_ts": 1755454065
+      },
+      {
+        "name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors",
+        "type": "checkpoints",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 6776.19,
+        "modified_ts": 1755452716
+      },
+      {
+        "name": "lbc_pony_wedding dress_126-000006.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\lbc_pony_wedding dress_126-000006.safetensors",
+        "type": "checkpoints",
+        "family": "unknown",
+        "ext": ".safetensors",
+        "size_mb": 109.13,
+        "modified_ts": 1755704217
+      },
+      {
+        "name": "RealVisXL_V3.0.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\RealVisXL_V3.0.safetensors",
+        "type": "checkpoints",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 6616.63,
+        "modified_ts": 1755474173
+      },
+      {
+        "name": "sd_xl_base_1.0.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\sd_xl_base_1.0.safetensors",
+        "type": "checkpoints",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 6616.67,
+        "modified_ts": 1755450717
+      },
+      {
+        "name": "sd_xl_refiner_1.0.safetensors",
+        "path": "C:\\AI\\models\\checkpoints\\sd_xl_refiner_1.0.safetensors",
+        "type": "checkpoints",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 5794.51,
+        "modified_ts": 1755454599
+      }
+    ],
+    "controlnet": [
+      {
+        "name": "controlnet-canny-sdxl.fp16.safetensors",
+        "path": "C:\\AI\\models\\controlnet\\controlnet-canny-sdxl.fp16.safetensors",
+        "type": "controlnet",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 2386.23,
+        "modified_ts": 1755473455
+      },
+      {
+        "name": "controlnet-depth-sdxl.fp16.safetensors",
+        "path": "C:\\AI\\models\\controlnet\\controlnet-depth-sdxl.fp16.safetensors",
+        "type": "controlnet",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 2386.23,
+        "modified_ts": 1755474557
+      },
+      {
+        "name": "controlnet-openpose-xl2.safetensors",
+        "path": "C:\\AI\\models\\controlnet\\controlnet-openpose-xl2.safetensors",
+        "type": "controlnet",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 4772.35,
+        "modified_ts": 1755477255
+      }
+    ],
+    "ipadapter": [
+      {
+        "name": "ip-adapter_sdxl.safetensors",
+        "path": "C:\\AI\\models\\ipadapter\\ip-adapter_sdxl.safetensors",
+        "type": "ipadapter",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 670.04,
+        "modified_ts": 1755471572
+      },
+      {
+        "name": "ip-adapter_sdxl_vit-h.safetensors",
+        "path": "C:\\AI\\models\\ipadapter\\ip-adapter_sdxl_vit-h.safetensors",
+        "type": "ipadapter",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 666.04,
+        "modified_ts": 1755451227
+      }
+    ],
+    "vae": [
+      {
+        "name": "sdxl_vae.safetensors",
+        "path": "C:\\AI\\models\\vae\\sdxl_vae.safetensors",
+        "type": "vae",
+        "family": "sdxl",
+        "ext": ".safetensors",
+        "size_mb": 319.14,
+        "modified_ts": 1755474566
+      }
+    ],
+    "upscale_models": [
+      {
+        "name": "4x-UltraSharp.pth",
+        "path": "C:\\AI\\models\\upscale_models\\ERSGAN\\4x-UltraSharp.pth",
+        "type": "upscale_models",
+        "family": "unknown",
+        "ext": ".pth",
+        "size_mb": 63.86,
+        "modified_ts": 1755450832
+      }
+    ],
+    "lora": []
+  }
+}

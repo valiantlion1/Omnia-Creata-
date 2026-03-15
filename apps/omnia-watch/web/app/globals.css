@@ -1,0 +1,50 @@
+@import "@omnia-watch/design-tokens/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  background:
+    radial-gradient(circle at top, rgb(var(--color-accent) / 0.08), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgb(var(--color-info) / 0.05), transparent 22%),
+    rgb(var(--color-canvas));
+}
+
+body {
+  min-height: 100vh;
+  background-image:
+    linear-gradient(180deg, rgb(var(--color-canvas)), rgb(7 11 20)),
+    radial-gradient(circle at top, rgb(var(--color-accent) / 0.05), transparent 30%);
+  color: rgb(var(--color-text));
+}
+
+body::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+body::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background: rgb(var(--color-border) / 0.45);
+  background-clip: padding-box;
+}
+
+body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: rgb(var(--color-accent) / 0.25);
+  color: rgb(var(--color-text));
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  border-color: rgb(var(--color-border));
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@prompt-vault/validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@prompt-vault/types": "*",
+    "zod": "^3.25.76"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

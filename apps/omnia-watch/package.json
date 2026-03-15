@@ -1,0 +1,28 @@
+{
+  "name": "omnia-watch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Omnia Watch product workspace for the Omnia Creata ecosystem.",
+  "packageManager": "npm@10.9.3",
+  "workspaces": [
+    "web",
+    "desktop",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "check": "turbo run typecheck build",
+    "dev": "turbo run dev --parallel",
+    "dev:desktop": "npm run dev --workspace @omnia-watch/agent-windows",
+    "dev:agent": "npm run dev:desktop",
+    "dev:web": "npm run dev --workspace @omnia-watch/web",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

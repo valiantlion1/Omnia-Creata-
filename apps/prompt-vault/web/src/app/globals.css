@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f2ec;
+  --background-elevated: #fcf9f4;
+  --surface: rgba(255, 252, 246, 0.86);
+  --surface-strong: #fffcf7;
+  --surface-muted: rgba(111, 86, 45, 0.08);
+  --text-primary: #22180c;
+  --text-secondary: #5a4d3d;
+  --text-tertiary: #8a7965;
+  --border: rgba(38, 29, 14, 0.1);
+  --border-strong: rgba(38, 29, 14, 0.18);
+  --accent: #bc8f46;
+  --accent-strong: #e9ca92;
+  --accent-soft: rgba(188, 143, 70, 0.14);
+  --accent-foreground: #191106;
+  --danger: #b65d52;
+  --success: #9a8359;
+  --warning: #bc8f46;
+  --shadow-soft: 0 22px 62px rgba(38, 26, 10, 0.11);
+  --shadow-panel: 0 14px 36px rgba(38, 26, 10, 0.09);
+  --shadow-glow: 0 0 0 1px rgba(188, 143, 70, 0.08), 0 14px 38px rgba(188, 143, 70, 0.16);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  --grid-line: rgba(34, 23, 8, 0.035);
+  --focus-ring: rgba(205, 160, 96, 0.36);
+  --radius: 28px;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist);
+  --font-display: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+}
+
+.dark {
+  --background: #050505;
+  --background-elevated: #0a0908;
+  --surface: rgba(17, 15, 13, 0.86);
+  --surface-strong: #171411;
+  --surface-muted: rgba(188, 143, 70, 0.09);
+  --text-primary: #f3eadb;
+  --text-secondary: #c7b7a1;
+  --text-tertiary: #8f806b;
+  --border: rgba(238, 219, 185, 0.085);
+  --border-strong: rgba(238, 219, 185, 0.16);
+  --accent: #cda060;
+  --accent-strong: #f0d29d;
+  --accent-soft: rgba(205, 160, 96, 0.16);
+  --accent-foreground: #150e06;
+  --danger: #ef8a7a;
+  --success: #b99f71;
+  --warning: #e3b66d;
+  --shadow-soft: 0 28px 90px rgba(0, 0, 0, 0.42);
+  --shadow-panel: 0 18px 48px rgba(0, 0, 0, 0.26);
+  --shadow-glow: 0 0 0 1px rgba(240, 210, 157, 0.09), 0 18px 44px rgba(146, 105, 38, 0.2);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --grid-line: rgba(255, 255, 255, 0.03);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  background: var(--background);
+  color: var(--text-primary);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(205, 160, 96, 0.16), transparent 25%),
+    radial-gradient(circle at 92% 10%, rgba(114, 77, 30, 0.11), transparent 23%),
+    linear-gradient(180deg, var(--background-elevated) 0%, var(--background) 100%);
+  color: var(--text-primary);
+  font-family: var(--font-geist), sans-serif;
+  line-height: 1.45;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, transparent 0, transparent calc(100% - 1px), var(--grid-line) calc(100% - 1px)),
+    linear-gradient(to bottom, transparent 0, transparent calc(100% - 1px), var(--grid-line) calc(100% - 1px));
+  background-size: 42px 42px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 85%);
+  opacity: 0.5;
+  z-index: -2;
+}
+
+body::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  right: -12vw;
+  bottom: -24vh;
+  height: 44vw;
+  width: 44vw;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(212, 167, 91, 0.11), transparent 68%);
+  filter: blur(18px);
+  z-index: -1;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition-duration: 180ms;
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: manipulation;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.app-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01));
+  backdrop-filter: blur(24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition: none;
+  }
+}
+
+@media (max-width: 768px) {
+  body::before {
+    opacity: 0.38;
+  }
+
+  body::after {
+    width: 58vw;
+    height: 58vw;
+    right: -20vw;
+    bottom: -22vh;
+  }
+}

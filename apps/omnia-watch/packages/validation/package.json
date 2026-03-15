@@ -1,0 +1,13 @@
+{
+  "name": "@omnia-watch/validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@omnia-watch/types": "0.1.0",
+    "zod": "^3.24.2"
+  }
+}

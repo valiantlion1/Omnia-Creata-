@@ -1,0 +1,23 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 20
+
+env:
+  - variable: NEXT_PUBLIC_SITE_URL
+    value: https://watch.omniacreata.com
+  - variable: NEXT_PUBLIC_ACCOUNT_URL
+    value: https://account.omniacreata.com
+  - variable: NEXT_PUBLIC_MARKETING_URL
+    value: https://omniacreata.com
+  - variable: AGENT_SYNC_API_BASE_URL
+    value: https://watch.omniacreata.com
+
+# Configure the remaining values as Firebase App Hosting secrets:
+# - NEXT_PUBLIC_SUPABASE_URL
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY
+# - SUPABASE_SERVICE_ROLE_KEY
+# - DEVICE_CREDENTIAL_SECRET
+# - SUPABASE_JWT_SECRET

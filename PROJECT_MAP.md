@@ -1,35 +1,24 @@
-# OMNIACREATA PRODUCT ECOSYSTEM
+# Omnia Creata Project Map
 
-## Core Products (`apps/`)
-Bağımsız çalışabilir ve paketlenebilir ana ürünler.
+## Core products
 
-| Klasör | Ürün | Açıklama |
-|---|---|---|
-| `apps/studio` | **OmniaCreata Studio** | AI içerik üretim ve kreatif stüdyo platformu |
-| `apps/pixels` | **OmniaPixels** | AI görsel üretim uygulaması (Stable Diffusion, image pipeline) |
-| `apps/companion` | **OmniaCompanion** | AI chatbot + roleplay + explore sosyal medya platformu |
-| `apps/organizer` | **OmniaOrganizer** | Görev yönetimi ve üretkenlik uygulaması |
-| `apps/promptvault` | **PromptVault** | Prompt yönetim platformu (SaaS) — kaydet, versiyonla, test et, optimize et |
-| `apps/internal/control-center` | **Control Center** | Yöneticiye özel iç panel (public değil) |
+- `apps/studio` - Omnia Creata Studio
+- `apps/omniapixels` - OmniaPixels
+- `apps/organizer` - OmniaOrganizer
+- `apps/companion` - OmniaCompanion
+- `apps/omnia-watch` - Omnia Watch
+- `apps/prompt-vault` - Prompt Vault
+- `apps/internal/control-center` - Control Center
 
-## Creator Tools (`creator-tools/`)
-Hızlı çıkarılabilir, Base44/Bolt/Replit ile geliştirilen AI araçları.
+## Web properties
 
-| Klasör | Ürün |
-|---|---|
-| `creator-tools/ai-caption-generator` | AI Caption Generator |
-| `creator-tools/hashtag-seo-master` | Hashtag SEO Master |
-| `creator-tools/ai-hook-generator` | AI Hook Generator |
-| `creator-tools/content-planner` | Content Planner |
+- `website/omniacreata-com` - public HQ site
 
-## Diğer Alanlar
+## Shared and support layers
 
-| Klasör | İçerik |
-|---|---|
-| `website/` | omniacreata.com ana web sitesi |
-| `prototypes/` | Düşük öncelikli projeler (OmniaBench, GameHub) |
-| `assets/` | Figma, medya, veri dosyaları |
-| `docs/` | Mimari, spec, planlar, incelemeler |
-| `research/` | Agent testleri, deneysel kodlar |
-| `backups/` | Zip arşivleri ve yedekler |
-| `temp/` | Henüz ayrıştırılmamış dosyalar |
+- `packages/` - future cross-product packages
+- `design/` - brand, figma, and export material
+- `docs/` - living repository docs
+- `research/` - experiments
+- `prototypes/` - incubating concepts
+- `archive/` - historical material

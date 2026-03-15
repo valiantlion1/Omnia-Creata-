@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "name": "Omnia Creata",
+  "topLevel": {
+    "apps": "Active core products",
+    "website": "Web properties umbrella",
+    "packages": "Shared cross-product code and contracts",
+    "design": "Brand, figma, and export material",
+    "docs": "Living documentation only",
+    "research": "Experiments and investigations",
+    "prototypes": "Incubating concepts",
+    "archive": "Historical material that remains in-repo",
+    "temp": "Local quarantine and staging",
+    "backups": "Local backup area"
+  },
+  "coreApps": [
+    {
+      "id": "studio",
+      "path": "apps/studio",
+      "status": "active",
+      "surfaces": [
+        "web",
+        "backend",
+        "assets",
+        "config",
+        "ops"
+      ]
+    },
+    {
+      "id": "omniapixels",
+      "path": "apps/omniapixels",
+      "status": "active",
+      "surfaces": [
+        "backend",
+        "mobile",
+        "packages",
+        "ops",
+        "docs",
+        "tests"
+      ]
+    },
+    {
+      "id": "organizer",
+      "path": "apps/organizer",
+      "status": "active",
+      "surfaces": [
+        "mobile",
+        "docs"
+      ]
+    },
+    {
+      "id": "companion",
+      "path": "apps/companion",
+      "status": "planned-core",
+      "surfaces": [
+        "docs"
+      ]
+    },
+    {
+      "id": "omnia-watch",
+      "path": "apps/omnia-watch",
+      "status": "active",
+      "surfaces": [
+        "web",
+        "desktop",
+        "packages",
+        "docs",
+        "ops",
+        "supabase"
+      ]
+    },
+    {
+      "id": "prompt-vault",
+      "path": "apps/prompt-vault",
+      "status": "active",
+      "surfaces": [
+        "web",
+        "packages",
+        "docs",
+        "supabase"
+      ]
+    },
+    {
+      "id": "control-center",
+      "path": "apps/internal/control-center",
+      "status": "planned-core",
+      "surfaces": [
+        "docs"
+      ]
+    }
+  ],
+  "websiteProperties": [
+    {
+      "id": "omniacreata-com",
+      "path": "website/omniacreata-com",
+      "status": "active"
+    }
+  ],
+  "prototypeAreas": [
+    {
+      "id": "omniatools-lab",
+      "path": "prototypes/omniatools-lab",
+      "status": "incubation"
+    },
+    {
+      "id": "subcompare-lab",
+      "path": "prototypes/subcompare-lab",
+      "status": "incubation"
+    },
+    {
+      "id": "web-scratch",
+      "path": "prototypes/web-scratch",
+      "status": "scratch"
+    },
+    {
+      "id": "website-temp",
+      "path": "prototypes/website-temp",
+      "status": "scratch"
+    }
+  ]
+}

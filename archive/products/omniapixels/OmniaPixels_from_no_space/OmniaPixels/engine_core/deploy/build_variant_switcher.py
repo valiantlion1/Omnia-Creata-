@@ -1,0 +1,1 @@
+# Placeholder for build_variant_switcher.py
