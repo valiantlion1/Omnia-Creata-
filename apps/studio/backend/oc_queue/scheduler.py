@@ -358,7 +358,7 @@ class JobScheduler:
             if not schedule.enabled:
                 continue
             
-            if self._is_schedule_due(schedule, now):
+            if await self._is_schedule_due(schedule, now):
                 due_schedules.append(schedule)
         
         # Process in batches
@@ -371,7 +371,7 @@ class JobScheduler:
         
         self._stats['schedules_processed'] += len(due_schedules)
     
-    def _is_schedule_due(self, schedule: ScheduleConfig, now: datetime) -> bool:
+    async def _is_schedule_due(self, schedule: ScheduleConfig, now: datetime) -> bool:
         """Check if a schedule is due for execution"""
         # Check date range
         if schedule.start_date and now < schedule.start_date:
@@ -392,8 +392,21 @@ class JobScheduler:
             # Check if enough time has passed since last run
             try:
                 interval = float(schedule.schedule_value)
-                # TODO: Check last run time from Redis
-                return True  # Simplified for now
+
+                # Check last run time from Redis
+                if self.queue.redis:
+                    last_run_key = f"schedule:last_run:{schedule.schedule_id}"
+                    last_run_str = await self.queue.redis.get(last_run_key)
+
+                    if last_run_str:
+                        last_run = datetime.fromisoformat(last_run_str)
+                        # Ensure last_run has timezone info if now does
+                        if now.tzinfo and not last_run.tzinfo:
+                            last_run = last_run.replace(tzinfo=timezone.utc)
+
+                        return (now - last_run).total_seconds() >= interval
+
+                return True  # First run or no Redis
             except ValueError:
                 return False
         
@@ -562,9 +575,11 @@ class JobScheduler:
         
         schedule_key = f"schedules:{schedule_id}"
         runs_key = f"schedule:runs:{schedule_id}"
+        last_run_key = f"schedule:last_run:{schedule_id}"
         
         await self.queue.redis.delete(schedule_key)
         await self.queue.redis.delete(runs_key)
+        await self.queue.redis.delete(last_run_key)
     
     async def _save_schedule_run(self, run: ScheduleRun):
         """Save schedule run to Redis"""
@@ -579,6 +594,10 @@ class JobScheduler:
         
         # Trim to max runs
         await self.queue.redis.ltrim(runs_key, 0, self.config.max_runs_per_schedule - 1)
+
+        # Update last run time
+        last_run_key = f"schedule:last_run:{run.schedule_id}"
+        await self.queue.redis.set(last_run_key, run.scheduled_at.isoformat())
 
 
 # Convenience functions
