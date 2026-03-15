@@ -16,7 +16,7 @@ const aspectPresets = {
 export default function CreateCanvasPage() {
   const { projectId = '' } = useParams()
   const queryClient = useQueryClient()
-  const { auth, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [model, setModel] = useState('flux-schnell')
@@ -31,7 +31,7 @@ export default function CreateCanvasPage() {
   const projectQuery = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => studioApi.getProject(projectId),
-    enabled: Boolean(projectId && !auth?.guest),
+    enabled: Boolean(projectId && isAuthenticated),
   })
 
   const modelsQuery = useQuery({
@@ -84,6 +84,10 @@ export default function CreateCanvasPage() {
       queryClient.invalidateQueries({ queryKey: ['billing'] })
     }
   }, [activeGenerationQuery.data, projectId, queryClient])
+
+  if (isLoading) {
+    return <div className="px-6 py-12 text-sm text-zinc-400">Loading canvas...</div>
+  }
 
   if (auth?.guest) {
     return (

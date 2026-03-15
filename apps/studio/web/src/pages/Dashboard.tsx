@@ -9,26 +9,26 @@ import { studioApi } from '@/lib/studioApi'
 export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { auth, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: () => studioApi.listProjects(),
-    enabled: !auth?.guest,
+    enabled: isAuthenticated,
   })
 
   const generationsQuery = useQuery({
     queryKey: ['generations'],
     queryFn: () => studioApi.listGenerations(),
-    enabled: !auth?.guest,
+    enabled: isAuthenticated,
   })
 
   const billingQuery = useQuery({
     queryKey: ['billing'],
     queryFn: () => studioApi.getBillingSummary(),
-    enabled: !auth?.guest,
+    enabled: isAuthenticated,
   })
 
   const createProjectMutation = useMutation({
@@ -40,6 +40,10 @@ export default function Dashboard() {
       navigate(`/projects/${project.id}`)
     },
   })
+
+  if (isLoading) {
+    return <div className="px-6 py-12 text-sm text-zinc-400">Loading dashboard...</div>
+  }
 
   if (auth?.guest) {
     return (

@@ -8,13 +8,13 @@ import { studioApi } from '@/lib/studioApi'
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
-  const { auth, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
   const [shareMessage, setShareMessage] = useState('')
 
   const projectQuery = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => studioApi.getProject(projectId),
-    enabled: Boolean(projectId && !auth?.guest),
+    enabled: Boolean(projectId && isAuthenticated),
   })
 
   const shareMutation = useMutation({
@@ -28,6 +28,10 @@ export default function ProjectPage() {
       setShareMessage(error instanceof Error ? error.message : 'Unable to create share link.')
     },
   })
+
+  if (isLoading) {
+    return <div className="px-6 py-12 text-sm text-zinc-400">Loading project...</div>
+  }
 
   if (auth?.guest) {
     return (

@@ -6,12 +6,16 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { studioApi } from '@/lib/studioApi'
 
 export default function HistoryPage() {
-  const { auth, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
   const generationsQuery = useQuery({
     queryKey: ['generations'],
     queryFn: () => studioApi.listGenerations(),
-    enabled: !auth?.guest,
+    enabled: isAuthenticated,
   })
+
+  if (isLoading) {
+    return <div className="px-6 py-12 text-sm text-zinc-400">Loading history...</div>
+  }
 
   if (auth?.guest) {
     return (

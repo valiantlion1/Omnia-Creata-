@@ -142,6 +142,7 @@ ComfyUI/temp/
 ComfyUI/input/
 
 # Backend specific
+backend/data/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -273,3 +274,17 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Keep the active Studio web client and store source tracked.
+!web/src/lib/
+!web/src/lib/store/
+!web/src/lib/store/**
+!web/src/lib/presets.ts
+!web/src/lib/queryClient.ts
+!web/src/lib/studioApi.ts
+!web/src/lib/studioAuth.tsx
+!web/src/lib/studioSession.ts
+web/src/lib/comfyClient.ts
+web/src/lib/googleStudioClient.ts
+web/src/lib/hfClient.ts
+web/src/lib/llmPlanner.ts

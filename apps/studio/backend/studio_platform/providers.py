@@ -127,7 +127,7 @@ class PollinationsProvider(StudioImageProvider):
 
         url = f"{self.base_url}{quote(prompt)}"
         try:
-            async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), follow_redirects=True) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -203,8 +203,8 @@ class ProviderRegistry:
     def __init__(self) -> None:
         self.providers: List[StudioImageProvider] = [
             RunwareProvider(os.getenv("RUNWARE_API_KEY")),
-            PollinationsProvider(enabled=os.getenv("STUDIO_ENABLE_POLLINATIONS", "true").lower() != "false"),
             DemoImageProvider(),
+            PollinationsProvider(enabled=os.getenv("STUDIO_ENABLE_POLLINATIONS", "true").lower() != "false"),
         ]
 
     async def health_snapshot(self) -> List[Dict[str, str]]:

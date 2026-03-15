@@ -122,9 +122,11 @@ def create_router(service: StudioService) -> APIRouter:
     async def get_project(project_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
         auth_user = _require_auth(current_user)
         try:
-            return await service.get_project(auth_user.id, project_id)
+            payload = await service.get_project(auth_user.id, project_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        payload["recent_generations"] = [_serialize_generation(GenerationJob.model_validate(item)) for item in payload["recent_generations"]]
+        return payload
 
     @router.get("/generations")
     async def get_generations(
