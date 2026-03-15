@@ -17,6 +17,8 @@ from typing import Optional
 
 router = APIRouter()
 
+NON_CANCELLABLE_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+
 @router.get('/presets')
 def get_presets():
     presets_path = os.path.join(os.path.dirname(__file__), '../models/presets.json')
@@ -140,7 +142,7 @@ def cancel_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+    if job.status in NON_CANCELLABLE_STATUSES:
         raise HTTPException(status_code=400, detail="Job cannot be cancelled")
     
     job.status = JobStatus.CANCELLED
