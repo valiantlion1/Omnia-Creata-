@@ -7,7 +7,7 @@
 | Omnia Creata Studio | `apps/studio` | Web + backend product root |
 | OmniaPixels | `apps/omniapixels` | Backend + mobile + product docs |
 | OmniaOrganizer | `apps/organizer` | Mobile Android root + planning docs |
-| OmniaCompanion | `apps/companion` | Product doc root, implementation pending |
+| OmniaCompanion | `apps/companion` | Canonical product plan and handoff, implementation pending |
 | Omnia Watch | `apps/omnia-watch` | Web + desktop + shared packages |
 | Prompt Vault | `apps/prompt-vault` | Web + shared packages + Supabase |
 | Control Center | `apps/internal/control-center` | Internal suite seed, implementation pending |

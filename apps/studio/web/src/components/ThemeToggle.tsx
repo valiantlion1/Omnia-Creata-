@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useStore, ThemeKey } from '@/lib/store';
+import { useStore } from '@/lib/store';
+import type { ThemeKey } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const THEMES: { id: ThemeKey; label: string; colors: [string, string]; emoji: string }[] = [

@@ -1,0 +1,1 @@
+"""Studio platform domain package."""
