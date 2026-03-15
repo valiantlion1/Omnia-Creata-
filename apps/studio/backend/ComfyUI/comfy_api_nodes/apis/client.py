@@ -18,10 +18,11 @@ Usage Examples:
 # For a simple API call that returns the result immediately:
 
 # 1. Create the API client
+import os
 api_client = ApiClient(
     base_url="https://api.example.com",
-    auth_token="your_auth_token_here",
-    comfy_api_key="your_comfy_api_key_here",
+    auth_token=os.getenv("COMFY_AUTH_TOKEN"),
+    comfy_api_key=os.getenv("COMFY_API_KEY"),
     timeout=30.0,
     verify_ssl=True
 )
