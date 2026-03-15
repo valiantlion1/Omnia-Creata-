@@ -4,12 +4,9 @@ Handles image processing tasks using AI Orchestrator
 """
 
 import logging
-import time
-from core.database import get_db
-from core.models import Job, JobStatus
+from core.models import Job
 from ai.orchestrator import process_job_task
 import tempfile
-import ostempfile
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
