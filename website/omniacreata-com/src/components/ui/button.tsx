@@ -7,16 +7,16 @@ type ButtonSize = "md" | "lg";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border border-[rgba(217,181,109,0.3)] bg-[linear-gradient(135deg,#f1d89f_0%,#d0a95e_45%,#9f7741_100%)] text-black shadow-[0_20px_50px_rgba(217,181,109,0.22)] hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(217,181,109,0.28)]",
+    "border border-[rgba(217,181,109,0.34)] bg-[linear-gradient(135deg,#efd49a_0%,#d7b26d_48%,#b78948_100%)] text-black shadow-[0_18px_44px_rgba(217,181,109,0.18)] hover:-translate-y-0.5 hover:shadow-[0_24px_56px_rgba(217,181,109,0.24)]",
   secondary:
-    "border border-white/10 bg-white/[0.04] text-foreground hover:-translate-y-0.5 hover:border-[rgba(217,181,109,0.24)] hover:bg-white/[0.07]",
+    "border border-white/10 bg-white/[0.03] text-foreground hover:-translate-y-0.5 hover:border-[rgba(217,181,109,0.18)] hover:bg-white/[0.05]",
   ghost:
-    "border border-transparent bg-transparent text-foreground-soft hover:bg-white/[0.05] hover:text-foreground",
+    "border border-white/8 bg-transparent text-foreground-soft hover:bg-white/[0.04] hover:text-foreground",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
   md: "h-11 px-5 text-sm",
-  lg: "h-12 px-6 text-sm sm:h-[52px] sm:px-7 sm:text-[15px]",
+  lg: "h-12 px-6 text-sm sm:h-[54px] sm:px-8 sm:text-[15px]",
 };
 
 function buttonClasses(variant: ButtonVariant, size: ButtonSize, className?: string) {

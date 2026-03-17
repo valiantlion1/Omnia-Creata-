@@ -22,29 +22,36 @@ export function ProductCard({
 }: ProductCardProps) {
   return (
     <Link
-      className={`group luxury-panel block rounded-[30px] p-6 transition duration-300 hover:-translate-y-1 hover:border-[rgba(217,181,109,0.22)] ${
+      className={`group block overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01)),rgba(8,8,8,0.92)] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.36)] transition duration-300 hover:-translate-y-1 hover:border-[rgba(217,181,109,0.2)] ${
         featured ? "gold-outline" : ""
       }`}
       href={withLocalePrefix(locale, `/products/${product.slug}`) as Route}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(217,181,109,0.22)] bg-[rgba(217,181,109,0.08)] text-accent">
           <ProductGlyph className="stroke-current" slug={product.slug} />
         </div>
-        <div className="pt-1">
-          <h3 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">
-            {product.name}
-          </h3>
-        </div>
+        {featured ? (
+          <span className="rounded-full border border-[rgba(217,181,109,0.2)] bg-[rgba(217,181,109,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
+            {messages.common.flagshipStudio}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-6 space-y-4">
-        <p className="text-sm leading-7 text-foreground-soft">
+      <div className="mt-8 space-y-4">
+        <h3
+          className={`font-semibold tracking-[-0.04em] text-foreground ${
+            featured ? "text-3xl sm:text-[2.2rem]" : "text-[1.7rem]"
+          }`}
+        >
+          {product.name}
+        </h3>
+        <p className="max-w-xl text-sm leading-7 text-foreground-soft">
           {product.shortDescription}
         </p>
 
         <div className="flex flex-wrap gap-2">
-          {product.platformMatrix.slice(0, 3).map((entry) => (
+          {product.platformMatrix.slice(0, featured ? 4 : 3).map((entry) => (
             <PlatformBadge
               key={`${product.slug}-${entry.platform}`}
               platform={entry.platform}
@@ -52,8 +59,11 @@ export function ProductCard({
           ))}
         </div>
 
-        <div className="border-t border-white/8 pt-4 text-sm text-accent transition group-hover:text-accent-strong">
-          {messages.common.viewProduct}
+        <div className="flex items-center justify-between border-t border-white/8 pt-4 text-sm">
+          <span className="text-foreground-soft">Direct product page</span>
+          <span className="text-accent transition group-hover:text-accent-strong">
+            {messages.common.viewProduct}
+          </span>
         </div>
       </div>
     </Link>

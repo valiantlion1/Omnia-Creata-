@@ -59,7 +59,7 @@ export function AccessIntentPanel({
         className="absolute inset-0"
         onClick={onClose}
       />
-      <div className="luxury-panel gold-outline relative z-10 w-full max-w-2xl rounded-[30px] p-6 sm:p-8">
+      <div className="luxury-panel gold-outline relative z-10 w-full max-w-2xl rounded-[32px] p-6 sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">
           {messages.accessPanel.eyebrow}
         </p>
@@ -70,11 +70,9 @@ export function AccessIntentPanel({
           {messages.accessPanel.description}
         </p>
 
-        <div className="mt-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
+        <div className="mt-5 rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <PlatformBadge
-              platform={entry.platform}
-            />
+            <PlatformBadge platform={entry.platform} />
           </div>
           <p className="mt-3 text-sm leading-7 text-foreground-soft">{entry.note}</p>
         </div>

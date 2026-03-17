@@ -65,7 +65,7 @@ export function DashboardView() {
             <Badge>{dashboard.favoriteCount} {t("app.favoritesCount").toLowerCase()}</Badge>
           </div>
         </div>
-        <div className="space-y-3 rounded-[24px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-4">
+        <div className="space-y-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-muted)] p-4 ring-1 ring-inset ring-white/5">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-[var(--text-primary)]">
               {t("app.recentActivityTitle")}
@@ -78,7 +78,7 @@ export function DashboardView() {
             {dataset.activities.slice(0, 3).map((activity) => (
               <div
                 key={activity.id}
-                className="rounded-[18px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5"
+                className="rounded-[16px] border border-[var(--border)] bg-black/40 px-3 py-2.5"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-[var(--text-primary)]">
@@ -141,11 +141,11 @@ export function DashboardView() {
                 <Link
                   key={action.href}
                   href={action.href}
-                  className="group rounded-[22px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-4 shadow-[var(--shadow-panel)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-glow)]"
+                  className="group rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-panel)] transition duration-200 hover:-translate-y-0.5 hover:border-[color:rgba(212,175,55,0.3)] hover:shadow-[var(--shadow-glow)]"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-[color:rgba(212,175,55,0.3)] bg-gradient-to-br from-[rgba(212,175,55,0.2)] to-[rgba(212,175,55,0.05)] text-[var(--accent-strong)]">
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
@@ -177,7 +177,7 @@ export function DashboardView() {
               return (
                 <div
                   key={item.categoryId}
-                  className="space-y-3 rounded-[20px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-3.5 md:p-4"
+                  className="space-y-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 md:p-4"
                 >
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-[var(--text-primary)]">
@@ -187,7 +187,7 @@ export function DashboardView() {
                   </div>
                   <div className="h-2.5 rounded-full bg-[var(--surface-muted)]">
                     <div
-                      className="h-2.5 rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-strong))] shadow-[0_0_18px_rgba(212,167,91,0.35)]"
+                      className="h-2.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] shadow-[0_0_12px_rgba(212,175,55,0.5)]"
                       style={{ width }}
                     />
                   </div>
@@ -218,7 +218,7 @@ export function DashboardView() {
             {dashboard.promptsByPlatform.map((item) => (
               <div
                 key={item.platform}
-                className="flex min-h-11 items-center justify-between rounded-[20px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] px-3 py-2.5 text-sm text-[var(--text-secondary)]"
+                className="flex min-h-11 items-center justify-between rounded-[16px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--text-secondary)]"
               >
                 <span className="font-medium text-[var(--text-primary)]">{item.platform}</span>
                 <Badge>{item.count}</Badge>

@@ -18,23 +18,23 @@ export function BrandMark({
 
   return (
     <Link
-      className={cn("group inline-flex items-center gap-4", className)}
+      className={cn("group inline-flex items-center gap-3.5", className)}
       href={withLocalePrefix(locale, "/") as Route}
     >
       <div
         className={cn(
-          "relative overflow-hidden border border-[rgba(217,181,109,0.24)] bg-black/70 shadow-[0_18px_40px_rgba(0,0,0,0.35)] transition duration-300 group-hover:border-[rgba(217,181,109,0.42)] group-hover:shadow-[0_24px_56px_rgba(0,0,0,0.42)]",
-          compact ? "h-12 w-[128px] rounded-[18px] px-2" : "h-[78px] w-[198px] rounded-[24px] px-3",
+          "relative shrink-0 overflow-hidden border border-[rgba(217,181,109,0.24)] bg-black/80 shadow-[0_18px_40px_rgba(0,0,0,0.34)] transition duration-300 group-hover:border-[rgba(217,181,109,0.38)] group-hover:shadow-[0_22px_52px_rgba(0,0,0,0.4)]",
+          compact ? "h-11 w-11 rounded-[16px] p-2" : "h-14 w-14 rounded-[20px] p-2.5",
         )}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,181,109,0.2),transparent_58%)]" />
         <Image
           alt="Omnia Creata"
-          className="relative z-10 h-full w-full object-contain py-1"
-          height={compact ? 40 : 66}
+          className="relative z-10 h-full w-full object-contain"
+          height={compact ? 28 : 36}
           priority
           src="/brand/logo-transparent.png"
-          width={compact ? 124 : 188}
+          width={compact ? 28 : 36}
         />
       </div>
       <div className={cn("min-w-0 flex-col", compact ? "hidden sm:flex" : "flex")}>
@@ -47,13 +47,11 @@ export function BrandMark({
             compact ? "text-sm font-medium" : "text-lg font-semibold tracking-[-0.03em]",
           )}
         >
+          Omnia Creata
+        </span>
+        <span className={cn("mt-1 text-muted", compact ? "text-xs" : "text-sm")}>
           omniacreata.com
         </span>
-        {!compact ? (
-          <span className="mt-1 text-sm text-muted">
-            {isTurkish ? "Premium teknoloji markasi" : "Premium technology brand"}
-          </span>
-        ) : null}
       </div>
     </Link>
   );

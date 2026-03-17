@@ -25,7 +25,7 @@ export function Footer({ locale, messages }: FooterProps) {
             <div className="space-y-5">
               <BrandMark locale={locale} />
               <p className="max-w-sm text-sm leading-7 text-foreground-soft">
-                Omnia Creata is a premium software ecosystem with connected flagship products.
+                Omnia Creata is the public website for flagship products, platform access, pricing, and contact.
               </p>
             </div>
 

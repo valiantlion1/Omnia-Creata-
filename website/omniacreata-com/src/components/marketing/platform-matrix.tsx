@@ -44,12 +44,13 @@ export function PlatformMatrix({ product, locale, messages }: PlatformMatrixProp
           return (
             <div
               key={`${product.slug}-${entry.platform}`}
-              className="luxury-panel rounded-[28px] p-5"
+              className="soft-panel rounded-[30px] p-5"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <PlatformBadge
-                  platform={entry.platform}
-                />
+                <PlatformBadge platform={entry.platform} />
+                <span className="text-[11px] uppercase tracking-[0.26em] text-muted">
+                  Product access
+                </span>
               </div>
               <p className="mt-4 text-sm leading-7 text-foreground-soft">{entry.note}</p>
               {liveEntryHref ? (

@@ -46,6 +46,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
   const messages = getMessages(locale);
   const products = getProducts(locale);
   const studio = products[0];
+  const supportingProducts = products.slice(1);
 
   return (
     <>
@@ -65,7 +66,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
         eyebrow={messages.nav.products}
         meta={[
           { label: "Flagship products", value: "5" },
-          { label: "Access model", value: "Direct product hubs" },
+          { label: "Access model", value: "Public product hubs" },
           { label: "Domain", value: "omniacreata.com" },
         ]}
         title="Choose the product you want to open."
@@ -76,23 +77,31 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
         <div className="mx-auto max-w-7xl">
           <Reveal>
             <SectionHeader
-              align="center"
               description="Every product keeps a clear purpose, a short explanation, and a direct route."
               eyebrow={messages.home.ecosystemEyebrow}
               title={messages.home.ecosystemTitle}
             />
           </Reveal>
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {products.map((product, index) => (
-              <Reveal key={product.slug} delay={index * 70}>
-                <ProductCard
-                  featured={product.slug === studio.slug}
-                  locale={locale}
-                  messages={messages}
-                  product={product}
-                />
-              </Reveal>
-            ))}
+          <div className="mt-12 grid gap-6 xl:grid-cols-[1.06fr_0.94fr]">
+            <Reveal>
+              <ProductCard
+                featured
+                locale={locale}
+                messages={messages}
+                product={studio}
+              />
+            </Reveal>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {supportingProducts.map((product, index) => (
+                <Reveal key={product.slug} delay={index * 70}>
+                  <ProductCard
+                    locale={locale}
+                    messages={messages}
+                    product={product}
+                  />
+                </Reveal>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -100,18 +109,8 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
       <section className="px-6 py-10 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">
           <Reveal>
-            <SectionHeader
-              align="center"
-              description="Platform coverage is visible before users commit to a product."
-              eyebrow={messages.home.platformBandEyebrow}
-              title={messages.home.platformBandTitle}
-            />
+            <PlatformAccessBand locale={locale} messages={messages} />
           </Reveal>
-          <div className="mt-10">
-            <Reveal delay={80}>
-              <PlatformAccessBand locale={locale} messages={messages} />
-            </Reveal>
-          </div>
         </div>
       </section>
 

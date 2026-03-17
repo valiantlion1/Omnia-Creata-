@@ -122,7 +122,7 @@ const english: Messages = {
     supportCenter: "Support",
   },
   common: {
-    exploreEcosystem: "View products",
+    exploreEcosystem: "Explore products",
     openStudio: "Open Studio",
     viewPricing: "View pricing",
     contactTeam: "Contact",
@@ -151,27 +151,27 @@ const english: Messages = {
   home: {
     heroEyebrow: "Official public website",
     heroTitle:
-      "Everything in Omnia Creata starts here.",
+      "The Omnia Creata ecosystem, in one place.",
     heroDescription:
-      "Explore products, check platform access, and move directly into the right Omnia Creata experience from one clear starting point.",
+      "Explore flagship products, see where each one lives, and move into the right Omnia Creata experience without clutter.",
     utilityDescription:
       "omniacreata.com",
     platformBandEyebrow: "Platform access",
-    platformBandTitle: "See where each product is available.",
+    platformBandTitle: "Platform access stays visible from the start.",
     platformBandDescription:
-      "Web, iOS, Android, PWA, and desktop availability is visible before you enter.",
+      "Web, iOS, Android, PWA, and desktop access are easy to scan before you open a product.",
     ecosystemEyebrow: "Products",
-    ecosystemTitle: "Five flagship products. One clear directory.",
+    ecosystemTitle: "Five flagship products, organized with intent.",
     ecosystemDescription:
-      "Each product has a defined purpose, a direct route, and a consistent public hub.",
+      "Each product has a clear role, a clear surface, and a clear route from the main site.",
     accessRailEyebrow: "Product access rail",
     accessRailTitle: "Go from discovery to the right product in one step.",
     accessRailDescription:
       "Every visible action should lead somewhere useful.",
     trustEyebrow: "Trust",
-    trustTitle: "Built to feel clear, stable, and ready.",
+    trustTitle: "Built like a long-term software company.",
     trustDescription:
-      "The public site is designed for fast decisions, reliable navigation, and a premium product experience.",
+      "Clear navigation, restrained motion, and product-first structure keep the site useful as the ecosystem grows.",
   },
   sections: {
     overview: "Overview",

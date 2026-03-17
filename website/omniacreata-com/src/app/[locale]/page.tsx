@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { FeatureCard } from "@/components/marketing/feature-card";
 import { HQHeroScene } from "@/components/marketing/hq-hero-scene";
@@ -8,7 +7,6 @@ import { ProductCard } from "@/components/marketing/product-card";
 import { ButtonLink } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { SectionHeader } from "@/components/ui/section-header";
-import { getHomepageModules } from "@/content/homepage";
 import { getProducts } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -47,62 +45,63 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
   }
 
   const messages = getMessages(locale);
-  const modules = getHomepageModules(locale);
   const products = getProducts(locale);
   const studio = products[0];
+  const supportingProducts = products.slice(1);
+  const trustSignals = [
+    {
+      title: "Direct product routes",
+      description: "Every main action leads to a real destination instead of a dead-end showcase.",
+    },
+    {
+      title: "Clear platform visibility",
+      description: "Platform access stays visible before users commit to a product.",
+    },
+    {
+      title: "Premium brand presence",
+      description: "The site is structured like a long-term software company, not a temporary campaign page.",
+    },
+    {
+      title: "Scalable HQ structure",
+      description: "The main website can grow with new surfaces, pricing, and product access without losing clarity.",
+    },
+  ];
   const studioHighlights = [
     {
-      title: "One workspace",
-      description: "Plan, review, and release work without hopping across disconnected tools.",
+      title: "One flagship workspace",
+      description: "Plan, review, and release work from the product that anchors the ecosystem.",
     },
     {
       title: "Shared product flow",
-      description: "Keep prompts, visual work, operations, and monitoring closer to the same entry point.",
+      description: "Keep prompts, visuals, operations, and monitoring closer to one central starting point.",
     },
     {
       title: "Clear public access",
-      description: "Use Studio as the strongest starting point when users need to enter the ecosystem fast.",
+      description: "Use Studio when users need the strongest first entry into Omnia Creata.",
     },
+  ];
+  const heroStats = [
+    { label: "Flagship products", value: "5" },
+    { label: "Access model", value: "Direct product hubs" },
+    { label: "Platform surfaces", value: "Web, iOS, Android, PWA, desktop" },
   ];
 
   return (
     <>
-      <section className="relative overflow-hidden px-6 pb-16 pt-10 sm:px-8 lg:px-10 lg:pb-24">
-        <Image
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.12] mix-blend-screen"
-          fill
-          priority
-          src="/brand/hero-texture.png"
-        />
-        <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.98fr_1.02fr] lg:items-center">
+      <section className="relative overflow-hidden px-6 pb-20 pt-8 sm:px-8 lg:px-10 lg:pb-24">
+        <div className="mx-auto grid max-w-7xl gap-14 xl:grid-cols-[0.98fr_1.02fr] xl:items-center">
           <Reveal className="relative">
-            <div className="space-y-8">
-              <div className="inline-flex max-w-full items-center gap-4 rounded-[26px] border border-[rgba(217,181,109,0.2)] bg-[rgba(255,255,255,0.03)] px-4 py-3 backdrop-blur-xl">
-                <div className="relative overflow-hidden rounded-[18px] border border-[rgba(217,181,109,0.22)] bg-black/70 px-2 py-1">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,181,109,0.2),transparent_60%)]" />
-                  <Image
-                    alt="Omnia Creata logo"
-                    className="relative z-10 h-auto w-[124px] object-contain"
-                    height={44}
-                    priority
-                    src="/brand/logo-transparent.png"
-                    width={124}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-accent">
-                    {messages.home.heroEyebrow}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-foreground-soft sm:text-[15px]">
-                    {messages.home.utilityDescription}
-                  </p>
-                </div>
+            <div className="max-w-[42rem] space-y-9">
+              <div className="inline-flex flex-wrap items-center gap-3 rounded-full border border-[rgba(217,181,109,0.16)] bg-white/[0.03] px-4 py-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
+                  {messages.home.heroEyebrow}
+                </span>
+                <span className="h-1 w-1 rounded-full bg-accent/80" />
+                <span className="text-sm text-foreground-soft">{messages.home.utilityDescription}</span>
               </div>
 
               <div className="space-y-6">
-                <h1 className="max-w-4xl text-5xl font-semibold leading-[0.95] tracking-[-0.06em] text-foreground sm:text-6xl lg:text-7xl xl:text-8xl">
+                <h1 className="max-w-4xl text-5xl font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-6xl lg:text-7xl xl:text-[5.9rem]">
                   {messages.home.heroTitle}
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
@@ -134,16 +133,13 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
                 </ButtonLink>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                {modules.heroStats.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-[24px] border border-white/8 bg-white/[0.03] px-5 py-4"
-                  >
-                    <p className="text-xs uppercase tracking-[0.28em] text-muted">
+              <div className="grid gap-4 border-t border-white/8 pt-6 sm:grid-cols-3">
+                {heroStats.map((item) => (
+                  <div key={item.label} className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
                       {item.label}
                     </p>
-                    <p className="mt-2 text-lg font-semibold text-foreground">
+                    <p className="text-base font-semibold text-foreground">
                       {item.value}
                     </p>
                   </div>
@@ -162,23 +158,31 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
         <div className="mx-auto max-w-7xl">
           <Reveal>
             <SectionHeader
-              align="center"
               description={messages.home.ecosystemDescription}
               eyebrow={messages.home.ecosystemEyebrow}
               title={messages.home.ecosystemTitle}
             />
           </Reveal>
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {products.map((product, index) => (
-              <Reveal key={product.slug} delay={index * 70}>
-                <ProductCard
-                  featured={product.slug === studio.slug}
-                  locale={locale}
-                  messages={messages}
-                  product={product}
-                />
-              </Reveal>
-            ))}
+          <div className="mt-12 grid gap-6 xl:grid-cols-[1.06fr_0.94fr]">
+            <Reveal>
+              <ProductCard
+                featured
+                locale={locale}
+                messages={messages}
+                product={studio}
+              />
+            </Reveal>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {supportingProducts.map((product, index) => (
+                <Reveal key={product.slug} delay={index * 70}>
+                  <ProductCard
+                    locale={locale}
+                    messages={messages}
+                    product={product}
+                  />
+                </Reveal>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -186,26 +190,16 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
       <section className="px-6 py-12 sm:px-8 lg:px-10" id="platforms">
         <div className="mx-auto max-w-7xl">
           <Reveal>
-            <SectionHeader
-              align="center"
-              description={messages.home.platformBandDescription}
-              eyebrow={messages.home.platformBandEyebrow}
-              title={messages.home.platformBandTitle}
-            />
+            <PlatformAccessBand locale={locale} messages={messages} />
           </Reveal>
-          <div className="mt-10">
-            <Reveal delay={80}>
-              <PlatformAccessBand locale={locale} messages={messages} />
-            </Reveal>
-          </div>
         </div>
       </section>
 
       <section className="px-6 py-12 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">
           <Reveal>
-            <div className="luxury-panel gold-outline overflow-hidden rounded-[36px] p-7 sm:p-10">
-              <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div className="luxury-panel gold-outline overflow-hidden rounded-[38px] p-7 sm:p-10">
+              <div className="grid gap-8 xl:grid-cols-[0.96fr_1.04fr] xl:items-start">
                 <div className="space-y-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
                     {messages.common.flagshipStudio}
@@ -213,7 +207,7 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
                   <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-5xl">
                     {studio.name}
                   </h2>
-                  <p className="text-base leading-8 text-foreground-soft sm:text-lg">
+                  <p className="max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
                     {studio.summary}
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -225,11 +219,11 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
                       {messages.common.openStudio}
                     </ButtonLink>
                     <ButtonLink
-                      href={withLocalePrefix(locale, "/contact")}
+                      href={withLocalePrefix(locale, "/pricing")}
                       size="lg"
                       variant="secondary"
                     >
-                      {messages.common.contactTeam}
+                      {messages.common.viewPricing}
                     </ButtonLink>
                   </div>
                 </div>
@@ -253,8 +247,8 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
       <section className="px-6 py-12 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">
           <Reveal>
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="luxury-panel gold-outline rounded-[32px] p-7 sm:p-9">
+            <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+              <div className="luxury-panel gold-outline rounded-[36px] p-7 sm:p-9">
                 <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
                   {messages.home.trustEyebrow}
                 </p>
@@ -282,8 +276,8 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
                 </div>
               </div>
 
-              <div className="grid gap-5">
-                {modules.trustSignals.map((signal, index) => (
+              <div className="grid gap-4 md:grid-cols-2">
+                {trustSignals.map((signal, index) => (
                   <Reveal key={signal.title} delay={index * 70}>
                     <FeatureCard
                       description={signal.description}

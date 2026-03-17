@@ -57,9 +57,9 @@ export const products: ProductRecord[] = [
     slug: "omnia-creata-studio",
     name: "OmniaCreata Studio",
     shortDescription:
-      "The central workspace for planning, creating, reviewing, and releasing work across Omnia Creata.",
+      "The flagship workspace for planning, review, and release across Omnia Creata.",
     summary:
-      "Studio is the main workspace of Omnia Creata. It brings planning, creative work, review, and release into one clear environment.",
+      "Studio is the main workspace of Omnia Creata, bringing planning, review, and release into one focused product surface.",
     status: "live",
     badge: "Flagship hub",
     headline: "The flagship product hub for Omnia Creata.",
@@ -183,9 +183,9 @@ export const products: ProductRecord[] = [
     slug: "omniapixels",
     name: "OmniaPixels",
     shortDescription:
-      "The visual product for generating, refining, and delivering images with a premium workflow.",
+      "Visual creation and refinement for images, assets, and polished delivery.",
     summary:
-      "OmniaPixels handles visual creation and refinement for the ecosystem, with direct routes for web, desktop, and future mobile access.",
+      "OmniaPixels handles visual creation and refinement with direct routes for web, desktop, and future mobile access.",
     status: "live",
     badge: "Visual pipeline",
     headline: "Visual creation and refinement with a premium software posture.",
@@ -288,9 +288,9 @@ export const products: ProductRecord[] = [
     slug: "omniaorganizer",
     name: "OmniaOrganizer",
     shortDescription:
-      "The operations product for planning, prioritizing, and keeping work moving across the ecosystem.",
+      "Planning, priorities, and operational flow for the Omnia Creata ecosystem.",
     summary:
-      "OmniaOrganizer keeps projects, timing, and execution aligned so product work stays visible and accountable.",
+      "OmniaOrganizer keeps projects, timing, and execution aligned so product work stays visible and moving.",
     status: "live",
     badge: "Operational layer",
     headline: "Operational control for a connected ecosystem.",
@@ -393,9 +393,9 @@ export const products: ProductRecord[] = [
     slug: "prompt-vault",
     name: "Prompt Vault",
     shortDescription:
-      "The prompt library for storing, organizing, and reusing high-value prompt systems.",
+      "Structured prompt storage, reuse, and prompt-system memory.",
     summary:
-      "Prompt Vault keeps prompt knowledge structured, searchable, and ready to move into the rest of Omnia Creata.",
+      "Prompt Vault keeps prompt knowledge structured, searchable, and ready to move across Omnia Creata.",
     status: "live",
     badge: "Prompt infrastructure",
     headline: "A product hub for reusable prompt intelligence.",
@@ -498,7 +498,7 @@ export const products: ProductRecord[] = [
     slug: "omnia-watch",
     name: "Omnia Watch",
     shortDescription:
-      "The monitoring product for health, quality, and system awareness across Omnia Creata.",
+      "Monitoring for product health, quality, and ecosystem awareness.",
     summary:
       "Omnia Watch helps teams stay aware of quality, performance, and product signals across the ecosystem.",
     status: "live",

@@ -15,13 +15,13 @@ export function Button({
       className={cn(
         "relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border text-[13px] font-semibold tracking-[-0.01em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
         variant === "primary" &&
-          "border-[color:rgba(255,255,255,0.14)] bg-[linear-gradient(135deg,var(--accent-strong),var(--accent))] px-4 text-[var(--accent-foreground)] shadow-[var(--shadow-glow)] before:absolute before:inset-x-3 before:top-[1px] before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.46),transparent)] before:content-[''] hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0 active:brightness-95",
+          "border border-[color:rgba(255,255,255,0.15)] bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent)] px-4 text-[#000000] shadow-[var(--shadow-glow)] before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/50 before:to-transparent before:content-[''] hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 active:brightness-95",
         variant === "secondary" &&
-          "border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 text-[var(--text-primary)] shadow-[var(--shadow-panel)] backdrop-blur-xl hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)] active:translate-y-0",
+          "border border-[var(--border)] bg-[var(--surface-muted)] px-4 text-[var(--text-primary)] shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] hover:bg-[var(--surface)] active:bg-[var(--surface-muted)]",
         variant === "ghost" &&
-          "border-transparent bg-transparent px-3 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-muted)]",
+          "border-transparent bg-transparent px-3 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-muted)] text-[13px] font-medium",
         variant === "danger" &&
-          "border-transparent bg-[linear-gradient(135deg,var(--danger),#b34840)] px-4 text-white shadow-[var(--shadow-soft)] hover:-translate-y-0.5 hover:opacity-95",
+          "border-transparent bg-red-500/10 border border-red-500/20 px-4 text-red-500 hover:bg-red-500/20 hover:text-red-400",
         size === "sm" && "h-11 px-3.5 text-xs",
         size === "default" && "h-11 px-4.5",
         size === "lg" && "h-12 px-5 text-base",
@@ -36,7 +36,7 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
   return (
     <input
       className={cn(
-        "h-11 w-full rounded-[20px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] backdrop-blur-xl outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+        "h-11 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ export function Textarea({ className, ...props }: ComponentPropsWithoutRef<"text
   return (
     <textarea
       className={cn(
-        "min-h-[120px] w-full rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))] px-4 py-3 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] backdrop-blur-xl outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+        "min-h-[120px] w-full rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -60,7 +60,7 @@ export function Select({ className, ...props }: ComponentPropsWithoutRef<"select
   return (
     <select
       className={cn(
-        "h-11 w-full appearance-none rounded-[20px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] backdrop-blur-xl outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-2 focus:ring-[var(--accent-soft)]",
+        "h-11 w-full appearance-none rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -79,7 +79,7 @@ export function Surface({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-soft)] backdrop-blur-xl before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.34),transparent)]",
+        "relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)] backdrop-blur-3xl ring-1 ring-inset ring-white/5 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
         className
       )}
       {...props}
@@ -103,13 +103,13 @@ export function Badge({
       className={cn(
         "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium tracking-[0.01em]",
         tone === "default" &&
-          "border-transparent bg-[var(--surface-muted)] text-[var(--text-secondary)]",
+          "border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]",
         tone === "accent" &&
-          "border-[color:rgba(205,160,96,0.22)] bg-[linear-gradient(180deg,rgba(205,160,96,0.14),rgba(205,160,96,0.07))] text-[var(--accent-strong)]",
+          "border-[color:rgba(212,175,55,0.3)] bg-[color:rgba(212,175,55,0.1)] text-[var(--accent-strong)] shadow-[0_0_12px_rgba(212,175,55,0.15)]",
         tone === "success" &&
-          "border-[color:rgba(185,159,113,0.2)] bg-[color:rgba(110,86,44,0.14)] text-[var(--success)]",
+          "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
         tone === "warning" &&
-          "border-[color:rgba(227,182,109,0.2)] bg-[color:rgba(139,99,42,0.14)] text-[var(--warning)]",
+          "border-amber-500/20 bg-amber-500/10 text-amber-400",
         className
       )}
     >

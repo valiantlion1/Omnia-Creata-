@@ -145,7 +145,7 @@ export function LibraryView() {
                 key={tag.id}
                 className={`min-h-11 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
                   active
-                    ? "border-[color:rgba(205,160,96,0.2)] bg-[linear-gradient(135deg,rgba(205,160,96,0.2),rgba(205,160,96,0.08))] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]"
+                    ? "border border-[color:rgba(212,175,55,0.3)] bg-gradient-to-br from-[rgba(212,175,55,0.15)] to-[rgba(212,175,55,0.05)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]"
                     : "border-transparent bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--text-primary)]"
                 }`}
                 onClick={() =>

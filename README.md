@@ -29,12 +29,18 @@ backups/     Local backups (gitignored)
 
 ## Repo operations
 
-- `npm run repo:inventory`
-- `npm run repo:check`
+- `npm run repo:inventory` prints the current manifest-backed inventory.
+- `npm run repo:check` validates current topology, naming, and nested repo rules.
 
 ## Canonical rules
 
 - `apps/` contains only active core products.
 - `website/` stays top-level and hosts web properties such as `omniacreata-com`.
 - Product roots use surface-oriented folders such as `web`, `backend`, `mobile`, `desktop`, `packages`, `docs`, and `ops`.
-- Heavy exports, local caches, and machine output do not stay in canonical source areas.
+- Product plans must align with root repo governance; product docs do not override taxonomy or migration rules.
+- In-place products such as Studio and OmniaPixels are cleaned incrementally rather than rewritten by default.
+- Heavy exports, local caches, and machine output are not canonical source.
+
+## Current validator scope
+
+Today `npm run repo:check` enforces structure and naming, but it does not yet fail on every generated artifact inside canonical roots. Expanding validator coverage for folders such as `.next`, `out`, `build`, and `dist` remains a follow-up cleanup task.

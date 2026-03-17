@@ -214,7 +214,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <Reveal>
-              <div className="luxury-panel gold-outline rounded-[32px] p-7 sm:p-9">
+              <div className="luxury-panel gold-outline rounded-[34px] p-7 sm:p-9">
                 <p className="text-base leading-8 text-foreground-soft">
                   {product.summary}
                 </p>
@@ -245,7 +245,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 />
               </Reveal>
               <Reveal delay={140}>
-                <div className="luxury-panel rounded-[30px] p-6">
+                <div className="soft-panel rounded-[30px] p-6">
                   <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
                     Product surfaces
                   </p>

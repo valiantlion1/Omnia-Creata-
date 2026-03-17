@@ -123,10 +123,10 @@ export function AppShell({
                 <Link
                   key={item.key}
                   className={cn(
-                    "group flex items-center gap-3 rounded-[20px] border px-3.5 py-3 text-sm font-medium transition",
+                    "group flex items-center gap-3 rounded-[16px] border px-3.5 py-3 text-sm font-medium transition",
                     isActive
-                      ? "border-[color:rgba(205,160,96,0.2)] bg-[linear-gradient(135deg,rgba(205,160,96,0.18),rgba(205,160,96,0.08))] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]"
-                      : "border-transparent text-[var(--text-secondary)] hover:-translate-x-0.5 hover:border-[var(--border)] hover:bg-[color:rgba(255,255,255,0.03)] hover:text-[var(--text-primary)]"
+                      ? "border border-[color:rgba(212,175,55,0.3)] bg-gradient-to-br from-[rgba(212,175,55,0.15)] to-[rgba(212,175,55,0.05)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]"
+                      : "border-transparent text-[var(--text-secondary)] hover:-translate-x-0.5 hover:border-[var(--border)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                   )}
                   href={href}
                 >
@@ -149,7 +149,7 @@ export function AppShell({
               );
             })}
           </div>
-          <div className="space-y-4 rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(205,160,96,0.12),rgba(255,255,255,0.02))] p-4 shadow-[var(--shadow-panel)]">
+          <div className="space-y-4 rounded-[20px] border border-[var(--border)] bg-gradient-to-b from-[rgba(212,175,55,0.1)] to-[var(--surface)] p-4 shadow-[var(--shadow-panel)] ring-1 ring-inset ring-white/5">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
@@ -190,7 +190,7 @@ export function AppShell({
         <button
           aria-expanded={quickOpen}
           aria-label={t("app.quickActions")}
-          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-[color:rgba(205,160,96,0.22)] bg-[linear-gradient(135deg,rgba(205,160,96,0.24),rgba(205,160,96,0.12))] text-[var(--accent-foreground)] shadow-[var(--shadow-glow)] active:scale-95 sm:right-4 lg:hidden"
+          className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.3)] bg-gradient-to-br from-[rgba(212,175,55,0.2)] to-[rgba(212,175,55,0.1)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)] active:scale-95 sm:right-4 lg:hidden"
           onClick={() =>
             setQuickOpenPathname((current) => (current === pathname ? null : pathname))
           }
@@ -263,9 +263,9 @@ export function AppShell({
                 key={item.key}
                 href={href}
                 className={cn(
-                  "flex min-h-11 flex-col items-center justify-center gap-1 rounded-[16px] border px-2 py-2 text-center text-[10px] font-semibold tracking-[0.01em]",
+                  "flex min-h-11 flex-col items-center justify-center gap-1 rounded-[14px] border px-2 py-2 text-center text-[10px] font-semibold tracking-[0.01em]",
                   isActive
-                    ? "border-[color:rgba(205,160,96,0.22)] bg-[linear-gradient(135deg,rgba(205,160,96,0.16),rgba(205,160,96,0.08))] text-[var(--accent-strong)]"
+                    ? "border border-[color:rgba(212,175,55,0.3)] bg-gradient-to-br from-[rgba(212,175,55,0.15)] to-[rgba(212,175,55,0.05)] text-[var(--accent-strong)]"
                     : "border-transparent text-[var(--text-secondary)]"
                 )}
               >
