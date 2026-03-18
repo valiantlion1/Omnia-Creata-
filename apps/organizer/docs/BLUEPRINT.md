@@ -1,27 +1,27 @@
 # OmniaOrganizer - Product Blueprint
 
 > Son guncelleme: 2026-03-17
-> Durum: Android-native source of truth aktif, urunlestirme asamasinda
+> Durum: Mobile-first source of truth aktif (Android kod tabani + iOS plani)
 
 ---
 
 ## 1. Urun Kimligi
 
 ### Tek Cumle
-**OmniaOrganizer** - Android uzerinde dosyalari bulmayi, kategorize etmeyi ve yonetmeyi kolaylastiran akilli file manager urunu.
+**OmniaOrganizer** - Android ve iOS telefonlarda dosyalari bulmayi, kategorize etmeyi ve yonetmeyi kolaylastiran akilli file manager urunu.
 
 ### Branding
 - **Urun adi:** OmniaOrganizer
 - **Tagline:** AI-Powered Smart File Explorer for Your Phone
-- **Play Store:** "OmniaOrganizer - Smart File Manager & AI Explorer"
+- **Magaza hedefi:** Google Play + Apple App Store
 
 ### Problem
-- Varsayilan dosya yoneticileri arama, ozetleme ve duzen tarafinda zayif kaliyor.
-- Kullanici dosyanin adini degil, baglamini hatirliyor.
-- Buyuk cihaz arsivlerinde neyin nerde oldugunu takip etmek zor.
+- Varsayilan file explorer uygulamalari arama, kategori ve temizlik onerisi tarafinda zayif kaliyor.
+- Kullanici dosyanin adini degil baglamini hatirliyor.
+- Mobil cihazlarda zamanla olusan arsiv karmasasi uretkenligi dusuruyor.
 
 ### Cozum
-Kategoriler, arama, depolama gorunurlugu ve ileride gelecek akilli oneriler ile dosya yonetimini daha anlasilir hale getiren Android-first uygulama.
+Kategoriler, arama, depolama gorunurlugu ve akilli (on-device + opsiyonel AI) oneriler ile file management'i mobilde gercekten kullanisli hale getiren urun.
 
 ---
 
@@ -30,163 +30,140 @@ Kategoriler, arama, depolama gorunurlugu ve ileride gelecek akilli oneriler ile 
 Bugun aktif kod tabani `apps/organizer/mobile/android` altindaki Kotlin multi-module Android projesidir.
 
 Orada simdiden bulunanlar:
-
 - `app`
 - `core`
 - `feature`
 - `gradle`
 - Compose tabanli navigation ve ekran iskeleti
 
-Bu nedenle Organizer icin aktif plan bir Flutter rewrite degil, mevcut Android tabanini urunlestirmektir.
-
 ### Karar
-
-- **Current source of truth:** Kotlin + Android
-- **Current delivery target:** Android app
-- **Future Flutter evaluation:** yalnizca daha sonra, net bir urun veya ekip ihtiyaci cikarsa
+- **Current code source of truth:** Kotlin + Android
+- **Current product target:** Mobile (Android + iOS)
+- **iOS strategy:** Monorepo'yu bozmadan `apps/organizer/mobile/ios` altinda yeni surface acilacak
+- **Rewrite karari:** Toplu rewrite yok; Android temeli urunlesirken iOS parity planli ilerler
 
 ---
 
 ## 3. Urun Yonelimi
 
 ### Ana karar
-Organizer icin aktif yon **mevcut Android koduyla devam** etmektir.
+Organizer icin aktif yon: **telefon odakli mobil urun (Android + iOS)**.
 
 Bu ne anlama gelir:
-
-- Mevcut Kotlin kodu "erken ama gercek temel" olarak kabul edilir.
-- Plan, sifirdan baska platforma gecis uzerine kurulmaz.
-- MVP once Android policy ve depolama gercegi ile uyumlu hale getirilir.
+- Android mevcut temel olarak hizla urunlestirilir.
+- iOS paralel planlanir ve Android V1 cekirdegine feature parity hedeflenir.
+- Desktop/web odagi bu urun icin aktif plan degildir.
 
 ### Platform prensipleri
-
-- **Android-first**
-- **Policy-aware**
+- **Mobile-first (phone UX once)**
+- **Policy-aware (Play + App Store uyumu)**
 - **On-device by default**
 - **AI optional, not required for core value**
+- **Human-in-control (oneri + onay)**
 
 ---
 
 ## 4. Storage ve Policy Sinirlari
 
-Bu urun file manager oldugu icin Android storage kurallari urun tasariminin merkezindedir.
+Bu urun file manager oldugu icin platform policy'leri tasarimin merkezindedir.
 
-### MVP icin kabul edilen sinir
+### Android MVP siniri
+- MediaStore + SAF tabanli erisim
+- Kullanici izinleriyle acilan dizin/alanlarda operasyon
+- Arka planda sinirsiz tum depolamayi tarama varsayimi yok
 
-- Kullaniciya ait medyaya ve belgelenmis Android storage API'lerine dayanan akislar
-- Kullanici tarafindan izin verilmis klasorler/dizinler
-- Media, documents, recents ve kategoriler uzerinden pratik navigasyon
+### iOS MVP siniri
+- Files app/Document Picker ile kullanici secimli erisim
+- Security-scoped kaynaklarda guvenli operasyon
+- iOS sandbox disina izinsiz genis erisim varsayimi yok
 
-### MVP'de varsayilmayan sey
-
-- Sinirsiz tum cihaz depolamasini arka planda tarayan crawler
-- Play policy detaylari cozulmeden "tam cihaz erisimi" vaadi
-- Her cihazda ayni yetki modeliyle calisacagi varsayimi
-
-Bu kisitlar urun zayifligi degil, Play uyumlu MVP siniridir.
+Bu kisitlar urun zayifligi degil; magaza uyumlu ve guvenli MVP siniridir.
 
 ---
 
-## 5. MVP Kapsami
+## 5. Mobile V1 Kapsami
 
 ### Hedef
-Android'de guvenilir, policy-uyumlu, hizli bir akilli file manager cikarmak.
+Android ve iOS'ta guvenilir, policy-uyumlu, hizli bir akilli file manager MVP cikarmak.
 
-### MVP ozellikleri
-
+### V1 ozellikleri
 - Dosya listesi ve temel navigasyon
 - Grid/list gorunumu
 - Kategori bazli kesif
 - Son kullanilanlar ve favoriler
 - Resim, video, PDF ve metin onizleme
 - Desteklenen konumlarda kopyala, tasi, sil, yeniden adlandir
-- Depolama analizi
-- Basit arama ve metadata tabanli filtreleme
+- Depolama analizi (platformun izin verdigi olcude)
+- Basit arama + metadata tabanli filtreleme
 
-### MVP'de olmayanlar
-
-- Semantic search zorunlulugu
-- Cloud AI bagimli temel akis
-- Cross-platform sozu
-- Flutter rewrite
+### V1'de olmayanlar
+- Cloud AI bagimli cekirdek akis
+- Desktop/web product hedefi
+- Team collaboration
+- Buyuk kapsamli cross-device sync
 
 ---
 
 ## 6. Mimari Yon
 
 ### Uygulama cekirdegi
-
-- Kotlin
-- Android Jetpack / Compose
-- Mevcut multi-module yapiyi guclendirme
-- Yerel veritabani ve indexleme
+- Android: Kotlin + Jetpack Compose + mevcut multi-module
+- iOS: Swift/SwiftUI + modul bazli feature ayirimi (paralel domain sozlesmesi)
+- Ortak urun mantigi: spec-first/domain-contract-first dokumantasyonla hizalanir
 
 ### Akilli katman
-
 - Faz 1: metadata, kategori, recents, storage insights
-- Faz 2: duplicate heuristics, temizlik onerileri, semantic arama denemeleri
-- Faz 2+ AI yardimlari: optional provider kullanimi, acik kota ve maliyet notlariyla
+- Faz 2: duplicate heuristics, temizlik onerileri
+- Faz 2+: opsiyonel AI yardimlari (kota/maliyet/sunum netligi ile)
 
-### Dosya erisimi
-
-- Android'in resmi erisim modelleri uzerinden
-- Kullanici izinleri ve secilen alanlar etrafinda
-- Play policy ile uyusmayan gizli/genel tarama varsayimlari olmadan
+### Tasarim girdi modeli
+- UI wireframe/flow tarafinda **Google Stitch ciktilari** tasarim girdisi olarak kullanilabilir.
+- Kod uygulamasi platform-native component sistemleriyle yapilir.
 
 ---
 
 ## 7. Fazlar
 
-### Faz 1: Android file manager MVP
+### Faz 1: Android V1 cekirdegi
+- Compose shell'i stabilize et
+- Library, search, settings akisini urunlestir
+- File operations + preview + kategori + depolama gorunurlugu
 
-- Mevcut Compose shell'i duzene sok
-- Library, search, tasks, settings akislarini urunlestir
-- File operations icin desteklenen storage path'lerini netlestir
-- Preview ve kategori akislarini tamamla
-- Depolama analizi ve favorileri tamamla
+### Faz 2: iOS V1 parity
+- iOS app shell + navigation
+- Android V1 cekirdek feature'larinin parity implementasyonu
+- Platform policy farklarina gore UX uyarlamasi
 
-### Faz 2: Akilli yardimlar
-
-- Semantic arama
+### Faz 3: Akilli yardimlar
 - Duplicate detection
-- Temizlik onerileri
-- Dokuman ozeti gibi opsiyonel AI destekleri
-
-### Faz 3: Genisleme
-
-- Cloud sync
-- Sifreleme
-- SMB/FTP gibi ileri seviye baglantilar
-- Cross-platform gerekliligi yeniden degerlendirmesi
+- Akilli temizlik onerileri
+- Opsiyonel AI destekleri
 
 ---
 
 ## 8. Kisitlar ve Riskler
 
-- Android storage ve Play policy en buyuk urun kisitidir.
-- Tum dosya turlerinde ayni preview/duzenleme deneyimi garanti edilmez.
-- AI destekleri varsa bunlar cekirdek dosya yonetiminin yerine gecmez.
-- Kotlin temelini korumak kisa vadede hiz kazandirir; platformlar arasi ortaklasma daha sonraki karardir.
+- Android storage + Play policy, iOS sandbox + App Store policy en buyuk kisitlar.
+- Tum dosya turlerinde ayni duzey preview/duzenleme garanti edilemez.
+- AI yardimlari cekirdek file-manager degerinin yerine gecmez.
+- Iki platform parity yonetimi iyi backlog disiplinine ihtiyac duyar.
 
 ---
 
 ## 9. Oncelik ve Basari Kriterleri
 
 ### Oncelik
+Organizer, mobilde net ve guvenilir bir file-management degeri vermelidir.
 
-Organizer, Vault ve Pixels sonrasinda ele alinacak urunlerden biridir; bu nedenle plan hem gercekci hem de mevcut tabani koruyacak sekilde tutulur.
-
-### MVP basari kriterleri
-
-- Android uygulamasi stabil aciliyor ve ana navigasyon akiyor
-- Kullanici dosyalari gorebiliyor, arayabiliyor ve desteklenen islemleri yapabiliyor
-- Storage/policy modelinden dolayi urun kendini kilitlemiyor
-- Temel file manager degeri AI olmadan da hissediliyor
+### V1 basari kriterleri
+- Android app stabil aciliyor ve ana navigasyon akiyor.
+- iOS uygulama kabugu + temel akislar parity backlog'u ile acilmis durumda.
+- Kullanici desteklenen path'lerde dosya gorup arayip temel islemleri yapabiliyor.
+- AI olmadan da urun degeri net hissediliyor.
 
 ---
 
 ## 10. AI Agent ve Gelistirici Notu
 
-- Bu urun icin aktif source of truth Kotlin Android tabanidir.
-- Flutter, mevcut plana gore rewrite hedefi degildir.
-- Android storage/policy sinirlari MVP'nin tasarim girdisidir; sonradan cozulur varsayimiyla yazilim plani kurulmaz.
+- Bu urunun aktif gelisim odağı mobil uygulamadir.
+- Plan kararlarinda masaustu/web yonlendirmesi degil, Android+iOS phone deneyimi esas alinmalidir.
