@@ -3,6 +3,7 @@ import { aiAssistRequestSchema } from "@prompt-vault/validation";
 import { getAIBackendConfig, runAIAssist } from "@/lib/ai/service";
 import { logAIRequest } from "@/lib/ai/logging";
 import { checkAIRateLimit } from "@/lib/ai/rate-limit";
+import { isAIEnabled } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isSameOrigin(request: NextRequest) {
@@ -45,6 +46,10 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
   const backend = getAIBackendConfig();
+
+  if (!isAIEnabled) {
+    return NextResponse.json({ error: "AI beta is disabled for this build." }, { status: 503 });
+  }
 
   if (!isSameOrigin(request)) {
     await logAIRequest({

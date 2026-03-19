@@ -1,11 +1,12 @@
+import { brand } from "@prompt-vault/config";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter, Manrope } from "next/font/google";
 import Script from "next/script";
 import { ServiceWorkerRegister } from "@/components/shared/service-worker-register";
 import "./globals.css";
 
-const geist = Geist({
-  variable: "--font-geist",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -14,24 +15,29 @@ const mono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://omniacreata.com"),
   title: {
-    default: "Prompt Vault | Omnia Creata",
-    template: "%s | Prompt Vault"
+    default: `${brand.name} | ${brand.parent}`,
+    template: `%s | ${brand.name}`
   },
   description:
-    "Prompt Vault is the premium prompt operating system for saving, organizing, syncing, and reusing prompts, ideas, and AI workflows.",
-  applicationName: "Prompt Vault",
+    `${brand.name} is Omnia Creata's lightweight idea operating system for capturing, organizing, and revisiting prompts, notes, workflows, and project thinking.`,
+  applicationName: brand.name,
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Prompt Vault"
+    title: brand.name
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0a09",
+  themeColor: "#000000",
   colorScheme: "dark light",
   viewportFit: "cover"
 };
@@ -43,7 +49,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${mono.variable} antialiased`}>
+      <body className={`${inter.variable} ${manrope.variable} ${mono.variable} antialiased`}>
         {process.env.NODE_ENV === "development" ? (
           <Script
             src="https://mcp.figma.com/mcp/html-to-design/capture.js"

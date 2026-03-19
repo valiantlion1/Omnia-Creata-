@@ -1,4 +1,5 @@
 import type { PromptVaultDataset } from "@prompt-vault/types";
+import { getEntries } from "@/lib/dataset";
 
 function linesForPrompt(prompt: PromptVaultDataset["prompts"][number]) {
   return [
@@ -22,11 +23,11 @@ export function exportAsJson(dataset: PromptVaultDataset) {
 }
 
 export function exportAsMarkdown(dataset: PromptVaultDataset) {
-  return dataset.prompts.flatMap(linesForPrompt).join("\n");
+  return getEntries(dataset).flatMap(linesForPrompt).join("\n");
 }
 
 export function exportAsText(dataset: PromptVaultDataset) {
-  return dataset.prompts
+  return getEntries(dataset)
     .map((prompt) =>
       [
         prompt.title,

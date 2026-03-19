@@ -6,9 +6,22 @@
     "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cap:add:android": "npx cap add android",
+    "cap:copy": "npx cap copy android",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "android:build:debug": "if exist android\\\\gradlew.bat (cd android && gradlew.bat assembleDebug) else (echo Android project not initialized && exit /b 1)"
   },
   "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
+    "@capacitor/keyboard": "^8.0.1",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.1",
     "@prompt-vault/config": "*",
     "@prompt-vault/i18n": "*",
     "@prompt-vault/types": "*",

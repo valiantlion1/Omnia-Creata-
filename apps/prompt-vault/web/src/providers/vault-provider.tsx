@@ -1,18 +1,29 @@
 "use client";
 
 import { createDemoDataset } from "@/lib/demo-data";
+import { getEntries, getProjects, withDatasetAliases } from "@/lib/dataset";
+import { getAuthMode, getProductRuntime } from "@/lib/env";
 import { downloadFile, exportAsJson, exportAsMarkdown, exportAsText } from "@/lib/exports";
-import { getAuthMode } from "@/lib/env";
-import { loadPreviewDataset, savePreviewDataset } from "@/lib/storage";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { loadRemoteVaultState, mergeVaultDatasets, saveRemoteVaultState } from "@/lib/supabase/vault-state";
+import {
+  loadPreviewDataset,
+  loadPreviewSyncQueue,
+  savePreviewDataset,
+  savePreviewSyncQueue
+} from "@/lib/storage";
 import { createDashboardSnapshot } from "@/lib/vault-utils";
 import { useToast } from "@/providers/toast-provider";
-import { promptInputSchema, type CollectionInput, type PromptInput } from "@prompt-vault/validation";
+import { entryInputSchema, type EntryInput, type ProjectInput } from "@prompt-vault/validation";
 import type {
   AIAssistResponse,
   AISuggestionRecord,
   AuthMode,
   DashboardSnapshot,
-  PromptRecord,
+  EntryDraftRecord,
+  EntryRecord,
+  OfflineMutationRecord,
+  PromptVersion,
   PromptVaultDataset,
   UserPreferenceRecord
 } from "@prompt-vault/types";
@@ -21,25 +32,44 @@ import {
   startTransition,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
 
-interface PromptEditorInput extends Omit<PromptInput, "tagIds" | "platforms"> {
+interface EntryEditorInput extends Omit<EntryInput, "tagIds" | "platforms"> {
   tagNames: string[];
   platforms: string[];
+}
+
+interface UpsertEntryOptions {
+  source?: PromptVersion["source"];
+  changeSummary?: string;
+  restoredFromVersionId?: string;
 }
 
 interface VaultContextValue {
   dataset: PromptVaultDataset;
   authMode: AuthMode;
+  runtime: ReturnType<typeof getProductRuntime>;
   dashboard: DashboardSnapshot;
   isReady: boolean;
-  upsertPrompt: (input: PromptEditorInput, existingId?: string) => string;
-  toggleFavorite: (promptId: string) => void;
-  toggleArchive: (promptId: string) => void;
-  duplicatePrompt: (promptId: string) => string | null;
-  createCollection: (input: CollectionInput) => string;
+  syncQueueCount: number;
+  sessionUserId: string | null;
+  isCloudSessionActive: boolean;
+  cloudSyncState: "idle" | "loading" | "saving" | "error";
+  upsertEntry: (input: EntryEditorInput, existingId?: string, options?: UpsertEntryOptions) => string;
+  upsertPrompt: (input: EntryEditorInput, existingId?: string, options?: UpsertEntryOptions) => string;
+  saveDraft: (input: EntryEditorInput, options?: { entryId?: string; draftId?: string }) => string;
+  discardDraft: (options?: { entryId?: string; draftId?: string }) => void;
+  toggleFavorite: (entryId: string) => void;
+  toggleArchive: (entryId: string) => void;
+  duplicateEntry: (entryId: string) => string | null;
+  duplicatePrompt: (entryId: string) => string | null;
+  restoreVersion: (entryId: string, versionId: string) => boolean;
+  createProject: (input: ProjectInput) => string;
+  createCollection: (input: ProjectInput) => string;
   updatePreferences: (input: Partial<UserPreferenceRecord>) => void;
   recordAISuggestion: (
     response: AIAssistResponse,
@@ -84,16 +114,89 @@ function buildVersionId(versionChainId: string, versionNumber: number) {
   return `${versionChainId}-v${versionNumber}`;
 }
 
+function buildDraftId(entryId?: string, draftId?: string) {
+  if (draftId) {
+    return draftId;
+  }
+
+  if (entryId) {
+    return `draft-entry-${entryId}`;
+  }
+
+  return "draft-capture";
+}
+
+function createVersionSnapshot(options: {
+  entry: EntryRecord;
+  versionId: string;
+  versionNumber: number;
+  source: PromptVersion["source"];
+  createdAt: string;
+  createdBy: string;
+  changeSummary?: string;
+  restoredFromVersionId?: string;
+}): PromptVersion {
+  const { entry, versionId, versionNumber, source, createdAt, createdBy, changeSummary, restoredFromVersionId } =
+    options;
+
+  return {
+    id: versionId,
+    entryId: entry.id,
+    versionChainId: entry.versionChainId,
+    versionNumber,
+    title: entry.title,
+    body: entry.body,
+    summary: entry.summary,
+    notes: entry.notes,
+    resultNotes: entry.resultNotes,
+    categoryId: entry.categoryId,
+    projectId: entry.projectId ?? entry.collectionId,
+    type: entry.type,
+    platforms: entry.platforms,
+    tagIds: entry.tagIds,
+    source,
+    changeSummary,
+    restoredFromVersionId,
+    createdAt,
+    createdBy
+  };
+}
+
+function queueMutation(
+  current: PromptVaultDataset,
+  mutation: Omit<OfflineMutationRecord, "id" | "createdAt">
+) {
+  return [
+    {
+      ...mutation,
+      id: `sync-${crypto.randomUUID()}`,
+      createdAt: new Date().toISOString()
+    },
+    ...current.syncQueue
+  ].slice(0, 100);
+}
+
 export function VaultProvider({ children }: { children: ReactNode }) {
-  const [dataset, setDataset] = useState<PromptVaultDataset>(createDemoDataset());
+  const [dataset, setDataset] = useState<PromptVaultDataset>(withDatasetAliases(createDemoDataset()));
   const [isReady, setIsReady] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [hydratedRemoteUserId, setHydratedRemoteUserId] = useState<string | null>(null);
+  const [cloudSyncState, setCloudSyncState] = useState<"idle" | "loading" | "saving" | "error">("idle");
+  const lastRemoteSnapshotRef = useRef<string | null>(null);
   const { notify } = useToast();
   const authMode = getAuthMode();
+  const runtime = getProductRuntime();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const stored = loadPreviewDataset();
-      setDataset(stored ?? createDemoDataset());
+      const syncQueue = loadPreviewSyncQueue();
+      const seed = withDatasetAliases(stored ?? createDemoDataset());
+      setDataset({
+        ...seed,
+        syncQueue: seed.syncQueue.length > 0 ? seed.syncQueue : syncQueue
+      });
       setIsReady(true);
     });
 
@@ -108,141 +211,461 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
 
     savePreviewDataset(dataset);
+    savePreviewSyncQueue(dataset.syncQueue);
   }, [dataset, isReady]);
+
+  useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+
+    let active = true;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!active) {
+        return;
+      }
+
+      setSessionUserId(user?.id ?? null);
+    });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUserId = session?.user?.id ?? null;
+      setSessionUserId(nextUserId);
+
+      if (!nextUserId) {
+        setHydratedRemoteUserId(null);
+        setCloudSyncState("idle");
+        lastRemoteSnapshotRef.current = null;
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!isReady || !supabase || !sessionUserId || hydratedRemoteUserId === sessionUserId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setCloudSyncState("loading");
+        const remoteState = await loadRemoteVaultState(supabase, sessionUserId);
+        if (cancelled) {
+          return;
+        }
+
+        const localState = withDatasetAliases(dataset);
+        const nextDataset = remoteState ? mergeVaultDatasets(remoteState, localState) : localState;
+        const serialized = JSON.stringify(nextDataset);
+
+        setDataset(nextDataset);
+        setHydratedRemoteUserId(sessionUserId);
+        lastRemoteSnapshotRef.current = serialized;
+
+        if (!remoteState || JSON.stringify(withDatasetAliases(remoteState)) !== serialized) {
+          await saveRemoteVaultState(supabase, sessionUserId, nextDataset);
+        }
+
+        setCloudSyncState("idle");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("[vault.remote-load-failed]", error);
+        setCloudSyncState("error");
+        notify("Cloud sync could not load your saved state.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataset, hydratedRemoteUserId, isReady, notify, sessionUserId, supabase]);
+
+  useEffect(() => {
+    if (!isReady || !supabase || !sessionUserId || hydratedRemoteUserId !== sessionUserId) {
+      return;
+    }
+
+    const serialized = JSON.stringify(withDatasetAliases(dataset));
+    if (lastRemoteSnapshotRef.current === serialized) {
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setCloudSyncState("saving");
+        await saveRemoteVaultState(supabase, sessionUserId, dataset);
+        lastRemoteSnapshotRef.current = serialized;
+        setCloudSyncState("idle");
+      } catch (error) {
+        console.error("[vault.remote-save-failed]", error);
+        setCloudSyncState("error");
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [dataset, hydratedRemoteUserId, isReady, sessionUserId, supabase]);
 
   function updateDataset(updater: (current: PromptVaultDataset) => PromptVaultDataset) {
     startTransition(() => {
-      setDataset((current) => updater(current));
+      setDataset((current) => {
+        const aliasedCurrent = withDatasetAliases(current);
+        const updated = updater(aliasedCurrent);
+
+        if (updated === aliasedCurrent || updated === current) {
+          return current;
+        }
+
+        return withDatasetAliases(updated);
+      });
     });
   }
 
-  function upsertPrompt(input: PromptEditorInput, existingId?: string) {
+  function upsertEntry(input: EntryEditorInput, existingId?: string, options?: UpsertEntryOptions) {
     const now = new Date().toISOString();
-    const promptId = existingId ?? `prompt-${crypto.randomUUID()}`;
-    let nextPromptId = promptId;
+    const entryId = existingId ?? `entry-${crypto.randomUUID()}`;
+    let nextEntryId = entryId;
 
     updateDataset((current) => {
+      const entries = getEntries(current);
       const { tagIds, newTags } = normalizeTags(current, input.tagNames);
-      const basePayload = promptInputSchema.parse({
+      const basePayload = entryInputSchema.parse({
         ...input,
-        collectionId: input.collectionId || "",
+        projectId: input.projectId || input.collectionId || "",
+        collectionId: input.projectId || input.collectionId || "",
         tagIds,
         sourceUrl: input.sourceUrl || "",
         sourceLabel: input.sourceLabel || ""
       });
-      const existingPrompt = current.prompts.find((prompt) => prompt.id === promptId);
-      const versionChainId = existingPrompt?.versionChainId ?? `chain-${crypto.randomUUID()}`;
-      const nextVersionNumber = existingPrompt ? existingPrompt.latestVersionNumber + 1 : 1;
+      const existingEntry = entries.find((entry) => entry.id === entryId);
+      const versionChainId = existingEntry?.versionChainId ?? `chain-${crypto.randomUUID()}`;
+      const nextVersionNumber = existingEntry ? existingEntry.latestVersionNumber + 1 : 1;
       const versionId = buildVersionId(versionChainId, nextVersionNumber);
+      const versionSource = options?.source ?? "manual";
 
-      const nextPrompt: PromptRecord = {
-        ...existingPrompt,
+      const nextEntry: EntryRecord = {
+        ...existingEntry,
         ...basePayload,
-        id: promptId,
-        userId: existingPrompt?.userId ?? "demo-user",
-        collectionId: basePayload.collectionId || undefined,
+        id: entryId,
+        userId: existingEntry?.userId ?? "demo-user",
+        projectId: basePayload.projectId || undefined,
+        collectionId: basePayload.projectId || basePayload.collectionId || undefined,
         latestVersionId: versionId,
         latestVersionNumber: nextVersionNumber,
         versionChainId,
-        createdAt: existingPrompt?.createdAt ?? now,
+        createdAt: existingEntry?.createdAt ?? now,
         updatedAt: now
       };
 
-      nextPromptId = nextPrompt.id;
+      nextEntryId = nextEntry.id;
+      const nextEntries = existingEntry
+        ? entries.map((entry) => (entry.id === entryId ? nextEntry : entry))
+        : [nextEntry, ...entries];
 
       return {
         ...current,
-        tags: [...current.tags, ...newTags.filter((tag) => !current.tags.some((item) => item.id === tag.id))],
-        prompts: existingPrompt
-          ? current.prompts.map((prompt) => (prompt.id === promptId ? nextPrompt : prompt))
-          : [nextPrompt, ...current.prompts],
+        tags: [
+          ...current.tags,
+          ...newTags.filter((tag) => !current.tags.some((item) => item.id === tag.id))
+        ],
+        drafts: current.drafts.filter(
+          (draft) => draft.entryId !== nextEntry.id && draft.id !== buildDraftId(undefined)
+        ),
+        entries: nextEntries,
+        prompts: nextEntries,
         versions: [
           ...current.versions,
-          {
-            id: versionId,
+          createVersionSnapshot({
+            entry: nextEntry,
+            versionId,
             versionNumber: nextVersionNumber,
-            body: nextPrompt.body,
-            summary: nextPrompt.summary,
-            resultNotes: nextPrompt.resultNotes,
+            source: versionSource,
             createdAt: now,
-            createdBy: "demo-user"
-          }
+            createdBy: "demo-user",
+            changeSummary: options?.changeSummary,
+            restoredFromVersionId: options?.restoredFromVersionId
+          })
         ],
         activities: [
           {
             id: `activity-${crypto.randomUUID()}`,
             userId: "demo-user",
-            type: existingPrompt ? "version_created" : "created",
-            promptId: nextPrompt.id,
-            promptTitle: nextPrompt.title,
+            type: existingEntry ? "version_created" : "created",
+            entryId: nextEntry.id,
+            promptId: nextEntry.id,
+            entryTitle: nextEntry.title,
+            promptTitle: nextEntry.title,
             createdAt: now,
-            description: existingPrompt
-              ? `Saved version ${nextVersionNumber} for ${nextPrompt.title}.`
-              : `Created ${nextPrompt.title}.`
+            description: existingEntry
+              ? `Saved version ${nextVersionNumber} for ${nextEntry.title}.`
+              : `Captured ${nextEntry.title}.`
           },
           ...current.activities
-        ]
+        ],
+        syncQueue: queueMutation(current, {
+          entity: "entry",
+          action: "upsert",
+          targetId: nextEntry.id
+        })
       };
     });
 
-    notify(existingId ? "Saved as a new version in your preview vault." : "Prompt added to your vault.");
+    notify(existingId ? "Saved as a new version in your local vault." : "Entry added to your vault.");
 
-    return nextPromptId;
+    return nextEntryId;
   }
 
-  function toggleFavorite(promptId: string) {
-    updateDataset((current) => ({
-      ...current,
-      prompts: current.prompts.map((prompt) =>
-        prompt.id === promptId
-          ? { ...prompt, isFavorite: !prompt.isFavorite, updatedAt: new Date().toISOString() }
-          : prompt
-      )
-    }));
+  function saveDraft(input: EntryEditorInput, options?: { entryId?: string; draftId?: string }) {
+    const now = new Date().toISOString();
+    const nextDraftId = buildDraftId(options?.entryId, options?.draftId);
+
+    updateDataset((current) => {
+      const draft: EntryDraftRecord = {
+        id: nextDraftId,
+        entryId: options?.entryId,
+        title: input.title,
+        body: input.body,
+        summary: input.summary || "",
+        notes: input.notes || "",
+        resultNotes: input.resultNotes || "",
+        categoryId: input.categoryId,
+        projectId: input.projectId || input.collectionId || undefined,
+        type: input.type,
+        language: input.language,
+        platforms: input.platforms,
+        tagIds: input.tagNames.map((tagName) => createTagId(tagName)),
+        variables: input.variables,
+        sourceLabel: input.sourceLabel || "",
+        sourceUrl: input.sourceUrl || "",
+        status: input.status,
+        rating: input.rating,
+        updatedAt: now,
+        deviceId: "preview-device"
+      };
+
+      const existingDraft = current.drafts.find((item) => item.id === nextDraftId);
+      if (existingDraft) {
+        const currentShape = JSON.stringify({
+          ...existingDraft,
+          updatedAt: undefined
+        });
+        const nextShape = JSON.stringify({
+          ...draft,
+          updatedAt: undefined
+        });
+
+        if (currentShape === nextShape) {
+          return current;
+        }
+      }
+
+      const drafts = existingDraft
+        ? current.drafts.map((item) => (item.id === nextDraftId ? draft : item))
+        : [draft, ...current.drafts].slice(0, 30);
+
+      return {
+        ...current,
+        drafts
+      };
+    });
+
+    return nextDraftId;
   }
 
-  function toggleArchive(promptId: string) {
-    updateDataset((current) => ({
-      ...current,
-      prompts: current.prompts.map((prompt) =>
-        prompt.id === promptId
-          ? { ...prompt, isArchived: !prompt.isArchived, updatedAt: new Date().toISOString() }
-          : prompt
-      )
-    }));
+  function discardDraft(options?: { entryId?: string; draftId?: string }) {
+    const targetId = buildDraftId(options?.entryId, options?.draftId);
+
+    updateDataset((current) => {
+      const drafts = current.drafts.filter(
+        (draft) => draft.id !== targetId && draft.entryId !== options?.entryId
+      );
+
+      if (drafts.length === current.drafts.length) {
+        return current;
+      }
+
+      return {
+        ...current,
+        drafts
+      };
+    });
   }
 
-  function duplicatePrompt(promptId: string) {
-    const source = dataset.prompts.find((prompt) => prompt.id === promptId);
+  function toggleFavorite(entryId: string) {
+    updateDataset((current) => {
+      const entries = getEntries(current).map((entry) =>
+        entry.id === entryId
+          ? { ...entry, isFavorite: !entry.isFavorite, updatedAt: new Date().toISOString() }
+          : entry
+      );
+
+      return {
+        ...current,
+        entries,
+        prompts: entries,
+        syncQueue: queueMutation(current, {
+          entity: "entry",
+          action: "toggle_favorite",
+          targetId: entryId
+        })
+      };
+    });
+  }
+
+  function toggleArchive(entryId: string) {
+    updateDataset((current) => {
+      const entries = getEntries(current).map((entry) =>
+        entry.id === entryId
+          ? { ...entry, isArchived: !entry.isArchived, updatedAt: new Date().toISOString() }
+          : entry
+      );
+
+      return {
+        ...current,
+        entries,
+        prompts: entries,
+        syncQueue: queueMutation(current, {
+          entity: "entry",
+          action: "toggle_archive",
+          targetId: entryId
+        })
+      };
+    });
+  }
+
+  function duplicateEntry(entryId: string) {
+    const source = getEntries(dataset).find((entry) => entry.id === entryId);
     if (!source) {
       return null;
     }
 
-    const duplicatedId = upsertPrompt(
+    const duplicatedId = upsertEntry(
       {
         ...source,
         title: `${source.title} Copy`,
-        collectionId: source.collectionId || "",
+        projectId: source.projectId || source.collectionId || "",
+        collectionId: source.projectId || source.collectionId || "",
         language: source.language === "tr" ? "tr" : "en",
         tagNames: source.tagIds.map(
           (tagId) => dataset.tags.find((tag) => tag.id === tagId)?.name ?? tagId
         )
       },
-      undefined
+      undefined,
+      {
+        source: "duplicate",
+        changeSummary: `Duplicated from ${source.title}.`
+      }
     );
     notify("Created a duplicate with its own version chain.");
 
     return duplicatedId;
   }
 
-  function createCollection(input: CollectionInput) {
+  function restoreVersion(entryId: string, versionId: string) {
+    let restored = false;
+    const now = new Date().toISOString();
+
+    updateDataset((current) => {
+      const entries = getEntries(current);
+      const existingEntry = entries.find((entry) => entry.id === entryId);
+      const version = current.versions.find(
+        (candidate) => candidate.id === versionId && candidate.entryId === entryId
+      );
+
+      if (!existingEntry || !version) {
+        return current;
+      }
+
+      const nextVersionNumber = existingEntry.latestVersionNumber + 1;
+      const nextVersionId = buildVersionId(existingEntry.versionChainId, nextVersionNumber);
+      const restoredEntry: EntryRecord = {
+        ...existingEntry,
+        title: version.title,
+        body: version.body,
+        summary: version.summary,
+        notes: version.notes,
+        resultNotes: version.resultNotes,
+        categoryId: version.categoryId,
+        projectId: version.projectId,
+        collectionId: version.projectId,
+        type: version.type,
+        platforms: version.platforms,
+        tagIds: version.tagIds,
+        latestVersionId: nextVersionId,
+        latestVersionNumber: nextVersionNumber,
+        updatedAt: now
+      };
+
+      restored = true;
+
+      return {
+        ...current,
+        entries: entries.map((entry) => (entry.id === entryId ? restoredEntry : entry)),
+        prompts: entries.map((entry) => (entry.id === entryId ? restoredEntry : entry)),
+        versions: [
+          ...current.versions,
+          createVersionSnapshot({
+            entry: restoredEntry,
+            versionId: nextVersionId,
+            versionNumber: nextVersionNumber,
+            source: "restore",
+            createdAt: now,
+            createdBy: "demo-user",
+            changeSummary: `Restored from v${version.versionNumber}.`,
+            restoredFromVersionId: version.id
+          })
+        ],
+        activities: [
+          {
+            id: `activity-${crypto.randomUUID()}`,
+            userId: "demo-user",
+            type: "version_created",
+            entryId: restoredEntry.id,
+            promptId: restoredEntry.id,
+            entryTitle: restoredEntry.title,
+            promptTitle: restoredEntry.title,
+            createdAt: now,
+            description: `Restored ${restoredEntry.title} from version ${version.versionNumber}.`
+          },
+          ...current.activities
+        ],
+        syncQueue: queueMutation(current, {
+          entity: "entry",
+          action: "upsert",
+          targetId: restoredEntry.id
+        })
+      };
+    });
+
+    if (restored) {
+      notify("Version restored as a new safe snapshot.");
+    } else {
+      notify("Version could not be restored.");
+    }
+
+    return restored;
+  }
+
+  function createProject(input: ProjectInput) {
     const parsed = input.name.trim();
-    const collectionId = input.id || `collection-${crypto.randomUUID()}`;
-    updateDataset((current) => ({
-      ...current,
-      collections: [
+    const projectId = input.id || `project-${crypto.randomUUID()}`;
+    updateDataset((current) => {
+      const projects = [
         {
-          id: collectionId,
+          id: projectId,
           userId: "demo-user",
           name: parsed,
           description: input.description || undefined,
@@ -251,12 +674,23 @@ export function VaultProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
-        ...current.collections
-      ]
-    }));
-    notify("Collection created.");
+        ...getProjects(current)
+      ];
 
-    return collectionId;
+      return {
+        ...current,
+        projects,
+        collections: projects,
+        syncQueue: queueMutation(current, {
+          entity: "project",
+          action: "create",
+          targetId: projectId
+        })
+      };
+    });
+    notify("Project created.");
+
+    return projectId;
   }
 
   function updatePreferences(input: Partial<UserPreferenceRecord>) {
@@ -265,13 +699,17 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       preferences: {
         ...current.preferences,
         ...input
-      }
+      },
+      syncQueue: queueMutation(current, {
+        entity: "preferences",
+        action: "update_preferences"
+      })
     }));
     notify("Preferences updated.");
   }
 
   function exportVault(format: "json" | "markdown" | "txt") {
-    const filenameBase = `prompt-vault-export-${new Date().toISOString().slice(0, 10)}`;
+    const filenameBase = `vault-export-${new Date().toISOString().slice(0, 10)}`;
     if (format === "json") {
       downloadFile(`${filenameBase}.json`, exportAsJson(dataset), "application/json");
     } else if (format === "markdown") {
@@ -295,6 +733,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       aiSuggestions: [
         {
           id: suggestionId,
+          entryId: options?.promptId ?? undefined,
           promptId: options?.promptId ?? undefined,
           action: response.action,
           provider: response.provider,
@@ -314,6 +753,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
           provider: response.provider,
           model: response.model,
           status: "success",
+          entryId: options?.promptId ?? undefined,
           promptId: options?.promptId ?? undefined,
           createdAt: now,
           latencyMs: options?.latencyMs ?? 0
@@ -327,10 +767,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     return suggestionId;
   }
 
-  function setAISuggestionStatus(
-    suggestionId: string,
-    status: AISuggestionRecord["status"]
-  ) {
+  function setAISuggestionStatus(suggestionId: string, status: AISuggestionRecord["status"]) {
     updateDataset((current) => ({
       ...current,
       aiSuggestions: current.aiSuggestions.map((suggestion) =>
@@ -346,7 +783,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }
 
   function resetPreview() {
-    const seed = createDemoDataset();
+    const seed = withDatasetAliases(createDemoDataset());
     setDataset(seed);
     notify("Preview vault reset to the seeded dataset.");
   }
@@ -356,13 +793,24 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       value={{
         dataset,
         authMode,
+        runtime,
         dashboard: createDashboardSnapshot(dataset),
         isReady,
-        upsertPrompt,
+        syncQueueCount: dataset.syncQueue.length,
+        sessionUserId,
+        isCloudSessionActive: Boolean(sessionUserId),
+        cloudSyncState,
+        upsertEntry,
+        upsertPrompt: upsertEntry,
+        saveDraft,
+        discardDraft,
         toggleFavorite,
         toggleArchive,
-        duplicatePrompt,
-        createCollection,
+        duplicateEntry,
+        duplicatePrompt: duplicateEntry,
+        restoreVersion,
+        createProject,
+        createCollection: createProject,
         updatePreferences,
         recordAISuggestion,
         setAISuggestionStatus,

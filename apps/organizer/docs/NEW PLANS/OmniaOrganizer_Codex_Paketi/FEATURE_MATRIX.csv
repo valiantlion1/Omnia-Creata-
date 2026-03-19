@@ -1,0 +1,24 @@
+Feature,Category,Phase,Priority,Layer,State,Notes
+File browser,Core,1,P0,Core,Now,Main local browsing experience
+File actions (copy/move/rename/share/delete),Core,1,P0,Core,Now,Safe destructive flow required
+Multi-select,Core,1,P0,Core,Now,Must be reliable
+Recycle Bin,Safety,1,P0,Core,Now,Required before trusted delete
+Search by name,Search,1,P0,Core,Now,Fast and practical
+Filter by type/date/size,Search,1,P1,Core,Now,Phase 1 search refinement
+Home summary,Navigation,1,P1,Core,Now,Recent/new/shortcuts
+Storage summary,Storage,1,P1,Core,Now,Simple category breakdown
+Media layer,Media,2,P0,Core,Later,Photo/video focused view
+Storage analyzer,Storage,2,P0,Core,Later,Where space is going
+Cleanup engine,Storage,2,P1,Core,Later,"Rules, not AI"
+Smart views,Intelligence,2,P1,Core,Later,"Large files, downloads, screenshots"
+Rule-based suggestions,Intelligence,2,P1,Core,Later,No AI yet
+Privacy vault,Privacy,3,P1,Strong module,Later,Biometric/pin
+Network access (SMB/NAS/FTP),Network,3,P2,Strong module,Later,Advanced access layer
+Cloud connectors,Cloud,4,P2,Strong module,Later,Optional extension
+Backup/restore,Cloud,4,P2,Strong module,Later,Not cloud-first
+Version history,Trust,4,P2,Strong module,Later,Cloud/trust layer
+Document preview,Documents,5,P2,Advanced module,Later,Preview before edit
+PDF tools,Documents,5,P3,Advanced module,Later,Controlled scope
+OCR,Documents,5,P3,Advanced module,Later,Not for early phases
+AI classification,AI,6,P4,Future layer,Future,Only after system matures
+AI search,AI,6,P4,Future layer,Future,No early semantic search

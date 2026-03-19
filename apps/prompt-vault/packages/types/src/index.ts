@@ -1,11 +1,11 @@
-export const appName = "Prompt Vault";
+export const appName = "Nolra";
 export const parentBrand = "Omnia Creata";
 export const parentDomain = "omniacreata.com";
 
 export const locales = ["en", "tr"] as const;
 export type Locale = (typeof locales)[number];
 
-export const promptTypes = [
+export const entryTypes = [
   "prompt",
   "idea",
   "workflow",
@@ -16,10 +16,15 @@ export const promptTypes = [
   "note",
 ] as const;
 
-export type PromptType = (typeof promptTypes)[number];
+export const promptTypes = entryTypes;
 
-export const promptStatuses = ["draft", "active", "reviewed", "archived"] as const;
-export type PromptStatus = (typeof promptStatuses)[number];
+export type EntryType = (typeof entryTypes)[number];
+export type PromptType = EntryType;
+
+export const entryStatuses = ["draft", "active", "reviewed", "archived"] as const;
+export const promptStatuses = entryStatuses;
+export type EntryStatus = (typeof entryStatuses)[number];
+export type PromptStatus = EntryStatus;
 
 export interface LocalizedLabel {
   en: string;
@@ -52,17 +57,40 @@ export interface PromptVariableDefinition {
   required?: boolean;
 }
 
+export const versionSources = [
+  "manual",
+  "autosave",
+  "restore",
+  "ai_refine",
+  "duplicate",
+  "merge"
+] as const;
+
+export type VersionSource = (typeof versionSources)[number];
+
 export interface PromptVersion {
   id: string;
+  entryId: string;
+  versionChainId: string;
   versionNumber: number;
+  title: string;
   body: string;
   summary?: string;
+  notes?: string;
   resultNotes?: string;
+  categoryId: string;
+  projectId?: string;
+  type: EntryType;
+  platforms: string[];
+  tagIds: string[];
+  source: VersionSource;
+  changeSummary?: string;
+  restoredFromVersionId?: string;
   createdAt: string;
   createdBy: string;
 }
 
-export interface Collection {
+export interface ProjectRecord {
   id: string;
   userId: string;
   name: string;
@@ -74,6 +102,8 @@ export interface Collection {
   updatedAt: string;
 }
 
+export type Collection = ProjectRecord;
+
 export interface Tag {
   id: string;
   userId: string;
@@ -82,7 +112,7 @@ export interface Tag {
   createdAt: string;
 }
 
-export interface PromptRecord {
+export interface EntryRecord {
   id: string;
   userId: string;
   title: string;
@@ -92,15 +122,16 @@ export interface PromptRecord {
   resultNotes?: string;
   recommendedVariations?: string;
   categoryId: string;
+  projectId?: string;
   collectionId?: string;
-  type: PromptType;
+  type: EntryType;
   language: Locale | string;
   platforms: string[];
   tagIds: string[];
   isFavorite: boolean;
   isArchived: boolean;
   isPinned: boolean;
-  status: PromptStatus;
+  status: EntryStatus;
   rating?: number;
   latestVersionId: string;
   latestVersionNumber: number;
@@ -112,12 +143,51 @@ export interface PromptRecord {
   updatedAt: string;
 }
 
+export type PromptRecord = EntryRecord;
+
+export interface EntryDraftRecord {
+  id: string;
+  entryId?: string;
+  title: string;
+  body: string;
+  summary?: string;
+  notes?: string;
+  resultNotes?: string;
+  categoryId: string;
+  projectId?: string;
+  type: EntryType;
+  language: Locale | string;
+  platforms: string[];
+  tagIds: string[];
+  variables: PromptVariableDefinition[];
+  sourceLabel?: string;
+  sourceUrl?: string;
+  status?: EntryStatus;
+  rating?: number;
+  updatedAt: string;
+  deviceId?: string;
+}
+
 export interface UserPreferenceRecord {
   language: Locale;
   theme: "system" | "light" | "dark";
   density: "comfortable" | "compact";
   defaultView: "list" | "grid";
   enableOfflineCache: boolean;
+}
+
+export interface OfflineMutationRecord {
+  id: string;
+  entity: "entry" | "project" | "preferences";
+  action:
+    | "upsert"
+    | "create"
+    | "toggle_favorite"
+    | "toggle_archive"
+    | "duplicate"
+    | "update_preferences";
+  targetId?: string;
+  createdAt: string;
 }
 
 export type AIAction =
@@ -134,6 +204,7 @@ export type AIAction =
 export type AIProviderKey = "preview" | "openrouter" | "groq" | "together";
 
 export interface AIPromptInput {
+  entryId?: string;
   promptId?: string;
   title?: string;
   body: string;
@@ -141,9 +212,10 @@ export interface AIPromptInput {
   notes?: string;
   resultNotes?: string;
   categoryId?: string;
+  projectId?: string;
   collectionId?: string;
   language: Locale;
-  type?: PromptType;
+  type?: EntryType;
   platforms: string[];
   tagNames: string[];
   variables: PromptVariableDefinition[];
@@ -160,6 +232,7 @@ export interface AILibraryContextItem {
 }
 
 export interface AISimilarPromptMatch {
+  entryId?: string;
   promptId: string;
   title: string;
   score: number;
@@ -212,6 +285,7 @@ export type AISuggestionPayload =
 
 export interface AISuggestionRecord {
   id: string;
+  entryId?: string;
   promptId?: string;
   action: AIAction;
   provider: AIProviderKey;
@@ -229,6 +303,7 @@ export interface AIUsageRecord {
   provider: AIProviderKey;
   model: string;
   status: "success" | "rate_limited" | "failed";
+  entryId?: string;
   promptId?: string;
   createdAt: string;
   latencyMs: number;
@@ -263,48 +338,60 @@ export interface ActivityRecord {
     | "archived"
     | "version_created"
     | "exported";
+  entryId?: string;
   promptId?: string;
+  entryTitle?: string;
   promptTitle?: string;
   createdAt: string;
   description: string;
 }
 
-export interface PromptFilters {
+export interface EntryFilters {
   query: string;
   categoryId: string | "all";
+  projectId: string | "all";
   collectionId: string | "all";
   platform: string | "all";
-  type: PromptType | "all";
+  type: EntryType | "all";
   language: Locale | "all";
   favoritesOnly: boolean;
   archivedOnly: boolean;
   tags: string[];
 }
 
+export type PromptFilters = EntryFilters;
+
 export interface DashboardSnapshot {
   totalEntries: number;
+  totalProjects: number;
   totalCollections: number;
   favoriteCount: number;
   archivedCount: number;
-  recentEntries: PromptRecord[];
-  recentlyUpdated: PromptRecord[];
+  recentEntries: EntryRecord[];
+  recentlyUpdated: EntryRecord[];
   promptsByCategory: Array<{ categoryId: string; count: number }>;
   promptsByPlatform: Array<{ platform: string; count: number }>;
   topTags: Array<{ tagId: string; count: number }>;
 }
 
-export interface PromptVaultDataset {
+export interface VaultDataset {
   categories: CategoryDefinition[];
   platforms: PlatformDefinition[];
+  projects: ProjectRecord[];
   collections: Collection[];
   tags: Tag[];
+  entries: EntryRecord[];
   prompts: PromptRecord[];
+  drafts: EntryDraftRecord[];
   versions: PromptVersion[];
   activities: ActivityRecord[];
   aiSuggestions: AISuggestionRecord[];
   aiUsage: AIUsageRecord[];
   preferences: UserPreferenceRecord;
+  syncQueue: OfflineMutationRecord[];
 }
+
+export type PromptVaultDataset = VaultDataset;
 
 export interface AuthMode {
   enabled: boolean;

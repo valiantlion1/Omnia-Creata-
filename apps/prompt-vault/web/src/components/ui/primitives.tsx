@@ -13,11 +13,11 @@ export function Button({
   return (
     <button
       className={cn(
-        "relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border text-[13px] font-semibold tracking-[-0.01em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
+        "motion-lift relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border text-[13px] font-semibold tracking-[-0.01em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
         variant === "primary" &&
-          "border border-[color:rgba(255,255,255,0.15)] bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent)] px-4 text-[#000000] shadow-[var(--shadow-glow)] before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/50 before:to-transparent before:content-[''] hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 active:brightness-95",
+          "soft-shimmer border border-[color:rgba(255,255,255,0.15)] bg-[linear-gradient(135deg,var(--accent-strong),var(--accent))] px-4 text-[#000000] shadow-[var(--shadow-glow)] before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/50 before:to-transparent before:content-[''] hover:brightness-110 active:translate-y-0 active:brightness-95",
         variant === "secondary" &&
-          "border border-[var(--border)] bg-[var(--surface-muted)] px-4 text-[var(--text-primary)] shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] hover:bg-[var(--surface)] active:bg-[var(--surface-muted)]",
+          "border border-[var(--border)] bg-[linear-gradient(180deg,var(--surface-muted),rgba(255,255,255,0.01))] px-4 text-[var(--text-primary)] shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] hover:bg-[var(--surface)] active:bg-[var(--surface-muted)]",
         variant === "ghost" &&
           "border-transparent bg-transparent px-3 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-muted)] text-[13px] font-medium",
         variant === "danger" &&
@@ -79,7 +79,7 @@ export function Surface({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-panel)] backdrop-blur-3xl ring-1 ring-inset ring-white/5 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
+        "relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,var(--surface),rgba(255,255,255,0.01))] shadow-[var(--shadow-panel)] backdrop-blur-3xl ring-1 ring-inset ring-white/5 transition-[border-color,box-shadow,background-color,transform] duration-[var(--motion-fast)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
         className
       )}
       {...props}
@@ -95,7 +95,7 @@ export function Badge({
   className
 }: {
   children: ReactNode;
-  tone?: "default" | "accent" | "success" | "warning";
+  tone?: "default" | "accent" | "success" | "warning" | "info";
   className?: string;
 }) {
   return (
@@ -110,6 +110,8 @@ export function Badge({
           "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
         tone === "warning" &&
           "border-amber-500/20 bg-amber-500/10 text-amber-400",
+        tone === "info" &&
+          "border-[color:rgba(111,151,141,0.28)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-strong)] shadow-[0_0_12px_rgba(111,151,141,0.14)]",
         className
       )}
     >

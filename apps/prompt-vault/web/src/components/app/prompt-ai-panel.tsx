@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { useState, useTransition } from "react";
 import type {
   AIAction,
@@ -12,6 +12,7 @@ import type {
 } from "@prompt-vault/types";
 import { cn } from "@/lib/cn";
 import { requestAIAssist } from "@/lib/ai/client";
+import { getEntries } from "@/lib/dataset";
 import { localizeHref } from "@/lib/locale";
 import { useLocaleContext } from "@/providers/locale-provider";
 import { useToast } from "@/providers/toast-provider";
@@ -56,19 +57,22 @@ const ACTION_BUTTONS: Array<{
 export function PromptAIPanel({
   prompt,
   promptId,
-  handlers
+  handlers,
+  collapsedByDefault = false
 }: {
   prompt: AIPromptInput;
   promptId?: string;
   handlers?: PromptAIHandlers;
+  collapsedByDefault?: boolean;
 }) {
-  const { dataset, recordAISuggestion, setAISuggestionStatus } = useVault();
+  const { dataset, recordAISuggestion, setAISuggestionStatus, runtime } = useVault();
   const { locale, t } = useLocaleContext();
   const { notify } = useToast();
   const [pendingAction, startTransition] = useTransition();
   const [activeAction, setActiveAction] = useState<AIAction | null>(null);
   const [localSuggestions, setLocalSuggestions] = useState<LocalSuggestion[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [collapsed, setCollapsed] = useState(collapsedByDefault);
 
   const storedSuggestions = promptId
     ? dataset.aiSuggestions
@@ -77,7 +81,7 @@ export function PromptAIPanel({
     : [];
   const suggestions = promptId ? storedSuggestions : localSuggestions;
 
-  const library = dataset.prompts
+  const library = getEntries(dataset)
     .filter((item) => item.id !== promptId)
     .slice(0, 30)
     .map((item) => ({
@@ -184,6 +188,33 @@ export function PromptAIPanel({
     });
   }
 
+  if (!runtime.enableAI) {
+    return (
+      <Surface className="space-y-5 p-5">
+        <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(212,167,91,0.15),rgba(255,255,255,0.02))] p-4 shadow-[var(--shadow-panel)]">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+                    {t("app.aiAssistantTitle")}
+                  </div>
+                  <div className="text-sm leading-6 text-[var(--text-secondary)]">
+                    {t("app.aiBetaDisabledDescription")}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Badge tone="accent">{t("app.aiComingSoonLabel")}</Badge>
+          </div>
+        </div>
+      </Surface>
+    );
+  }
+
   return (
     <Surface className="space-y-5 p-5">
       <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(212,167,91,0.15),rgba(255,255,255,0.02))] p-4 shadow-[var(--shadow-panel)]">
@@ -203,63 +234,72 @@ export function PromptAIPanel({
               </div>
             </div>
           </div>
-          <Badge tone="accent">{t("app.aiServerOnly")}</Badge>
-        </div>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2">
-        {ACTION_BUTTONS.map((item) => (
-          <Button
-            key={item.action}
-            className="justify-start"
-            disabled={pendingAction}
-            onClick={() => runAction(item.action)}
-            size="sm"
-            variant={activeAction === item.action ? "primary" : "secondary"}
-          >
-            {activeAction === item.action && pendingAction ? t("app.aiWorking") : t(item.labelKey)}
-          </Button>
-        ))}
-      </div>
-
-      {errorMessage ? (
-        <div className="rounded-2xl border border-[color:rgba(182,93,82,0.35)] bg-[color:rgba(182,93,82,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <div className="space-y-3">
-        {suggestions.length === 0 ? (
-          <div className="rounded-[26px] border border-dashed border-[var(--border-strong)] bg-[color:rgba(255,255,255,0.02)] px-4 py-5 text-sm leading-7 text-[var(--text-secondary)]">
-            {t("app.aiEmptyState")}
+          <div className="flex items-center gap-2">
+            <Badge tone="accent">{t("app.aiServerOnly")}</Badge>
+            <Button onClick={() => setCollapsed((current) => !current)} size="sm" variant="ghost">
+              <ChevronDown className={`h-4 w-4 transition ${collapsed ? "" : "rotate-180"}`} />
+            </Button>
           </div>
-        ) : (
-          suggestions.map((suggestion) => (
-            <div
-              key={suggestion.id}
-              className="rounded-[26px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-4 shadow-[var(--shadow-panel)]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-[var(--text-primary)]">
-                  {labelForAction(suggestion.action, t)}
-                </div>
-                <Badge>{suggestion.provider}</Badge>
-              </div>
-              <div className="mt-3">{renderSuggestionBody(suggestion, locale, t)}</div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {suggestion.action !== "find_similar" ? (
-                  <Button onClick={() => applySuggestion(suggestion)} size="sm">
-                    {t("app.aiAccept")}
-                  </Button>
-                ) : null}
-                <Button onClick={() => rejectSuggestion(suggestion)} size="sm" variant="ghost">
-                  {suggestion.action === "find_similar" ? t("app.aiDismiss") : t("app.aiReject")}
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
+        </div>
       </div>
+
+      {!collapsed ? (
+        <>
+          <div className="grid gap-2 md:grid-cols-2">
+            {ACTION_BUTTONS.map((item) => (
+              <Button
+                key={item.action}
+                className="justify-start"
+                disabled={pendingAction}
+                onClick={() => runAction(item.action)}
+                size="sm"
+                variant={activeAction === item.action ? "primary" : "secondary"}
+              >
+                {activeAction === item.action && pendingAction ? t("app.aiWorking") : t(item.labelKey)}
+              </Button>
+            ))}
+          </div>
+
+          {errorMessage ? (
+            <div className="rounded-2xl border border-[color:rgba(182,93,82,0.35)] bg-[color:rgba(182,93,82,0.12)] px-4 py-3 text-sm text-[var(--danger)]">
+              {errorMessage}
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            {suggestions.length === 0 ? (
+              <div className="rounded-[26px] border border-dashed border-[var(--border-strong)] bg-[color:rgba(255,255,255,0.02)] px-4 py-5 text-sm leading-7 text-[var(--text-secondary)]">
+                {t("app.aiEmptyState")}
+              </div>
+            ) : (
+              suggestions.map((suggestion) => (
+                <div
+                  key={suggestion.id}
+                  className="rounded-[26px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-4 shadow-[var(--shadow-panel)]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-[var(--text-primary)]">
+                      {labelForAction(suggestion.action, t)}
+                    </div>
+                    <Badge>{suggestion.provider}</Badge>
+                  </div>
+                  <div className="mt-3">{renderSuggestionBody(suggestion, locale, t)}</div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {suggestion.action !== "find_similar" ? (
+                      <Button onClick={() => applySuggestion(suggestion)} size="sm">
+                        {t("app.aiAccept")}
+                      </Button>
+                    ) : null}
+                    <Button onClick={() => rejectSuggestion(suggestion)} size="sm" variant="ghost">
+                      {suggestion.action === "find_similar" ? t("app.aiDismiss") : t("app.aiReject")}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : null}
     </Surface>
   );
 }

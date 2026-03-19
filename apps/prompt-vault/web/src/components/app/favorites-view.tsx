@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/app/page-header";
 import { PromptCard } from "@/components/app/prompt-card";
 import { Button, EmptyState } from "@/components/ui/primitives";
+import { getEntries } from "@/lib/dataset";
 import { localizeHref } from "@/lib/locale";
 import { useLocaleContext } from "@/providers/locale-provider";
 import { useVault } from "@/providers/vault-provider";
@@ -11,7 +12,7 @@ import { useVault } from "@/providers/vault-provider";
 export function FavoritesView() {
   const { dataset } = useVault();
   const { locale, t } = useLocaleContext();
-  const favorites = dataset.prompts.filter((prompt) => prompt.isFavorite && !prompt.isArchived);
+  const favorites = getEntries(dataset).filter((entry) => entry.isFavorite && !entry.isArchived);
 
   return (
     <div className="space-y-6">

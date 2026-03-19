@@ -1,5 +1,12 @@
-import { CollectionsView } from "@/components/app/collections-view";
+import { redirect } from "next/navigation";
+import { localizeHref } from "@/lib/locale";
 
-export default function AppCollectionsPage() {
-  return <CollectionsView />;
+export default async function AppCollectionsPage({
+  params
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+
+  redirect(localizeHref(locale as "en" | "tr", "/app/projects"));
 }

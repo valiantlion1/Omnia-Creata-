@@ -2,11 +2,9 @@ import { brand } from "@prompt-vault/config";
 import { getMessages } from "@prompt-vault/i18n";
 import type { Locale } from "@prompt-vault/types";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { MarketingShell } from "@/components/site/marketing-shell";
 import { Badge, Button, SectionHeading, Surface } from "@/components/ui/primitives";
 import { assertLocale, localizeHref } from "@/lib/locale";
-import { getServerAuthState } from "@/lib/server-auth";
 
 interface EntryMessages {
   common: {
@@ -42,11 +40,6 @@ export default async function AppEntryPage({
   const { locale } = await params;
   const safeLocale = assertLocale(locale);
   const messages = getEntryMessages(safeLocale);
-  const { enabled, user } = await getServerAuthState();
-
-  if (enabled && user) {
-    redirect(localizeHref(safeLocale, "/app"));
-  }
 
   return (
     <MarketingShell locale={safeLocale}>
@@ -62,7 +55,7 @@ export default async function AppEntryPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href={localizeHref(safeLocale, "/sign-in")}>
+            <Link href={localizeHref(safeLocale, "/app")}>
               <Button size="lg">{messages.common.launchApp}</Button>
             </Link>
             <Link href={localizeHref(safeLocale, "/sign-up")}>
@@ -74,7 +67,7 @@ export default async function AppEntryPage({
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--text-secondary)]">
             <Link
               className="transition hover:text-[var(--text-primary)]"
-              href={localizeHref(safeLocale, "/sign-in")}
+              href={localizeHref(safeLocale, "/app")}
             >
               {messages.common.signIn}
             </Link>

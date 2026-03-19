@@ -13,6 +13,10 @@
   "scripts": {
     "dev": "npm run dev --workspace @prompt-vault/web",
     "build": "npm run build --workspace @prompt-vault/web",
-    "lint": "npm run lint --workspace @prompt-vault/web"
+    "lint": "npm run lint --workspace @prompt-vault/web",
+    "android:add": "npm run cap:add:android --workspace @prompt-vault/web",
+    "android:sync": "npm run cap:sync --workspace @prompt-vault/web",
+    "android:open": "npm run cap:open --workspace @prompt-vault/web",
+    "android:build:debug": "npm run android:build:debug --workspace @prompt-vault/web"
   }
 }

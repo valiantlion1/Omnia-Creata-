@@ -1,5 +1,6 @@
 import "server-only";
 
+import { brand } from "@prompt-vault/config";
 import { OpenAICompatibleProvider } from "@/lib/ai/providers/openai-compatible-provider";
 import { env } from "@/lib/env";
 
@@ -11,7 +12,7 @@ export class OpenRouterProvider extends OpenAICompatibleProvider {
       apiKey: env.openRouterApiKey,
       extraHeaders: {
         "HTTP-Referer": env.siteUrl,
-        "X-Title": "Prompt Vault"
+        "X-Title": brand.name
       }
     });
   }

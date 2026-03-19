@@ -1,12 +1,12 @@
-import type { CategoryDefinition, PlatformDefinition } from "@prompt-vault/types";
+import type { CategoryDefinition, LocalizedLabel, PlatformDefinition } from "@prompt-vault/types";
 
 export const brand = {
-  name: "Prompt Vault",
+  name: "Nolra",
   parent: "Omnia Creata",
   domain: "omniacreata.com",
   marketingUrl: "https://omniacreata.com",
-  productUrl: "https://omniacreata.com/prompt-vault",
-  appUrl: "https://promptvault.omniacreata.com",
+  productUrl: "https://omniacreata.com/vault",
+  appUrl: "https://vault.omniacreata.com",
   repoName: "prompt-vault",
 };
 
@@ -27,8 +27,6 @@ export const support = {
 
 export const primaryNavigation = [
   { href: "/", key: "home" },
-  { href: "/features", key: "features" },
-  { href: "/how-it-works", key: "howItWorks" },
   { href: "/pricing", key: "pricing" },
   { href: "/faq", key: "faq" },
 ] as const;
@@ -36,10 +34,82 @@ export const primaryNavigation = [
 export const dashboardNavigation = [
   { href: "/app", key: "dashboard" },
   { href: "/app/library", key: "library" },
-  { href: "/app/collections", key: "collections" },
-  { href: "/app/favorites", key: "favorites" },
-  { href: "/app/recent", key: "recent" },
+  { href: "/app/capture", key: "capture" },
+  { href: "/app/projects", key: "projects" },
   { href: "/app/settings", key: "settings" },
+] as const;
+
+export interface ReleaseNoteDefinition {
+  id: string;
+  version: string;
+  channel: "beta" | "stable" | "coming_soon";
+  publishedAt: string;
+  title: LocalizedLabel;
+  summary: LocalizedLabel;
+  highlights: LocalizedLabel[];
+}
+
+export const releaseNotes: ReleaseNoteDefinition[] = [
+  {
+    id: "0.3.0-beta",
+    version: "0.3.0-beta",
+    channel: "beta",
+    publishedAt: "2026-03-19T12:00:00.000Z",
+    title: {
+      en: "A calmer app shell, real drafts, and safer version restores",
+      tr: "Daha sakin uygulama kabugu, gercek taslaklar ve daha guvenli surum geri yukleme"
+    },
+    summary: {
+      en: `${brand.name} now behaves more like a real app: Home is simpler, drafts autosave locally, and restoring old versions creates safe new snapshots instead of overwriting history.`,
+      tr: `${brand.name} artik daha gercek bir uygulama gibi davranir: Ana ekran sadeleşti, taslaklar yerelde otomatik kaydolur ve eski surumu geri almak gecmisi ezmeden yeni bir guvenli snapshot olusturur.`
+    },
+    highlights: [
+      {
+        en: "Home now acts as a true app start surface instead of a busy dashboard.",
+        tr: "Ana ekran artik kalabalik bir dashboard yerine gercek bir baslangic yuzeyi gibi davranir."
+      },
+      {
+        en: "Capture and editor flows autosave local drafts so unfinished writing is easier to resume.",
+        tr: "Capture ve editor akisi yerel taslaklari otomatik kaydeder; boylece yarim kalan yaziya geri donmek kolaylasir."
+      },
+      {
+        en: "Version restore now creates a fresh safe snapshot instead of replacing the old history.",
+        tr: "Surum geri yukleme artik eski gecmisi degistirmek yerine yeni bir guvenli snapshot olusturur."
+      },
+      {
+        en: "Android shell, privacy pages, and Play Store prep moved closer to a real beta build.",
+        tr: "Android shell, gizlilik sayfalari ve Play Store hazirligi gercek bir beta build'e daha da yaklasti."
+      }
+    ]
+  },
+  {
+    id: "0.2.0-beta",
+    version: "0.2.0-beta",
+    channel: "beta",
+    publishedAt: "2026-03-18T12:00:00.000Z",
+    title: {
+      en: "Mobile-first foundation and project-aware capture",
+      tr: "Mobil-oncelikli temel ve proje farkindalikli capture"
+    },
+    summary: {
+      en: "The product moved from prompt-only language toward entries, projects, and faster capture for everyday use.",
+      tr: "Urun prompt merkezli dilden giriler, projeler ve gundelik hizli capture tarafina kaydi."
+    },
+    highlights: [
+      {
+        en: "Home, Library, Capture, Projects, and Settings became the core beta information architecture.",
+        tr: "Home, Library, Capture, Projects ve Settings beta bilgi mimarisinin ana omurgasi oldu."
+      },
+      {
+        en: "Collections were folded into projects so the product structure feels simpler and more coherent.",
+        tr: "Collections proje mantigina yaklastirildi; boylece urun yapisi daha sade ve daha tutarli hale geldi."
+      },
+      {
+        en: "The app can start in guest mode with local data before cloud sync is enabled.",
+        tr: "Uygulama bulut sync acilmadan once misafir modunda yerel veriyle baslayabilir hale geldi."
+      }
+    ]
+  }
 ] as const;
 
 export const builtinCategories: CategoryDefinition[] = [
@@ -240,36 +310,36 @@ export const platformCatalog: PlatformDefinition[] = [
 
 export const pricingTiers = [
   {
-    key: "starter",
+    key: "free",
     price: "$0",
     cadence: "/month",
     featured: false,
     limits: {
-      prompts: "Up to 250 entries",
-      collections: "Up to 15 collections",
-      exports: "Manual JSON and Markdown export",
+      prompts: "Up to 150 entries",
+      collections: "Up to 8 projects",
+      exports: "Local export and beta ads included",
     },
   },
   {
     key: "pro",
-    price: "$12",
+    price: "Soon",
     cadence: "/month",
     featured: true,
     limits: {
-      prompts: "Unlimited entries and versions",
-      collections: "Advanced collections and sharing",
-      exports: "Scheduled backups and premium templates",
+      prompts: "Higher limits and no ads",
+      collections: "More projects and organization tools",
+      exports: "AI assist and premium sync land in V1",
     },
   },
   {
     key: "studio",
-    price: "$29",
+    price: "Later",
     cadence: "/seat",
     featured: false,
     limits: {
-      prompts: "Workspace libraries and governance",
-      collections: "Shared collections and approvals",
-      exports: "Audit logs and team provisioning",
+      prompts: "Team workspaces and governance",
+      collections: "Shared projects and approvals",
+      exports: "Admin controls after the beta cycle",
     },
   },
 ] as const;

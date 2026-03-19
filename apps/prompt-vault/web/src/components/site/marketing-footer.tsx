@@ -3,12 +3,10 @@ import type { Locale } from "@prompt-vault/types";
 import Link from "next/link";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { localizeHref } from "@/lib/locale";
-import { getServerAuthState } from "@/lib/server-auth";
 import { translate } from "@prompt-vault/i18n";
 
 export async function MarketingFooter({ locale }: { locale: Locale }) {
-  const { user } = await getServerAuthState();
-  const appHref = user ? localizeHref(locale, "/app") : localizeHref(locale, "/sign-in");
+  const appHref = localizeHref(locale, "/app");
 
   return (
     <footer className="border-t border-[var(--border)] bg-[color:rgba(255,255,255,0.28)]">

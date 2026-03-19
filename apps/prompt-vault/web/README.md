@@ -1,9 +1,10 @@
-# Prompt Vault Web App
+# Vault Web App
 
-This workspace contains the Prompt Vault web application and PWA shell built with Next.js App Router.
+This workspace contains Vault, Omnia Creata's mobile-first web application and Android-ready shell built with Next.js App Router and Capacitor.
 
 Primary reference:
 
-- [Root README](/Users/valiantlion/Desktop/Prompt%20Vault/README.md)
-- [Architecture](/Users/valiantlion/Desktop/Prompt%20Vault/docs/ARCHITECTURE.md)
-- [Deployment](/Users/valiantlion/Desktop/Prompt%20Vault/docs/DEPLOYMENT.md)
+- [Root README](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/README.md)
+- [Architecture](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/ARCHITECTURE.md)
+- [Deployment](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/DEPLOYMENT.md)
+- [Play Store](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PLAY-STORE.md)
