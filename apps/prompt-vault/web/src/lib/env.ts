@@ -3,7 +3,10 @@ import type { AIProviderKey, AuthMode } from "@prompt-vault/types";
 
 export const env = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  supabaseAnonKey:
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    "",
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001",
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? brand.name,
   betaMode: process.env.NEXT_PUBLIC_BETA_MODE !== "false",

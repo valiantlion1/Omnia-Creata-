@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
+/* ─── Button ─── */
 export function Button({
   className,
   variant = "primary",
@@ -13,18 +14,18 @@ export function Button({
   return (
     <button
       className={cn(
-        "motion-lift relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border text-[13px] font-semibold tracking-[-0.01em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
+        "vault-press relative inline-flex items-center justify-center gap-2 rounded-[12px] text-[13px] font-semibold tracking-[-0.01em] outline-none disabled:pointer-events-none disabled:opacity-40",
         variant === "primary" &&
-          "soft-shimmer border border-[color:rgba(255,255,255,0.15)] bg-[linear-gradient(135deg,var(--accent-strong),var(--accent))] px-4 text-[#000000] shadow-[var(--shadow-glow)] before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/50 before:to-transparent before:content-[''] hover:brightness-110 active:translate-y-0 active:brightness-95",
+          "bg-gradient-to-b from-[var(--accent-strong)] to-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_1px_2px_rgba(0,0,0,0.3),var(--shadow-glow)] hover:brightness-110",
         variant === "secondary" &&
-          "border border-[var(--border)] bg-[linear-gradient(180deg,var(--surface-muted),rgba(255,255,255,0.01))] px-4 text-[var(--text-primary)] shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] hover:bg-[var(--surface)] active:bg-[var(--surface-muted)]",
+          "border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)]",
         variant === "ghost" &&
-          "border-transparent bg-transparent px-3 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-muted)] text-[13px] font-medium",
+          "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface)] hover:text-[var(--text-primary)]",
         variant === "danger" &&
-          "border-transparent bg-red-500/10 border border-red-500/20 px-4 text-red-500 hover:bg-red-500/20 hover:text-red-400",
-        size === "sm" && "h-11 px-3.5 text-xs",
-        size === "default" && "h-11 px-4.5",
-        size === "lg" && "h-12 px-5 text-base",
+          "border border-red-500/20 bg-red-500/8 text-[var(--danger)] hover:bg-red-500/14",
+        size === "sm" && "h-9 px-3 text-xs",
+        size === "default" && "h-11 px-4",
+        size === "lg" && "h-12 px-5 text-[14px]",
         className
       )}
       {...props}
@@ -32,11 +33,12 @@ export function Button({
   );
 }
 
+/* ─── Input ─── */
 export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">) {
   return (
     <input
       className={cn(
-        "h-11 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
+        "h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -44,11 +46,12 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
   );
 }
 
+/* ─── Textarea ─── */
 export function Textarea({ className, ...props }: ComponentPropsWithoutRef<"textarea">) {
   return (
     <textarea
       className={cn(
-        "min-h-[120px] w-full rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
+        "min-h-[120px] w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] resize-none",
         className
       )}
       {...props}
@@ -56,11 +59,12 @@ export function Textarea({ className, ...props }: ComponentPropsWithoutRef<"text
   );
 }
 
+/* ─── Select ─── */
 export function Select({ className, ...props }: ComponentPropsWithoutRef<"select">) {
   return (
     <select
       className={cn(
-        "h-11 w-full appearance-none rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] shadow-[var(--shadow-inset)] outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:bg-[var(--surface-strong)] focus:ring-1 focus:ring-[var(--accent)]",
+        "h-11 w-full appearance-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -68,6 +72,7 @@ export function Select({ className, ...props }: ComponentPropsWithoutRef<"select
   );
 }
 
+/* ─── Surface ─── */
 export function Surface({
   className,
   children,
@@ -79,7 +84,7 @@ export function Surface({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,var(--surface),rgba(255,255,255,0.01))] shadow-[var(--shadow-panel)] backdrop-blur-3xl ring-1 ring-inset ring-white/5 transition-[border-color,box-shadow,background-color,transform] duration-[var(--motion-fast)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
+        "rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-strong)] transition-colors duration-[var(--motion-fast)]",
         className
       )}
       {...props}
@@ -89,10 +94,11 @@ export function Surface({
   );
 }
 
+/* ─── Badge ─── */
 export function Badge({
   children,
   tone = "default",
-  className
+  className,
 }: {
   children: ReactNode;
   tone?: "default" | "accent" | "success" | "warning" | "info";
@@ -101,17 +107,17 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium tracking-[0.01em]",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium",
         tone === "default" &&
-          "border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]",
+          "bg-[var(--surface-muted)] text-[var(--text-secondary)]",
         tone === "accent" &&
-          "border-[color:rgba(212,175,55,0.3)] bg-[color:rgba(212,175,55,0.1)] text-[var(--accent-strong)] shadow-[0_0_12px_rgba(212,175,55,0.15)]",
+          "bg-[var(--accent-soft)] text-[var(--accent-strong)]",
         tone === "success" &&
-          "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+          "bg-emerald-500/10 text-emerald-400",
         tone === "warning" &&
-          "border-amber-500/20 bg-amber-500/10 text-amber-400",
+          "bg-amber-500/10 text-amber-400",
         tone === "info" &&
-          "border-[color:rgba(111,151,141,0.28)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-strong)] shadow-[0_0_12px_rgba(111,151,141,0.14)]",
+          "bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-strong)]",
         className
       )}
     >
@@ -120,11 +126,12 @@ export function Badge({
   );
 }
 
+/* ─── SectionHeading ─── */
 export function SectionHeading({
   eyebrow,
   title,
   description,
-  align = "left"
+  align = "left",
 }: {
   eyebrow?: string;
   title: string;
@@ -132,96 +139,69 @@ export function SectionHeading({
   align?: "left" | "center";
 }) {
   return (
-    <div className={cn("space-y-3", align === "center" && "text-center")}>
+    <div className={cn("space-y-2", align === "center" && "text-center")}>
       {eyebrow ? (
-        <div className="inline-flex rounded-full border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.26em] text-[var(--accent)]">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
           {eyebrow}
         </div>
       ) : null}
-      <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] md:text-[1.75rem]">
-          {title}
-        </h2>
-        {description ? (
-          <p className="max-w-2xl text-sm leading-6 text-[var(--text-secondary)] md:text-[15px]">
-            {description}
-          </p>
-        ) : null}
-      </div>
+      <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+        {title}
+      </h2>
+      {description ? (
+        <p className="max-w-lg text-sm leading-relaxed text-[var(--text-secondary)]">
+          {description}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-export function MetricCard({
-  label,
-  value,
-  detail,
-  className
-}: {
-  label: string;
-  value: string | number;
-  detail?: string;
-  className?: string;
-}) {
-  return (
-    <Surface className={cn("space-y-4 p-5", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-          {label}
-        </p>
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--accent)] shadow-[0_0_18px_rgba(212,167,91,0.45)]" />
-      </div>
-      <div className="text-3xl font-semibold tracking-[-0.05em] text-[var(--text-primary)] md:text-[2rem]">
-        {value}
-      </div>
-      {detail ? <p className="text-xs leading-6 text-[var(--text-tertiary)]">{detail}</p> : null}
-    </Surface>
-  );
-}
-
+/* ─── EmptyState ─── */
 export function EmptyState({
   title,
   description,
-  action
+  action,
 }: {
   title: string;
   description: string;
   action?: ReactNode;
 }) {
   return (
-    <Surface className="flex min-h-[260px] flex-col items-center justify-center gap-5 p-8 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] shadow-[var(--shadow-glow)]">
-        <span className="h-2.5 w-2.5 rounded-full bg-[var(--accent-strong)]" />
+    <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-soft)]">
+        <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
       </div>
-      <div className="space-y-2">
-        <h3 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
-          {title}
-        </h3>
-        <p className="mx-auto max-w-lg text-sm leading-7 text-[var(--text-secondary)]">
+      <div className="space-y-1.5">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mx-auto max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
           {description}
         </p>
       </div>
       {action}
-    </Surface>
+    </div>
   );
 }
 
+/* ─── Field ─── */
 export function Field({
   label,
   hint,
-  children
+  children,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
 }) {
   return (
-    <label className="space-y-2.5">
-      <span className="block text-sm font-medium tracking-[-0.01em] text-[var(--text-primary)]">
+    <label className="space-y-2">
+      <span className="block text-sm font-medium text-[var(--text-primary)]">
         {label}
       </span>
       {children}
-      {hint ? <span className="block text-xs text-[var(--text-tertiary)]">{hint}</span> : null}
+      {hint ? (
+        <span className="block text-xs text-[var(--text-tertiary)]">{hint}</span>
+      ) : null}
     </label>
   );
 }

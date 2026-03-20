@@ -1,7 +1,7 @@
 import type { CategoryDefinition, LocalizedLabel, PlatformDefinition } from "@prompt-vault/types";
 
 export const brand = {
-  name: "Nolra",
+  name: "OmniaVault",
   parent: "Omnia Creata",
   domain: "omniacreata.com",
   marketingUrl: "https://omniacreata.com",

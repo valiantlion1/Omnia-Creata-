@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Locale } from "@prompt-vault/types";
+import { brand } from "@prompt-vault/config";
 import { BrandMark } from "@/components/shared/brand-mark";
-import { Badge, Button, Surface } from "@/components/ui/primitives";
+import { Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { localizeHref } from "@/lib/locale";
 import {
@@ -12,108 +13,94 @@ import {
   loadIntroState,
   markSessionSplashSeen,
   saveIntroState,
-  type IntroStateRecord
+  type IntroStateRecord,
 } from "@/lib/storage";
 
 type IntroStage = "booting" | "splash" | "welcome" | "auth" | "offers" | "app";
 
 const copy = {
   en: {
-    splashTag: "Creative system online",
-    welcomeTitle: "A lighter place for the ideas you actually want to keep.",
+    splashTag: "Your idea system",
+    welcomeTitle: "Capture ideas. Refine later.",
+    welcomeSub: "A fast, calm place for every thought worth keeping.",
     slides: [
       {
-        title: "Capture before the thought disappears",
-        body: "Save prompts, ideas, notes, research fragments, and project thoughts in seconds."
+        title: "Capture before it disappears",
+        body: "Save ideas, notes, prompts, and project thoughts in seconds.",
       },
       {
-        title: "Organize without turning life into admin work",
-        body: "Projects, categories, and tags stay close, but never overpower the writing surface."
+        title: "Organize without the overhead",
+        body: "Projects and tags stay close but never overpower your writing.",
       },
       {
         title: "Refine when it matters",
-        body: "Come back later, grow the entry, version it, and reuse it instead of losing it."
-      }
+        body: "Come back, version it, expand it, reuse it.",
+      },
     ],
-    authTitle: "Keep going the way you want",
-    authBody:
-      "Create an account for sync and future upgrades, or continue as a guest while the beta stays lightweight.",
+    authTitle: "Continue your way",
+    authBody: "Create an account for sync, or continue as a guest.",
     signIn: "Sign in",
     signUp: "Create account",
     continueGuest: "Continue as guest",
-    offersTitle: "Start free, upgrade later",
-    offersBody:
-      "The beta stays fast and accessible first. Pro comes back with more room, no ads, and helper AI.",
+    offersTitle: "Start free",
+    offersBody: "The beta is fast and accessible. Pro features come with V1.",
     freeLabel: "Free beta",
     freeBody: "Capture, projects, local persistence, and the core workflow.",
-    proLabel: "Pro later",
-    proBody: "No ads, bigger limits, and AI-assisted cleanup when V1 lands.",
-    continueToApp: "Enter the app",
+    proLabel: "Pro — coming soon",
+    proBody: "No ads, bigger limits, AI-assisted cleanup.",
+    continueToApp: "Get started",
     next: "Next",
     back: "Back",
-    skip: "Skip intro"
+    skip: "Skip",
   },
   tr: {
-    splashTag: "Yaratici sistem hazir",
-    welcomeTitle: "Gercekten saklamak isteyecegin fikirler icin daha hafif bir alan.",
+    splashTag: "Fikir sisteminiz",
+    welcomeTitle: "Fikirleri yakala. Sonra düzenle.",
+    welcomeSub: "Saklamaya değer her düşünce için hızlı, sakin bir alan.",
     slides: [
       {
-        title: "Dusunce kaybolmadan yakala",
-        body: "Promptlari, fikirleri, notlari, arastirma kirintilarini ve proje dusuncelerini saniyeler icinde kaydet."
+        title: "Kaybolmadan yakala",
+        body: "Fikirleri, notları, promptları ve proje düşüncelerini saniyeler içinde kaydet.",
       },
       {
-        title: "Duzeni yonetim isine cevirmeden kur",
-        body: "Projeler, kategoriler ve etiketler yakinda kalir ama yazma alanini asla bogmaz."
+        title: "Düzeni yük haline getirme",
+        body: "Projeler ve etiketler yakında kalır ama yazı alanını boğmaz.",
       },
       {
-        title: "Gerektiginde geri donup gelistir",
-        body: "Kayda sonra tekrar don, buyut, versiyonla ve kaybetmek yerine yeniden kullan."
-      }
+        title: "Gerektiğinde geliştir",
+        body: "Geri dön, versiyonla, genişlet, yeniden kullan.",
+      },
     ],
-    authTitle: "Istegin sekilde devam et",
-    authBody:
-      "Sync ve ilerideki gelismeler icin hesap olustur ya da beta hafif kalirken misafir olarak devam et.",
-    signIn: "Giris yap",
-    signUp: "Hesap olustur",
+    authTitle: "İstediğin şekilde devam et",
+    authBody: "Sync için hesap oluştur ya da misafir olarak devam et.",
+    signIn: "Giriş yap",
+    signUp: "Hesap oluştur",
     continueGuest: "Misafir devam et",
-    offersTitle: "Ucretsiz basla, sonra yukselt",
-    offersBody:
-      "Beta once hizli ve erisilebilir kalir. Pro, daha fazla alan, reklamsiz deneyim ve yardimci AI ile V1'de gelir.",
-    freeLabel: "Ucretsiz beta",
-    freeBody: "Capture, projeler, lokal kalicilik ve temel calisma akisi.",
-    proLabel: "Pro sonra",
-    proBody: "Reklamsiz kullanim, daha yuksek limitler ve V1 ile AI destekli duzenleme.",
-    continueToApp: "Uygulamaya gir",
-    next: "Ileri",
+    offersTitle: "Ücretsiz başla",
+    offersBody: "Beta hızlı ve erişilebilir. Pro özellikler V1 ile gelir.",
+    freeLabel: "Ücretsiz beta",
+    freeBody: "Capture, projeler, lokal kalıcılık ve temel akış.",
+    proLabel: "Pro — yakında",
+    proBody: "Reklamsız, daha yüksek limitler, AI destekli düzenleme.",
+    continueToApp: "Başla",
+    next: "İleri",
     back: "Geri",
-    skip: "Tanitim atla"
-  }
+    skip: "Atla",
+  },
 } as const;
 
 function resolveStage(state: IntroStateRecord, hasUser: boolean) {
-  if (state.hasCompletedIntro) {
-    return "app" as const;
-  }
-
-  if (!state.hasSeenWelcome) {
-    return "welcome" as const;
-  }
-
-  if (!hasUser && !state.authDeferred) {
-    return "auth" as const;
-  }
-
-  if (!state.hasSeenOffers) {
-    return "offers" as const;
-  }
-
+  if (state.hasCompletedIntro) return "app" as const;
+  if (!state.hasSeenWelcome) return "welcome" as const;
+  if (!hasUser && !state.authDeferred) return "auth" as const;
+  if (!state.hasSeenOffers) return "offers" as const;
   return "app" as const;
 }
 
 export function IntroGate({
   children,
   locale,
-  hasUser
+  hasUser,
 }: {
   children: ReactNode;
   locale: Locale;
@@ -128,16 +115,11 @@ export function IntroGate({
   const isLastSlide = slideIndex === text.slides.length - 1;
 
   useEffect(() => {
-    if (stage !== "splash") {
-      return;
-    }
-
+    if (stage !== "splash") return;
     markSessionSplashSeen();
-
     const timeout = window.setTimeout(() => {
       setStage(resolveStage(introState, hasUser));
-    }, 1500);
-
+    }, 1800);
     return () => window.clearTimeout(timeout);
   }, [hasUser, introState, stage]);
 
@@ -154,8 +136,10 @@ export function IntroGate({
           key={slide.title}
           aria-label={slide.title}
           className={cn(
-            "h-2.5 rounded-full transition",
-            index === slideIndex ? "w-8 bg-[var(--accent-strong)]" : "w-2.5 bg-white/20"
+            "h-1.5 rounded-full transition-all duration-300",
+            index === slideIndex
+              ? "w-6 bg-[var(--accent)]"
+              : "w-1.5 bg-white/15"
           )}
           onClick={() => setSlideIndex(index)}
           type="button"
@@ -164,137 +148,118 @@ export function IntroGate({
     [slideIndex, text.slides]
   );
 
-  if (stage === "app") {
-    return children;
-  }
+  if (stage === "app") return children;
 
   return (
-    <div className="fixed inset-0 z-[120] overflow-hidden bg-[var(--background)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(242,202,80,0.14),transparent_24%),radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.06),transparent_18%),radial-gradient(circle_at_50%_100%,rgba(242,202,80,0.08),transparent_30%)]" />
-
+    <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-hidden bg-[var(--background)]">
+      {/* Splash */}
       {stage === "splash" ? (
-        <div className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center">
-          <div className="intro-pulse-ring absolute h-28 w-28 rounded-full border border-[rgba(242,202,80,0.18)]" />
-          <div className="intro-pulse-dot absolute h-4 w-4 rounded-full bg-[var(--accent-strong)]" />
-          <div className="intro-fade-rise relative z-10 space-y-4">
-            <div className="flex justify-center">
-              <BrandMark />
+        <div className="flex flex-col items-center gap-6 text-center">
+          {/* Glow dot */}
+          <div className="intro-scale intro-glow-pulse flex h-16 w-16 items-center justify-center rounded-full bg-[var(--accent-soft)]">
+            <div className="h-3 w-3 rounded-full bg-[var(--accent)]" />
+          </div>
+
+          <div className="intro-fade space-y-2" style={{ animationDelay: "200ms" }}>
+            <div className="font-display text-2xl font-bold tracking-[-0.03em] text-[var(--text-primary)]">
+              {brand.name}
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--text-tertiary)]">
+            <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
               {text.splashTag}
             </div>
           </div>
         </div>
       ) : null}
 
+      {/* Welcome / Auth / Offers */}
       {stage !== "splash" ? (
-        <div className="relative mx-auto flex min-h-screen w-full max-w-[720px] items-center px-4 py-6 md:px-6">
-          <Surface className="intro-fade-rise w-full rounded-[32px] bg-[rgba(20,20,20,0.88)] p-6 md:p-8">
+        <div className="w-full max-w-[440px] px-6">
+          <div className="intro-fade space-y-8">
             {stage === "welcome" ? (
-              <div className="space-y-8">
-                <div className="space-y-5 text-center">
-                  <div className="flex justify-center">
-                    <BrandMark />
-                  </div>
-                  <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold tracking-[-0.06em] text-[var(--text-primary)] md:text-5xl">
+              <>
+                <div className="space-y-3 text-center">
+                  <h1 className="font-display text-[28px] font-bold leading-tight tracking-[-0.04em] text-[var(--text-primary)]">
                     {text.welcomeTitle}
                   </h1>
+                  <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                    {text.welcomeSub}
+                  </p>
                 </div>
 
-                <div className="space-y-5">
-                  <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface-strong)] p-6 md:p-7">
-                    <div className="space-y-3">
-                      <Badge tone="accent">{String(slideIndex + 1).padStart(2, "0")}</Badge>
-                      <h2 className="font-display text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)] md:text-3xl">
-                        {text.slides[slideIndex].title}
-                      </h2>
-                      <p className="text-base leading-8 text-[var(--text-secondary)]">
-                        {text.slides[slideIndex].body}
-                      </p>
+                <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5">
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--accent)]">
+                      {String(slideIndex + 1).padStart(2, "0")}
                     </div>
+                    <h2 className="text-lg font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+                      {text.slides[slideIndex].title}
+                    </h2>
+                    <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                      {text.slides[slideIndex].body}
+                    </p>
                   </div>
-
-                  <div className="flex items-center justify-center gap-2">{dots}</div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Button
-                    onClick={() => {
-                      const nextState = {
-                        ...introState,
-                        hasSeenWelcome: true
-                      };
-                      commitState(nextState, hasUser ? "offers" : "auth");
-                    }}
-                    variant="ghost"
-                  >
+                <div className="flex items-center justify-center gap-2">{dots}</div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <Button onClick={() => {
+                    const nextState = { ...introState, hasSeenWelcome: true };
+                    commitState(nextState, hasUser ? "offers" : "auth");
+                  }} variant="ghost" size="sm">
                     {text.skip}
                   </Button>
                   <div className="flex gap-2">
                     <Button
                       disabled={slideIndex === 0}
-                      onClick={() => setSlideIndex((current) => Math.max(0, current - 1))}
+                      onClick={() => setSlideIndex((c) => Math.max(0, c - 1))}
                       variant="secondary"
+                      size="sm"
                     >
                       {text.back}
                     </Button>
                     <Button
+                      size="sm"
                       onClick={() => {
                         if (!isLastSlide) {
-                          setSlideIndex((current) => Math.min(text.slides.length - 1, current + 1));
+                          setSlideIndex((c) => Math.min(text.slides.length - 1, c + 1));
                           return;
                         }
-
-                        const nextState = {
-                          ...introState,
-                          hasSeenWelcome: true
-                        };
+                        const nextState = { ...introState, hasSeenWelcome: true };
                         commitState(nextState, hasUser ? "offers" : "auth");
                       }}
                     >
-                      {isLastSlide ? text.next : text.next}
+                      {text.next}
                     </Button>
                   </div>
                 </div>
-              </div>
+              </>
             ) : null}
 
             {stage === "auth" ? (
-              <div className="space-y-8">
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-center">
-                    <BrandMark />
-                  </div>
-                  <div className="space-y-3">
-                    <h1 className="font-display text-4xl font-extrabold tracking-[-0.06em] text-[var(--text-primary)] md:text-5xl">
-                      {text.authTitle}
-                    </h1>
-                    <p className="mx-auto max-w-xl text-base leading-8 text-[var(--text-secondary)]">
-                      {text.authBody}
-                    </p>
-                  </div>
+              <>
+                <div className="space-y-3 text-center">
+                  <h1 className="font-display text-[28px] font-bold leading-tight tracking-[-0.04em] text-[var(--text-primary)]">
+                    {text.authTitle}
+                  </h1>
+                  <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                    {text.authBody}
+                  </p>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Link href={localizeHref(locale, "/sign-in")}>
-                    <Button className="w-full" size="lg" variant="secondary">
-                      {text.signIn}
-                    </Button>
-                  </Link>
+                <div className="space-y-3">
                   <Link href={localizeHref(locale, "/sign-up")}>
-                    <Button className="w-full" size="lg">
-                      {text.signUp}
-                    </Button>
+                    <Button className="w-full" size="lg">{text.signUp}</Button>
+                  </Link>
+                  <Link href={localizeHref(locale, "/sign-in")}>
+                    <Button className="w-full" size="lg" variant="secondary">{text.signIn}</Button>
                   </Link>
                 </div>
 
                 <div className="flex justify-center">
                   <Button
                     onClick={() => {
-                      const nextState = {
-                        ...introState,
-                        authDeferred: true
-                      };
+                      const nextState = { ...introState, authDeferred: true };
                       commitState(nextState, "offers");
                     }}
                     variant="ghost"
@@ -302,64 +267,57 @@ export function IntroGate({
                     {text.continueGuest}
                   </Button>
                 </div>
-              </div>
+              </>
             ) : null}
 
             {stage === "offers" ? (
-              <div className="space-y-8">
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-center">
-                    <BrandMark />
+              <>
+                <div className="space-y-3 text-center">
+                  <h1 className="font-display text-[28px] font-bold leading-tight tracking-[-0.04em] text-[var(--text-primary)]">
+                    {text.offersTitle}
+                  </h1>
+                  <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                    {text.offersBody}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Badge tone="accent">{text.freeLabel}</Badge>
+                        <span className="text-lg font-bold text-[var(--text-primary)]">$0</span>
+                      </div>
+                      <p className="text-sm text-[var(--text-secondary)]">{text.freeBody}</p>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <h1 className="font-display text-4xl font-extrabold tracking-[-0.06em] text-[var(--text-primary)] md:text-5xl">
-                      {text.offersTitle}
-                    </h1>
-                    <p className="mx-auto max-w-xl text-base leading-8 text-[var(--text-secondary)]">
-                      {text.offersBody}
-                    </p>
+                  <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 opacity-60">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <Badge>{text.proLabel}</Badge>
+                      </div>
+                      <p className="text-sm text-[var(--text-secondary)]">{text.proBody}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Surface className="rounded-[24px] bg-[var(--surface-strong)] p-6">
-                    <div className="space-y-3">
-                      <Badge tone="accent">{text.freeLabel}</Badge>
-                      <div className="font-display text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">
-                        $0
-                      </div>
-                      <p className="text-sm leading-7 text-[var(--text-secondary)]">{text.freeBody}</p>
-                    </div>
-                  </Surface>
-                  <Surface className="rounded-[24px] bg-[linear-gradient(180deg,rgba(242,202,80,0.08),rgba(255,255,255,0.02))] p-6">
-                    <div className="space-y-3">
-                      <Badge>{text.proLabel}</Badge>
-                      <div className="font-display text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">
-                        Soon
-                      </div>
-                      <p className="text-sm leading-7 text-[var(--text-secondary)]">{text.proBody}</p>
-                    </div>
-                  </Surface>
-                </div>
-
-                <div className="flex justify-center">
-                  <Button
-                    onClick={() => {
-                      const nextState = {
-                        ...introState,
-                        hasSeenOffers: true,
-                        hasCompletedIntro: true
-                      };
-                      commitState(nextState, "app");
-                    }}
-                    size="lg"
-                  >
-                    {text.continueToApp}
-                  </Button>
-                </div>
-              </div>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => {
+                    const nextState = {
+                      ...introState,
+                      hasSeenOffers: true,
+                      hasCompletedIntro: true,
+                    };
+                    commitState(nextState, "app");
+                  }}
+                >
+                  {text.continueToApp}
+                </Button>
+              </>
             ) : null}
-          </Surface>
+          </div>
         </div>
       ) : null}
     </div>
