@@ -27,7 +27,7 @@ What is not claimed yet:
 
 Current UI/UX readiness for Capacitor or similar Android packaging:
 
-- Manifest colors aligned with Prompt Vault black-and-gold theme (`theme_color`, `background_color`)
+- Manifest colors aligned with the current app theme (`theme_color`, `background_color`); final palette may change during redesign
 - Maskable icon route available for launcher compatibility
 - `viewport-fit=cover` enabled for standalone safe-area handling
 - Mobile bottom navigation and quick drawers respect safe-area insets

@@ -55,7 +55,7 @@ The product is considered ready for serious beta only when all of the following 
 - local runtime stability on the default dev port
 - end-to-end sync verification against real account data
 - UI overhaul on major app screens
-- final app-like motion and AMOLED polish
+- final app-like motion and visual polish
 - hardening of settings, onboarding, and home logic
 - production monitoring
 - final Android release prep
@@ -134,7 +134,7 @@ Goal:
 
 Tasks:
 
-- full AMOLED background pass
+- full visual foundation pass
 - unify token system
 - refine card depth and subtle 3D usage
 - unify micro-interactions
@@ -178,7 +178,7 @@ Work in this order unless a blocker forces reprioritization:
 6. library redesign
 7. projects redesign
 8. detail/editor redesign
-9. motion/AMOLED pass
+9. motion and visual system pass
 10. settings and onboarding polish
 11. Android polish
 12. monitoring and analytics

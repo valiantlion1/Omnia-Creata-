@@ -439,9 +439,10 @@ The product should feel like a real premium app, not a premium website.
 
 ### Core visual rules
 
-- AMOLED or near-AMOLED black foundations
-- restrained gold/amber accents
-- subtle secondary cool accent only when needed
+- palette is open and should be chosen for product quality, not habit
+- dark-first, neutral, earthy, or softly lit premium directions are all valid
+- accent colors should be restrained, intentional, and consistent
+- secondary accent only when needed
 - premium typography
 - strong spacing
 - minimal clutter
@@ -1042,7 +1043,7 @@ Recommended order from this point forward:
 6. redesign Library
 7. redesign Projects
 8. redesign Detail / Editor
-9. finalize motion and AMOLED pass
+9. finalize motion and visual system pass
 10. finalize Android app shell polish
 11. enable monitoring and analytics
 12. prepare closed beta release

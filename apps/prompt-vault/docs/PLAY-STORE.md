@@ -9,9 +9,9 @@
 ## Repo-side work completed
 - Capacitor dependencies installed in `web/package.json`
 - Android bootstrap scripts added to root and web workspaces
-- Capacitor config updated for AMOLED black, status bar, splash, keyboard resize, and server allowlist
+- Capacitor config updated for the current dark-first runtime, status bar, splash, keyboard resize, and server allowlist
 - Privacy and terms public pages added for store listing support
-- Manifest theme/background set to black and portrait orientation
+- Manifest theme/background currently set to a dark background and portrait orientation
 
 ## Commands
 - Install deps: `npm install`

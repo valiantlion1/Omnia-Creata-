@@ -1,6 +1,6 @@
-# Figma Handoff Rules (Prompt Vault)
+# Figma Handoff Rules (OmniaVault)
 
-Bu dokuman, Prompt Vault UI/UX iyilestirme surecinde Figma ile kod tarafinin ayni sistemde kalmasi icin referans kurallaridir.
+Bu dokuman, OmniaVault UI/UX iyilestirme surecinde Figma ile kod tarafinin ayni sistemde kalmasi icin referans kurallaridir.
 
 ## 1) Tasarim token kaynagi
 
@@ -16,13 +16,19 @@ Bu dokuman, Prompt Vault UI/UX iyilestirme surecinde Figma ile kod tarafinin ayn
 
 ## 2) Brand ve renk kurali
 
-- Prompt Vault icin siyah/charcoal zemin + restrained gold vurgu zorunlu.
-- Altin sadece su alanlarda kullanilir:
+- OmniaVault icin belirli bir renk paleti zorunlu degildir.
+- Secilecek palet su nitelikleri tasimalidir:
+  - premium
+  - sakin
+  - okunakli
+  - mobilde guclu
+  - app-like
+- Accent rengi sadece su alanlarda kullanilir:
   - Primary CTA
   - Active navigation state
   - Selected chips/controls
   - Hover highlight
-- Genel yuzeylerde yesil SaaS aksani kullanilmaz.
+- Genel yuzeylerde rastgele SaaS aksanlari kullanilmaz.
 
 ## 3) Tipografi ve ritim
 
@@ -159,4 +165,4 @@ Figma tarafinda kullanilacak ana dosya yapisi:
 - Dashboard "hero" gibi degil, "command center" gibi degerlendirilir.
 - Editor "serious creation workspace" kalite kapisindan gecmelidir.
 - Library "search operating surface" olarak degerlendirilir; filtreleme yan rol degil ana urun davranisidir.
-- Gold vurgu sadece secili, aktif, CTA veya highlight durumlarinda kullanilir.
+- Accent vurgu sadece secili, aktif, CTA veya highlight durumlarinda kullanilir.
