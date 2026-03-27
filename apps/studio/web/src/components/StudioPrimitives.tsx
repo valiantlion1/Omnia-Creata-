@@ -1,6 +1,119 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 
+export function AppPage({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return <div className={clsx('mx-auto flex w-full max-w-[1520px] flex-col gap-6 px-4 py-6 md:px-5 xl:px-6', className)}>{children}</div>
+}
+
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+  aside,
+  className,
+}: {
+  eyebrow: string
+  title: string
+  description?: string
+  actions?: ReactNode
+  aside?: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={clsx('grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-end', className)}>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-600">{eyebrow}</div>
+        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] text-white md:text-4xl">{title}</h1>
+        {description ? <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p> : null}
+        {actions ? <div className="mt-5 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
+      </div>
+      {aside ? <div className="xl:justify-self-end">{aside}</div> : null}
+    </div>
+  )
+}
+
+export function Surface({
+  children,
+  className,
+  tone = 'default',
+}: {
+  children: ReactNode
+  className?: string
+  tone?: 'default' | 'muted' | 'raised'
+}) {
+  const toneMap = {
+    default: 'border-white/[0.08] bg-[#141519]',
+    muted: 'border-white/[0.06] bg-[#111216]',
+    raised: 'border-white/[0.1] bg-[#17181d] shadow-[0_32px_90px_rgba(0,0,0,0.26)]',
+  }
+
+  return (
+    <section
+      className={clsx(
+        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6',
+        toneMap[tone],
+        className,
+      )}
+    >
+      {children}
+    </section>
+  )
+}
+
+export function SurfaceHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+  className,
+}: {
+  eyebrow?: string
+  title: string
+  description?: string
+  actions?: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={clsx('flex flex-col gap-3 md:flex-row md:items-start md:justify-between', className)}>
+      <div className="min-w-0">
+        {eyebrow ? <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-600">{eyebrow}</div> : null}
+        <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.03em] text-white md:text-2xl">{title}</h2>
+        {description ? <p className="mt-2.5 max-w-2xl text-sm leading-6 text-zinc-400">{description}</p> : null}
+      </div>
+      {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  )
+}
+
+export function ButtonChip({
+  children,
+  active = false,
+  className,
+}: {
+  children: ReactNode
+  active?: boolean
+  className?: string
+}) {
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs transition',
+        active ? 'bg-white text-black' : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/8',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 export function PageIntro({
   eyebrow,
   title,
@@ -12,18 +125,7 @@ export function PageIntro({
   description: string
   actions?: ReactNode
 }) {
-  return (
-    <div className="flex flex-col gap-5 rounded-[28px] border border-white/10 bg-white/[0.03] p-6 md:flex-row md:items-end md:justify-between md:p-8">
-      <div className="max-w-3xl">
-        <div className="mb-3 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200">
-          {eyebrow}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">{title}</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300 md:text-base">{description}</p>
-      </div>
-      {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
-    </div>
-  )
+  return <PageHeader eyebrow={eyebrow} title={title} description={description} actions={actions} />
 }
 
 export function Panel({
@@ -33,11 +135,7 @@ export function Panel({
   children: ReactNode
   className?: string
 }) {
-  return (
-    <div className={clsx('rounded-[24px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.18)]', className)}>
-      {children}
-    </div>
-  )
+  return <Surface className={className}>{children}</Surface>
 }
 
 export function MetricCard({
@@ -50,11 +148,11 @@ export function MetricCard({
   detail: string
 }) {
   return (
-    <Panel className="min-h-[150px]">
-      <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">{label}</div>
-      <div className="mt-6 text-3xl font-semibold text-white">{value}</div>
+    <Surface tone="muted" className="min-h-[148px]">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">{label}</div>
+      <div className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</div>
       <p className="mt-3 text-sm leading-6 text-zinc-400">{detail}</p>
-    </Panel>
+    </Surface>
   )
 }
 
@@ -68,12 +166,12 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-8 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] text-xl text-white">+</div>
-      <h3 className="text-lg font-semibold text-white">{title}</h3>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
+    <Surface tone="muted" className="border-dashed text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.04] text-lg text-white ring-1 ring-white/8">+</div>
+      <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</h3>
+      <p className="mx-auto mt-2.5 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
-    </div>
+    </Surface>
   )
 }
 
@@ -89,8 +187,8 @@ export function StatusPill({
     success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
     warning: 'border-amber-300/20 bg-amber-300/10 text-amber-100',
     danger: 'border-rose-400/20 bg-rose-400/10 text-rose-200',
-    brand: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100',
+    brand: 'border-violet-300/20 bg-violet-300/10 text-violet-100',
   }
 
-  return <span className={clsx('inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium', toneMap[tone])}>{children}</span>
+  return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone])}>{children}</span>
 }

@@ -78,6 +78,7 @@ async def root():
         "endpoints": {
             "auth_me": "/v1/auth/me",
             "projects": "/v1/projects",
+            "conversations": "/v1/conversations",
             "generations": "/v1/generations",
             "assets": "/v1/assets",
             "billing": "/v1/billing/summary",

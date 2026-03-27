@@ -6,11 +6,12 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { studioApi } from '@/lib/studioApi'
 
 export default function HistoryPage() {
-  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo } = useStudioAuth()
+  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const generationsQuery = useQuery({
     queryKey: ['generations'],
     queryFn: () => studioApi.listGenerations(),
-    enabled: isAuthenticated,
+    enabled: canLoadPrivate,
   })
 
   if (isLoading) {
@@ -21,14 +22,14 @@ export default function HistoryPage() {
     return (
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 md:px-6">
         <EmptyState
-          title="History is private until creator mode is active."
-          description="This page is built from persistent generation jobs, so it opens only for signed-in creators."
+          title="History opens after sign-in."
+          description="This page is built from your real generation jobs, so it only becomes useful once you have an account."
           action={
             <button
-              onClick={() => signInDemo('free', 'Omnia Creator')}
+              onClick={() => signInDemo('free', 'Omnia User')}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
             >
-              Continue as Free Creator
+              Continue with free access
             </button>
           }
         />
@@ -43,7 +44,7 @@ export default function HistoryPage() {
       <PageIntro
         eyebrow="History"
         title="Every generation keeps its prompt snapshot, status, model, and output."
-        description="This replaces the old floating gallery logic with real job persistence, which means reload-safe polling and a single truth source for the media library."
+        description="Every run stays saved with its settings, so you can come back without losing context."
       />
 
       <Panel>

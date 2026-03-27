@@ -8,13 +8,14 @@ import { studioApi } from '@/lib/studioApi'
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
-  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo } = useStudioAuth()
+  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const [shareMessage, setShareMessage] = useState('')
 
   const projectQuery = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => studioApi.getProject(projectId),
-    enabled: Boolean(projectId && isAuthenticated),
+    enabled: Boolean(projectId && canLoadPrivate),
   })
 
   const shareMutation = useMutation({
@@ -37,14 +38,14 @@ export default function ProjectPage() {
     return (
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 md:px-6">
         <EmptyState
-          title="Projects are private creator workspaces."
-          description="Sign in to create or inspect project-scoped generation history, media, and share links."
+          title="Projects open after sign-in."
+          description="Your images, history, and share links stay tied to your account, so guest mode only previews the shell."
           action={
             <button
-              onClick={() => signInDemo('free', 'Omnia Creator')}
+              onClick={() => signInDemo('free', 'Omnia User')}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
             >
-              Continue as Free Creator
+              Continue with free access
             </button>
           }
         />
@@ -65,13 +66,13 @@ export default function ProjectPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-6">
       <PageIntro
-        eyebrow="Project Workspace"
+        eyebrow="Project"
         title={project.title}
-        description={project.description || 'A focused workspace for image production, history, and persistent media.'}
+        description={project.description || 'A focused project for image production, history, and persistent media.'}
         actions={
           <>
-            <Link to={`/projects/${project.id}/create`} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-              Open create canvas
+            <Link to={`/create?projectId=${project.id}`} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+              Open Create
             </Link>
             <button
               onClick={() => shareMutation.mutate()}
@@ -94,8 +95,8 @@ export default function ProjectPage() {
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
               <h2 className="mt-2 text-xl font-semibold text-white">The project surface is now fed by real stored assets.</h2>
             </div>
-            <Link to="/media" className="text-sm text-zinc-300 transition hover:text-white">
-              Open media library
+            <Link to="/library" className="text-sm text-zinc-300 transition hover:text-white">
+              Open library
             </Link>
           </div>
 
@@ -112,7 +113,7 @@ export default function ProjectPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No assets in this project yet" description="The create canvas will save each completed image into the project media stream automatically." />
+            <EmptyState title="No assets in this project yet" description="The next completed render will land in this project automatically." />
           )}
         </Panel>
 
@@ -147,7 +148,7 @@ export default function ProjectPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No generations yet" description="Open the create canvas and the first project job will show up here as soon as it is queued." />
+            <EmptyState title="No generations yet" description="Open Create and the first project job will show up here as soon as it is queued." />
           )}
         </Panel>
       </div>

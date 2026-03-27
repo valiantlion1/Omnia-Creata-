@@ -1,4 +1,4 @@
-import { getStudioAccessToken } from '@/lib/studioSession'
+import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSession'
 
 export type IdentityPlan = 'guest' | 'free' | 'pro'
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retryable_failed'
@@ -27,6 +27,8 @@ export type IdentityPayload = {
   plan: IdentityPlan
   workspace_id: string | null
   guest?: boolean
+  owner_mode?: boolean
+  local_access?: boolean
 }
 
 export type AuthMeResponse = {
@@ -74,10 +76,12 @@ export type GenerationOutput = {
   mime_type: string
   width: number
   height: number
+  variation_index: number
 }
 
 export type Generation = {
   job_id: string
+  title: string
   status: JobStatus
   project_id: string
   provider: string
@@ -85,6 +89,7 @@ export type Generation = {
   prompt_snapshot: PromptSnapshot
   estimated_cost: number
   credit_cost: number
+  output_count: number
   outputs: GenerationOutput[]
   error: string | null
   created_at: string
@@ -103,6 +108,44 @@ export type MediaAsset = {
   local_path: string
   metadata: Record<string, unknown>
   created_at: string
+  deleted_at: string | null
+}
+
+export type ChatAttachment = {
+  kind: string
+  url: string
+  asset_id: string | null
+  label: string
+}
+
+export type ChatSuggestedAction = {
+  id: string
+  label: string
+  action: string
+  value: string | null
+}
+
+export type ChatConversation = {
+  id: string
+  workspace_id: string
+  identity_id: string
+  title: string
+  model: string
+  message_count: number
+  last_message_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ChatMessage = {
+  id: string
+  conversation_id: string
+  identity_id: string
+  role: 'user' | 'assistant'
+  content: string
+  attachments: ChatAttachment[]
+  suggested_actions: ChatSuggestedAction[]
+  created_at: string
 }
 
 export type ModelCatalogEntry = {
@@ -115,6 +158,39 @@ export type ModelCatalogEntry = {
   max_width: number
   max_height: number
   featured: boolean
+  runtime: 'cloud' | 'local'
+  owner_only: boolean
+  provider_hint: string | null
+  source_id?: string | null
+  source_path?: string | null
+  license_reference?: string | null
+}
+
+export type LocalRuntimeSummary = {
+  enabled: boolean
+  available: boolean
+  status: string
+  detail: string
+  url: string
+  model_directory: string
+  discovered_models: number
+  models: string[]
+}
+
+export type HealthProvider = {
+  name: string
+  status: string
+  detail?: string
+  model_directory?: string
+  discovered_models?: number
+  url?: string
+}
+
+export type HealthResponse = {
+  status: string
+  providers: HealthProvider[]
+  local_runtime?: LocalRuntimeSummary
+  counts?: Record<string, number>
 }
 
 export type PresetEntry = {
@@ -165,6 +241,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      clearStudioAccessToken()
+    }
     const payload = await response.json().catch(() => ({ error: 'Request failed' }))
     throw new Error(payload.error ?? `Request failed with ${response.status}`)
   }
@@ -183,10 +262,31 @@ export const studioApi = {
         plan,
       }),
     }),
+  localOwnerLogin: (ownerKey = '', displayName = 'Omnia Owner') =>
+    apiFetch<DemoLoginResponse>('/auth/local-owner-login', {
+      method: 'POST',
+      body: JSON.stringify({
+        owner_key: ownerKey,
+        display_name: displayName,
+        email: 'owner@omnia.local',
+      }),
+    }),
   listProjects: () => apiFetch<{ projects: Project[] }>('/projects'),
   createProject: (payload: { title: string; description?: string }) =>
     apiFetch<Project>('/projects', { method: 'POST', body: JSON.stringify(payload) }),
   getProject: (projectId: string) => apiFetch<{ project: Project; recent_generations: Generation[]; recent_assets: MediaAsset[] }>(`/projects/${projectId}`),
+  listConversations: () => apiFetch<{ conversations: ChatConversation[] }>('/conversations'),
+  createConversation: (payload?: { title?: string; model?: string }) =>
+    apiFetch<ChatConversation>('/conversations', { method: 'POST', body: JSON.stringify(payload ?? {}) }),
+  getConversation: (conversationId: string) =>
+    apiFetch<{ conversation: ChatConversation; messages: ChatMessage[] }>(`/conversations/${conversationId}`),
+  deleteConversation: (conversationId: string) =>
+    apiFetch<{ status: string }>(`/conversations/${conversationId}`, { method: 'DELETE' }),
+  sendConversationMessage: (conversationId: string, payload: { content: string; model?: string; attachments?: ChatAttachment[] }) =>
+    apiFetch<{ conversation: ChatConversation; user_message: ChatMessage; assistant_message: ChatMessage }>(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   listGenerations: (projectId?: string) =>
     apiFetch<{ generations: Generation[] }>(projectId ? `/generations?project_id=${encodeURIComponent(projectId)}` : '/generations'),
   createGeneration: (payload: {
@@ -200,10 +300,18 @@ export const studioApi = {
     cfg_scale: number
     seed: number
     aspect_ratio: string
+    output_count: number
   }) => apiFetch<Generation>('/generations', { method: 'POST', body: JSON.stringify(payload) }),
   getGeneration: (generationId: string) => apiFetch<Generation>(`/generations/${generationId}`),
-  listAssets: (projectId?: string) =>
-    apiFetch<{ assets: MediaAsset[] }>(projectId ? `/assets?project_id=${encodeURIComponent(projectId)}` : '/assets'),
+  listAssets: (projectId?: string, includeDeleted = false) => {
+    const params = new URLSearchParams()
+    if (projectId) params.set('project_id', projectId)
+    if (includeDeleted) params.set('include_deleted', 'true')
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    return apiFetch<{ assets: MediaAsset[] }>(`/assets${suffix}`)
+  },
+  trashAsset: (assetId: string) => apiFetch<MediaAsset>(`/assets/${assetId}`, { method: 'DELETE' }),
+  restoreAsset: (assetId: string) => apiFetch<MediaAsset>(`/assets/${assetId}/restore`, { method: 'POST' }),
   listModels: () => apiFetch<{ models: ModelCatalogEntry[] }>('/models'),
   listPresets: () => apiFetch<{ presets: PresetEntry[] }>('/presets'),
   getBillingSummary: () => apiFetch<BillingSummary>('/billing/summary'),
@@ -221,6 +329,8 @@ export const studioApi = {
       plans: PlanInfo[]
       models: ModelCatalogEntry[]
       presets: PresetEntry[]
+      local_runtime: LocalRuntimeSummary
     }>('/settings/bootstrap'),
-  getHealth: () => apiFetch<Record<string, unknown>>('/healthz'),
+  getHealth: () => apiFetch<HealthResponse>('/healthz'),
+  getHealthDetail: () => apiFetch<HealthResponse>('/healthz/detail'),
 }

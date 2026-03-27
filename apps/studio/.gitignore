@@ -140,6 +140,7 @@ ComfyUI/models/
 ComfyUI/output/
 ComfyUI/temp/
 ComfyUI/input/
+OmniaCreata-Studio.zip
 
 # Backend specific
 backend/data/

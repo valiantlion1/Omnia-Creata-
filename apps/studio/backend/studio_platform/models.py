@@ -47,12 +47,19 @@ class CheckoutKind(str, Enum):
     TOP_UP_LARGE = "top_up_large"
 
 
+class ChatRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
 class OmniaIdentity(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     email: str
     display_name: str = "Creator"
     plan: IdentityPlan = IdentityPlan.FREE
     guest: bool = False
+    owner_mode: bool = False
+    local_access: bool = False
     workspace_id: str = Field(default_factory=lambda: str(uuid4()))
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE
     monthly_credits_remaining: int = 60
@@ -83,6 +90,43 @@ class Project(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ChatAttachment(BaseModel):
+    kind: str = "image"
+    url: str
+    asset_id: Optional[str] = None
+    label: str = ""
+
+
+class ChatSuggestedAction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    label: str
+    action: str
+    value: Optional[str] = None
+
+
+class ChatConversation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    workspace_id: str
+    identity_id: str
+    title: str = "New chat"
+    model: str = "studio-assist"
+    message_count: int = 0
+    last_message_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ChatMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    conversation_id: str
+    identity_id: str
+    role: ChatRole
+    content: str
+    attachments: List[ChatAttachment] = Field(default_factory=list)
+    suggested_actions: List[ChatSuggestedAction] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class PromptSnapshot(BaseModel):
     prompt: str
     negative_prompt: str = ""
@@ -102,6 +146,7 @@ class GenerationOutput(BaseModel):
     mime_type: str = "image/png"
     width: int
     height: int
+    variation_index: int = 0
 
 
 class GenerationJob(BaseModel):
@@ -109,12 +154,14 @@ class GenerationJob(BaseModel):
     workspace_id: str
     project_id: str
     identity_id: str
+    title: str = "Untitled set"
     status: JobStatus = JobStatus.PENDING
     provider: str = "pending"
     model: str
     prompt_snapshot: PromptSnapshot
     estimated_cost: float
     credit_cost: int
+    output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)
     error: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
@@ -134,6 +181,7 @@ class MediaAsset(BaseModel):
     local_path: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
+    deleted_at: Optional[datetime] = None
 
 
 class CreditLedgerEntry(BaseModel):
@@ -167,6 +215,12 @@ class ModelCatalogEntry(BaseModel):
     max_width: int
     max_height: int
     featured: bool = False
+    runtime: str = "cloud"
+    owner_only: bool = False
+    provider_hint: Optional[str] = None
+    source_id: Optional[str] = None
+    source_path: Optional[str] = None
+    license_reference: Optional[str] = None
 
 
 class PlanCatalogEntry(BaseModel):
@@ -183,6 +237,8 @@ class StudioState(BaseModel):
     identities: Dict[str, OmniaIdentity] = Field(default_factory=dict)
     workspaces: Dict[str, StudioWorkspace] = Field(default_factory=dict)
     projects: Dict[str, Project] = Field(default_factory=dict)
+    conversations: Dict[str, ChatConversation] = Field(default_factory=dict)
+    chat_messages: Dict[str, ChatMessage] = Field(default_factory=dict)
     generations: Dict[str, GenerationJob] = Field(default_factory=dict)
     assets: Dict[str, MediaAsset] = Field(default_factory=dict)
     shares: Dict[str, ShareLink] = Field(default_factory=dict)

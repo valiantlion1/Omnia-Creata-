@@ -1,16 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { EmptyState, MetricCard, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, EmptyState, StatusPill, Surface } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { studioApi, type CheckoutKind } from '@/lib/studioApi'
 
 export default function BillingPage() {
   const queryClient = useQueryClient()
-  const { auth, isAuthenticated, isLoading, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo } = useStudioAuth()
+  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const billingQuery = useQuery({
     queryKey: ['billing'],
     queryFn: () => studioApi.getBillingSummary(),
-    enabled: isAuthenticated,
+    enabled: canLoadPrivate,
   })
 
   const checkoutMutation = useMutation({
@@ -21,77 +22,90 @@ export default function BillingPage() {
   })
 
   if (isLoading) {
-    return <div className="px-6 py-12 text-sm text-zinc-400">Loading billing...</div>
+    return <div className="px-6 py-12 text-sm text-zinc-400">Loading subscription...</div>
   }
 
   if (auth?.guest) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 md:px-6">
-        <PageIntro
-          eyebrow="Billing"
-          title="Pricing is visible to guests. Usage is not."
-          description="This is where Free, Pro, and top-up credits converge into one margin-aware monetization path."
-        />
+      <AppPage>
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Subscription</div>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Sign in to manage access</h1>
+        </div>
         <EmptyState
-          title="Enter as a creator to simulate quota and upgrades."
-          description="The current checkout flow runs in demo mode so Studio can validate plans, credit math, and upgrade UX before a real Paddle adapter is wired."
+          title="Sign in to see credits and upgrades."
+          description="Subscription becomes personal after you enter Studio."
           action={
             <button
-              onClick={() => signInDemo('free', 'Omnia Creator')}
+              onClick={() => signInDemo('free', 'Omnia User')}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
             >
-              Continue as Free Creator
+              Continue with free access
             </button>
           }
         />
-      </div>
+      </AppPage>
     )
   }
 
   const billing = billingQuery.data
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-6">
-      <PageIntro
-        eyebrow="Billing"
-        title="Subscription and top-up credits are part of the Studio core, not an afterthought."
-        description="The backend now owns the plan state, remaining quota, and checkout intent so cost control lives where generation actually happens."
-      />
+    <AppPage>
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Subscription</div>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Plan and credits</h1>
+      </div>
 
       {billing ? (
-        <>
-          <div className="grid gap-4 md:grid-cols-3">
-            <MetricCard label="Current plan" value={billing.plan.label} detail={`Subscription status: ${billing.subscription_status}`} />
-            <MetricCard label="Credits left" value={String(billing.credits.remaining)} detail={`Monthly allowance ${billing.credits.monthly_allowance}, extra credits ${billing.credits.extra_credits}.`} />
-            <MetricCard label="Share links" value={billing.plan.share_links ? 'Enabled' : 'Locked'} detail="Pro enables project and asset share links so Studio can stay private-first but still deliver externally." />
-          </div>
+        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <Surface tone="muted" className="space-y-1">
+            {[
+              ['Plan', billing.plan.label],
+              ['Status', billing.subscription_status],
+              ['Credits', String(billing.credits.remaining)],
+              ['Monthly allowance', String(billing.credits.monthly_allowance)],
+              ['Extra credits', String(billing.credits.extra_credits)],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-3 rounded-2xl px-1 py-2">
+                <div className="text-sm text-zinc-400">{label}</div>
+                <div className="text-sm font-medium text-white">{value}</div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-3 rounded-2xl px-1 py-2">
+              <div className="text-sm text-zinc-400">Share links</div>
+              <StatusPill tone={billing.plan.share_links ? 'success' : 'neutral'}>
+                {billing.plan.share_links ? 'Enabled' : 'Locked'}
+              </StatusPill>
+            </div>
+          </Surface>
 
-          <div className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
-            <Panel>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Checkout options</div>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <div className="space-y-4">
+            <Surface tone="raised">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Top up</div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {billing.checkout_options.map((option) => (
-                  <div key={option.kind} className="rounded-[24px] border border-white/10 bg-black/20 p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-lg font-semibold text-white">{option.label}</div>
+                  <div key={option.kind} className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-base font-semibold text-white">{option.label}</div>
                       {option.plan ? <StatusPill tone="brand">{option.plan}</StatusPill> : null}
                     </div>
-                    <div className="mt-3 text-3xl font-semibold text-white">${option.price_usd}</div>
-                    <div className="mt-2 text-sm text-zinc-400">{option.credits} credits delivered</div>
+                    <div className="mt-3 text-2xl font-semibold text-white">${option.price_usd}</div>
+                    <div className="mt-1.5 text-sm text-zinc-400">{option.credits} credits</div>
                     <button
                       onClick={() => checkoutMutation.mutate(option.kind)}
-                      className="mt-5 w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+                      className="mt-4 w-full rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
                     >
-                      {checkoutMutation.isPending ? 'Processing...' : 'Activate in demo mode'}
+                      {checkoutMutation.isPending ? 'Processing...' : 'Activate'}
                     </button>
                   </div>
                 ))}
               </div>
-            </Panel>
+            </Surface>
 
-            <Panel>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Recent credit activity</div>
-              <div className="mt-5 space-y-3">
+            <Surface tone="muted">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Activity</div>
+              <div className="mt-4 space-y-2.5">
                 {billing.recent_activity.map((entry) => (
                   <div key={entry.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <div className="flex items-center justify-between gap-4">
@@ -106,10 +120,10 @@ export default function BillingPage() {
                   </div>
                 ))}
               </div>
-            </Panel>
+            </Surface>
           </div>
-        </>
+        </div>
       ) : null}
-    </div>
+    </AppPage>
   )
 }

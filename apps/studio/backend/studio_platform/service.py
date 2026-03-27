@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,6 +10,11 @@ from typing import Any, Dict, List, Optional
 from PIL import Image
 
 from .models import (
+    ChatAttachment,
+    ChatConversation,
+    ChatMessage,
+    ChatRole,
+    ChatSuggestedAction,
     CheckoutKind,
     CreditEntryType,
     CreditLedgerEntry,
@@ -28,7 +34,7 @@ from .models import (
     SubscriptionStatus,
     utc_now,
 )
-from .providers import ProviderRegistry, ProviderTemporaryError, build_media_path, guess_file_extension
+from .providers import LocalModelDescriptor, ProviderRegistry, ProviderTemporaryError, build_media_path
 from .store import StudioStateStore
 
 
@@ -73,6 +79,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
         max_width=1024,
         max_height=1024,
         featured=True,
+        runtime="cloud",
+        provider_hint="managed",
     ),
     "sdxl-base": ModelCatalogEntry(
         id="sdxl-base",
@@ -83,6 +91,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
         estimated_cost=0.008,
         max_width=1024,
         max_height=1024,
+        runtime="cloud",
+        provider_hint="managed",
     ),
     "realvis-xl": ModelCatalogEntry(
         id="realvis-xl",
@@ -94,6 +104,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
         max_width=1536,
         max_height=1536,
         featured=True,
+        runtime="cloud",
+        provider_hint="managed",
     ),
     "juggernaut-xl": ModelCatalogEntry(
         id="juggernaut-xl",
@@ -104,6 +116,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
         estimated_cost=0.02,
         max_width=1536,
         max_height=1536,
+        runtime="cloud",
+        provider_hint="managed",
     ),
 }
 
@@ -149,6 +163,11 @@ CHECKOUT_CATALOG: Dict[CheckoutKind, Dict[str, Any]] = {
     },
 }
 
+CHAT_MESSAGE_LIMITS: Dict[IdentityPlan, int] = {
+    IdentityPlan.FREE: 25,
+    IdentityPlan.PRO: 200,
+}
+
 
 class StudioService:
     def __init__(
@@ -177,6 +196,8 @@ class StudioService:
                     "email": "",
                     "display_name": "Guest",
                     "plan": IdentityPlan.GUEST.value,
+                    "owner_mode": False,
+                    "local_access": False,
                     "workspace_id": None,
                 },
                 "credits": {"remaining": 0, "monthly_remaining": 0, "extra_credits": 0},
@@ -187,10 +208,20 @@ class StudioService:
             user_id=auth_user.id,
             email=auth_user.email or f"{auth_user.id}@omnia.local",
             display_name=getattr(auth_user, "username", None) or "Creator",
+            owner_mode=bool(getattr(auth_user, "metadata", {}).get("owner_mode")),
+            local_access=bool(getattr(auth_user, "metadata", {}).get("local_access")),
         )
         return self.serialize_identity(identity)
 
-    async def ensure_identity(self, user_id: str, email: str, display_name: str, desired_plan: IdentityPlan | None = None) -> OmniaIdentity:
+    async def ensure_identity(
+        self,
+        user_id: str,
+        email: str,
+        display_name: str,
+        desired_plan: IdentityPlan | None = None,
+        owner_mode: bool = False,
+        local_access: bool = False,
+    ) -> OmniaIdentity:
         holder: Dict[str, OmniaIdentity] = {}
 
         def mutation(state: StudioState) -> None:
@@ -207,6 +238,8 @@ class StudioService:
                     plan=plan,
                     workspace_id=f"ws_{user_id}",
                     guest=False,
+                    owner_mode=owner_mode,
+                    local_access=local_access,
                     subscription_status=SubscriptionStatus.ACTIVE if plan == IdentityPlan.PRO else SubscriptionStatus.NONE,
                     monthly_credits_remaining=plan_config.monthly_credits,
                     monthly_credit_allowance=plan_config.monthly_credits,
@@ -231,8 +264,13 @@ class StudioService:
                 if desired_plan and desired_plan != identity.plan:
                     identity.plan = desired_plan
                     identity.subscription_status = SubscriptionStatus.ACTIVE if desired_plan == IdentityPlan.PRO else SubscriptionStatus.NONE
+                    upgraded_plan = PLAN_CATALOG[desired_plan]
+                    identity.monthly_credit_allowance = upgraded_plan.monthly_credits
+                    identity.monthly_credits_remaining = max(identity.monthly_credits_remaining, upgraded_plan.monthly_credits)
                 identity.email = email or identity.email
                 identity.display_name = display_name or identity.display_name
+                identity.owner_mode = identity.owner_mode or owner_mode
+                identity.local_access = identity.local_access or local_access
                 self._refresh_monthly_credits_locked(state, identity)
                 identity.updated_at = now
                 state.identities[identity.id] = identity
@@ -290,6 +328,110 @@ class StudioService:
             "recent_assets": [asset.model_dump(mode="json") for asset in assets[:16]],
         }
 
+    async def list_conversations(self, identity_id: str) -> List[ChatConversation]:
+        conversations = await self.store.list_models("conversations", ChatConversation)
+        return sorted(
+            [conversation for conversation in conversations if conversation.identity_id == identity_id],
+            key=lambda item: item.updated_at,
+            reverse=True,
+        )
+
+    async def create_conversation(self, identity_id: str, title: str = "", model: str = "studio-assist") -> ChatConversation:
+        identity = await self.get_identity(identity_id)
+        conversation = ChatConversation(
+            workspace_id=identity.workspace_id,
+            identity_id=identity_id,
+            title=title.strip() or "New chat",
+            model=model.strip() or "studio-assist",
+        )
+        await self.store.save_model("conversations", conversation)
+        return conversation
+
+    async def get_conversation(self, identity_id: str, conversation_id: str) -> Dict[str, Any]:
+        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
+        messages = await self.list_conversation_messages(identity_id, conversation_id)
+        return {
+            "conversation": conversation.model_dump(mode="json"),
+            "messages": [message.model_dump(mode="json") for message in messages],
+        }
+
+    async def list_conversation_messages(self, identity_id: str, conversation_id: str) -> List[ChatMessage]:
+        await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
+        messages = await self.store.list_models("chat_messages", ChatMessage)
+        filtered = [message for message in messages if message.identity_id == identity_id and message.conversation_id == conversation_id]
+        return sorted(filtered, key=lambda item: item.created_at)
+
+    async def delete_conversation(self, identity_id: str, conversation_id: str) -> None:
+        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
+
+        def mutation(state: StudioState) -> None:
+            state.conversations.pop(conversation.id, None)
+            stale_ids = [message.id for message in state.chat_messages.values() if message.conversation_id == conversation.id]
+            for message_id in stale_ids:
+                state.chat_messages.pop(message_id, None)
+
+        await self.store.mutate(mutation)
+
+    async def send_chat_message(
+        self,
+        identity_id: str,
+        conversation_id: str,
+        content: str,
+        model: str | None = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        identity = await self.get_identity(identity_id)
+        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
+        messages = await self.list_conversation_messages(identity_id, conversation_id)
+        user_turn_count = sum(1 for message in messages if message.role == ChatRole.USER)
+        message_limit = CHAT_MESSAGE_LIMITS.get(identity.plan, 0)
+        if message_limit and user_turn_count >= message_limit:
+            raise PermissionError(f"{PLAN_CATALOG[identity.plan].label} plan chat limit reached")
+
+        sanitized_content = content.strip()
+        if not sanitized_content:
+            raise ValueError("Message content is required")
+
+        attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
+        user_message = ChatMessage(
+            conversation_id=conversation.id,
+            identity_id=identity.id,
+            role=ChatRole.USER,
+            content=sanitized_content,
+            attachments=attachment_models,
+        )
+        response_body, suggested_actions = self._build_chat_reply(sanitized_content, attachment_models)
+        assistant_message = ChatMessage(
+            conversation_id=conversation.id,
+            identity_id=identity.id,
+            role=ChatRole.ASSISTANT,
+            content=response_body,
+            suggested_actions=suggested_actions,
+        )
+
+        def mutation(state: StudioState) -> None:
+            current_conversation = state.conversations[conversation.id]
+            now = utc_now()
+            if model:
+                current_conversation.model = model.strip() or current_conversation.model
+            if current_conversation.message_count == 0:
+                current_conversation.title = self._title_from_message(sanitized_content)
+            current_conversation.message_count += 2
+            current_conversation.last_message_at = now
+            current_conversation.updated_at = now
+            state.conversations[current_conversation.id] = current_conversation
+            state.chat_messages[user_message.id] = user_message
+            state.chat_messages[assistant_message.id] = assistant_message
+
+        await self.store.mutate(mutation)
+
+        updated_conversation = await self.require_owned_model("conversations", conversation.id, ChatConversation, identity_id)
+        return {
+            "conversation": updated_conversation.model_dump(mode="json"),
+            "user_message": user_message.model_dump(mode="json"),
+            "assistant_message": assistant_message.model_dump(mode="json"),
+        }
+
     async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
         generations = await self.store.list_models("generations", GenerationJob)
         filtered = [job for job in generations if job.identity_id == identity_id]
@@ -300,18 +442,62 @@ class StudioService:
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
         return await self.require_owned_model("generations", generation_id, GenerationJob, identity_id)
 
-    async def list_assets(self, identity_id: str, project_id: Optional[str] = None) -> List[MediaAsset]:
+    async def list_assets(self, identity_id: str, project_id: Optional[str] = None, include_deleted: bool = False) -> List[MediaAsset]:
         assets = await self.store.list_models("assets", MediaAsset)
-        filtered = [asset for asset in assets if asset.identity_id == identity_id]
+        filtered = [
+            asset
+            for asset in assets
+            if asset.identity_id == identity_id and (include_deleted or asset.deleted_at is None)
+        ]
         if project_id:
             filtered = [asset for asset in filtered if asset.project_id == project_id]
         return sorted(filtered, key=lambda item: item.created_at, reverse=True)
+
+    async def trash_asset(self, identity_id: str, asset_id: str) -> MediaAsset:
+        asset = await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.assets[asset.id]
+            current.deleted_at = utc_now()
+            state.assets[current.id] = current
+            project = state.projects.get(current.project_id)
+            if project and project.cover_asset_id == current.id:
+                project.cover_asset_id = None
+                project.updated_at = utc_now()
+                state.projects[project.id] = project
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("assets", asset.id, MediaAsset)
+        if updated is None:
+            raise KeyError("Asset not found")
+        return updated
+
+    async def restore_asset(self, identity_id: str, asset_id: str) -> MediaAsset:
+        asset = await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.assets[asset.id]
+            current.deleted_at = None
+            state.assets[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("assets", asset.id, MediaAsset)
+        if updated is None:
+            raise KeyError("Asset not found")
+        return updated
 
     async def get_identity(self, identity_id: str) -> OmniaIdentity:
         identity = await self.store.get_model("identities", identity_id, OmniaIdentity)
         if identity is None:
             raise KeyError("Identity not found")
-        await self.ensure_identity(identity.id, identity.email, identity.display_name, identity.plan)
+        await self.ensure_identity(
+            identity.id,
+            identity.email,
+            identity.display_name,
+            identity.plan,
+            owner_mode=identity.owner_mode,
+            local_access=identity.local_access,
+        )
         refreshed = await self.store.get_model("identities", identity_id, OmniaIdentity)
         if refreshed is None:
             raise KeyError("Identity not found after refresh")
@@ -330,6 +516,7 @@ class StudioService:
         cfg_scale: float,
         seed: int,
         aspect_ratio: str,
+        output_count: int = 1,
     ) -> GenerationJob:
         identity = await self.get_identity(identity_id)
         plan_config = PLAN_CATALOG[identity.plan]
@@ -337,16 +524,18 @@ class StudioService:
             raise PermissionError("Guests cannot generate images")
 
         project = await self.require_owned_model("projects", project_id, Project, identity_id)
-        model = self.get_model(model_id)
-        self._validate_model_for_plan(identity.plan, model)
+        model = await self.get_model(model_id)
+        self._validate_model_for_identity(identity, model)
         self._validate_dimensions_for_model(width, height, model)
 
+        total_credit_cost = model.credit_cost * output_count
         available_credits = identity.monthly_credits_remaining + identity.extra_credits
-        if available_credits < model.credit_cost:
+        if available_credits < total_credit_cost:
             raise ValueError("Not enough credits to run this generation")
 
+        cleaned_prompt = prompt.strip()
         prompt_snapshot = PromptSnapshot(
-            prompt=prompt.strip(),
+            prompt=cleaned_prompt,
             negative_prompt=negative_prompt.strip(),
             model=model.id,
             width=width,
@@ -360,10 +549,12 @@ class StudioService:
             workspace_id=identity.workspace_id,
             project_id=project.id,
             identity_id=identity.id,
+            title=self._build_generation_title(cleaned_prompt),
             model=model.id,
             prompt_snapshot=prompt_snapshot,
-            estimated_cost=model.estimated_cost,
-            credit_cost=model.credit_cost,
+            estimated_cost=model.estimated_cost * output_count,
+            credit_cost=total_credit_cost,
+            output_count=output_count,
         )
 
         await self.store.save_model("generations", job)
@@ -466,15 +657,21 @@ class StudioService:
             "identity": self.serialize_identity(updated),
         }
 
-    async def health(self) -> Dict[str, Any]:
+    async def health(self, detail: bool = False) -> Dict[str, Any]:
         state = await self.store.snapshot()
-        provider_status = await self.providers.health_snapshot()
+        provider_status = await self.providers.health_snapshot(probe=detail)
+        local_runtime = await self.providers.local_runtime_snapshot(probe=detail)
+        degraded_states = {"degraded", "unavailable", "error"}
+        overall_status = "degraded" if any(provider.get("status") in degraded_states for provider in provider_status) else "healthy"
         return {
-            "status": "healthy",
+            "status": overall_status,
             "providers": provider_status,
+            "local_runtime": local_runtime,
             "counts": {
                 "identities": len(state.identities),
                 "projects": len(state.projects),
+                "conversations": len(state.conversations),
+                "chat_messages": len(state.chat_messages),
                 "generations": len(state.generations),
                 "assets": len(state.assets),
                 "shares": len(state.shares),
@@ -486,20 +683,73 @@ class StudioService:
         return {
             "identity": self.serialize_identity(identity),
             "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values()],
-            "models": [model.model_dump(mode="json") for model in MODEL_CATALOG.values()],
+            "models": [model.model_dump(mode="json") for model in await self.list_models_for_identity(identity)],
             "presets": PRESET_CATALOG,
+            "local_runtime": await self.providers.local_runtime_snapshot(probe=False),
         }
 
-    def get_model(self, model_id: str) -> ModelCatalogEntry:
-        try:
-            return MODEL_CATALOG[model_id]
-        except KeyError as exc:
-            raise KeyError("Model not found") from exc
+    async def list_models_for_identity(self, identity: OmniaIdentity | None = None) -> List[ModelCatalogEntry]:
+        models = [model.model_copy(deep=True) for model in MODEL_CATALOG.values()]
+        if identity and identity.owner_mode and identity.local_access:
+            models.extend(await self._build_local_model_catalog())
+        return models
 
-    def _validate_model_for_plan(self, plan: IdentityPlan, model: ModelCatalogEntry) -> None:
-        if plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO:
+    async def get_model(self, model_id: str) -> ModelCatalogEntry:
+        if model_id in MODEL_CATALOG:
+            return MODEL_CATALOG[model_id]
+
+        for model in await self._build_local_model_catalog():
+            if model.id == model_id:
+                return model
+        raise KeyError("Model not found")
+
+    async def _build_local_model_catalog(self) -> List[ModelCatalogEntry]:
+        local_models: List[LocalModelDescriptor] = await self.providers.list_local_models()
+        catalog: List[ModelCatalogEntry] = []
+        for index, model in enumerate(local_models):
+            catalog.append(
+                ModelCatalogEntry(
+                    id=model.id,
+                    label=self._build_local_model_alias(model, index),
+                    description=f"Your local checkpoint from {Path(model.path).parent}.",
+                    min_plan=IdentityPlan.PRO,
+                    credit_cost=0,
+                    estimated_cost=0.0,
+                    max_width=1536,
+                    max_height=1536,
+                    featured=False,
+                    runtime="local",
+                    owner_only=True,
+                    provider_hint="comfyui-local",
+                    source_id=model.filename,
+                    source_path=model.path,
+                    license_reference="Local checkpoint on this machine. Confirm the original upstream license before public or commercial use.",
+                )
+            )
+        return catalog
+
+    def _build_local_model_alias(self, model: LocalModelDescriptor, index: int) -> str:
+        stem = Path(model.filename).stem
+        raw_tokens = [token for token in stem.replace("_", " ").replace("-", " ").replace(".", " ").split() if token]
+        tokens: List[str] = []
+        for token in raw_tokens[:4]:
+            lower = token.lower()
+            if lower in {"xl", "sdxl", "sd", "vae", "flux", "fp8", "fp16"}:
+                tokens.append(token.upper())
+            elif token.isdigit():
+                tokens.append(token)
+            else:
+                tokens.append(token.capitalize())
+
+        humanized = " ".join(tokens).strip() or f"Local {index + 1}"
+        return f"Omnia {humanized}"
+
+    def _validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
+        if model.owner_only and not (identity.owner_mode and identity.local_access):
+            raise PermissionError("This model requires local owner access")
+        if identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO:
             raise PermissionError("This model requires Pro")
-        if plan == IdentityPlan.GUEST:
+        if identity.plan == IdentityPlan.GUEST:
             raise PermissionError("Guests cannot generate images")
 
     def _validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
@@ -526,6 +776,77 @@ class StudioService:
                 description=f"{plan_config.label} monthly refresh",
             )
 
+    def _title_from_message(self, content: str) -> str:
+        words = content.strip().split()
+        return " ".join(words[:6]).strip()[:72] or "New chat"
+
+    def _build_chat_reply(
+        self,
+        content: str,
+        attachments: List[ChatAttachment],
+    ) -> tuple[str, List[ChatSuggestedAction]]:
+        lower = content.lower()
+        has_image_reference = bool(attachments) or any(keyword in lower for keyword in ("image", "photo", "upload", "reference"))
+        asks_for_inpaint = any(keyword in lower for keyword in ("inpaint", "mask", "remove", "replace background", "clean the background"))
+        asks_for_prompt = any(keyword in lower for keyword in ("prompt", "rewrite", "stronger prompt", "better prompt"))
+        asks_for_generation = any(keyword in lower for keyword in ("generate", "create", "render", "make", "turn this into"))
+
+        if asks_for_inpaint:
+            prompt = self._compact_prompt(content)
+            return (
+                "This reads like an inpaint pass. Keep the untouched subject fixed, define only the area that changes, then move the final prompt into Create.",
+                [
+                    ChatSuggestedAction(label="Draft inpaint prompt", action="draft_prompt", value=prompt),
+                    ChatSuggestedAction(label="Open Create", action="open_create", value="/create"),
+                ],
+            )
+
+        if asks_for_prompt:
+            prompt = self._compact_prompt(content)
+            return (
+                "I would tighten this into one clearer render prompt, then keep the rest as negative or edit notes.",
+                [
+                    ChatSuggestedAction(label="Use stronger prompt", action="draft_prompt", value=prompt),
+                    ChatSuggestedAction(label="Open Create", action="open_create", value="/create"),
+                ],
+            )
+
+        if has_image_reference:
+            return (
+                "Good starting point. Tell me what must stay, what can change, and what should feel stronger, and I can turn that into a clean prompt or edit plan.",
+                [
+                    ChatSuggestedAction(label="Write stronger prompt", action="draft_prompt", value=self._compact_prompt(content)),
+                    ChatSuggestedAction(label="Plan edit pass", action="plan_edit"),
+                ],
+            )
+
+        if asks_for_generation:
+            return (
+                "This already sounds close to render-ready. I would lock the subject, medium, lighting, and framing, then send it straight into Create.",
+                [
+                    ChatSuggestedAction(label="Draft render prompt", action="draft_prompt", value=self._compact_prompt(content)),
+                    ChatSuggestedAction(label="Open Create", action="open_create", value="/create"),
+                ],
+            )
+
+        return (
+            "I can help turn this into a sharper prompt, an edit plan, or an inpaint request. Pick the direction and I will structure the next pass.",
+            [
+                ChatSuggestedAction(label="Sharpen prompt", action="draft_prompt", value=self._compact_prompt(content)),
+                ChatSuggestedAction(label="Plan edit", action="plan_edit"),
+                ChatSuggestedAction(label="Open Create", action="open_create", value="/create"),
+            ],
+        )
+
+    def _compact_prompt(self, content: str) -> str:
+        cleaned = " ".join(content.strip().split())
+        if not cleaned:
+            return ""
+        lowered = cleaned.lower()
+        if not any(keyword in lowered for keyword in ("lighting", "composition", "background", "style", "color")):
+            cleaned = f"{cleaned}, clean composition, controlled lighting, high detail"
+        return cleaned[:320]
+
     async def require_owned_model(self, collection: str, model_id: str, model_type, identity_id: str):
         model = await self.store.get_model(collection, model_id, model_type)
         if model is None or model.identity_id != identity_id:
@@ -533,26 +854,41 @@ class StudioService:
         return model
 
     async def _process_generation(self, job_id: str) -> None:
-        await self._update_job_status(job_id, JobStatus.PROCESSING, provider="cloud")
         job = await self.store.get_model("generations", job_id, GenerationJob)
         if job is None:
             return
+        provider_label = "local" if self.providers.is_local_model(job.model) else "cloud"
+        await self._update_job_status(job_id, JobStatus.PROCESSING, provider=provider_label)
 
         try:
-            result = await self.providers.generate(
-                prompt=job.prompt_snapshot.prompt,
-                negative_prompt=job.prompt_snapshot.negative_prompt,
-                width=job.prompt_snapshot.width,
-                height=job.prompt_snapshot.height,
-                seed=job.prompt_snapshot.seed,
-            )
-            asset = await self._create_asset_from_result(job, result.provider, result.image_bytes, result.mime_type)
+            generated_outputs: List[GenerationOutput] = []
+            created_assets: List[MediaAsset] = []
+            provider_name: Optional[str] = None
 
-            def mutation(state: StudioState) -> None:
-                current_job = state.generations[job.id]
-                current_job.status = JobStatus.COMPLETED
-                current_job.provider = result.provider
-                current_job.outputs = [
+            for variation_index in range(job.output_count):
+                variation_seed = job.prompt_snapshot.seed + variation_index
+                result = await self.providers.generate(
+                    prompt=job.prompt_snapshot.prompt,
+                    negative_prompt=job.prompt_snapshot.negative_prompt,
+                    width=job.prompt_snapshot.width,
+                    height=job.prompt_snapshot.height,
+                    seed=variation_seed,
+                    model_id=job.model,
+                    steps=job.prompt_snapshot.steps,
+                    cfg_scale=job.prompt_snapshot.cfg_scale,
+                )
+                provider_name = result.provider
+                asset = await self._create_asset_from_result(
+                    job,
+                    result.provider,
+                    result.image_bytes,
+                    result.mime_type,
+                    variation_index=variation_index,
+                    variation_count=job.output_count,
+                    seed=variation_seed,
+                )
+                created_assets.append(asset)
+                generated_outputs.append(
                     GenerationOutput(
                         asset_id=asset.id,
                         url=asset.url,
@@ -560,16 +896,24 @@ class StudioService:
                         mime_type=result.mime_type,
                         width=job.prompt_snapshot.width,
                         height=job.prompt_snapshot.height,
+                        variation_index=variation_index,
                     )
-                ]
+                )
+
+            def mutation(state: StudioState) -> None:
+                current_job = state.generations[job.id]
+                current_job.status = JobStatus.COMPLETED
+                current_job.provider = provider_name or current_job.provider
+                current_job.outputs = generated_outputs
                 current_job.completed_at = utc_now()
                 current_job.updated_at = utc_now()
                 state.generations[current_job.id] = current_job
 
-                state.assets[asset.id] = asset
+                for asset in created_assets:
+                    state.assets[asset.id] = asset
                 project = state.projects[job.project_id]
                 project.last_generation_id = current_job.id
-                project.cover_asset_id = asset.id
+                project.cover_asset_id = created_assets[0].id if created_assets else project.cover_asset_id
                 project.updated_at = utc_now()
                 state.projects[project.id] = project
 
@@ -628,19 +972,26 @@ class StudioService:
         provider: str,
         image_bytes: bytes,
         mime_type: str,
+        variation_index: int = 0,
+        variation_count: int = 1,
+        seed: Optional[int] = None,
     ) -> MediaAsset:
         asset = MediaAsset(
             workspace_id=job.workspace_id,
             project_id=job.project_id,
             identity_id=job.identity_id,
-            title=job.prompt_snapshot.prompt[:80] or "Untitled asset",
+            title=job.title or "Untitled asset",
             prompt=job.prompt_snapshot.prompt,
             url="",
             local_path="",
             metadata={
+                "generation_id": job.id,
+                "generation_title": job.title,
+                "variation_index": variation_index,
+                "variation_count": variation_count,
                 "provider": provider,
                 "model": job.model,
-                "seed": job.prompt_snapshot.seed,
+                "seed": seed if seed is not None else job.prompt_snapshot.seed,
                 "steps": job.prompt_snapshot.steps,
                 "cfg_scale": job.prompt_snapshot.cfg_scale,
                 "width": job.prompt_snapshot.width,
@@ -666,3 +1017,18 @@ class StudioService:
         asset.url = f"{self.media_url_prefix}/{main_path.name}"
         asset.thumbnail_url = thumbnail_url
         return asset
+
+    def _build_generation_title(self, prompt: str) -> str:
+        cleaned = " ".join(prompt.strip().split())
+        if not cleaned:
+            return "Untitled set"
+
+        lead = re.split(r"[.!?,:;\n]", cleaned, maxsplit=1)[0]
+        words = lead.split()
+        title = " ".join(words[:6]).strip()
+        if len(words) > 6:
+            title = f"{title}..."
+        title = title.strip(" -_,.;:")
+        if not title:
+            return "Untitled set"
+        return title[:72]

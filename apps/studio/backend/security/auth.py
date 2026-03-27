@@ -134,7 +134,9 @@ class JWTManager:
         payload = {
             "sub": user.id,
             "email": user.email,
+            "username": user.username,
             "role": user.role.value,
+            "metadata": user.metadata,
             "type": TokenType.ACCESS.value,
             "exp": expire,
             "iat": datetime.now(timezone.utc),
@@ -372,9 +374,11 @@ async def get_current_user(
         user = User(
             id=payload["sub"],
             email=payload.get("email", ""),
+            username=payload.get("username"),
             role=UserRole(payload.get("role", "user")),
             is_active=True,
-            is_verified=True
+            is_verified=True,
+            metadata=payload.get("metadata", {}) or {},
         )
         
         return user
