@@ -10,6 +10,8 @@ from passlib.hash import bcrypt
 import secrets
 import time
 from enum import Enum
+from config.env import get_settings
+from .supabase_auth import SupabaseAuthClient, SupabaseAuthError
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +302,7 @@ class JWTManager:
 
 # Global JWT manager instance
 _jwt_manager: Optional[JWTManager] = None
+_supabase_auth_client: Optional[SupabaseAuthClient] = None
 
 
 def get_jwt_manager() -> JWTManager:
@@ -312,15 +315,24 @@ def get_jwt_manager() -> JWTManager:
 
 def setup_auth(config: Optional[AuthConfig] = None) -> JWTManager:
     """Setup authentication system"""
-    global _jwt_manager
+    global _jwt_manager, _supabase_auth_client
     
     if config is None:
         config = create_auth_config_from_env()
     
     _jwt_manager = JWTManager(config)
+    settings = get_settings()
+    if settings.supabase_url and settings.supabase_anon_key:
+        _supabase_auth_client = SupabaseAuthClient(settings.supabase_url, settings.supabase_anon_key)
+    else:
+        _supabase_auth_client = None
     logger.info("Authentication system initialized")
     
     return _jwt_manager
+
+
+def get_supabase_auth_client() -> Optional[SupabaseAuthClient]:
+    return _supabase_auth_client
 
 
 def create_auth_config_from_env() -> AuthConfig:
@@ -328,7 +340,7 @@ def create_auth_config_from_env() -> AuthConfig:
     import os
     
     return AuthConfig(
-        secret_key=os.getenv("AUTH_SECRET_KEY", ""),
+        secret_key=os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET", ""),
         algorithm=os.getenv("AUTH_ALGORITHM", "HS256"),
         access_token_expire_minutes=int(os.getenv("AUTH_ACCESS_TOKEN_EXPIRE_MINUTES", "30")),
         refresh_token_expire_days=int(os.getenv("AUTH_REFRESH_TOKEN_EXPIRE_DAYS", "7")),
@@ -384,7 +396,46 @@ async def get_current_user(
         return user
     
     except HTTPException:
-        return None
+        supabase_client = get_supabase_auth_client()
+        if supabase_client is None:
+            return None
+        try:
+            payload = await supabase_client.get_user(token)
+            settings = get_settings()
+            user_metadata = payload.get("user_metadata") or {}
+            app_metadata = payload.get("app_metadata") or {}
+            email = (payload.get("email") or "").strip().lower()
+            owner_email_match = email in settings.owner_emails_list
+            root_admin_match = email in settings.root_admin_emails_list
+            display_name = (
+                user_metadata.get("display_name")
+                or user_metadata.get("full_name")
+                or user_metadata.get("name")
+                or email.split("@")[0]
+                or "Creator"
+            )
+            metadata: Dict[str, Any] = {
+                "owner_mode": bool(app_metadata.get("owner_mode") or user_metadata.get("owner_mode") or owner_email_match),
+                "root_admin": bool(app_metadata.get("root_admin") or user_metadata.get("root_admin") or root_admin_match),
+                "local_access": bool(app_metadata.get("local_access") or user_metadata.get("local_access") or owner_email_match),
+                "username": (user_metadata.get("username") or email.split("@")[0] or "").strip().lower(),
+                "accepted_terms": bool(user_metadata.get("accepted_terms")),
+                "accepted_privacy": bool(user_metadata.get("accepted_privacy")),
+                "accepted_usage_policy": bool(user_metadata.get("accepted_usage_policy")),
+                "marketing_opt_in": bool(user_metadata.get("marketing_opt_in")),
+                "supabase": True,
+            }
+            return User(
+                id=payload["id"],
+                email=email,
+                username=display_name,
+                role=UserRole.ADMIN if metadata["owner_mode"] else UserRole.USER,
+                is_active=True,
+                is_verified=bool(payload.get("email_confirmed_at") or payload.get("confirmed_at")),
+                metadata=metadata,
+            )
+        except SupabaseAuthError:
+            return None
 
 
 async def require_auth(

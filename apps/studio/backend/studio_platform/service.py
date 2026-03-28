@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import io
+import mimetypes
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
+import httpx
 from PIL import Image
+import jwt
 
+from config.env import get_settings
+
+from .asset_storage import (
+    ResolvedAssetDelivery,
+    build_asset_storage_registry,
+)
 from .models import (
     ChatAttachment,
     ChatConversation,
@@ -26,15 +36,17 @@ from .models import (
     ModelCatalogEntry,
     OmniaIdentity,
     PlanCatalogEntry,
+    PublicPost,
     Project,
     PromptSnapshot,
     ShareLink,
     StudioState,
     StudioWorkspace,
     SubscriptionStatus,
+    Visibility,
     utc_now,
 )
-from .providers import LocalModelDescriptor, ProviderRegistry, ProviderTemporaryError, build_media_path
+from .providers import LocalModelDescriptor, ProviderRegistry, ProviderTemporaryError
 from .store import StudioStateStore
 
 
@@ -183,9 +195,59 @@ class StudioService:
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self.media_url_prefix = media_url_prefix.rstrip("/")
         self._tasks: set[asyncio.Task] = set()
+        settings = get_settings()
+        self._asset_token_secret = settings.jwt_secret or "dev-asset-secret"
+        self._asset_token_ttl_seconds = 60 * 20
+        self.asset_storage = build_asset_storage_registry(settings, media_dir)
+        self._public_safety_blocklist = (
+            "nsfw",
+            "nude",
+            "nudes",
+            "naked",
+            "nipple",
+            "nipples",
+            "breast",
+            "breasts",
+            "boobs",
+            "pussy",
+            "vagina",
+            "penis",
+            "dick",
+            "cock",
+            "blowjob",
+            "porn",
+            "porno",
+            "explicit",
+            "hentai",
+            "sex",
+            "sexual",
+            "fetish",
+            "bdsm",
+            "cum",
+            "anal",
+            "gangbang",
+            "lingerie",
+            "boudoir",
+            "erotic",
+            "seductive",
+            "intimate",
+            "bedroom",
+        )
+        self._public_low_signal_blocklist = (
+            "placeholder",
+            "lorem ipsum",
+            "debug",
+            "temp",
+            "tmp",
+            "dummy",
+            "test prompt",
+            "test render",
+            "security check",
+        )
 
     async def initialize(self) -> None:
         await self.store.load()
+        await self.store.mutate(self._initialize_state_locked)
 
     async def get_public_identity(self, auth_user: Any | None) -> Dict[str, Any]:
         if auth_user is None:
@@ -195,9 +257,15 @@ class StudioService:
                     "id": "guest",
                     "email": "",
                     "display_name": "Guest",
-                    "plan": IdentityPlan.GUEST.value,
-                    "owner_mode": False,
-                    "local_access": False,
+                    "username": None,
+                "plan": IdentityPlan.GUEST.value,
+                "owner_mode": False,
+                "root_admin": False,
+                "local_access": False,
+                "accepted_terms": False,
+                    "accepted_privacy": False,
+                    "accepted_usage_policy": False,
+                    "marketing_opt_in": False,
                     "workspace_id": None,
                 },
                 "credits": {"remaining": 0, "monthly_remaining": 0, "extra_credits": 0},
@@ -208,8 +276,16 @@ class StudioService:
             user_id=auth_user.id,
             email=auth_user.email or f"{auth_user.id}@omnia.local",
             display_name=getattr(auth_user, "username", None) or "Creator",
+            username=(getattr(auth_user, "metadata", {}) or {}).get("username")
+            or getattr(auth_user, "email", "").split("@")[0]
+            or "creator",
             owner_mode=bool(getattr(auth_user, "metadata", {}).get("owner_mode")),
+            root_admin=bool(getattr(auth_user, "metadata", {}).get("root_admin")),
             local_access=bool(getattr(auth_user, "metadata", {}).get("local_access")),
+            accepted_terms=bool(getattr(auth_user, "metadata", {}).get("accepted_terms")),
+            accepted_privacy=bool(getattr(auth_user, "metadata", {}).get("accepted_privacy")),
+            accepted_usage_policy=bool(getattr(auth_user, "metadata", {}).get("accepted_usage_policy")),
+            marketing_opt_in=bool(getattr(auth_user, "metadata", {}).get("marketing_opt_in")),
         )
         return self.serialize_identity(identity)
 
@@ -218,9 +294,18 @@ class StudioService:
         user_id: str,
         email: str,
         display_name: str,
+        username: str | None = None,
         desired_plan: IdentityPlan | None = None,
         owner_mode: bool = False,
+        root_admin: bool = False,
         local_access: bool = False,
+        accepted_terms: bool = False,
+        accepted_privacy: bool = False,
+        accepted_usage_policy: bool = False,
+        marketing_opt_in: bool = False,
+        bio: str = "",
+        avatar_url: str | None = None,
+        default_visibility: Visibility = Visibility.PUBLIC,
     ) -> OmniaIdentity:
         holder: Dict[str, OmniaIdentity] = {}
 
@@ -235,11 +320,20 @@ class StudioService:
                     id=user_id,
                     email=email,
                     display_name=display_name or "Creator",
+                    username=(username or email.split("@")[0] or "creator").strip().lower(),
                     plan=plan,
                     workspace_id=f"ws_{user_id}",
                     guest=False,
                     owner_mode=owner_mode,
+                    root_admin=root_admin,
                     local_access=local_access,
+                    accepted_terms=accepted_terms,
+                    accepted_privacy=accepted_privacy,
+                    accepted_usage_policy=accepted_usage_policy,
+                    marketing_opt_in=marketing_opt_in,
+                    bio=bio.strip(),
+                    avatar_url=avatar_url,
+                    default_visibility=default_visibility,
                     subscription_status=SubscriptionStatus.ACTIVE if plan == IdentityPlan.PRO else SubscriptionStatus.NONE,
                     monthly_credits_remaining=plan_config.monthly_credits,
                     monthly_credit_allowance=plan_config.monthly_credits,
@@ -269,8 +363,17 @@ class StudioService:
                     identity.monthly_credits_remaining = max(identity.monthly_credits_remaining, upgraded_plan.monthly_credits)
                 identity.email = email or identity.email
                 identity.display_name = display_name or identity.display_name
+                identity.username = (username or identity.username or identity.email.split("@")[0] or "creator").strip().lower()
                 identity.owner_mode = identity.owner_mode or owner_mode
+                identity.root_admin = identity.root_admin or root_admin
                 identity.local_access = identity.local_access or local_access
+                identity.accepted_terms = identity.accepted_terms or accepted_terms
+                identity.accepted_privacy = identity.accepted_privacy or accepted_privacy
+                identity.accepted_usage_policy = identity.accepted_usage_policy or accepted_usage_policy
+                identity.marketing_opt_in = identity.marketing_opt_in or marketing_opt_in
+                identity.bio = bio or identity.bio
+                identity.avatar_url = avatar_url or identity.avatar_url
+                identity.default_visibility = default_visibility or identity.default_visibility
                 self._refresh_monthly_credits_locked(state, identity)
                 identity.updated_at = now
                 state.identities[identity.id] = identity
@@ -299,6 +402,511 @@ class StudioService:
             "plan": PLAN_CATALOG[identity.plan].model_dump(mode="json"),
         }
 
+    def serialize_usage_summary(self, identity: OmniaIdentity) -> Dict[str, Any]:
+        allowance = max(identity.monthly_credit_allowance, 1)
+        remaining = identity.monthly_credits_remaining + identity.extra_credits
+        consumed = max(allowance - identity.monthly_credits_remaining, 0)
+        progress = max(0, min(100, round((consumed / allowance) * 100)))
+        next_reset = (
+            identity.last_credit_refresh_at.astimezone(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            + timedelta(days=32)
+        ).replace(day=1)
+        return {
+            "plan_label": PLAN_CATALOG[identity.plan].label,
+            "credits_remaining": remaining,
+            "allowance": allowance,
+            "reset_at": next_reset.isoformat(),
+            "progress_percent": progress,
+        }
+
+    def _initialize_state_locked(self, state: StudioState) -> None:
+        self._backfill_posts_locked(state)
+
+    def _backfill_posts_locked(self, state: StudioState) -> None:
+        for generation in state.generations.values():
+            if generation.status != JobStatus.COMPLETED:
+                continue
+            if generation.id in state.posts:
+                continue
+
+            identity = state.identities.get(generation.identity_id)
+            if identity is None:
+                continue
+
+            asset_ids = [
+                output.asset_id
+                for output in generation.outputs
+                if output.asset_id in state.assets and state.assets[output.asset_id].deleted_at is None
+            ]
+            if not asset_ids:
+                asset_ids = [
+                    asset.id
+                    for asset in state.assets.values()
+                    if asset.identity_id == generation.identity_id
+                    and asset.project_id == generation.project_id
+                    and asset.deleted_at is None
+                    and str(asset.metadata.get("generation_id") or "") == generation.id
+                ]
+            if not asset_ids:
+                continue
+
+            state.posts[generation.id] = PublicPost(
+                id=generation.id,
+                workspace_id=generation.workspace_id,
+                project_id=generation.project_id,
+                identity_id=generation.identity_id,
+                owner_username=identity.username or identity.email.split("@")[0],
+                owner_display_name=identity.display_name,
+                title=generation.title,
+                prompt=generation.prompt_snapshot.prompt,
+                cover_asset_id=asset_ids[0],
+                asset_ids=asset_ids,
+                visibility=identity.default_visibility,
+                style_tags=self._infer_style_tags(generation),
+                liked_by=[],
+                created_at=generation.created_at,
+                updated_at=generation.updated_at,
+            )
+
+    def get_public_plan_payload(self) -> Dict[str, Any]:
+        return {
+            "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values() if plan.id != IdentityPlan.GUEST],
+            "top_ups": [
+                {"kind": kind.value, **meta}
+                for kind, meta in CHECKOUT_CATALOG.items()
+                if meta["plan"] is None
+            ],
+            "featured_plan": IdentityPlan.PRO.value,
+        }
+
+    def _post_preview_assets(
+        self,
+        assets_by_id: Dict[str, MediaAsset],
+        asset_ids: List[str],
+        *,
+        identity_id: Optional[str] = None,
+        public_preview: bool = False,
+    ) -> List[Dict[str, Any]]:
+        visible_assets = [
+            assets_by_id[asset_id]
+            for asset_id in asset_ids
+            if asset_id in assets_by_id
+            and assets_by_id[asset_id].deleted_at is None
+            and self._asset_has_renderable_variant(assets_by_id[asset_id])
+        ]
+        return self.serialize_assets(
+            visible_assets[:4],
+            identity_id=identity_id,
+            public_preview=public_preview,
+        )
+
+    def serialize_post(
+        self,
+        post: PublicPost,
+        *,
+        assets_by_id: Dict[str, MediaAsset],
+        viewer_identity_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        cover_asset = assets_by_id.get(post.cover_asset_id or "")
+        public_preview = viewer_identity_id is None
+        return {
+            "id": post.id,
+            "owner_username": post.owner_username,
+            "owner_display_name": post.owner_display_name,
+            "title": post.title,
+            "prompt": post.prompt,
+            "cover_asset": self.serialize_asset(
+                cover_asset,
+                identity_id=viewer_identity_id,
+                public_preview=public_preview,
+            )
+            if cover_asset and cover_asset.deleted_at is None and self._asset_has_renderable_variant(cover_asset)
+            else None,
+            "preview_assets": self._post_preview_assets(
+                assets_by_id,
+                post.asset_ids,
+                identity_id=viewer_identity_id,
+                public_preview=public_preview,
+            ),
+            "visibility": post.visibility.value,
+            "like_count": len(post.liked_by),
+            "viewer_has_liked": bool(viewer_identity_id and viewer_identity_id in post.liked_by),
+            "created_at": post.created_at.isoformat(),
+            "project_id": post.project_id,
+            "style_tags": post.style_tags,
+        }
+
+    def serialize_asset(
+        self,
+        asset: MediaAsset,
+        *,
+        identity_id: Optional[str] = None,
+        share_token: Optional[str] = None,
+        public_preview: bool = False,
+    ) -> Dict[str, Any]:
+        payload = asset.model_dump(
+            mode="json",
+            exclude={"local_path"},
+        )
+        payload["metadata"] = {
+            key: value
+            for key, value in asset.metadata.items()
+            if key not in {"storage_backend", "storage_key", "thumbnail_storage_key", "thumbnail_path"}
+        }
+        payload["url"] = self.build_asset_delivery_url(
+            asset.id,
+            variant="content",
+            identity_id=identity_id,
+            share_token=share_token,
+            public_preview=public_preview,
+        )
+        payload["thumbnail_url"] = self.build_asset_delivery_url(
+            asset.id,
+            variant="thumbnail",
+            identity_id=identity_id,
+            share_token=share_token,
+            public_preview=public_preview,
+        ) if self._asset_variant_exists(asset, "thumbnail") else None
+        return payload
+
+    def serialize_assets(
+        self,
+        assets: List[MediaAsset],
+        *,
+        identity_id: Optional[str] = None,
+        share_token: Optional[str] = None,
+        public_preview: bool = False,
+    ) -> List[Dict[str, Any]]:
+        return [
+            self.serialize_asset(
+                asset,
+                identity_id=identity_id,
+                share_token=share_token,
+                public_preview=public_preview,
+            )
+            for asset in assets
+        ]
+
+    def serialize_local_runtime_payload(
+        self,
+        snapshot: Dict[str, Any],
+        *,
+        include_models: bool = False,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "enabled": bool(snapshot.get("enabled", False)),
+            "available": bool(snapshot.get("available", False)),
+            "status": snapshot.get("status", "unknown"),
+            "detail": snapshot.get("detail"),
+            "discovered_models": int(snapshot.get("discovered_models", 0)),
+        }
+        if include_models:
+            payload["models"] = list(snapshot.get("models", []))
+        return payload
+
+    def serialize_owner_local_runtime_payload(self, snapshot: Dict[str, Any]) -> Dict[str, Any]:
+        payload = self.serialize_local_runtime_payload(snapshot, include_models=True)
+        payload["url"] = snapshot.get("url")
+        payload["model_directory"] = snapshot.get("model_directory")
+        return payload
+
+    def serialize_health_payload(self, payload: Dict[str, Any], detail: bool) -> Dict[str, Any]:
+        if detail:
+            return payload
+
+        providers = payload.get("providers", [])
+        return {
+            "status": payload.get("status", "unknown"),
+            "providers": [
+                {
+                    "name": provider.get("name"),
+                    "status": provider.get("status"),
+                }
+                for provider in providers
+            ],
+        }
+
+    def serialize_public_share_payload(self, payload: Dict[str, Any], share_token: str) -> Dict[str, Any]:
+        serialized: Dict[str, Any] = {"share": payload["share"]}
+        if "project" in payload:
+            serialized["project"] = payload["project"]
+        if "assets" in payload:
+            serialized["assets"] = self.serialize_assets(
+                [MediaAsset.model_validate(asset) for asset in payload["assets"]],
+                share_token=share_token,
+            )
+        if "asset" in payload and payload["asset"] is not None:
+            serialized["asset"] = self.serialize_asset(
+                MediaAsset.model_validate(payload["asset"]),
+                share_token=share_token,
+            )
+        return serialized
+
+    def build_asset_delivery_url(
+        self,
+        asset_id: str,
+        *,
+        variant: str,
+        identity_id: Optional[str] = None,
+        share_token: Optional[str] = None,
+        public_preview: bool = False,
+    ) -> str:
+        token = self._create_asset_delivery_token(
+            asset_id=asset_id,
+            variant=variant,
+            identity_id=identity_id,
+            share_token=share_token,
+            public_preview=public_preview,
+        )
+        endpoint = "thumbnail" if variant == "thumbnail" else "content"
+        return f"/v1/assets/{asset_id}/{endpoint}?token={token}"
+
+    def serialize_generation_for_identity(self, job: GenerationJob, identity_id: str) -> Dict[str, Any]:
+        outputs: List[Dict[str, Any]] = []
+        for output in job.outputs:
+            outputs.append(
+                {
+                    "asset_id": output.asset_id,
+                    "url": self.build_asset_delivery_url(
+                        output.asset_id,
+                        variant="content",
+                        identity_id=identity_id,
+                    ),
+                    "thumbnail_url": self.build_asset_delivery_url(
+                        output.asset_id,
+                        variant="thumbnail",
+                        identity_id=identity_id,
+                    ) if output.thumbnail_url else None,
+                    "mime_type": output.mime_type,
+                    "width": output.width,
+                    "height": output.height,
+                    "variation_index": output.variation_index,
+                }
+            )
+
+        return {
+            "job_id": job.id,
+            "title": job.title,
+            "status": job.status.value,
+            "project_id": job.project_id,
+            "provider": job.provider,
+            "model": job.model,
+            "prompt_snapshot": job.prompt_snapshot.model_dump(mode="json"),
+            "estimated_cost": job.estimated_cost,
+            "credit_cost": job.credit_cost,
+            "output_count": job.output_count,
+            "outputs": outputs,
+            "error": job.error,
+            "created_at": job.created_at.isoformat(),
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+
+    async def resolve_asset_delivery(self, asset_id: str, token: str, variant: str) -> ResolvedAssetDelivery:
+        claims = self._verify_asset_delivery_token(token, asset_id=asset_id, variant=variant)
+        asset = await self.store.get_model("assets", asset_id, MediaAsset)
+        if asset is None:
+            raise KeyError("Asset not found")
+
+        if claims.get("share_token"):
+            await self._assert_share_access(asset, str(claims["share_token"]))
+        elif claims.get("public_preview"):
+            await self._assert_public_asset_preview_access(asset.id)
+        elif claims.get("identity_id") != asset.identity_id:
+            raise PermissionError("Asset access denied")
+
+        storage_key = self._resolve_asset_variant_storage_key(asset, variant)
+        storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
+        if storage_key and storage_kind:
+            backend = self.asset_storage.get(storage_kind)
+            content = await backend.fetch_bytes(storage_key)
+            return ResolvedAssetDelivery(
+                filename=Path(storage_key).name,
+                media_type=self._resolve_asset_variant_mime_type(asset, variant, storage_key),
+                content=content,
+            )
+
+        path = self._resolve_asset_variant_path(asset, variant)
+        if path is None or not path.exists():
+            raise FileNotFoundError("Asset file not found")
+
+        return ResolvedAssetDelivery(
+            filename=path.name,
+            media_type=self._resolve_asset_variant_mime_type(asset, variant, path.name),
+            local_path=path,
+        )
+
+    async def _assert_share_access(self, asset: MediaAsset, share_token: str) -> None:
+        shares = await self.store.list_models("shares", ShareLink)
+        share = next((item for item in shares if item.token == share_token), None)
+        if share is None:
+            raise PermissionError("Share access denied")
+        if share.expires_at and share.expires_at < utc_now():
+            raise PermissionError("Share link expired")
+        if share.asset_id:
+            if share.asset_id != asset.id:
+                raise PermissionError("Share access denied")
+            return
+        if share.project_id and share.project_id != asset.project_id:
+            raise PermissionError("Share access denied")
+
+    def _create_asset_delivery_token(
+        self,
+        *,
+        asset_id: str,
+        variant: str,
+        identity_id: Optional[str],
+        share_token: Optional[str],
+        public_preview: bool = False,
+    ) -> str:
+        expires_at = utc_now() + timedelta(seconds=self._asset_token_ttl_seconds)
+        payload = {
+            "sub": "asset-delivery",
+            "asset_id": asset_id,
+            "variant": variant,
+            "identity_id": identity_id,
+            "share_token": share_token,
+            "public_preview": public_preview,
+            "exp": expires_at,
+            "iat": utc_now(),
+        }
+        return jwt.encode(payload, self._asset_token_secret, algorithm="HS256")
+
+    def _verify_asset_delivery_token(self, token: str, *, asset_id: str, variant: str) -> Dict[str, Any]:
+        try:
+            payload = jwt.decode(token, self._asset_token_secret, algorithms=["HS256"])
+        except jwt.InvalidTokenError as exc:
+            raise PermissionError("Invalid asset token") from exc
+
+        if payload.get("sub") != "asset-delivery":
+            raise PermissionError("Invalid asset token")
+        if payload.get("asset_id") != asset_id:
+            raise PermissionError("Asset token mismatch")
+        if payload.get("variant") != variant:
+            raise PermissionError("Asset variant mismatch")
+        if not payload.get("identity_id") and not payload.get("share_token") and not payload.get("public_preview"):
+            raise PermissionError("Asset token missing scope")
+        return payload
+
+    def _resolve_asset_variant_path(self, asset: MediaAsset, variant: str) -> Optional[Path]:
+        if variant == "content":
+            if not asset.local_path:
+                return None
+            return Path(asset.local_path)
+
+        thumb_path = asset.metadata.get("thumbnail_path")
+        if thumb_path:
+            return Path(str(thumb_path))
+
+        if asset.thumbnail_url:
+            parsed = urlparse(asset.thumbnail_url)
+            name = Path(parsed.path).name
+            if name:
+                return self.media_dir / name
+        return None
+
+    def _resolve_asset_variant_storage_key(self, asset: MediaAsset, variant: str) -> Optional[str]:
+        if variant == "content":
+            return asset.metadata.get("storage_key")
+        return asset.metadata.get("thumbnail_storage_key")
+
+    def _resolve_asset_variant_mime_type(self, asset: MediaAsset, variant: str, name: str) -> str:
+        if variant == "content":
+            explicit = asset.metadata.get("mime_type")
+            if explicit:
+                return str(explicit)
+        guessed, _ = mimetypes.guess_type(name)
+        if guessed:
+            return guessed
+        if variant == "thumbnail":
+            return "image/jpeg"
+        return "image/png"
+
+    def _asset_variant_exists(self, asset: MediaAsset, variant: str) -> bool:
+        if self._resolve_asset_variant_storage_key(asset, variant):
+            return True
+        path = self._resolve_asset_variant_path(asset, variant)
+        return path is not None and path.exists()
+
+    def _asset_has_renderable_variant(self, asset: MediaAsset) -> bool:
+        return self._asset_variant_exists(asset, "thumbnail") or self._asset_variant_exists(asset, "content")
+
+    def _normalize_public_post_text(self, value: str) -> str:
+        normalized = re.sub(r"[^a-z0-9\s]+", " ", value.lower())
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized.strip()
+
+    def _looks_like_public_feed_gibberish(self, value: str) -> bool:
+        normalized = self._normalize_public_post_text(value)
+        compact = normalized.replace(" ", "")
+        if not compact:
+            return True
+        if re.fullmatch(r"(asd|qwe|zxc|abc|test|demo|tmp|lol|xxx|123)+", compact):
+            return True
+        if len(normalized.split()) <= 1 and len(compact) >= 8 and len(set(compact)) <= 4:
+            return True
+        return False
+
+    def _is_publicly_safe_post(self, post: PublicPost) -> bool:
+        prompt = (post.prompt or "").lower()
+        title = (post.title or "").lower()
+        combined = f"{title}\n{prompt}"
+        return not any(term in combined for term in self._public_safety_blocklist)
+
+    def _is_publicly_presentable_post(self, post: PublicPost) -> bool:
+        title = self._normalize_public_post_text(post.title or "")
+        prompt = self._normalize_public_post_text(post.prompt or "")
+        combined = f"{title}\n{prompt}"
+
+        if any(term in combined for term in self._public_low_signal_blocklist):
+            return False
+        if self._looks_like_public_feed_gibberish(title):
+            return False
+        if self._looks_like_public_feed_gibberish(prompt):
+            return False
+
+        prompt_words = re.findall(r"[a-z0-9]+", prompt)
+        title_words = re.findall(r"[a-z0-9]+", title)
+        if len(prompt_words) < 3 and len(title_words) < 2:
+            return False
+        return True
+
+    def _is_publicly_showcase_ready_post(self, post: PublicPost) -> bool:
+        return self._is_publicly_safe_post(post) and self._is_publicly_presentable_post(post)
+
+    def _public_feed_dedupe_key(self, post: PublicPost) -> str:
+        title = self._normalize_public_post_text(post.title or "")[:80]
+        prompt = self._normalize_public_post_text(post.prompt or "")[:140]
+        return f"{post.owner_username}|{title}|{prompt}"
+
+    async def _assert_public_asset_preview_access(self, asset_id: str) -> None:
+        posts = await self.store.list_models("posts", PublicPost)
+        for post in posts:
+            if post.visibility != Visibility.PUBLIC:
+                continue
+            if not self._is_publicly_showcase_ready_post(post):
+                continue
+            if asset_id in post.asset_ids or asset_id == post.cover_asset_id:
+                return
+        raise PermissionError("Public preview access denied")
+
+    async def _delete_asset_variant(self, asset: MediaAsset, variant: str) -> None:
+        storage_key = self._resolve_asset_variant_storage_key(asset, variant)
+        storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
+        if storage_key and storage_kind:
+            backend = self.asset_storage.get(storage_kind)
+            await backend.delete_bytes(storage_key)
+            return
+
+        path = self._resolve_asset_variant_path(asset, variant)
+        if path and path.exists():
+            await asyncio.to_thread(path.unlink)
+
+    async def _purge_asset_storage(self, asset: MediaAsset) -> None:
+        if self._asset_variant_exists(asset, "content"):
+            await self._delete_asset_variant(asset, "content")
+        if self._asset_variant_exists(asset, "thumbnail"):
+            await self._delete_asset_variant(asset, "thumbnail")
+
     async def list_projects(self, identity_id: str) -> List[Project]:
         projects = await self.store.list_models("projects", Project)
         return sorted(
@@ -324,8 +932,8 @@ class StudioService:
         assets = await self.list_assets(identity_id, project_id=project_id)
         return {
             "project": project.model_dump(mode="json"),
-            "recent_generations": [job.model_dump(mode="json") for job in generations[:10]],
-            "recent_assets": [asset.model_dump(mode="json") for asset in assets[:16]],
+            "recent_generations": [self.serialize_generation_for_identity(job, identity_id) for job in generations[:10]],
+            "recent_assets": self.serialize_assets(assets[:16], identity_id=identity_id),
         }
 
     async def list_conversations(self, identity_id: str) -> List[ChatConversation]:
@@ -453,6 +1061,357 @@ class StudioService:
             filtered = [asset for asset in filtered if asset.project_id == project_id]
         return sorted(filtered, key=lambda item: item.created_at, reverse=True)
 
+    async def rename_asset(self, identity_id: str, asset_id: str, title: str) -> MediaAsset:
+        asset = await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
+        next_title = title.strip()[:72]
+        if not next_title:
+            raise ValueError("Title is required")
+
+        def mutation(state: StudioState) -> None:
+            current = state.assets[asset.id]
+            current.title = next_title
+            state.assets[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("assets", asset.id, MediaAsset)
+        if updated is None:
+            raise KeyError("Asset not found")
+        return updated
+
+    async def _get_post(self, post_id: str) -> PublicPost:
+        post = await self.store.get_model("posts", post_id, PublicPost)
+        if post is None:
+            raise KeyError("Post not found")
+        return post
+
+    async def _owned_post(self, identity_id: str, post_id: str) -> PublicPost:
+        post = await self._get_post(post_id)
+        if post.identity_id != identity_id:
+            raise KeyError("Post not found")
+        return post
+
+    async def list_public_posts(
+        self,
+        *,
+        sort: str = "trending",
+        viewer_identity_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        posts = await self.store.list_models("posts", PublicPost)
+        assets = await self.store.list_models("assets", MediaAsset)
+        assets_by_id = {asset.id: asset for asset in assets}
+
+        public_posts = []
+        for post in posts:
+            if post.visibility != Visibility.PUBLIC:
+                continue
+            if not self._is_publicly_showcase_ready_post(post):
+                continue
+            preview_assets = [
+                assets_by_id[asset_id]
+                for asset_id in post.asset_ids
+                if asset_id in assets_by_id
+                and assets_by_id[asset_id].deleted_at is None
+                and self._asset_has_renderable_variant(assets_by_id[asset_id])
+            ]
+            if not preview_assets:
+                continue
+            public_posts.append(post)
+
+        if sort == "newest":
+            public_posts.sort(key=lambda item: item.created_at, reverse=True)
+        elif sort == "top":
+            public_posts.sort(key=lambda item: (len(item.liked_by), item.created_at), reverse=True)
+        elif sort == "styles":
+            public_posts.sort(key=lambda item: (len(item.style_tags), len(item.liked_by), item.created_at), reverse=True)
+        else:
+            public_posts.sort(
+                key=lambda item: (
+                    len(item.liked_by) * 5
+                    + len(item.style_tags) * 2,
+                    item.created_at,
+                ),
+                reverse=True,
+            )
+
+        deduped_posts: List[PublicPost] = []
+        seen_keys: set[str] = set()
+        for post in public_posts:
+            dedupe_key = self._public_feed_dedupe_key(post)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            deduped_posts.append(post)
+
+        return [
+            self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+            for post in deduped_posts
+        ]
+
+    async def get_profile_payload(
+        self,
+        *,
+        username: Optional[str] = None,
+        identity_id: Optional[str] = None,
+        viewer_identity_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if username:
+            identity = await self.get_identity_by_username(username)
+        elif identity_id:
+            identity = await self.get_identity(identity_id)
+        else:
+            raise KeyError("Profile not found")
+
+        posts = await self.store.list_models("posts", PublicPost)
+        assets = await self.store.list_models("assets", MediaAsset)
+        assets_by_id = {asset.id: asset for asset in assets}
+        own_profile = bool(viewer_identity_id and viewer_identity_id == identity.id)
+
+        visible_posts = []
+        for post in posts:
+            if post.identity_id != identity.id:
+                continue
+            if not own_profile and post.visibility != Visibility.PUBLIC:
+                continue
+            if not own_profile and not self._is_publicly_showcase_ready_post(post):
+                continue
+            if not any(
+                asset_id in assets_by_id
+                and assets_by_id[asset_id].deleted_at is None
+                and self._asset_has_renderable_variant(assets_by_id[asset_id])
+                for asset_id in post.asset_ids
+            ):
+                continue
+            visible_posts.append(post)
+
+        visible_posts.sort(key=lambda item: item.created_at, reverse=True)
+        public_post_count = len(
+            [
+                post
+                for post in posts
+                if post.identity_id == identity.id
+                and post.visibility == Visibility.PUBLIC
+                and self._is_publicly_showcase_ready_post(post)
+            ]
+        )
+
+        return {
+            "profile": {
+                "display_name": identity.display_name,
+                "username": identity.username or identity.email.split("@")[0],
+                "avatar_url": identity.avatar_url,
+                "bio": identity.bio,
+                "plan": identity.plan.value,
+                "default_visibility": identity.default_visibility.value,
+                "usage_summary": self.serialize_usage_summary(identity) if own_profile else None,
+                "public_post_count": public_post_count,
+            },
+            "posts": [
+                self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+                for post in visible_posts
+            ],
+            "own_profile": own_profile,
+            "can_edit": own_profile,
+        }
+
+    async def update_profile(
+        self,
+        identity_id: str,
+        *,
+        display_name: Optional[str] = None,
+        bio: Optional[str] = None,
+        default_visibility: Optional[Visibility] = None,
+    ) -> OmniaIdentity:
+        identity = await self.get_identity(identity_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.identities[identity.id]
+            if display_name is not None:
+                cleaned_name = display_name.strip()[:120]
+                if cleaned_name:
+                    current.display_name = cleaned_name
+            if bio is not None:
+                current.bio = bio.strip()[:220]
+            if default_visibility is not None:
+                current.default_visibility = default_visibility
+            current.updated_at = utc_now()
+            state.identities[current.id] = current
+
+            for post in state.posts.values():
+                if post.identity_id != current.id:
+                    continue
+                post.owner_display_name = current.display_name
+                post.owner_username = current.username or current.email.split("@")[0]
+                post.updated_at = utc_now()
+
+        await self.store.mutate(mutation)
+        refreshed = await self.store.get_model("identities", identity.id, OmniaIdentity)
+        if refreshed is None:
+            raise KeyError("Identity not found")
+        return refreshed
+
+    async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
+        post = await self._get_post(post_id)
+        assets = await self.store.list_models("assets", MediaAsset)
+        assets_by_id = {asset.id: asset for asset in assets}
+        if post.visibility != Visibility.PUBLIC and viewer_identity_id != post.identity_id:
+            raise PermissionError("Post is private")
+        return self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+
+    async def update_post(
+        self,
+        identity_id: str,
+        post_id: str,
+        *,
+        title: Optional[str] = None,
+        visibility: Optional[Visibility] = None,
+    ) -> PublicPost:
+        post = await self._owned_post(identity_id, post_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            if title is not None:
+                cleaned = title.strip()[:72]
+                if cleaned:
+                    current.title = cleaned
+            if visibility is not None:
+                current.visibility = visibility
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+            if title is not None:
+                cleaned = title.strip()[:72]
+                if cleaned:
+                    for asset_id in current.asset_ids:
+                        asset = state.assets.get(asset_id)
+                        if asset:
+                            asset.title = cleaned
+                            state.assets[asset.id] = asset
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def like_post(self, identity_id: str, post_id: str) -> PublicPost:
+        await self.get_identity(identity_id)
+        post = await self._get_post(post_id)
+        if post.visibility != Visibility.PUBLIC:
+            raise PermissionError("Only public posts can be liked")
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            if identity_id not in current.liked_by:
+                current.liked_by.append(identity_id)
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def unlike_post(self, identity_id: str, post_id: str) -> PublicPost:
+        post = await self._get_post(post_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            current.liked_by = [liked for liked in current.liked_by if liked != identity_id]
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def move_post(self, identity_id: str, post_id: str, project_id: str) -> PublicPost:
+        post = await self._owned_post(identity_id, post_id)
+        project = await self.require_owned_model("projects", project_id, Project, identity_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            now = utc_now()
+            current.project_id = project.id
+            current.updated_at = now
+            state.posts[current.id] = current
+            for asset_id in current.asset_ids:
+                asset = state.assets.get(asset_id)
+                if asset:
+                    asset.project_id = project.id
+                    state.assets[asset.id] = asset
+            generation = state.generations.get(current.id)
+            if generation:
+                generation.project_id = project.id
+                generation.updated_at = now
+                state.generations[generation.id] = generation
+            project_record = state.projects.get(project.id)
+            if project_record:
+                project_record.updated_at = now
+                state.projects[project.id] = project_record
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def trash_post(self, identity_id: str, post_id: str) -> Dict[str, Any]:
+        post = await self._owned_post(identity_id, post_id)
+
+        def mutation(state: StudioState) -> None:
+            now = utc_now()
+            count = 0
+            for asset_id in post.asset_ids:
+                asset = state.assets.get(asset_id)
+                if asset and asset.deleted_at is None:
+                    asset.deleted_at = now
+                    state.assets[asset.id] = asset
+                    count += 1
+            current_post = state.posts.get(post.id)
+            if current_post:
+                current_post.updated_at = now
+                state.posts[current_post.id] = current_post
+
+        await self.store.mutate(mutation)
+        return {"post_id": post.id, "trashed_count": len(post.asset_ids)}
+
+    async def update_project(self, identity_id: str, project_id: str, *, title: str, description: str = "") -> Project:
+        project = await self.require_owned_model("projects", project_id, Project, identity_id)
+        next_title = title.strip()[:72]
+        if not next_title:
+            raise ValueError("Collection name is required")
+
+        def mutation(state: StudioState) -> None:
+            current = state.projects[project.id]
+            current.title = next_title
+            current.description = description.strip()
+            current.updated_at = utc_now()
+            state.projects[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("projects", project.id, Project)
+        if updated is None:
+            raise KeyError("Project not found")
+        return updated
+
+    async def delete_project(self, identity_id: str, project_id: str) -> Dict[str, Any]:
+        project = await self.require_owned_model("projects", project_id, Project, identity_id)
+        assets = await self.list_assets(identity_id, project_id=project_id, include_deleted=True)
+        if assets:
+            raise ValueError("Move or remove items before deleting this collection")
+
+        def mutation(state: StudioState) -> None:
+            state.projects.pop(project.id, None)
+            stale_posts = [post_id for post_id, post in state.posts.items() if post.project_id == project.id]
+            for post_id in stale_posts:
+                state.posts.pop(post_id, None)
+
+        await self.store.mutate(mutation)
+        return {"project_id": project.id, "status": "deleted"}
+
     async def trash_asset(self, identity_id: str, asset_id: str) -> MediaAsset:
         asset = await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
 
@@ -486,22 +1445,131 @@ class StudioService:
             raise KeyError("Asset not found")
         return updated
 
+    async def permanently_delete_asset(self, identity_id: str, asset_id: str) -> Dict[str, Any]:
+        asset = await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
+        await self._purge_asset_storage(asset)
+
+        def mutation(state: StudioState) -> None:
+            state.assets.pop(asset.id, None)
+
+            project = state.projects.get(asset.project_id)
+            if project and project.cover_asset_id == asset.id:
+                project.cover_asset_id = None
+                project.updated_at = utc_now()
+                state.projects[project.id] = project
+
+            stale_share_ids = [
+                share_id
+                for share_id, share in state.shares.items()
+                if share.asset_id == asset.id
+            ]
+            for share_id in stale_share_ids:
+                state.shares.pop(share_id, None)
+
+            generation_id = str(asset.metadata.get("generation_id") or "")
+            post = state.posts.get(generation_id)
+            if post:
+                post.asset_ids = [value for value in post.asset_ids if value != asset.id]
+                if post.cover_asset_id == asset.id:
+                    post.cover_asset_id = post.asset_ids[0] if post.asset_ids else None
+                post.updated_at = utc_now()
+                if post.asset_ids:
+                    state.posts[post.id] = post
+                else:
+                    state.posts.pop(post.id, None)
+
+        await self.store.mutate(mutation)
+        return {"asset_id": asset.id, "status": "deleted"}
+
+    async def empty_trash(self, identity_id: str) -> Dict[str, Any]:
+        trashed_assets = [
+            asset
+            for asset in await self.list_assets(identity_id, include_deleted=True)
+            if asset.deleted_at is not None
+        ]
+
+        for asset in trashed_assets:
+            await self._purge_asset_storage(asset)
+
+        trashed_asset_ids = {asset.id for asset in trashed_assets}
+        trashed_project_ids = {asset.project_id for asset in trashed_assets}
+
+        def mutation(state: StudioState) -> None:
+            for asset_id in trashed_asset_ids:
+                state.assets.pop(asset_id, None)
+
+            stale_share_ids = [
+                share_id
+                for share_id, share in state.shares.items()
+                if share.asset_id in trashed_asset_ids
+            ]
+            for share_id in stale_share_ids:
+                state.shares.pop(share_id, None)
+
+            now = utc_now()
+            for project_id in trashed_project_ids:
+                project = state.projects.get(project_id)
+                if project and project.cover_asset_id in trashed_asset_ids:
+                    project.cover_asset_id = None
+                    project.updated_at = now
+                    state.projects[project.id] = project
+
+            for post_id, post in list(state.posts.items()):
+                remaining_asset_ids = [asset_id for asset_id in post.asset_ids if asset_id not in trashed_asset_ids]
+                if len(remaining_asset_ids) == len(post.asset_ids):
+                    continue
+                post.asset_ids = remaining_asset_ids
+                if post.cover_asset_id in trashed_asset_ids:
+                    post.cover_asset_id = remaining_asset_ids[0] if remaining_asset_ids else None
+                post.updated_at = now
+                if post.asset_ids:
+                    state.posts[post_id] = post
+                else:
+                    state.posts.pop(post_id, None)
+
+        await self.store.mutate(mutation)
+        return {"status": "deleted", "deleted_count": len(trashed_assets)}
+
     async def get_identity(self, identity_id: str) -> OmniaIdentity:
         identity = await self.store.get_model("identities", identity_id, OmniaIdentity)
         if identity is None:
             raise KeyError("Identity not found")
         await self.ensure_identity(
-            identity.id,
-            identity.email,
-            identity.display_name,
-            identity.plan,
+            user_id=identity.id,
+            email=identity.email,
+            display_name=identity.display_name,
+            username=identity.username,
+            desired_plan=identity.plan,
             owner_mode=identity.owner_mode,
+            root_admin=identity.root_admin,
             local_access=identity.local_access,
+            accepted_terms=identity.accepted_terms,
+            accepted_privacy=identity.accepted_privacy,
+            accepted_usage_policy=identity.accepted_usage_policy,
+            marketing_opt_in=identity.marketing_opt_in,
+            bio=identity.bio,
+            avatar_url=identity.avatar_url,
+            default_visibility=identity.default_visibility,
         )
         refreshed = await self.store.get_model("identities", identity_id, OmniaIdentity)
         if refreshed is None:
             raise KeyError("Identity not found after refresh")
         return refreshed
+
+    async def get_identity_by_username(self, username: str) -> OmniaIdentity:
+        normalized = username.strip().lower()
+        identities = await self.store.list_models("identities", OmniaIdentity)
+        for identity in identities:
+            if (identity.username or "").strip().lower() == normalized:
+                return identity
+        posts = await self.store.list_models("posts", PublicPost)
+        for post in posts:
+            if post.owner_username.strip().lower() != normalized:
+                continue
+            for identity in identities:
+                if identity.id == post.identity_id:
+                    return identity
+        raise KeyError("Identity not found")
 
     async def create_generation(
         self,
@@ -519,18 +1587,22 @@ class StudioService:
         output_count: int = 1,
     ) -> GenerationJob:
         identity = await self.get_identity(identity_id)
+        project = await self.require_owned_model("projects", project_id, Project, identity_id)
+        model = await self.get_model(
+            model_id,
+            include_local_owner=bool(identity.owner_mode and identity.local_access),
+        )
         plan_config = PLAN_CATALOG[identity.plan]
-        if not plan_config.can_generate:
+        local_admin_bypass = self._can_bypass_local_generation_limits(identity, model)
+        if not plan_config.can_generate and not local_admin_bypass:
             raise PermissionError("Guests cannot generate images")
 
-        project = await self.require_owned_model("projects", project_id, Project, identity_id)
-        model = await self.get_model(model_id)
         self._validate_model_for_identity(identity, model)
         self._validate_dimensions_for_model(width, height, model)
 
-        total_credit_cost = model.credit_cost * output_count
+        total_credit_cost = 0 if local_admin_bypass else model.credit_cost * output_count
         available_credits = identity.monthly_credits_remaining + identity.extra_credits
-        if available_credits < total_credit_cost:
+        if not local_admin_bypass and available_credits < total_credit_cost:
             raise ValueError("Not enough credits to run this generation")
 
         cleaned_prompt = prompt.strip()
@@ -552,7 +1624,7 @@ class StudioService:
             title=self._build_generation_title(cleaned_prompt),
             model=model.id,
             prompt_snapshot=prompt_snapshot,
-            estimated_cost=model.estimated_cost * output_count,
+            estimated_cost=0.0 if local_admin_bypass else model.estimated_cost * output_count,
             credit_cost=total_credit_cost,
             output_count=output_count,
         )
@@ -680,27 +1752,55 @@ class StudioService:
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
         identity = await self.get_identity(identity_id)
+        local_runtime = await self.providers.local_runtime_snapshot(probe=False)
         return {
             "identity": self.serialize_identity(identity),
             "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values()],
-            "models": [model.model_dump(mode="json") for model in await self.list_models_for_identity(identity)],
+            "models": [
+                model.model_dump(mode="json")
+                for model in await self.list_models_for_identity(
+                    identity,
+                    include_local_owner=bool(identity.owner_mode and identity.local_access),
+                )
+            ],
             "presets": PRESET_CATALOG,
-            "local_runtime": await self.providers.local_runtime_snapshot(probe=False),
+            "local_runtime": self.serialize_local_runtime_payload(
+                local_runtime,
+                include_models=False,
+            ),
         }
 
-    async def list_models_for_identity(self, identity: OmniaIdentity | None = None) -> List[ModelCatalogEntry]:
+    async def get_owner_local_lab_payload(self, identity_id: str) -> Dict[str, Any]:
+        identity = await self.get_identity(identity_id)
+        if not (identity.owner_mode and identity.local_access):
+            raise PermissionError("Local lab requires owner access")
+
+        local_runtime = await self.providers.local_runtime_snapshot(probe=True)
+        models = await self._build_local_model_catalog()
+        return {
+            "runtime": self.serialize_owner_local_runtime_payload(local_runtime),
+            "models": [model.model_dump(mode="json") for model in models],
+        }
+
+    async def list_models_for_identity(
+        self,
+        identity: OmniaIdentity | None = None,
+        *,
+        include_local_owner: bool = False,
+    ) -> List[ModelCatalogEntry]:
         models = [model.model_copy(deep=True) for model in MODEL_CATALOG.values()]
-        if identity and identity.owner_mode and identity.local_access:
+        if include_local_owner and identity and identity.owner_mode and identity.local_access:
             models.extend(await self._build_local_model_catalog())
         return models
 
-    async def get_model(self, model_id: str) -> ModelCatalogEntry:
+    async def get_model(self, model_id: str, *, include_local_owner: bool = False) -> ModelCatalogEntry:
         if model_id in MODEL_CATALOG:
             return MODEL_CATALOG[model_id]
 
-        for model in await self._build_local_model_catalog():
-            if model.id == model_id:
-                return model
+        if include_local_owner:
+            for model in await self._build_local_model_catalog():
+                if model.id == model_id:
+                    return model
         raise KeyError("Model not found")
 
     async def _build_local_model_catalog(self) -> List[ModelCatalogEntry]:
@@ -711,7 +1811,7 @@ class StudioService:
                 ModelCatalogEntry(
                     id=model.id,
                     label=self._build_local_model_alias(model, index),
-                    description=f"Your local checkpoint from {Path(model.path).parent}.",
+                    description="Your local checkpoint available through this machine.",
                     min_plan=IdentityPlan.PRO,
                     credit_cost=0,
                     estimated_cost=0.0,
@@ -722,7 +1822,6 @@ class StudioService:
                     owner_only=True,
                     provider_hint="comfyui-local",
                     source_id=model.filename,
-                    source_path=model.path,
                     license_reference="Local checkpoint on this machine. Confirm the original upstream license before public or commercial use.",
                 )
             )
@@ -744,9 +1843,14 @@ class StudioService:
         humanized = " ".join(tokens).strip() or f"Local {index + 1}"
         return f"Omnia {humanized}"
 
+    def _can_bypass_local_generation_limits(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> bool:
+        return bool(model.runtime == "local" and identity.owner_mode and identity.local_access)
+
     def _validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
         if model.owner_only and not (identity.owner_mode and identity.local_access):
             raise PermissionError("This model requires local owner access")
+        if self._can_bypass_local_generation_limits(identity, model):
+            return
         if identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO:
             raise PermissionError("This model requires Pro")
         if identity.plan == IdentityPlan.GUEST:
@@ -847,6 +1951,112 @@ class StudioService:
             cleaned = f"{cleaned}, clean composition, controlled lighting, high detail"
         return cleaned[:320]
 
+    async def improve_generation_prompt(self, prompt: str) -> Dict[str, Any]:
+        cleaned = " ".join(prompt.strip().split())
+        if not cleaned:
+            raise ValueError("Prompt cannot be empty")
+
+        llm_prompt = await self._try_gemini_prompt_improvement(cleaned)
+        if llm_prompt:
+            return {
+                "prompt": llm_prompt,
+                "provider": "gemini",
+                "used_llm": True,
+            }
+
+        return {
+            "prompt": self._fallback_enhanced_prompt(cleaned),
+            "provider": "heuristic",
+            "used_llm": False,
+        }
+
+    async def _try_gemini_prompt_improvement(self, prompt: str) -> Optional[str]:
+        settings = get_settings()
+        if not settings.gemini_api_key:
+            return None
+
+        request_body = {
+            "system_instruction": {
+                "parts": [
+                    {
+                        "text": (
+                            "You improve image-generation prompts. Keep the user's intent, remove filler, "
+                            "and add only useful visual detail. Return only the final improved prompt."
+                        )
+                    }
+                ]
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": (
+                                "Improve this prompt for a high-quality image generation request. "
+                                "Keep it concise, visual, and production-ready.\n\n"
+                                f"Prompt: {prompt}"
+                            )
+                        }
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.45,
+                "topP": 0.9,
+                "maxOutputTokens": 220,
+            },
+        }
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=4.0)) as client:
+                response = await client.post(url, json=request_body)
+                response.raise_for_status()
+        except Exception:
+            return None
+
+        try:
+            payload = response.json()
+            candidates = payload.get("candidates") or []
+            parts = ((candidates[0] or {}).get("content") or {}).get("parts") or []
+            text = "".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
+        except Exception:
+            return None
+
+        normalized = self._normalize_improved_prompt(text)
+        return normalized or None
+
+    def _normalize_improved_prompt(self, prompt: str) -> str:
+        normalized = prompt.strip().strip("`").strip().strip('"').strip("'")
+        normalized = re.sub(r"^\s*(prompt|improved prompt)\s*:\s*", "", normalized, flags=re.IGNORECASE)
+        normalized = " ".join(normalized.split())
+        return normalized[:420]
+
+    def _fallback_enhanced_prompt(self, prompt: str) -> str:
+        cleaned = prompt.strip().strip(",.")
+        lowered = cleaned.lower()
+        enhancements: List[str] = []
+
+        if not any(keyword in lowered for keyword in ("cinematic", "editorial", "studio", "photography", "illustration", "render")):
+            enhancements.append("cinematic image")
+        if not any(keyword in lowered for keyword in ("lighting", "light", "sunset", "shadow", "soft light")):
+            enhancements.append("soft controlled lighting")
+        if not any(keyword in lowered for keyword in ("composition", "framing", "close-up", "wide shot", "portrait")):
+            enhancements.append("clear subject focus")
+        if not any(keyword in lowered for keyword in ("detail", "texture", "sharp", "high resolution")):
+            enhancements.append("high detail")
+        if not any(keyword in lowered for keyword in ("background", "environment", "setting")):
+            enhancements.append("clean background separation")
+
+        if enhancements:
+            cleaned = f"{cleaned}, {', '.join(enhancements)}"
+
+        return cleaned[:420]
+
     async def require_owned_model(self, collection: str, model_id: str, model_type, identity_id: str):
         model = await self.store.get_model(collection, model_id, model_type)
         if model is None or model.identity_id != identity_id:
@@ -918,6 +2128,24 @@ class StudioService:
                 state.projects[project.id] = project
 
                 identity = state.identities[job.identity_id]
+                visibility = identity.default_visibility
+                state.posts[current_job.id] = PublicPost(
+                    id=current_job.id,
+                    workspace_id=current_job.workspace_id,
+                    project_id=current_job.project_id,
+                    identity_id=current_job.identity_id,
+                    owner_username=identity.username or identity.email.split("@")[0],
+                    owner_display_name=identity.display_name,
+                    title=current_job.title,
+                    prompt=current_job.prompt_snapshot.prompt,
+                    cover_asset_id=created_assets[0].id if created_assets else None,
+                    asset_ids=[asset.id for asset in created_assets],
+                    visibility=visibility,
+                    style_tags=self._infer_style_tags(current_job),
+                    liked_by=[],
+                    created_at=current_job.created_at,
+                    updated_at=utc_now(),
+                )
                 self._consume_credits_locked(identity, job.credit_cost)
                 identity.updated_at = utc_now()
                 state.identities[identity.id] = identity
@@ -997,26 +2225,75 @@ class StudioService:
                 "width": job.prompt_snapshot.width,
                 "height": job.prompt_snapshot.height,
                 "negative_prompt": job.prompt_snapshot.negative_prompt,
+                "mime_type": mime_type,
             },
         )
-        main_path = build_media_path(self.media_dir, asset.id, mime_type)
-        thumb_path = self.media_dir / f"{asset.id}_thumb.jpg"
-        await asyncio.to_thread(main_path.write_bytes, image_bytes)
+        main_extension = self._extension_for_mime_type(mime_type)
+        storage_backend = self.asset_storage.default_kind
+        main_key = f"generated/{job.workspace_id}/{job.project_id}/{job.id}/{asset.id}{main_extension}"
+        thumbnail_key = f"generated/{job.workspace_id}/{job.project_id}/{job.id}/{asset.id}_thumb.jpg"
+
+        backend = self.asset_storage.get(storage_backend)
+        await backend.store_bytes(main_key, image_bytes, content_type=mime_type)
+        asset.metadata["storage_backend"] = storage_backend
+        asset.metadata["storage_key"] = main_key
+
+        if storage_backend == "local":
+            asset.local_path = str(self.asset_storage.local_backend.resolve_path(main_key))
 
         thumbnail_url = None
         try:
             image = await asyncio.to_thread(Image.open, io.BytesIO(image_bytes))
             thumb = image.copy()
             thumb.thumbnail((480, 480))
-            await asyncio.to_thread(thumb.save, thumb_path, format="JPEG", quality=88)
-            thumbnail_url = f"{self.media_url_prefix}/{thumb_path.name}"
+            thumb_buffer = io.BytesIO()
+            await asyncio.to_thread(thumb.save, thumb_buffer, format="JPEG", quality=88)
+            thumb_bytes = thumb_buffer.getvalue()
+            await backend.store_bytes(thumbnail_key, thumb_bytes, content_type="image/jpeg")
+            asset.metadata["thumbnail_storage_key"] = thumbnail_key
+            if storage_backend == "local":
+                asset.metadata["thumbnail_path"] = str(self.asset_storage.local_backend.resolve_path(thumbnail_key))
+            thumbnail_url = "stored"
         except Exception:
             thumbnail_url = None
 
-        asset.local_path = str(main_path)
-        asset.url = f"{self.media_url_prefix}/{main_path.name}"
+        asset.url = "stored"
         asset.thumbnail_url = thumbnail_url
         return asset
+
+    def _infer_style_tags(self, job: GenerationJob) -> List[str]:
+        prompt = job.prompt_snapshot.prompt.lower()
+        tags: List[str] = []
+        keyword_map = {
+            "portrait": ["portrait", "face", "editorial"],
+            "product": ["product", "packshot", "commercial", "catalog"],
+            "anime": ["anime", "manga", "illustration"],
+            "surreal": ["surreal", "dream", "abstract"],
+            "fantasy": ["fantasy", "mythic", "wizard", "dragon"],
+            "cyberpunk": ["cyberpunk", "neon", "future", "dystopian"],
+            "animal": ["animal", "wildlife", "cat", "dog", "bird"],
+            "cinematic": ["cinematic", "film", "moody", "dramatic"],
+        }
+        for tag, keywords in keyword_map.items():
+            if any(keyword in prompt for keyword in keywords):
+                tags.append(tag)
+        if not tags:
+            tags.append("featured")
+        return tags[:3]
+
+    def _extension_for_mime_type(self, mime_type: str) -> str:
+        explicit_map = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        }
+        if mime_type in explicit_map:
+            return explicit_map[mime_type]
+
+        guessed = mimetypes.guess_extension(mime_type) or ""
+        if guessed == ".jpe":
+            return ".jpg"
+        return guessed or ".bin"
 
     def _build_generation_title(self, prompt: str) -> str:
         cleaned = " ".join(prompt.strip().split())

@@ -386,7 +386,6 @@ class LocalComfyProvider(StudioImageProvider):
             [
                 Path("C:/AI/models/checkpoints"),
                 Path("C:/AI/ComfyUI_windows_portable/ComfyUI/models/checkpoints"),
-                Path(__file__).resolve().parent.parent / "ComfyUI" / "models" / "checkpoints",
             ]
         )
 

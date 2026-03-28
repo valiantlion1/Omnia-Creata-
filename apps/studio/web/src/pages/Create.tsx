@@ -1,76 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ChevronDown,
-  Image as ImageIcon,
-  Paintbrush,
-  RefreshCw,
-  Sparkles,
-  Wand2,
-  Wrench,
-  X,
-  Zap,
-} from 'lucide-react'
+import { Check, ChevronDown, RefreshCw, Sparkles, Wand2, X } from 'lucide-react'
 
-import { AppPage, ButtonChip, EmptyState, PageHeader, Surface, SurfaceHeader, StatusPill } from '@/components/StudioPrimitives'
-import { studioApi, type Generation, type JobStatus } from '@/lib/studioApi'
+import { AppPage, ButtonChip, StatusPill } from '@/components/StudioPrimitives'
+import { studioApi, type Generation, type JobStatus, type ModelCatalogEntry } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 const aspectPresets = {
   '1:1': { width: 1024, height: 1024, label: 'Square' },
   '16:9': { width: 1280, height: 720, label: 'Landscape' },
-  '4:5': { width: 1024, height: 1280, label: 'Editorial' },
-  '3:4': { width: 960, height: 1280, label: 'Portrait' },
+  '4:5': { width: 1024, height: 1280, label: 'Portrait' },
+  '3:4': { width: 960, height: 1280, label: 'Vertical' },
 } as const
-
-const outputCountOptions = [1, 2, 4] as const
-const createTools = ['image', 'edit', 'inpaint'] as const
-
-const createToolContent = {
-  image: {
-    label: 'Image',
-    title: 'Create images',
-    helper: 'Fresh generation with direct prompt control.',
-    promptPlaceholder: 'Describe the image you want to generate...',
-    actionLabel: 'Generate',
-    icon: ImageIcon,
-  },
-  edit: {
-    label: 'Edit',
-    title: 'Edit direction',
-    helper: 'Use this when the image idea is already defined and you want a stronger pass.',
-    promptPlaceholder: 'Describe the visual change you want to make...',
-    actionLabel: 'Apply edit',
-    icon: Paintbrush,
-  },
-  inpaint: {
-    label: 'Inpaint',
-    title: 'Repair or replace',
-    helper: 'Target a region and describe exactly what should change.',
-    promptPlaceholder: 'Describe what should change inside the selected area...',
-    actionLabel: 'Run inpaint',
-    icon: Wrench,
-  },
-} as const
-
-type CreateTool = (typeof createTools)[number]
 
 type GenerationToast = {
   id: string
   title: string
   status: JobStatus
   outputCount: number
-  model: string
   projectId: string
   error: string | null
   dismissed: boolean
-  createdAt: string
-  completedAt: string | null
-}
-
-function isCreateTool(value: string | null): value is CreateTool {
-  return createTools.includes((value ?? '') as CreateTool)
 }
 
 function isTerminalStatus(status: JobStatus) {
@@ -102,12 +53,8 @@ function getToastLabel(status: JobStatus) {
 }
 
 function getToastDescription(job: GenerationToast) {
-  if (job.status === 'completed') {
-    return 'Saved to Library / My Images.'
-  }
-  if (job.status === 'processing' || job.status === 'pending') {
-    return 'Studio is rendering this set now.'
-  }
+  if (job.status === 'completed') return 'Saved to Library / My Images.'
+  if (job.status === 'processing' || job.status === 'pending') return 'Your image is being rendered.'
   return job.error || 'This run did not finish successfully.'
 }
 
@@ -117,82 +64,111 @@ function mapGenerationToToast(generation: Generation, projectId: string): Genera
     title: generation.title,
     status: generation.status,
     outputCount: generation.output_count,
-    model: generation.model,
     projectId,
     error: generation.error,
     dismissed: false,
-    createdAt: generation.created_at,
-    completedAt: generation.completed_at,
   }
 }
 
+function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
+  return [...models]
+    .filter((entry) => !entry.owner_only || canUseLocal)
+    .sort((a, b) => Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost)
+}
+
+function getModelCostLabel(model: ModelCatalogEntry | undefined) {
+  if (!model) return 'Select a model'
+  if (model.runtime === 'local') return 'Local runtime'
+  return `${model.credit_cost} credits`
+}
+
+function getModelCostSummary(model: ModelCatalogEntry | undefined, width: number, height: number) {
+  if (!model) return `${width} x ${height}`
+  if (model.runtime === 'local') return `Local runtime · no credit spend · ${width} x ${height}`
+  return `Cost ${model.credit_cost} credits · ${width} x ${height}`
+}
+
 export default function CreatePage() {
-  const { projectId: routeProjectId } = useParams()
-  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
-  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo, signInLocalOwner } = useStudioAuth()
+  const { projectId: routeProjectId } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
+
+  const requestedProjectId = routeProjectId ?? searchParams.get('projectId')
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
-  const requestedProjectId = routeProjectId ?? searchParams.get('projectId') ?? null
-  const activeTool: CreateTool = isCreateTool(searchParams.get('tool')) ? searchParams.get('tool') : 'image'
-  const toolContent = createToolContent[activeTool]
+  const canUseLocalModels = Boolean(auth?.identity.owner_mode && auth?.identity.local_access)
 
   const [prompt, setPrompt] = useState('')
-  const [negativePrompt, setNegativePrompt] = useState('')
-  const [model, setModel] = useState('flux-schnell')
+  const [selectedModelId, setSelectedModelId] = useState('')
   const [aspectRatio, setAspectRatio] = useState<keyof typeof aspectPresets>('1:1')
-  const [width, setWidth] = useState(1024)
-  const [height, setHeight] = useState(1024)
-  const [steps] = useState(28)
-  const [cfgScale] = useState(6.5)
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1_000_000_000))
-  const [outputCount, setOutputCount] = useState<(typeof outputCountOptions)[number]>(1)
-  const [modelOpen, setModelOpen] = useState(false)
-  const [sessionProjectId, setSessionProjectId] = useState<string | null>(requestedProjectId)
-  const [createError, setCreateError] = useState<string | null>(null)
   const [submittingCount, setSubmittingCount] = useState(0)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [improveState, setImproveState] = useState<'idle' | 'working' | 'done' | 'fallback'>('idle')
   const [generationToasts, setGenerationToasts] = useState<GenerationToast[]>([])
+  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(requestedProjectId ?? null)
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
 
-  const projectIdRef = useRef<string | null>(requestedProjectId)
   const projectPromiseRef = useRef<Promise<string> | null>(null)
+  const modelPickerRef = useRef<HTMLDivElement | null>(null)
 
   const modelsQuery = useQuery({
-    queryKey: ['models'],
+    queryKey: ['models', 'create'],
     queryFn: () => studioApi.listModels(),
+    enabled: canLoadPrivate,
   })
 
-  const projectContextQuery = useQuery({
-    queryKey: ['project', sessionProjectId, 'create-context'],
-    queryFn: () => studioApi.getProject(sessionProjectId as string),
-    enabled: canLoadPrivate && Boolean(sessionProjectId),
-  })
-
-  const availableModels = modelsQuery.data?.models ?? []
-  const selectedModel = useMemo(() => availableModels.find((entry) => entry.id === model) ?? availableModels[0], [availableModels, model])
-  const projectTitle = projectContextQuery.data?.project.title ?? null
-  const totalCredits = (selectedModel?.credit_cost ?? 0) * outputCount
+  const models = useMemo(
+    () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
+    [canUseLocalModels, modelsQuery.data],
+  )
+  const selectedModel = useMemo(() => models.find((entry) => entry.id === selectedModelId) ?? models[0], [models, selectedModelId])
+  const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
   const runningJobs = useMemo(
     () => generationToasts.filter((job) => job.status === 'pending' || job.status === 'processing').length,
     [generationToasts],
   )
-  const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
+  const runtimeCredits = auth?.credits.remaining ?? 0
+  const activeAspect = aspectPresets[aspectRatio]
 
   useEffect(() => {
-    projectIdRef.current = sessionProjectId
-  }, [sessionProjectId])
-
-  useEffect(() => {
-    if (!availableModels.length) return
-    if (!availableModels.some((entry) => entry.id === model)) {
-      setModel(availableModels[0].id)
+    if (!models.length) return
+    if (!models.some((entry) => entry.id === selectedModelId)) {
+      setSelectedModelId(models[0].id)
     }
-  }, [availableModels, model])
+  }, [models, selectedModelId])
 
   useEffect(() => {
-    if (requestedProjectId && requestedProjectId !== sessionProjectId) {
-      projectIdRef.current = requestedProjectId
-      setSessionProjectId(requestedProjectId)
+    if (!requestedProjectId) return
+    setResolvedProjectId(requestedProjectId)
+  }, [requestedProjectId])
+
+  useEffect(() => {
+    const nextPrompt = searchParams.get('prompt')
+    const nextModel = searchParams.get('model')
+    const nextAspect = searchParams.get('aspect_ratio') as keyof typeof aspectPresets | null
+
+    if (nextPrompt) setPrompt(nextPrompt)
+    if (nextModel) setSelectedModelId(nextModel)
+    if (nextAspect && nextAspect in aspectPresets) setAspectRatio(nextAspect)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!searchParams.has('tool')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('tool')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!modelPickerRef.current) return
+      if (modelPickerRef.current.contains(event.target as Node)) return
+      setModelPickerOpen(false)
     }
-  }, [requestedProjectId, sessionProjectId])
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (!canLoadPrivate) return
@@ -229,9 +205,7 @@ export default function CreatePage() {
               title: snapshot.title,
               status: snapshot.status,
               outputCount: snapshot.output_count,
-              model: snapshot.model,
               error: snapshot.error,
-              completedAt: snapshot.completed_at,
             }
           })
           .filter((job) => !(job.dismissed && isTerminalStatus(job.status))),
@@ -240,7 +214,6 @@ export default function CreatePage() {
       if (invalidate) {
         await queryClient.invalidateQueries({ queryKey: ['assets'] })
         await queryClient.invalidateQueries({ queryKey: ['generations'] })
-        await queryClient.invalidateQueries({ queryKey: ['billing'] })
         await queryClient.invalidateQueries({ queryKey: ['projects'] })
       }
     }, 1500)
@@ -248,19 +221,21 @@ export default function CreatePage() {
     return () => window.clearInterval(interval)
   }, [canLoadPrivate, generationToasts, queryClient])
 
+  useEffect(() => {
+    setModelPickerOpen(false)
+  }, [selectedModelId])
+
   const ensureProjectId = useCallback(async () => {
-    if (projectIdRef.current) return projectIdRef.current
+    if (resolvedProjectId) return resolvedProjectId
 
     if (!projectPromiseRef.current) {
-      const title = prompt.trim().split(/\s+/).slice(0, 6).join(' ') || 'Quick Create Session'
       projectPromiseRef.current = studioApi
         .createProject({
-          title: title.slice(0, 60),
-          description: 'Created from quick create',
+          title: 'New image set',
+          description: 'Created from Studio Create',
         })
         .then((project) => {
-          projectIdRef.current = project.id
-          setSessionProjectId(project.id)
+          setResolvedProjectId(project.id)
           return project.id
         })
         .finally(() => {
@@ -269,7 +244,7 @@ export default function CreatePage() {
     }
 
     return projectPromiseRef.current
-  }, [prompt])
+  }, [resolvedProjectId])
 
   const dismissToast = useCallback((jobId: string) => {
     setGenerationToasts((current) =>
@@ -283,6 +258,20 @@ export default function CreatePage() {
     )
   }, [])
 
+  const handleImprovePrompt = useCallback(async () => {
+    if (!prompt.trim()) return
+
+    setImproveState('working')
+    try {
+      const response = await studioApi.improvePrompt({ prompt })
+      setPrompt(response.prompt)
+      setImproveState(response.used_llm ? 'done' : 'fallback')
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Prompt could not be improved.')
+      setImproveState('idle')
+    }
+  }, [prompt])
+
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || !selectedModel) return
 
@@ -290,271 +279,171 @@ export default function CreatePage() {
     setSubmittingCount((value) => value + 1)
 
     try {
-      const targetProjectId = await ensureProjectId()
+      const projectId = await ensureProjectId()
       const generation = await studioApi.createGeneration({
-        project_id: targetProjectId,
+        project_id: projectId,
         prompt,
-        negative_prompt: negativePrompt,
-        model,
-        width,
-        height,
-        steps,
-        cfg_scale: cfgScale,
-        seed,
+        negative_prompt: '',
+        model: selectedModel.id,
+        width: activeAspect.width,
+        height: activeAspect.height,
+        steps: 28,
+        cfg_scale: 6.5,
+        seed: Math.floor(Math.random() * 1_000_000_000),
         aspect_ratio: aspectRatio,
-        output_count: outputCount,
+        output_count: 1,
       })
 
-      setGenerationToasts((current) => [mapGenerationToToast(generation, targetProjectId), ...current.filter((job) => job.id !== generation.job_id)])
-      setSeed(Math.floor(Math.random() * 1_000_000_000))
-
+      setGenerationToasts((current) => [mapGenerationToToast(generation, projectId), ...current.filter((job) => job.id !== generation.job_id)])
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
       await queryClient.invalidateQueries({ queryKey: ['assets'] })
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : 'Unable to generate image.')
+      setCreateError(error instanceof Error ? error.message : 'Generation could not be started.')
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
-  }, [aspectRatio, cfgScale, ensureProjectId, height, model, negativePrompt, outputCount, prompt, queryClient, seed, selectedModel, steps, width])
+  }, [activeAspect.height, activeAspect.width, aspectRatio, ensureProjectId, prompt, queryClient, selectedModel])
 
   if (isLoading) {
-    return <div className="px-6 py-12 text-sm text-zinc-400">Loading create...</div>
+    return <div className="px-6 py-10 text-sm text-zinc-500">Loading compose...</div>
   }
 
-  if (auth?.guest) {
+  if (!isAuthenticated || auth?.guest) {
     return (
-      <AppPage>
-        <PageHeader
-          eyebrow="Create"
-          title="Create"
-          description="Generate directly, then let your results land in Library automatically."
-          actions={
-            <>
-              <button
-                onClick={() => signInDemo('free', 'Omnia User')}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
-              >
-                Start free
-                <Sparkles className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => signInLocalOwner('', 'Omnia Owner')}
-                className="rounded-full bg-white/[0.04] px-5 py-3 text-sm text-white ring-1 ring-white/8 transition hover:bg-white/[0.08]"
-              >
-                Enter owner local mode
-              </button>
-            </>
-          }
-        />
-
-        <Surface tone="raised" className="max-w-4xl">
-          <div className="text-sm leading-7 text-zinc-300">
-            Create stays clean on purpose. Generate here, then review and organize everything from Library / My Images.
+      <AppPage className="max-w-[1040px] py-8">
+        <section className="px-2 py-8 md:px-4">
+          <h1 className="text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-400">Write the prompt, choose the model, pick the ratio, generate. The result lands in Library automatically.</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link to="/signup" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+              Start free
+            </Link>
+            <Link to="/login" className="rounded-full bg-white/[0.05] px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08]">
+              Log in
+            </Link>
           </div>
-        </Surface>
+        </section>
       </AppPage>
     )
   }
 
-  const ToolIcon = toolContent.icon
-
   return (
     <>
-      <AppPage className="max-w-[1360px] gap-5 py-5">
-        <PageHeader
-          eyebrow="Create"
-          title="Create"
-          description="Generate here. Review results in Library."
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <Link to="/library/images" className="inline-flex">
-                <ButtonChip>My Images</ButtonChip>
-              </Link>
-              {projectTitle && sessionProjectId ? (
-                <Link to={`/projects/${sessionProjectId}`} className="inline-flex">
-                  <ButtonChip>{projectTitle}</ButtonChip>
-                </Link>
-              ) : null}
-              <StatusPill tone="brand">{auth?.credits.remaining ?? 0} credits</StatusPill>
-              {runningJobs ? <StatusPill tone="brand">{runningJobs} running</StatusPill> : null}
-              {submittingCount ? <StatusPill tone="neutral">{submittingCount} starting</StatusPill> : null}
+      <AppPage className="h-full max-w-[1180px] py-4">
+        <section className="flex h-full min-h-0 flex-col px-2 py-2 md:px-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
+              <p className="mt-3 text-sm text-zinc-500">Prompt. Model. Ratio. Generate. Results land in Library.</p>
             </div>
-          }
-        />
+            <div className="flex items-center gap-2">
+              <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
+              {runningJobs ? <StatusPill tone="neutral">{runningJobs} running</StatusPill> : null}
+            </div>
+          </div>
 
-        <div className="min-w-0">
-          <Surface tone="raised" className="mx-auto max-w-[1040px]">
-              <SurfaceHeader
-                eyebrow={toolContent.label}
-                title={toolContent.title}
-                description="Write your prompt, choose a model, and generate."
-                actions={
-                  <div className="flex flex-wrap items-center gap-2">
-                    {projectTitle && sessionProjectId ? (
-                      <Link to={`/projects/${sessionProjectId}`} className="inline-flex">
-                        <ButtonChip>Open project</ButtonChip>
-                      </Link>
-                    ) : null}
-                  </div>
-                }
-              />
+          <div className="mt-8 flex min-h-0 flex-1 flex-col">
+            <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+              <div className="text-sm text-zinc-500">Prompt</div>
+              <button
+                onClick={handleImprovePrompt}
+                disabled={!prompt.trim() || improveState === 'working'}
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3.5 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Improve prompt
+              </button>
+            </div>
 
-              <div className="mt-6 rounded-[28px] bg-[#0f1013] p-5 ring-1 ring-white/[0.08]">
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.04] text-zinc-200 ring-1 ring-white/[0.08]">
-                    <ToolIcon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <textarea
-                      value={prompt}
-                      onChange={(event) => setPrompt(event.target.value)}
-                      rows={6}
-                      placeholder={toolContent.promptPlaceholder}
-                      className="w-full resize-none bg-transparent text-base leading-8 text-white outline-none placeholder:text-zinc-500"
-                    />
-                    <div className="mt-4 border-t border-white/[0.06] pt-4">
-                      <input
-                        value={negativePrompt}
-                        onChange={(event) => setNegativePrompt(event.target.value)}
-                        placeholder="Negative prompt"
-                        className="w-full bg-transparent text-sm text-zinc-300 outline-none placeholder:text-zinc-600"
-                      />
+            <textarea
+              value={prompt}
+              onChange={(event) => {
+                setPrompt(event.target.value)
+                if (improveState !== 'idle') setImproveState('idle')
+              }}
+              rows={9}
+              placeholder="Describe the image you want to generate..."
+              className="mt-4 min-h-[250px] w-full flex-1 resize-none bg-transparent text-[1.08rem] leading-8 text-white outline-none placeholder:text-zinc-500 md:min-h-[290px] md:text-[1.14rem]"
+            />
+
+            <div className="mt-6 border-t border-white/[0.06] pt-5">
+              <div className="flex flex-wrap items-center gap-3">
+                {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => (
+                  <button key={ratio} onClick={() => setAspectRatio(ratio)}>
+                    <ButtonChip active={aspectRatio === ratio}>
+                      {ratio} - {config.label}
+                    </ButtonChip>
+                  </button>
+                ))}
+
+                <div ref={modelPickerRef} className="relative">
+                  <button
+                    onClick={() => setModelPickerOpen((value) => !value)}
+                    className="inline-flex min-w-[240px] items-center justify-between gap-3 rounded-full bg-white/[0.05] px-4 py-3 text-left text-sm text-white transition hover:bg-white/[0.08]"
+                  >
+                      <div className="min-w-0">
+                      <div className="truncate font-medium">{selectedModel?.label ?? 'Select model'}</div>
+                      <div className="mt-0.5 text-xs text-zinc-500">{getModelCostLabel(selectedModel)}</div>
                     </div>
-                  </div>
-                </div>
-              </div>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
+                  </button>
 
-              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-zinc-600">Model</div>
-                    <div className="relative">
-                      <button
-                        onClick={() => setModelOpen((value) => !value)}
-                        className="flex w-full items-center justify-between rounded-[22px] bg-black/20 px-4 py-4 text-left ring-1 ring-white/[0.08] transition hover:bg-black/30"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-white">{selectedModel?.label ?? 'Select model'}</div>
-                          <div className="mt-1 text-xs text-zinc-500">
-                            {selectedModel?.runtime === 'local' ? 'Local checkpoint' : selectedModel?.description ?? 'Cloud model'}
-                          </div>
-                        </div>
-                        <ChevronDown className={`h-4 w-4 text-zinc-500 transition ${modelOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {modelOpen ? (
-                        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 overflow-hidden rounded-[22px] bg-[#111216] shadow-[0_24px_60px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08]">
-                          {availableModels.map((entry) => (
-                            <button
-                              key={entry.id}
-                              onClick={() => {
-                                setModel(entry.id)
-                                setModelOpen(false)
-                              }}
-                              className={`w-full px-4 py-3 text-left transition ${
-                                entry.id === model ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05]'
-                              }`}
-                            >
-                              <div className="text-sm font-medium">{entry.label}</div>
-                              <div className="mt-1 text-xs text-zinc-500">{entry.runtime === 'local' ? 'Local runtime' : entry.description}</div>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-zinc-600">Format</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => (
+                  {modelPickerOpen ? (
+                    <div className="absolute left-0 top-[calc(100%+10px)] z-20 w-[min(420px,calc(100vw-56px))] overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                      {models.slice(0, 6).map((entry) => {
+                        const active = entry.id === selectedModel?.id
+                        return (
                           <button
-                            key={ratio}
-                            onClick={() => {
-                              setAspectRatio(ratio)
-                              setWidth(config.width)
-                              setHeight(config.height)
-                            }}
+                            key={entry.id}
+                            onClick={() => setSelectedModelId(entry.id)}
+                            className={`flex w-full items-start justify-between gap-4 rounded-[18px] px-3.5 py-3 text-left transition ${
+                              active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
+                            }`}
                           >
-                            <div className={`rounded-[20px] px-4 py-3 text-left transition ${aspectRatio === ratio ? 'bg-white text-black' : 'bg-black/20 text-zinc-300 ring-1 ring-white/[0.08]'}`}>
-                              <div className="text-sm font-semibold">{ratio}</div>
-                              <div className={`mt-1 text-xs ${aspectRatio === ratio ? 'text-black/60' : 'text-zinc-500'}`}>{config.label}</div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
+                                <span className="truncate">{entry.label}</span>
+                              </div>
+                              <div className="mt-1 pl-[1.3rem] text-xs leading-5 text-zinc-500">{entry.description}</div>
+                            </div>
+                            <div className="shrink-0 text-right text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                              {entry.runtime === 'local' ? 'Local' : `${entry.credit_cost} cr`}
                             </div>
                           </button>
-                        ))}
-                      </div>
+                        )
+                      })}
                     </div>
-
-                    <div>
-                      <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-zinc-600">Variations</div>
-                      <div className="flex flex-wrap gap-2">
-                        {outputCountOptions.map((count) => (
-                          <button key={count} onClick={() => setOutputCount(count)}>
-                            <ButtonChip active={outputCount === count}>
-                              {count} output{count > 1 ? 's' : ''}
-                            </ButtonChip>
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                        <div className="rounded-[20px] bg-black/20 px-3 py-3 ring-1 ring-white/[0.08]">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Steps</div>
-                          <div className="mt-2 text-white">{steps}</div>
-                        </div>
-                        <div className="rounded-[20px] bg-black/20 px-3 py-3 ring-1 ring-white/[0.08]">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">CFG</div>
-                          <div className="mt-2 text-white">{cfgScale.toFixed(1)}</div>
-                        </div>
-                        <div className="rounded-[20px] bg-black/20 px-3 py-3 ring-1 ring-white/[0.08]">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Seed</div>
-                          <div className="mt-2 truncate text-white">{seed}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
 
-                <div className="rounded-[24px] bg-black/20 p-4 ring-1 ring-white/[0.08]">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Saved to</div>
-                  <div className="mt-3 text-sm font-medium text-white">Library / My Images</div>
-
-                  <div className="mt-4 space-y-2 text-sm text-zinc-300">
-                    <div className="flex items-center justify-between">
-                      <span>Tool</span>
-                      <span>{toolContent.label}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Variations</span>
-                      <span>{outputCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Credit cost</span>
-                      <span>{totalCredits}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleGenerate}
-                    disabled={!prompt.trim() || !selectedModel}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                    {submittingCount ? 'Starting...' : toolContent.actionLabel}
-                    <span className="inline-flex items-center gap-1 text-black/65">
-                      <Zap className="h-4 w-4" />
-                      {totalCredits}
-                    </span>
-                  </button>
-                </div>
+                <div className="text-sm text-zinc-500">{getModelCostSummary(selectedModel, activeAspect.width, activeAspect.height)}</div>
               </div>
 
-              {createError ? (
-                <div className="mt-4 rounded-[22px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{createError}</div>
-              ) : null}
-          </Surface>
-        </div>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-4">
+                  {improveState === 'done' ? <span className="text-xs text-emerald-200">Prompt improved.</span> : null}
+                  {improveState === 'fallback' ? <span className="text-xs text-zinc-400">Prompt tightened.</span> : null}
+                  <Link to="/library/images" className="text-sm text-white transition hover:text-zinc-200">
+                    Open My Images
+                  </Link>
+                </div>
+
+                <button
+                  onClick={handleGenerate}
+                  disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  {submittingCount ? 'Starting...' : 'Generate'}
+                </button>
+              </div>
+
+              {createError ? <div className="mt-4 text-sm text-rose-200">{createError}</div> : null}
+            </div>
+          </div>
+        </section>
       </AppPage>
 
       {visibleToasts.length ? (
@@ -585,7 +474,6 @@ export default function CreatePage() {
                 <StatusPill tone="neutral">
                   {job.outputCount} output{job.outputCount > 1 ? 's' : ''}
                 </StatusPill>
-                <StatusPill tone="neutral">{job.model}</StatusPill>
               </div>
 
               <div className="mt-4 flex items-center gap-3">
@@ -594,11 +482,9 @@ export default function CreatePage() {
                     Open My Images
                   </Link>
                 ) : null}
-                {job.projectId ? (
-                  <Link to={`/projects/${job.projectId}`} className="text-sm text-zinc-400 transition hover:text-white">
-                    Open project
-                  </Link>
-                ) : null}
+                <Link to={`/projects/${job.projectId}`} className="text-sm text-zinc-400 transition hover:text-white">
+                  Open project
+                </Link>
               </div>
             </div>
           ))}

@@ -1,8 +1,11 @@
 import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSession'
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+
 export type IdentityPlan = 'guest' | 'free' | 'pro'
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retryable_failed'
 export type CheckoutKind = 'pro_monthly' | 'top_up_small' | 'top_up_large'
+export type Visibility = 'public' | 'private'
 
 export type PlanInfo = {
   id: IdentityPlan
@@ -24,11 +27,20 @@ export type IdentityPayload = {
   id: string
   email: string
   display_name: string
+  username?: string | null
   plan: IdentityPlan
   workspace_id: string | null
   guest?: boolean
   owner_mode?: boolean
+  root_admin?: boolean
   local_access?: boolean
+  accepted_terms?: boolean
+  accepted_privacy?: boolean
+  accepted_usage_policy?: boolean
+  marketing_opt_in?: boolean
+  bio?: string
+  avatar_url?: string | null
+  default_visibility?: Visibility
 }
 
 export type AuthMeResponse = {
@@ -43,6 +55,38 @@ export type DemoLoginResponse = {
   refresh_token: string
   token_type: string
   identity: AuthMeResponse
+}
+
+export type PasswordAuthPayload = {
+  email: string
+  password: string
+}
+
+export type SignupPayload = PasswordAuthPayload & {
+  display_name?: string
+  username: string
+  accepted_terms: boolean
+  accepted_privacy: boolean
+  accepted_usage_policy: boolean
+  marketing_opt_in: boolean
+}
+
+export type PublicPlansPayload = {
+  plans: PlanInfo[]
+  top_ups: Array<{
+    kind: CheckoutKind
+    label: string
+    credits: number
+    price_usd: number
+    plan: IdentityPlan | null
+  }>
+  featured_plan: IdentityPlan
+}
+
+export type ImprovedPromptResponse = {
+  prompt: string
+  provider: string
+  used_llm: boolean
 }
 
 export type Project = {
@@ -105,10 +149,51 @@ export type MediaAsset = {
   prompt: string
   url: string
   thumbnail_url: string | null
-  local_path: string
   metadata: Record<string, unknown>
   created_at: string
   deleted_at: string | null
+}
+
+export type UsageSummary = {
+  plan_label: string
+  credits_remaining: number
+  allowance: number
+  reset_at: string | null
+  progress_percent: number
+}
+
+export type PublicPost = {
+  id: string
+  owner_username: string
+  owner_display_name: string
+  title: string
+  prompt: string
+  cover_asset: MediaAsset | null
+  preview_assets: MediaAsset[]
+  visibility: Visibility
+  like_count: number
+  viewer_has_liked: boolean
+  created_at: string
+  project_id: string
+  style_tags: string[]
+}
+
+export type ProfileSummary = {
+  display_name: string
+  username: string
+  avatar_url: string | null
+  bio: string
+  plan: IdentityPlan
+  default_visibility: Visibility
+  usage_summary: UsageSummary | null
+  public_post_count: number
+}
+
+export type ProfilePayload = {
+  profile: ProfileSummary
+  posts: PublicPost[]
+  own_profile: boolean
+  can_edit: boolean
 }
 
 export type ChatAttachment = {
@@ -162,7 +247,6 @@ export type ModelCatalogEntry = {
   owner_only: boolean
   provider_hint: string | null
   source_id?: string | null
-  source_path?: string | null
   license_reference?: string | null
 }
 
@@ -171,10 +255,15 @@ export type LocalRuntimeSummary = {
   available: boolean
   status: string
   detail: string
-  url: string
-  model_directory: string
+  url?: string
+  model_directory?: string
   discovered_models: number
-  models: string[]
+  models?: string[]
+}
+
+export type OwnerLocalLabBootstrap = {
+  runtime: LocalRuntimeSummary
+  models: ModelCatalogEntry[]
 }
 
 export type HealthProvider = {
@@ -235,10 +324,15 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`/v1${path}`, {
-    ...init,
-    headers,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/v1${path}`, {
+      ...init,
+      headers,
+    })
+  } catch {
+    throw new Error('Studio service is offline right now. Try again in a moment.')
+  }
 
   if (!response.ok) {
     if (response.status === 401 && token) {
@@ -253,6 +347,21 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const studioApi = {
   getMe: () => apiFetch<AuthMeResponse>('/auth/me'),
+  signUp: (payload: SignupPayload) =>
+    apiFetch<DemoLoginResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  signIn: (payload: PasswordAuthPayload) =>
+    apiFetch<DemoLoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  improvePrompt: (payload: { prompt: string }) =>
+    apiFetch<ImprovedPromptResponse>('/prompts/improve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   demoLogin: (plan: IdentityPlan = 'free', displayName = 'Creator') =>
     apiFetch<DemoLoginResponse>('/auth/demo-login', {
       method: 'POST',
@@ -260,15 +369,6 @@ export const studioApi = {
         email: `${displayName.replace(/\s+/g, '.').toLowerCase() || 'creator'}@omnia.local`,
         display_name: displayName,
         plan,
-      }),
-    }),
-  localOwnerLogin: (ownerKey = '', displayName = 'Omnia Owner') =>
-    apiFetch<DemoLoginResponse>('/auth/local-owner-login', {
-      method: 'POST',
-      body: JSON.stringify({
-        owner_key: ownerKey,
-        display_name: displayName,
-        email: 'owner@omnia.local',
       }),
     }),
   listProjects: () => apiFetch<{ projects: Project[] }>('/projects'),
@@ -310,8 +410,17 @@ export const studioApi = {
     const suffix = params.toString() ? `?${params.toString()}` : ''
     return apiFetch<{ assets: MediaAsset[] }>(`/assets${suffix}`)
   },
+  renameAsset: (assetId: string, payload: { title: string }) =>
+    apiFetch<MediaAsset>(`/assets/${assetId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   trashAsset: (assetId: string) => apiFetch<MediaAsset>(`/assets/${assetId}`, { method: 'DELETE' }),
   restoreAsset: (assetId: string) => apiFetch<MediaAsset>(`/assets/${assetId}/restore`, { method: 'POST' }),
+  permanentlyDeleteAsset: (assetId: string) =>
+    apiFetch<{ asset_id: string; status: string }>(`/assets/${assetId}/permanent`, { method: 'DELETE' }),
+  emptyTrash: () => apiFetch<{ status: string; deleted_count: number }>('/assets/trash/empty', { method: 'POST' }),
+  updateProject: (projectId: string, payload: { title: string; description?: string }) =>
+    apiFetch<Project>(`/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteProject: (projectId: string) =>
+    apiFetch<{ project_id: string; status: string }>(`/projects/${projectId}`, { method: 'DELETE' }),
   listModels: () => apiFetch<{ models: ModelCatalogEntry[] }>('/models'),
   listPresets: () => apiFetch<{ presets: PresetEntry[] }>('/presets'),
   getBillingSummary: () => apiFetch<BillingSummary>('/billing/summary'),
@@ -331,6 +440,22 @@ export const studioApi = {
       presets: PresetEntry[]
       local_runtime: LocalRuntimeSummary
     }>('/settings/bootstrap'),
+  getOwnerLocalLabBootstrap: () => apiFetch<OwnerLocalLabBootstrap>('/owner/local-lab/bootstrap'),
   getHealth: () => apiFetch<HealthResponse>('/healthz'),
   getHealthDetail: () => apiFetch<HealthResponse>('/healthz/detail'),
+  getPublicPlans: () => apiFetch<PublicPlansPayload>('/public/plans'),
+  listPublicPosts: (sort: 'trending' | 'newest' | 'top' | 'styles' = 'trending') =>
+    apiFetch<{ posts: PublicPost[] }>(`/public/posts?sort=${encodeURIComponent(sort)}`),
+  likePost: (postId: string) => apiFetch<{ post: PublicPost }>(`/posts/${postId}/like`, { method: 'POST' }),
+  unlikePost: (postId: string) => apiFetch<{ post: PublicPost }>(`/posts/${postId}/like`, { method: 'DELETE' }),
+  updatePost: (postId: string, payload: { title?: string; visibility?: Visibility }) =>
+    apiFetch<{ post: PublicPost }>(`/posts/${postId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  movePost: (postId: string, payload: { project_id: string }) =>
+    apiFetch<{ post: PublicPost }>(`/posts/${postId}/move`, { method: 'POST', body: JSON.stringify(payload) }),
+  trashPost: (postId: string) =>
+    apiFetch<{ post_id: string; trashed_count: number }>(`/posts/${postId}/trash`, { method: 'POST' }),
+  getProfile: (username: string) => apiFetch<ProfilePayload>(`/profiles/${encodeURIComponent(username)}`),
+  getMyProfile: () => apiFetch<ProfilePayload>('/profiles/me'),
+  updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>
+    apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 }

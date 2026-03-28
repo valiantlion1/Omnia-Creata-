@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   PanelLeft,
   PenSquare,
+  LogOut,
   Settings,
   Sparkles,
   SwatchBook,
@@ -24,8 +25,10 @@ import {
   X,
 } from 'lucide-react'
 
+import { LegalFooter } from '@/components/StudioPrimitives'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { useNavigate } from 'react-router-dom'
 
 type NavItem = {
   to: string
@@ -44,7 +47,7 @@ type NavChild = {
 
 const primaryNav: NavItem[] = [
   { to: '/explore', label: 'Explore', icon: Compass, aliases: ['/community'] },
-  { to: '/create', label: 'Create', icon: Sparkles, aliases: ['/projects'] },
+  { to: '/create', label: 'Compose', icon: Sparkles, aliases: ['/projects'] },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
@@ -58,8 +61,7 @@ const libraryNav: NavItem[] = [
 const elementsNav: NavItem[] = [{ to: '/elements/styles', label: 'Styles', icon: SwatchBook, aliases: ['/elements'] }]
 
 const utilityNav: NavItem[] = [
-  { to: '/learn', label: 'Learn', icon: BookOpen },
-  { to: '/account', label: 'My Account', icon: UserCircle2 },
+  { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/usage-policy', '/learn'] },
   { to: '/subscription', label: 'Subscription', icon: CreditCard, aliases: ['/billing', '/plan'] },
   { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'], expandOnMainClick: true },
 ]
@@ -211,10 +213,12 @@ function Section({
 
 export default function StudioShell({ children }: { children: ReactNode }) {
   const location = useLocation()
-  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
+  const navigate = useNavigate()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading, signOut } = useStudioAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+  const [identityPaneOpen, setIdentityPaneOpen] = useState(false)
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
   useEffect(() => {
@@ -229,15 +233,24 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const next: Record<string, boolean> = {}
     if (location.pathname.startsWith('/chat')) next['/chat'] = true
-    if (location.pathname.startsWith('/create') || location.pathname.startsWith('/projects/')) next['/create'] = true
     if (location.pathname.startsWith('/settings')) next['/settings'] = true
     if (!Object.keys(next).length) return
     setExpandedItems((current) => ({ ...next, ...current }))
   }, [location.pathname])
 
+  useEffect(() => {
+    setIdentityPaneOpen(false)
+  }, [location.pathname, location.search])
+
   const conversationsQuery = useQuery({
     queryKey: ['conversations', 'sidebar'],
     queryFn: () => studioApi.listConversations(),
+    enabled: canLoadPrivate,
+  })
+
+  const profileQuery = useQuery({
+    queryKey: ['profile', 'sidebar-me'],
+    queryFn: () => studioApi.getMyProfile(),
     enabled: canLoadPrivate,
   })
 
@@ -255,18 +268,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     )
   }, [conversationsQuery.data])
 
-  const createChildren = useMemo<NavChild[]>(
-    () => [
-      { to: '/create?tool=image', label: 'Image', icon: Sparkles, kind: 'action' },
-      { to: '/create?tool=edit', label: 'Edit', icon: PenSquare, kind: 'action' },
-      { to: '/create?tool=inpaint', label: 'Inpaint', icon: ImageIcon, kind: 'action' },
-    ],
-    [],
-  )
+  const usageSummary = profileQuery.data?.profile.usage_summary
+  const usagePercent = usageSummary ? Math.max(0, 100 - usageSummary.progress_percent) : 0
 
   const getItemChildren = (item: NavItem) => {
     if (item.to === '/chat') return chatChildren
-    if (item.to === '/create') return createChildren
     return []
   }
 
@@ -301,7 +307,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
         <Link
-          to="/docs#faq"
+          to="/help#faq"
           onClick={() => setMobileOpen(false)}
           className="mt-2 block rounded-2xl bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
         >
@@ -316,6 +322,13 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     if (!expandable) return
     setExpandedItems((current) => ({ ...current, [item.to]: !current[item.to] }))
     setMobileOpen(false)
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    setMobileOpen(false)
+    setIdentityPaneOpen(false)
+    navigate('/landing')
   }
 
   const rail = (collapsed: boolean) => (
@@ -358,48 +371,96 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         <Section title="Utility" items={utilityNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      <div className="border-t border-white/[0.015] p-3">
-        <div className={`rounded-[20px] border border-white/[0.06] bg-[#15161a] ${collapsed ? 'p-2.5' : 'px-3.5 py-3'}`}>
-          {collapsed ? (
-            <div className="space-y-2">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.05] text-sm font-semibold text-white">
-                {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
+      <div className="relative border-t border-white/[0.015] p-3">
+        {identityPaneOpen ? (
+          <div
+            className={`absolute bottom-full z-20 mb-3 bg-[#111216] shadow-[0_28px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/[0.08] ${
+              collapsed ? 'left-3 w-[220px] rounded-[22px] p-3' : 'left-3 right-3 rounded-[24px] p-4'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}</div>
+                <div className="mt-1 text-xs text-zinc-500">@{auth?.identity.username ?? 'guest'} / {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}</div>
               </div>
-              <Link
-                to="/account"
-                title="Open account"
-                className="flex h-10 items-center justify-center rounded-2xl bg-black/20 text-sm font-semibold text-white ring-1 ring-white/[0.06] transition hover:bg-black/30"
-              >
-                {auth?.credits.remaining ?? 0}
-              </Link>
+              <div className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-200 ring-1 ring-white/[0.06]">
+                {usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits
+              </div>
             </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
+            {usageSummary ? (
+              <div className="mt-4 space-y-2">
+                <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                  <div className="h-full rounded-full bg-white" style={{ width: `${usagePercent}%` }} />
+                </div>
+                <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                  <span>{usageSummary.allowance} monthly allowance</span>
+                  <span>{new Date(usageSummary.reset_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Link to="/account" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                Profile
+              </Link>
+              <Link to="/subscription" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                Subscription
+              </Link>
+              <Link to="/settings" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                Settings
+              </Link>
+              <button onClick={handleSignOut} className="rounded-full px-3 py-2 text-[12px] text-rose-300 transition hover:bg-rose-500/[0.08] hover:text-rose-200">
+                Log out
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-3'}`}>
+          <Link
+            to="/account"
+            className={`min-w-0 flex-1 rounded-full px-2.5 py-2 transition hover:bg-white/[0.04] ${collapsed ? 'flex h-11 w-11 items-center justify-center bg-white/[0.05]' : 'flex items-center gap-3'}`}
+            title="Open profile"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-sm font-semibold text-white">
+              {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
+            </div>
+            {!collapsed ? (
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-white">{auth?.identity.display_name ?? 'Guest'}</div>
-                <div className="mt-0.5 text-xs text-zinc-500">{auth?.guest ? 'Guest' : auth?.plan.label ?? 'Free'}</div>
+                <div className="mt-0.5 text-xs text-zinc-500">
+                  {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'} / {usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits
+                </div>
               </div>
-              <Link to="/account" className="rounded-full bg-black/20 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-white/[0.06] transition hover:bg-black/30">
-                {auth?.credits.remaining ?? 0}
-              </Link>
-            </div>
-          )}
+            ) : null}
+          </Link>
+          <button
+            onClick={() => setIdentityPaneOpen((value) => !value)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.04] hover:text-white"
+            title={identityPaneOpen ? 'Hide account panel' : 'Show account panel'}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </>
   )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0b0b0d] text-white">
+    <div className="relative flex h-screen overflow-hidden bg-[#0b0b0d] text-white">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-8%] top-[-14%] h-[26rem] w-[26rem] rounded-full bg-sky-300/[0.05] blur-[150px] animate-[oc-gradientShift_24s_ease-in-out_infinite]" />
+        <div className="absolute right-[-6%] top-[8%] h-[24rem] w-[24rem] rounded-full bg-cyan-300/[0.04] blur-[150px] animate-[oc-gradientShiftB_28s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-18%] left-[22%] h-[26rem] w-[26rem] rounded-full bg-indigo-300/[0.04] blur-[180px] animate-[oc-float_22s_ease-in-out_infinite]" />
+      </div>
       <aside
-        className={`relative hidden shrink-0 overflow-visible bg-[#101114] shadow-[inset_-1px_0_0_rgba(255,255,255,0.012)] transition-[width] duration-300 ease-out lg:flex lg:flex-col ${
+        className={`relative z-10 hidden shrink-0 overflow-visible bg-[#101114]/92 shadow-[inset_-1px_0_0_rgba(255,255,255,0.012)] backdrop-blur-xl transition-[width] duration-300 ease-out lg:flex lg:flex-col ${
           desktopCollapsed ? 'w-[84px]' : 'w-[252px]'
         }`}
       >
         {rail(desktopCollapsed)}
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-30 border-b border-white/[0.02] bg-[#0d0e11]/92 px-4 py-3 backdrop-blur-xl md:px-5 lg:hidden">
           <div className="flex items-center gap-3">
             <button
@@ -413,12 +474,15 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(88,92,120,0.1),transparent_24%),#0b0b0d]">
-            {children}
+            <div className="flex min-h-full flex-col">
+              <div className="flex-1">{children}</div>
+              <LegalFooter className="mx-auto w-full max-w-[1520px] px-4 pb-6 md:px-5 xl:px-6" />
+            </div>
           </main>
         </div>
 
         <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-white/[0.04] bg-[#0d0e11]/95 backdrop-blur-xl lg:hidden">
-          {[primaryNav[0], primaryNav[1], primaryNav[2], libraryNav[0], utilityNav[3]].map((item) => {
+          {[primaryNav[0], primaryNav[1], primaryNav[2], libraryNav[0], { to: '/account', label: 'Profile', icon: UserCircle2 }].map((item) => {
             const Icon = item.icon
             const active = isActive(location.pathname, item)
             return (
@@ -464,6 +528,44 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               <Section title="Library" items={libraryNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
               <Section title="Elements" items={elementsNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
               <Section title="Utility" items={utilityNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
+            </div>
+            <div className="border-t border-white/[0.02] px-4 py-3">
+              {identityPaneOpen ? (
+                <div className="mb-3 rounded-[22px] bg-white/[0.03] p-3 ring-1 ring-white/[0.06]">
+                  <div className="text-sm font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    @{auth?.identity.username ?? 'guest'} / {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                    <div className="h-full rounded-full bg-white" style={{ width: `${usagePercent}%` }} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                    <span>{usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits</span>
+                    {usageSummary?.reset_at ? <span>{new Date(usageSummary.reset_at).toLocaleDateString()}</span> : null}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link to="/account" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                      Profile
+                    </Link>
+                    <Link to="/subscription" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                      Subscription
+                    </Link>
+                    <Link to="/settings" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                      Settings
+                    </Link>
+                    <button onClick={handleSignOut} className="rounded-full px-3 py-2 text-[12px] text-rose-300">
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <button
+                onClick={() => setIdentityPaneOpen((value) => !value)}
+                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-300 transition hover:text-white"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                Profile and usage
+              </button>
             </div>
           </aside>
         </div>

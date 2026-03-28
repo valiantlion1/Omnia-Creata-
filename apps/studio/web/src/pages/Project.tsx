@@ -8,7 +8,7 @@ import { studioApi } from '@/lib/studioApi'
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
-  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const [shareMessage, setShareMessage] = useState('')
 
@@ -42,7 +42,7 @@ export default function ProjectPage() {
           description="Your images, history, and share links stay tied to your account, so guest mode only previews the shell."
           action={
             <button
-              onClick={() => signInDemo('free', 'Omnia User')}
+              onClick={() => window.location.assign('/signup')}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
             >
               Continue with free access
@@ -95,7 +95,7 @@ export default function ProjectPage() {
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
               <h2 className="mt-2 text-xl font-semibold text-white">The project surface is now fed by real stored assets.</h2>
             </div>
-            <Link to="/library" className="text-sm text-zinc-300 transition hover:text-white">
+            <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
               Open library
             </Link>
           </div>
@@ -123,7 +123,7 @@ export default function ProjectPage() {
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Generation history</div>
               <h2 className="mt-2 text-xl font-semibold text-white">Every run keeps its prompt snapshot attached.</h2>
             </div>
-            <Link to="/history" className="text-sm text-zinc-300 transition hover:text-white">
+            <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
               View all
             </Link>
           </div>

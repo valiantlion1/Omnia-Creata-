@@ -165,7 +165,7 @@ function PendingVisualCard({ mode, title }: { mode: ComposeMode; title: string }
 export default function ChatPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { auth, isAuthenticated, isAuthSyncing, isLoading, signInDemo } = useStudioAuth()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const [searchParams] = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -520,7 +520,7 @@ export default function ChatPage() {
 
           {auth?.guest ? (
             <button
-              onClick={() => signInDemo('free', 'Omnia User')}
+              onClick={() => navigate('/signup')}
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
             >
               Start free

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
     "@tanstack/react-query": "^5.58.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

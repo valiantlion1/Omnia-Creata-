@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def utc_now() -> datetime:
@@ -16,6 +16,11 @@ class IdentityPlan(str, Enum):
     GUEST = "guest"
     FREE = "free"
     PRO = "pro"
+
+
+class Visibility(str, Enum):
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 
 class SubscriptionStatus(str, Enum):
@@ -56,10 +61,19 @@ class OmniaIdentity(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     email: str
     display_name: str = "Creator"
+    username: Optional[str] = None
     plan: IdentityPlan = IdentityPlan.FREE
     guest: bool = False
     owner_mode: bool = False
+    root_admin: bool = False
     local_access: bool = False
+    accepted_terms: bool = False
+    accepted_privacy: bool = False
+    accepted_usage_policy: bool = False
+    marketing_opt_in: bool = False
+    bio: str = ""
+    avatar_url: Optional[str] = None
+    default_visibility: Visibility = Visibility.PUBLIC
     workspace_id: str = Field(default_factory=lambda: str(uuid4()))
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE
     monthly_credits_remaining: int = 60
@@ -94,7 +108,26 @@ class ChatAttachment(BaseModel):
     kind: str = "image"
     url: str
     asset_id: Optional[str] = None
-    label: str = ""
+    label: str = Field(default="", max_length=120)
+
+    @field_validator("kind")
+    @classmethod
+    def validate_kind(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"image", "file"}:
+            raise ValueError("Unsupported attachment kind")
+        return normalized
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        url = value.strip()
+        allowed_prefixes = ("data:", "https://", "http://", "/v1/assets/")
+        if not url.startswith(allowed_prefixes):
+            raise ValueError("Unsupported attachment URL")
+        if len(url) > 5_000_000:
+            raise ValueError("Attachment payload is too large")
+        return url
 
 
 class ChatSuggestedAction(BaseModel):
@@ -178,10 +211,28 @@ class MediaAsset(BaseModel):
     prompt: str
     url: str
     thumbnail_url: Optional[str] = None
-    local_path: str
+    local_path: str = Field(default="", repr=False)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
     deleted_at: Optional[datetime] = None
+
+
+class PublicPost(BaseModel):
+    id: str
+    workspace_id: str
+    project_id: str
+    identity_id: str
+    owner_username: str
+    owner_display_name: str
+    title: str
+    prompt: str
+    cover_asset_id: Optional[str] = None
+    asset_ids: List[str] = Field(default_factory=list)
+    visibility: Visibility = Visibility.PUBLIC
+    style_tags: List[str] = Field(default_factory=list)
+    liked_by: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class CreditLedgerEntry(BaseModel):
@@ -219,7 +270,7 @@ class ModelCatalogEntry(BaseModel):
     owner_only: bool = False
     provider_hint: Optional[str] = None
     source_id: Optional[str] = None
-    source_path: Optional[str] = None
+    source_path: Optional[str] = Field(default=None, exclude=True, repr=False)
     license_reference: Optional[str] = None
 
 
@@ -241,5 +292,6 @@ class StudioState(BaseModel):
     chat_messages: Dict[str, ChatMessage] = Field(default_factory=dict)
     generations: Dict[str, GenerationJob] = Field(default_factory=dict)
     assets: Dict[str, MediaAsset] = Field(default_factory=dict)
+    posts: Dict[str, PublicPost] = Field(default_factory=dict)
     shares: Dict[str, ShareLink] = Field(default_factory=dict)
     credit_ledger: Dict[str, CreditLedgerEntry] = Field(default_factory=dict)

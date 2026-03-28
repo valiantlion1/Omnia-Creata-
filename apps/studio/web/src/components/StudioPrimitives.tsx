@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
+import { Link } from 'react-router-dom'
 
 export function AppPage({
   children,
@@ -191,4 +192,28 @@ export function StatusPill({
   }
 
   return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone])}>{children}</span>
+}
+
+export function LegalFooter({ className }: { className?: string }) {
+  return (
+    <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>OmniaCreata TM 2026</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link to="/help#terms" className="transition hover:text-white">
+            Terms
+          </Link>
+          <Link to="/help#privacy" className="transition hover:text-white">
+            Privacy
+          </Link>
+          <Link to="/help#usage-policy" className="transition hover:text-white">
+            Usage Policy
+          </Link>
+          <Link to="/help#faq" className="transition hover:text-white">
+            FAQ
+          </Link>
+        </div>
+      </div>
+    </footer>
+  )
 }

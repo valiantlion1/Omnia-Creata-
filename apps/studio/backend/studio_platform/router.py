@@ -1,36 +1,64 @@
 from __future__ import annotations
-
-import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, ConfigDict, Field
 
-from security.auth import User, UserRole, create_user_tokens, get_current_user
+from config.env import get_settings
+from security.auth import User, UserRole, create_user_tokens, get_current_user, get_supabase_auth_client
 from security.auth import User as AuthUser
+from security.rate_limit import RateLimiter
+from security.supabase_auth import SupabaseAuthError
 
-from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan
+from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
 from .service import PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
 class DemoLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: str = Field(default="creator@omnia.local")
     display_name: str = Field(default="Creator")
     plan: IdentityPlan = Field(default=IdentityPlan.FREE)
 
 
 class ProjectCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     title: str
     description: str = ""
 
 
-class LocalOwnerLoginRequest(BaseModel):
-    owner_key: str = ""
-    display_name: str = Field(default="Omnia Owner")
-    email: str = Field(default="owner@omnia.local")
+class ProjectUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str
+    description: str = ""
+
+
+class SupabaseSignupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=8, max_length=256)
+    display_name: str = Field(default="Omnia User", max_length=120)
+    username: str = Field(min_length=3, max_length=32)
+    accepted_terms: bool
+    accepted_privacy: bool
+    accepted_usage_policy: bool
+    marketing_opt_in: bool = False
+
+
+class SupabaseLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=8, max_length=256)
+
+
+class PromptImproveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prompt: str = Field(min_length=1, max_length=1600)
 
 
 class GenerationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     project_id: str
     prompt: str = Field(min_length=1, max_length=1600)
     negative_prompt: str = ""
@@ -45,50 +73,70 @@ class GenerationCreateRequest(BaseModel):
 
 
 class ShareCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     project_id: Optional[str] = None
     asset_id: Optional[str] = None
 
 
 class BillingCheckoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     kind: CheckoutKind
 
 
 class ConversationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     title: str = ""
     model: str = "studio-assist"
 
 
 class ChatMessageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1, max_length=2400)
     model: Optional[str] = None
-    attachments: list[ChatAttachment] = Field(default_factory=list)
+    attachments: list[ChatAttachment] = Field(default_factory=list, max_length=4)
 
 
-def create_router(service: StudioService) -> APIRouter:
+class AssetRenameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=72)
+
+
+class PostUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: Optional[str] = Field(default=None, min_length=1, max_length=72)
+    visibility: Optional[Visibility] = None
+
+
+class PostMoveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    bio: Optional[str] = Field(default=None, max_length=220)
+    default_visibility: Optional[Visibility] = None
+
+
+def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRouter:
     router = APIRouter(prefix="/v1", tags=["studio"])
+    settings = get_settings()
 
     def _require_auth(auth_user: Optional[AuthUser]) -> AuthUser:
         if auth_user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
         return auth_user
 
-    def _serialize_generation(job: GenerationJob) -> dict:
-        return {
-            "job_id": job.id,
-            "title": job.title,
-            "status": job.status.value,
-            "project_id": job.project_id,
-            "provider": job.provider,
-            "model": job.model,
-            "prompt_snapshot": job.prompt_snapshot.model_dump(mode="json"),
-            "estimated_cost": job.estimated_cost,
-            "credit_cost": job.credit_cost,
-            "output_count": job.output_count,
-            "outputs": [output.model_dump(mode="json") for output in job.outputs],
-            "error": job.error,
-            "created_at": job.created_at.isoformat(),
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-        }
+    async def _require_owner(auth_user: Optional[AuthUser]) -> AuthUser:
+        current = _require_auth(auth_user)
+        metadata = getattr(current, "metadata", {}) or {}
+        if current.role != UserRole.ADMIN and not metadata.get("owner_mode"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
+        return current
+
+    def _serialize_generation(job: GenerationJob, identity_id: str) -> dict:
+        return service.serialize_generation_for_identity(job, identity_id)
 
     def _serialize_conversation(conversation: ChatConversation) -> dict:
         return {
@@ -115,15 +163,30 @@ def create_router(service: StudioService) -> APIRouter:
             "created_at": message.created_at.isoformat(),
         }
 
-    def _is_local_request(request: Request) -> bool:
-        client_host = request.client.host if request.client else ""
-        forwarded_for = request.headers.get("x-forwarded-for", "")
-        forwarded_host = forwarded_for.split(",")[0].strip() if forwarded_for else ""
-        local_hosts = {"127.0.0.1", "::1", "localhost", "testclient"}
-        return client_host in local_hosts or forwarded_host in local_hosts
+    def _build_client_key(request: Request, scope: str, identifier: Optional[str] = None) -> str:
+        client_host = request.client.host if request.client else "unknown"
+        return f"{scope}:{identifier or client_host}"
+
+    async def _consume_rate_limit(request: Request, scope: str, limit: int, identifier: Optional[str] = None) -> None:
+        decision = await rate_limiter.check(_build_client_key(request, scope, identifier), limit=limit)
+        if decision.allowed:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please slow down and try again.",
+            headers={
+                "Retry-After": str(decision.retry_after),
+                "X-RateLimit-Limit": str(decision.limit),
+                "X-RateLimit-Remaining": str(decision.remaining),
+                "X-RateLimit-Reset": str(decision.retry_after),
+            },
+        )
 
     @router.post("/auth/demo-login")
-    async def demo_login(payload: DemoLoginRequest):
+    async def demo_login(payload: DemoLoginRequest, request: Request):
+        if not settings.enable_demo_auth:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Demo auth is disabled")
+        await _consume_rate_limit(request, "auth:demo-login", limit=8)
         demo_user = User(
             id=payload.email.lower(),
             email=payload.email.lower(),
@@ -145,52 +208,126 @@ def create_router(service: StudioService) -> APIRouter:
         }
 
     @router.post("/auth/local-owner-login")
-    async def local_owner_login(payload: LocalOwnerLoginRequest, request: Request):
-        if not _is_local_request(request):
+    async def local_owner_login():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Local owner bypass has been removed. Use an approved admin account instead.",
+        )
+
+    @router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+    async def signup(payload: SupabaseSignupRequest, request: Request):
+        await _consume_rate_limit(request, "auth:signup", limit=8)
+        if not (payload.accepted_terms and payload.accepted_privacy and payload.accepted_usage_policy):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Local owner login is only available from this machine.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Terms, privacy, and usage policy must be accepted.",
             )
+        supabase_client = get_supabase_auth_client()
+        if supabase_client is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
 
-        expected_key = os.getenv("STUDIO_OWNER_KEY", "").strip()
-        if expected_key and payload.owner_key.strip() != expected_key:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner key mismatch")
+        try:
+            session = await supabase_client.sign_up(
+                email=payload.email.strip().lower(),
+                password=payload.password,
+                display_name=payload.display_name.strip() or "Omnia User",
+                username=payload.username.strip().lower(),
+                accepted_terms=payload.accepted_terms,
+                accepted_privacy=payload.accepted_privacy,
+                accepted_usage_policy=payload.accepted_usage_policy,
+                marketing_opt_in=payload.marketing_opt_in,
+            )
+        except SupabaseAuthError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-        owner_email = (payload.email or os.getenv("STUDIO_OWNER_EMAIL") or "owner@omnia.local").lower()
-        owner_name = payload.display_name or os.getenv("STUDIO_OWNER_NAME") or "Omnia Owner"
-        owner_user = User(
-            id=owner_email,
-            email=owner_email,
-            username=owner_name,
-            role=UserRole.ADMIN,
-            is_active=True,
-            is_verified=True,
-            metadata={"owner_mode": True, "local_access": True},
+        user_data = session.user
+        user_metadata = user_data.get("user_metadata") or {}
+        display_name = (
+            user_metadata.get("display_name")
+            or payload.display_name.strip()
+            or payload.email.split("@")[0]
+            or "Omnia User"
         )
         identity = await service.ensure_identity(
-            user_id=owner_user.id,
-            email=owner_user.email,
-            display_name=owner_name,
-            desired_plan=IdentityPlan.PRO,
-            owner_mode=True,
-            local_access=True,
+            user_id=user_data["id"],
+            email=user_data.get("email", payload.email.strip().lower()),
+            display_name=display_name,
+            username=(user_metadata.get("username") or payload.username).strip().lower(),
+            desired_plan=IdentityPlan.FREE,
+            accepted_terms=bool(user_metadata.get("accepted_terms", payload.accepted_terms)),
+            accepted_privacy=bool(user_metadata.get("accepted_privacy", payload.accepted_privacy)),
+            accepted_usage_policy=bool(user_metadata.get("accepted_usage_policy", payload.accepted_usage_policy)),
+            marketing_opt_in=bool(user_metadata.get("marketing_opt_in", payload.marketing_opt_in)),
         )
         return {
-            **create_user_tokens(owner_user),
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
+            "token_type": session.token_type,
             "identity": service.serialize_identity(identity),
         }
 
+    @router.post("/auth/login")
+    async def login(payload: SupabaseLoginRequest, request: Request):
+        await _consume_rate_limit(request, "auth:login", limit=12)
+        supabase_client = get_supabase_auth_client()
+        if supabase_client is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
+
+        try:
+            session = await supabase_client.sign_in(
+                email=payload.email.strip().lower(),
+                password=payload.password,
+            )
+        except SupabaseAuthError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+
+        user_data = session.user
+        user_metadata = user_data.get("user_metadata") or {}
+        display_name = (
+            user_metadata.get("display_name")
+            or user_data.get("email", payload.email.strip().lower()).split("@")[0]
+            or "Omnia User"
+        )
+        identity = await service.ensure_identity(
+            user_id=user_data["id"],
+            email=user_data.get("email", payload.email.strip().lower()),
+            display_name=display_name,
+            username=(user_metadata.get("username") or user_data.get("email", "").split("@")[0]).strip().lower(),
+            desired_plan=IdentityPlan.FREE,
+            accepted_terms=bool(user_metadata.get("accepted_terms")),
+            accepted_privacy=bool(user_metadata.get("accepted_privacy")),
+            accepted_usage_policy=bool(user_metadata.get("accepted_usage_policy")),
+            marketing_opt_in=bool(user_metadata.get("marketing_opt_in")),
+        )
+        return {
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
+            "token_type": session.token_type,
+            "identity": service.serialize_identity(identity),
+        }
+
+    @router.get("/public/plans")
+    async def get_public_plans():
+        return service.get_public_plan_payload()
+
     @router.get("/auth/me")
-    async def get_me(current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def get_me(request: Request, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        if current_user is None:
+            has_auth_header = bool(request.headers.get("authorization") or request.headers.get("x-api-key"))
+            if has_auth_header:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
         return await service.get_public_identity(current_user)
 
     @router.get("/healthz")
     async def healthz():
-        return await service.health(detail=False)
+        payload = await service.health(detail=False)
+        return service.serialize_health_payload(payload, detail=False)
 
     @router.get("/healthz/detail")
-    async def healthz_detail():
-        return await service.health(detail=True)
+    async def healthz_detail(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        await _require_owner(current_user)
+        payload = await service.health(detail=True)
+        return service.serialize_health_payload(payload, detail=True)
 
     @router.get("/models")
     async def get_models(current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -200,7 +337,34 @@ def create_router(service: StudioService) -> APIRouter:
                 identity = await service.get_identity(current_user.id)
             except KeyError:
                 identity = None
-        return {"models": [model.model_dump(mode="json") for model in await service.list_models_for_identity(identity)]}
+        include_local_owner = bool(identity and identity.owner_mode and identity.local_access)
+        return {
+            "models": [
+                model.model_dump(mode="json")
+                for model in await service.list_models_for_identity(identity, include_local_owner=include_local_owner)
+            ]
+        }
+
+    @router.post("/prompts/improve")
+    async def improve_prompt(
+        payload: PromptImproveRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "prompt:improve", limit=20, identifier=auth_user.id)
+        try:
+            return await service.improve_generation_prompt(payload.prompt)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/owner/local-lab/bootstrap")
+    async def get_owner_local_lab_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = await _require_owner(current_user)
+        try:
+            return await service.get_owner_local_lab_payload(auth_user.id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
     @router.get("/presets")
     async def get_presets():
@@ -225,8 +389,81 @@ def create_router(service: StudioService) -> APIRouter:
             payload = await service.get_project(auth_user.id, project_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        payload["recent_generations"] = [_serialize_generation(GenerationJob.model_validate(item)) for item in payload["recent_generations"]]
         return payload
+
+    @router.patch("/projects/{project_id}")
+    async def patch_project(
+        project_id: str,
+        payload: ProjectUpdateRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            project = await service.update_project(
+                auth_user.id,
+                project_id,
+                title=payload.title,
+                description=payload.description,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return project.model_dump(mode="json")
+
+    @router.delete("/projects/{project_id}")
+    async def delete_project(project_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            return await service.delete_project(auth_user.id, project_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/public/posts")
+    async def get_public_posts(
+        sort: str = Query(default="trending", pattern="^(trending|newest|top|styles)$"),
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        viewer_identity_id = current_user.id if current_user is not None else None
+        posts = await service.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id)
+        return {"posts": posts}
+
+    @router.get("/profiles/me")
+    async def get_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    @router.patch("/profiles/me")
+    async def patch_my_profile(
+        payload: ProfileUpdateRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.update_profile(
+                auth_user.id,
+                display_name=payload.display_name,
+                bio=payload.bio,
+                default_visibility=payload.default_visibility,
+            )
+            return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/profiles/{username}")
+    async def get_profile(username: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        viewer_identity_id = current_user.id if current_user is not None else None
+        try:
+            return await service.get_profile_payload(username=username, viewer_identity_id=viewer_identity_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     @router.get("/conversations")
     async def get_conversations(current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -235,8 +472,13 @@ def create_router(service: StudioService) -> APIRouter:
         return {"conversations": [_serialize_conversation(conversation) for conversation in conversations]}
 
     @router.post("/conversations", status_code=status.HTTP_201_CREATED)
-    async def post_conversation(payload: ConversationCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def post_conversation(
+        payload: ConversationCreateRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "chat:new-conversation", limit=20, identifier=auth_user.id)
         conversation = await service.create_conversation(auth_user.id, payload.title, payload.model)
         return _serialize_conversation(conversation)
 
@@ -265,9 +507,11 @@ def create_router(service: StudioService) -> APIRouter:
     async def post_conversation_message(
         conversation_id: str,
         payload: ChatMessageRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
         try:
             result = await service.send_chat_message(
                 auth_user.id,
@@ -295,11 +539,16 @@ def create_router(service: StudioService) -> APIRouter:
     ):
         auth_user = _require_auth(current_user)
         jobs = await service.list_generations(auth_user.id, project_id=project_id)
-        return {"generations": [_serialize_generation(job) for job in jobs]}
+        return {"generations": [_serialize_generation(job, auth_user.id) for job in jobs]}
 
     @router.post("/generations", status_code=status.HTTP_202_ACCEPTED)
-    async def post_generations(payload: GenerationCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def post_generations(
+        payload: GenerationCreateRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "generation:create", limit=24, identifier=auth_user.id)
         try:
             job = await service.create_generation(
                 identity_id=auth_user.id,
@@ -321,7 +570,7 @@ def create_router(service: StudioService) -> APIRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-        return _serialize_generation(job)
+        return _serialize_generation(job, auth_user.id)
 
     @router.get("/generations/{generation_id}")
     async def get_generation(generation_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -330,7 +579,7 @@ def create_router(service: StudioService) -> APIRouter:
             job = await service.get_generation(auth_user.id, generation_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
-        return _serialize_generation(job)
+        return _serialize_generation(job, auth_user.id)
 
     @router.get("/assets")
     async def get_assets(
@@ -340,7 +589,22 @@ def create_router(service: StudioService) -> APIRouter:
     ):
         auth_user = _require_auth(current_user)
         assets = await service.list_assets(auth_user.id, project_id=project_id, include_deleted=include_deleted)
-        return {"assets": [asset.model_dump(mode="json") for asset in assets]}
+        return {"assets": service.serialize_assets(assets, identity_id=auth_user.id)}
+
+    @router.patch("/assets/{asset_id}")
+    async def patch_asset(
+        asset_id: str,
+        payload: AssetRenameRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            asset = await service.rename_asset(auth_user.id, asset_id, payload.title)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return service.serialize_asset(asset, identity_id=auth_user.id)
 
     @router.delete("/assets/{asset_id}")
     async def delete_asset(asset_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -349,7 +613,7 @@ def create_router(service: StudioService) -> APIRouter:
             asset = await service.trash_asset(auth_user.id, asset_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-        return asset.model_dump(mode="json")
+        return service.serialize_asset(asset, identity_id=auth_user.id)
 
     @router.post("/assets/{asset_id}/restore")
     async def restore_asset(asset_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -358,7 +622,132 @@ def create_router(service: StudioService) -> APIRouter:
             asset = await service.restore_asset(auth_user.id, asset_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-        return asset.model_dump(mode="json")
+        return service.serialize_asset(asset, identity_id=auth_user.id)
+
+    @router.delete("/assets/{asset_id}/permanent")
+    async def permanently_delete_asset(
+        asset_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "assets:permanent-delete", limit=20, identifier=auth_user.id)
+        try:
+            return await service.permanently_delete_asset(auth_user.id, asset_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    @router.post("/assets/trash/empty")
+    async def empty_trash(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "assets:empty-trash", limit=8, identifier=auth_user.id)
+        return await service.empty_trash(auth_user.id)
+
+    @router.get("/assets/{asset_id}/content")
+    async def get_asset_content(asset_id: str, token: str = Query(min_length=16)):
+        try:
+            delivery = await service.resolve_asset_delivery(asset_id, token, "content")
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except FileNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset file not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        if delivery.local_path is not None:
+            return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
+        return Response(content=delivery.content or b"", media_type=delivery.media_type)
+
+    @router.get("/assets/{asset_id}/thumbnail")
+    async def get_asset_thumbnail(asset_id: str, token: str = Query(min_length=16)):
+        try:
+            delivery = await service.resolve_asset_delivery(asset_id, token, "thumbnail")
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except FileNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        if delivery.local_path is not None:
+            return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
+        return Response(content=delivery.content or b"", media_type=delivery.media_type)
+
+    @router.patch("/posts/{post_id}")
+    async def patch_post(
+        post_id: str,
+        payload: PostUpdateRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.update_post(
+                auth_user.id,
+                post_id,
+                title=payload.title,
+                visibility=payload.visibility,
+            )
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        return {"post": post}
+
+    @router.post("/posts/{post_id}/move")
+    async def post_move_post(
+        post_id: str,
+        payload: PostMoveRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.move_post(auth_user.id, post_id, payload.project_id)
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/posts/{post_id}/trash")
+    async def post_trash_post(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            return await service.trash_post(auth_user.id, post_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    @router.post("/posts/{post_id}/like")
+    async def post_like_post(
+        post_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "posts:like", limit=80, identifier=auth_user.id)
+        try:
+            await service.like_post(auth_user.id, post_id)
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        return {"post": post}
+
+    @router.delete("/posts/{post_id}/like")
+    async def delete_like_post(
+        post_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "posts:like", limit=80, identifier=auth_user.id)
+        try:
+            await service.unlike_post(auth_user.id, post_id)
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
 
     @router.post("/shares", status_code=status.HTTP_201_CREATED)
     async def post_shares(payload: ShareCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -381,7 +770,8 @@ def create_router(service: StudioService) -> APIRouter:
     @router.get("/shares/public/{token}")
     async def get_public_share(token: str):
         try:
-            return await service.get_public_share(token)
+            payload = await service.get_public_share(token)
+            return service.serialize_public_share_payload(payload, token)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share not found")
 
@@ -391,8 +781,13 @@ def create_router(service: StudioService) -> APIRouter:
         return await service.billing_summary(auth_user.id)
 
     @router.post("/billing/checkout")
-    async def post_billing_checkout(payload: BillingCheckoutRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def post_billing_checkout(
+        payload: BillingCheckoutRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "billing:checkout", limit=10, identifier=auth_user.id)
         return await service.checkout(auth_user.id, payload.kind)
 
     @router.get("/settings/bootstrap")

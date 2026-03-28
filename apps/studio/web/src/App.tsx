@@ -1,47 +1,60 @@
+import { useEffect } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import StudioShell from '@/components/StudioShell'
+import AccountPage from '@/pages/Account'
 import BillingPage from '@/pages/Billing'
 import ChatPage from '@/pages/Chat'
-import AccountPage from '@/pages/Account'
 import CreatePage from '@/pages/Create'
 import DashboardPage from '@/pages/Dashboard'
 import DocumentationPage from '@/pages/Documentation'
 import ElementsPage from '@/pages/Elements'
-import HistoryPage from '@/pages/History'
 import HomePage from '@/pages/Home'
-import LearnPage from '@/pages/Learn'
 import LoginPage from '@/pages/Login'
 import MediaLibraryPage from '@/pages/MediaLibrary'
+import OwnerLocalLabPage from '@/pages/OwnerLocalLab'
 import ProjectPage from '@/pages/Project'
 import SettingsPage from '@/pages/Settings'
 import SharedPage from '@/pages/Shared'
-import SplashPage from '@/pages/Splash'
 import SignupPage from '@/pages/Signup'
+import SplashPage from '@/pages/Splash'
+import { useStudioAuth } from '@/lib/studioAuth'
+import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 
-function AppFrame() {
-  const location = useLocation()
-  const isPublic =
-    location.pathname === '/' ||
-    location.pathname === '/landing' ||
-    location.pathname === '/login' ||
-    location.pathname === '/signup' ||
-    location.pathname.startsWith('/shared/')
-
-  const routes = (
+function PublicRoutes() {
+  return (
     <Routes>
       <Route path="/" element={<SplashPage />} />
       <Route path="/landing" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/explore" element={<DashboardPage />} />
+      <Route path="/help" element={<DocumentationPage />} />
+      <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
+      <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
+      <Route path="/terms" element={<Navigate to="/help#terms" replace />} />
+      <Route path="/privacy" element={<Navigate to="/help#privacy" replace />} />
+      <Route path="/usage-policy" element={<Navigate to="/help#usage-policy" replace />} />
+      <Route path="/learn" element={<Navigate to="/help" replace />} />
+      <Route path="/u/:username" element={<AccountPage />} />
       <Route path="/home" element={<Navigate to="/landing" replace />} />
+      <Route path="/shared/:token" element={<SharedPage />} />
+      <Route path="*" element={<Navigate to="/landing" replace />} />
+    </Routes>
+  )
+}
+
+function ProtectedRoutes() {
+  return (
+    <Routes>
       <Route path="/explore" element={<DashboardPage />} />
       <Route path="/dashboard" element={<Navigate to="/explore" replace />} />
       <Route path="/create" element={<CreatePage />} />
+      <Route path="/compose" element={<Navigate to="/create" replace />} />
       <Route path="/chat" element={<ChatPage />} />
       <Route path="/projects/:projectId" element={<ProjectPage />} />
       <Route path="/projects/:projectId/create" element={<CreatePage />} />
-      <Route path="/history" element={<HistoryPage />} />
+      <Route path="/history" element={<Navigate to="/library/images" replace />} />
       <Route path="/library" element={<Navigate to="/library/images" replace />} />
       <Route path="/library/images" element={<MediaLibraryPage />} />
       <Route path="/library/collections" element={<MediaLibraryPage />} />
@@ -53,26 +66,71 @@ function AppFrame() {
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
       <Route path="/elements/characters" element={<Navigate to="/elements/styles" replace />} />
+      <Route path="/help" element={<DocumentationPage />} />
+      <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
+      <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
+      <Route path="/terms" element={<Navigate to="/help#terms" replace />} />
+      <Route path="/privacy" element={<Navigate to="/help#privacy" replace />} />
+      <Route path="/usage-policy" element={<Navigate to="/help#usage-policy" replace />} />
+      <Route path="/learn" element={<Navigate to="/help" replace />} />
       <Route path="/subscription" element={<BillingPage />} />
-      <Route path="/plan" element={<Navigate to="/subscription" replace />} />
-      <Route path="/billing" element={<Navigate to="/subscription" replace />} />
-      <Route path="/learn" element={<LearnPage />} />
-      <Route path="/docs" element={<DocumentationPage />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="/owner/local-lab" element={<OwnerLocalLabPage />} />
       <Route path="/settings" element={<SettingsPage />} />
-      <Route path="/shared/:token" element={<SharedPage />} />
       <Route path="/studio" element={<Navigate to="/explore" replace />} />
-      <Route path="/gallery" element={<Navigate to="/library" replace />} />
+      <Route path="/gallery" element={<Navigate to="/library/images" replace />} />
       <Route path="/profile" element={<Navigate to="/settings" replace />} />
-      <Route path="*" element={<Navigate to="/landing" replace />} />
+      <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
   )
+}
 
-  if (isPublic) {
-    return <div className="min-h-screen bg-[rgb(var(--bg))]">{routes}</div>
+function AppFrame() {
+  const location = useLocation()
+  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
+  const nextPath = `${location.pathname}${location.search}`
+  const isAlwaysPublic =
+    location.pathname === '/' ||
+    location.pathname === '/landing' ||
+    location.pathname === '/login' ||
+    location.pathname === '/signup' ||
+    location.pathname.startsWith('/shared/') ||
+    location.pathname.startsWith('/u/')
+  const isPublicCapable =
+    location.pathname === '/explore' ||
+    location.pathname === '/help' ||
+    location.pathname === '/docs' ||
+    location.pathname === '/faq' ||
+    location.pathname === '/terms' ||
+    location.pathname === '/privacy' ||
+    location.pathname === '/usage-policy' ||
+    location.pathname === '/learn'
+  const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+
+  useEffect(() => {
+    if (isAlwaysPublic || isPublicCapable) return
+    if (isLoading || isAuthSyncing) return
+    if (isAuthenticated && !auth?.guest) return
+    setStudioPostAuthRedirect(nextPath)
+  }, [auth?.guest, isAlwaysPublic, isAuthSyncing, isAuthenticated, isLoading, isPublicCapable, nextPath])
+
+  if (isAlwaysPublic || (isPublicCapable && !canRenderWithShell)) {
+    return <div className="min-h-screen bg-[rgb(var(--bg))]">{<PublicRoutes />}</div>
   }
 
-  return <StudioShell>{routes}</StudioShell>
+  if (!isPublicCapable && (isLoading || isAuthSyncing)) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#0b0b0d] text-sm text-zinc-500">Opening Studio...</div>
+  }
+
+  if (!canRenderWithShell) {
+    return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />
+  }
+
+  return (
+    <StudioShell>
+      <ProtectedRoutes />
+    </StudioShell>
+  )
 }
 
 export default function App() {
