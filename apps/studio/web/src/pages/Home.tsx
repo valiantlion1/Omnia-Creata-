@@ -38,8 +38,8 @@ const defaultPlans: PublicPlansPayload = {
 const atmosphereRows = [
   {
     motion: 'landing-drift-a',
-    depthBlur: 1.6,
-    opacity: 0.13,
+    depthBlur: 1.05,
+    opacity: 0.18,
     scale: 1.03,
     top: '5%',
     left: '-16%',
@@ -52,8 +52,8 @@ const atmosphereRows = [
   },
   {
     motion: 'landing-drift-b',
-    depthBlur: 0.7,
-    opacity: 0.18,
+    depthBlur: 0.3,
+    opacity: 0.25,
     scale: 1,
     top: '24%',
     left: '-8%',
@@ -66,8 +66,8 @@ const atmosphereRows = [
   },
   {
     motion: 'landing-drift-c',
-    depthBlur: 2.2,
-    opacity: 0.11,
+    depthBlur: 1.45,
+    opacity: 0.16,
     scale: 1.05,
     top: '49%',
     left: '-14%',
@@ -80,8 +80,8 @@ const atmosphereRows = [
   },
   {
     motion: 'landing-drift-d',
-    depthBlur: 0.45,
-    opacity: 0.16,
+    depthBlur: 0.2,
+    opacity: 0.22,
     scale: 0.97,
     top: '71%',
     left: '-5%',
@@ -91,6 +91,42 @@ const atmosphereRows = [
       { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '22rem', rotate: '2deg', rise: '0.9rem', focus: 'center center' },
       { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '20rem', rotate: '-3deg', rise: '2.6rem', focus: '66% center' },
     ],
+  },
+]
+
+const heroAnchors = [
+  {
+    src: '/atmosphere/atmosphere-03-skyline-garden.png',
+    width: '28rem',
+    height: '17rem',
+    top: '8%',
+    right: '8%',
+    rotate: '5deg',
+    opacity: 0.32,
+    blur: 0.1,
+    focus: 'center center',
+  },
+  {
+    src: '/atmosphere/atmosphere-05-desert-courtyard.png',
+    width: '26rem',
+    height: '15.5rem',
+    top: '34%',
+    right: '2%',
+    rotate: '-4deg',
+    opacity: 0.28,
+    blur: 0.2,
+    focus: '58% center',
+  },
+  {
+    src: '/atmosphere/atmosphere-04-snow-leopard.png',
+    width: '24rem',
+    height: '15rem',
+    top: '58%',
+    right: '13%',
+    rotate: '3deg',
+    opacity: 0.24,
+    blur: 0.4,
+    focus: '68% center',
   },
 ]
 
@@ -175,10 +211,10 @@ function AtmosphereRow({
               className="h-[13rem] w-full object-cover"
               style={{
                 objectPosition: item.focus ?? 'center center',
-                filter: `blur(${depthBlur}px) saturate(0.8) contrast(0.94) brightness(0.84)`,
+                filter: `blur(${depthBlur}px) saturate(0.9) contrast(1) brightness(0.9)`,
               }}
             />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,17,26,0.04),rgba(7,17,26,0.24)_58%,rgba(7,17,26,0.38))]" />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,17,26,0.02),rgba(7,17,26,0.14)_56%,rgba(7,17,26,0.24))]" />
           </div>
         ))}
       </div>
@@ -244,10 +280,36 @@ export default function HomePage() {
           {atmosphereRows.map((row) => (
             <AtmosphereRow key={`${row.motion}-${row.top}`} {...row} />
           ))}
+          {heroAnchors.map((item) => (
+            <div
+              key={item.src}
+              className="absolute overflow-hidden rounded-[38px] border border-white/[0.055] bg-white/[0.02] shadow-[0_38px_120px_rgba(0,0,0,0.28)]"
+              style={{
+                top: item.top,
+                right: item.right,
+                width: item.width,
+                height: item.height,
+                opacity: item.opacity,
+                transform: `translate3d(${(pointer.x - 0.5) * -10}px, ${(pointer.y - 0.5) * -6}px, 0) rotate(${item.rotate})`,
+              }}
+            >
+              <img
+                src={item.src}
+                alt=""
+                aria-hidden="true"
+                className="h-full w-full object-cover"
+                style={{
+                  objectPosition: item.focus,
+                  filter: `blur(${item.blur}px) saturate(0.94) contrast(1.02) brightness(0.94)`,
+                }}
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,17,26,0.03),rgba(7,17,26,0.16)_58%,rgba(7,17,26,0.28))]" />
+            </div>
+          ))}
         </div>
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,196,255,0.09),transparent_24%),linear-gradient(180deg,rgba(7,17,26,0.12),rgba(7,17,26,0.44)_28%,rgba(7,17,26,0.78)_60%,#07111a_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,17,26,0.74),rgba(7,17,26,0.34)_28%,rgba(7,17,26,0.34)_72%,rgba(7,17,26,0.76))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_16%,rgba(120,196,255,0.11),transparent_20%),radial-gradient(circle_at_78%_24%,rgba(120,196,255,0.09),transparent_18%),linear-gradient(180deg,rgba(7,17,26,0.06),rgba(7,17,26,0.24)_26%,rgba(7,17,26,0.58)_62%,#07111a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,17,26,0.88),rgba(7,17,26,0.46)_30%,rgba(7,17,26,0.16)_64%,rgba(7,17,26,0.36)_100%)]" />
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-[1440px] flex-col px-5 py-6 md:px-8 xl:px-10">

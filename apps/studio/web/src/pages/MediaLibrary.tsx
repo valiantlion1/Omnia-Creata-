@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Folder, Grid2X2, Heart, Image as ImageIcon, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type Generation, type MediaAsset, type Project } from '@/lib/studioApi'
@@ -16,6 +16,28 @@ type TrashFilter = 'all' | 'recent'
 type ConfirmState =
   | { kind: 'permanent-delete'; asset: MediaAsset }
   | { kind: 'empty-trash'; count: number }
+  | { kind: 'delete-project'; projectId: string; title: string }
+  | null
+
+type PreviewState = {
+  group: AssetGroup
+  index: number
+} | null
+
+type MoveState = {
+  postId: string
+  currentProjectId: string
+  title: string
+} | null
+
+type NoticeState = {
+  title: string
+  body: string
+} | null
+
+type RenameState =
+  | { kind: 'post'; id: string; title: string }
+  | { kind: 'project'; id: string; title: string; description?: string }
   | null
 
 type AssetGroup = {
@@ -78,14 +100,17 @@ function ConfirmDialog({
   const body =
     state.kind === 'empty-trash'
       ? `This will permanently remove ${state.count} item${state.count > 1 ? 's' : ''} from Trash. This cannot be undone.`
-      : `"${state.asset.title}" will be removed permanently. This cannot be undone.`
+      : state.kind === 'delete-project'
+        ? `Delete "${state.title}" permanently? Empty collections can be removed and this cannot be undone.`
+        : `"${state.asset.title}" will be removed permanently. This cannot be undone.`
+  const resolvedTitle = state.kind === 'empty-trash' ? 'Empty trash?' : state.kind === 'delete-project' ? 'Delete collection?' : 'Delete forever?'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
       <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold text-white">{title}</div>
+            <div className="text-lg font-semibold text-white">{resolvedTitle}</div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">{body}</p>
           </div>
           <button
@@ -113,9 +138,356 @@ function ConfirmDialog({
   )
 }
 
+function NoticeDialog({
+  state,
+  onClose,
+}: {
+  state: NoticeState
+  onClose: () => void
+}) {
+  if (!state) return null
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold text-white">{state.title}</div>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">{state.body}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button onClick={onClose} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90">
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RenameDialog({
+  state,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  state: RenameState
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (title: string) => void
+}) {
+  const [value, setValue] = useState('')
+
+  useEffect(() => {
+    setValue(state?.title ?? '')
+  }, [state])
+
+  if (!state) return null
+
+  const heading = state.kind === 'post' ? 'Rename image set' : 'Rename collection'
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold text-white">{heading}</div>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">Give this {state.kind === 'post' ? 'image set' : 'collection'} a cleaner name.</p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-5">
+          <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">Title</label>
+          <input
+            autoFocus
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            className="mt-2 w-full rounded-[18px] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none ring-1 ring-white/8 transition focus:ring-white/20"
+            placeholder={state.kind === 'post' ? 'Image set name' : 'Collection name'}
+          />
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button onClick={onCancel} className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white">
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(value)}
+            disabled={busy || !value.trim() || value.trim() === state.title}
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssetLightbox({
+  state,
+  busy,
+  onClose,
+  onSelect,
+  onOpenProject,
+  onReusePrompt,
+  onReuseStyle,
+  onMove,
+  onSetVisibility,
+  onTrash,
+}: {
+  state: PreviewState
+  busy: boolean
+  onClose: () => void
+  onSelect: (index: number) => void
+  onOpenProject: () => void
+  onReusePrompt: () => void
+  onReuseStyle: () => void
+  onMove: () => void
+  onSetVisibility: (visibility: 'public' | 'private') => void
+  onTrash: () => void
+}) {
+  useEffect(() => {
+    if (!state) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key === 'ArrowLeft') {
+        onSelect((state.index - 1 + state.group.items.length) % state.group.items.length)
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        onSelect((state.index + 1) % state.group.items.length)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose, onSelect, state])
+
+  if (!state) return null
+
+  const asset = state.group.items[state.index]
+  const canStep = state.group.items.length > 1
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(4,6,10,0.82)] px-4 py-6 backdrop-blur-[10px]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,196,255,0.08),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.52)_48%,rgba(0,0,0,0.78))]" />
+      <button
+        onClick={onClose}
+        className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+        title="Close preview"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      {canStep ? (
+        <>
+          <button
+            onClick={() => onSelect((state.index - 1 + state.group.items.length) % state.group.items.length)}
+            className="absolute left-5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+            title="Previous image"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onSelect((state.index + 1) % state.group.items.length)}
+            className="absolute right-5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+            title="Next image"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </>
+      ) : null}
+
+      <div className="relative z-[1] grid w-full max-w-[1380px] gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
+        <div className="flex min-h-0 items-center justify-center">
+          <img
+            src={asset.url}
+            alt={asset.title}
+            className="max-h-[78vh] w-auto max-w-full rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+          />
+        </div>
+
+        <div className="space-y-4 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md">
+          <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Image preview</div>
+          <div className="text-2xl font-semibold tracking-[-0.04em] text-white">{state.group.title}</div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+            <span>{formatDate(asset.created_at)}</span>
+            <span>/</span>
+            <span>{state.group.model}</span>
+            <span>/</span>
+            <span>
+              Variation {state.index + 1} of {state.group.items.length}
+            </span>
+          </div>
+          <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-600">{state.group.projectTitle}</div>
+          <div className="max-h-[15rem] overflow-auto pr-1 text-sm leading-7 text-zinc-300">{state.group.prompt}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onReusePrompt}
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+              disabled={busy}
+            >
+              Reuse prompt
+            </button>
+            <button
+              onClick={onReuseStyle}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              Reuse style
+            </button>
+            <button
+              onClick={onMove}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              Move
+            </button>
+            <button
+              onClick={() => onSetVisibility('public')}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              Set public
+            </button>
+            <button
+              onClick={() => onSetVisibility('private')}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              Set private
+            </button>
+            <button
+              onClick={onTrash}
+              className="rounded-full bg-rose-500/[0.12] px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+            >
+              Move to trash
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onOpenProject}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+            >
+              Open project
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+            >
+              Close
+            </button>
+          </div>
+          {canStep ? (
+            <div className="grid grid-cols-5 gap-2 pt-2">
+              {state.group.items.map((item, index) => (
+                <button
+                  key={item.id}
+                  onClick={() => onSelect(index)}
+                  className={`overflow-hidden rounded-[16px] ring-1 transition ${
+                    state.index === index ? 'ring-white/40' : 'ring-white/6 hover:ring-white/20'
+                  }`}
+                >
+                  <img src={item.thumbnail_url ?? item.url} alt={item.title} className="aspect-square h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MovePostDialog({
+  state,
+  projects,
+  busy,
+  onClose,
+  onMove,
+}: {
+  state: MoveState
+  projects: Project[]
+  busy: boolean
+  onClose: () => void
+  onMove: (projectId: string) => void
+}) {
+  if (!state) return null
+
+  const destinations = projects.filter((project) => project.id !== state.currentProjectId)
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold text-white">Move image set</div>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">
+              Choose where <span className="text-white">{state.title}</span> should live.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-5 max-h-[50vh] overflow-auto divide-y divide-white/[0.06] border-y border-white/[0.06]">
+          {destinations.length ? (
+            destinations.map((project) => (
+              <button
+                key={project.id}
+                onClick={() => onMove(project.id)}
+                disabled={busy}
+                className="flex w-full items-center justify-between gap-4 py-3 text-left transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-white">{project.title}</div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">{project.description || 'Collection'}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
+              </button>
+            ))
+          ) : (
+            <div className="py-4 text-sm text-zinc-500">No other collections available.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function InlineActionMenu({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute right-0 top-full z-30 mt-2 min-w-[220px] bg-[#111216] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8">
+    <div className="absolute right-0 top-full z-30 mt-2 w-[min(220px,calc(100vw-2rem))] overflow-hidden rounded-[18px] bg-[#111216]/98 p-1.5 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl">
       <div className="space-y-1">{children}</div>
     </div>
   )
@@ -205,15 +577,15 @@ function Toolbar({
   actions?: ReactNode
 }) {
   return (
-    <section className="border-b border-white/[0.06] pb-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <section className="border-b border-white/[0.06] pb-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[2rem]">{title}</h1>
           <p className="mt-2 text-sm text-zinc-500">{description}</p>
-          {filters ? <div className="mt-4">{filters}</div> : null}
+          {filters ? <div className="mt-3">{filters}</div> : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="flex min-w-[220px] items-center gap-2 rounded-full bg-white/[0.03] px-3.5 py-2.5 text-sm text-zinc-400 ring-1 ring-white/8">
+          <label className="flex min-w-[200px] items-center gap-2 rounded-full bg-white/[0.03] px-3.5 py-2 text-sm text-zinc-400 ring-1 ring-white/8">
             <Search className="h-3.5 w-3.5" />
             <input
               value={search}
@@ -240,7 +612,7 @@ function EmptyInline({
   description: string
 }) {
   return (
-    <section className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+    <section className="flex min-h-[28vh] flex-col items-center justify-center gap-3 text-center">
       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.03] text-zinc-300 ring-1 ring-white/8">{icon}</div>
       <div className="text-lg font-semibold text-white">{title}</div>
       <div className="max-w-xl text-sm leading-7 text-zinc-500">{description}</div>
@@ -299,6 +671,10 @@ export default function MediaLibraryPage() {
   const [trashFilter, setTrashFilter] = useState<TrashFilter>('all')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [actionMenu, setActionMenu] = useState<string | null>(null)
+  const [previewState, setPreviewState] = useState<PreviewState>(null)
+  const [moveState, setMoveState] = useState<MoveState>(null)
+  const [noticeState, setNoticeState] = useState<NoticeState>(null)
+  const [renameState, setRenameState] = useState<RenameState>(null)
 
   const section = useMemo<LibrarySection>(() => {
     if (location.pathname.startsWith('/library/collections')) return 'collections'
@@ -360,7 +736,10 @@ export default function MediaLibraryPage() {
   const updatePostMutation = useMutation({
     mutationFn: ({ postId, payload }: { postId: string; payload: { title?: string; visibility?: 'public' | 'private' } }) =>
       studioApi.updatePost(postId, payload),
-    onSuccess: invalidateLibrary,
+    onSuccess: async () => {
+      setRenameState(null)
+      await invalidateLibrary()
+    },
   })
 
   const movePostMutation = useMutation({
@@ -376,12 +755,18 @@ export default function MediaLibraryPage() {
   const updateProjectMutation = useMutation({
     mutationFn: ({ projectId, title, description }: { projectId: string; title: string; description?: string }) =>
       studioApi.updateProject(projectId, { title, description }),
-    onSuccess: invalidateLibrary,
+    onSuccess: async () => {
+      setRenameState(null)
+      await invalidateLibrary()
+    },
   })
 
   const deleteProjectMutation = useMutation({
     mutationFn: (projectId: string) => studioApi.deleteProject(projectId),
-    onSuccess: invalidateLibrary,
+    onSuccess: async () => {
+      setConfirmState(null)
+      await invalidateLibrary()
+    },
   })
 
   const menuBusy =
@@ -503,7 +888,15 @@ export default function MediaLibraryPage() {
   }
 
   const handleMenuError = (error: unknown) => {
-    window.alert(error instanceof Error ? error.message : 'That action could not be completed.')
+    setNoticeState({
+      title: 'Action unavailable',
+      body: error instanceof Error ? error.message : 'That action could not be completed.',
+    })
+  }
+
+  const openPreview = (group: AssetGroup, index: number) => {
+    setActionMenu(null)
+    setPreviewState({ group, index })
   }
 
   if (isLoading) {
@@ -524,7 +917,7 @@ export default function MediaLibraryPage() {
 
   return (
     <>
-      <AppPage className="max-w-[1500px] gap-6 py-4">
+      <AppPage className="max-w-[1480px] gap-5 py-4">
         {section === 'images' ? (
           <>
             <Toolbar
@@ -560,12 +953,12 @@ export default function MediaLibraryPage() {
                 />
               )
             ) : filteredImageGroups.length ? (
-              <section className="space-y-8">
+              <section className="space-y-6">
                 {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="border-b border-white/[0.06] pb-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                  <section key={group.id} className="group border-b border-white/[0.06] pb-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-lg font-semibold text-white">{group.title}</div>
+                        <div className="text-[1.05rem] font-semibold text-white">{group.title}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                           <span>{formatDate(group.createdAt)}</span>
                           <span>/</span>
@@ -573,7 +966,56 @@ export default function MediaLibraryPage() {
                           <span>/</span>
                           <span>{group.items.length} variation{group.items.length > 1 ? 's' : ''}</span>
                         </div>
-                        <div className="mt-2 max-w-4xl text-sm leading-7 text-zinc-500">{group.prompt}</div>
+                        <div
+                          className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                        >
+                          {group.prompt}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                          <button
+                            onClick={() => openPreview(group, 0)}
+                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={() => openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })}
+                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                          >
+                            Reuse prompt
+                          </button>
+                          <button
+                            onClick={() => setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })}
+                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                          >
+                            Move
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updatePostMutation.mutateAsync({ postId: group.id, payload: { visibility: 'public' } })
+                              } catch (error) {
+                                handleMenuError(error)
+                              }
+                            }}
+                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                          >
+                            Public
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await trashPostMutation.mutateAsync(group.id)
+                              } catch (error) {
+                                handleMenuError(error)
+                              }
+                            }}
+                            className="rounded-full bg-rose-500/[0.1] px-3 py-1.5 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/[0.16]"
+                          >
+                            Trash
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-start gap-2">
                         <Link to={`/projects/${group.projectId}`} className="pt-1 text-sm text-white transition hover:text-zinc-200">
@@ -591,15 +1033,9 @@ export default function MediaLibraryPage() {
                             <InlineActionMenu>
                               <MenuAction
                                 disabled={menuBusy}
-                                onClick={async () => {
-                                  const nextTitle = window.prompt('Rename image set', group.title)
-                                  if (!nextTitle || nextTitle === group.title) return
-                                  try {
-                                    await updatePostMutation.mutateAsync({ postId: group.id, payload: { title: nextTitle } })
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
+                                onClick={() => {
+                                  setRenameState({ kind: 'post', id: group.id, title: group.title })
+                                  setActionMenu(null)
                                 }}
                               >
                                 Rename
@@ -646,22 +1082,14 @@ export default function MediaLibraryPage() {
                               >
                                 Set private
                               </MenuAction>
-                              {(projects.filter((project) => project.id !== group.projectId)).map((project) => (
-                                <MenuAction
-                                  key={project.id}
-                                  disabled={menuBusy}
-                                  onClick={async () => {
-                                    try {
-                                      await movePostMutation.mutateAsync({ postId: group.id, projectId: project.id })
-                                      setActionMenu(null)
-                                    } catch (error) {
-                                      handleMenuError(error)
-                                    }
-                                  }}
-                                >
-                                  Move to {project.title}
-                                </MenuAction>
-                              ))}
+                              <MenuAction
+                                onClick={() => {
+                                  setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Move to collection
+                              </MenuAction>
                               <MenuAction
                                 tone="danger"
                                 disabled={menuBusy}
@@ -685,15 +1113,18 @@ export default function MediaLibraryPage() {
                     {activeView === 'grid' ? (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {group.items.map((asset) => (
-                          <div key={asset.id} className="space-y-3">
-                            <Link to={`/projects/${asset.project_id}`} className="block overflow-hidden rounded-[22px] bg-white/[0.03]">
+                        <div key={asset.id} className="space-y-2.5">
+                            <button
+                              onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
+                              className="block w-full overflow-hidden rounded-[22px] bg-white/[0.03] text-left"
+                            >
                               <img
                                 src={asset.thumbnail_url ?? asset.url}
                                 alt={asset.title}
                                 className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
                               />
-                            </Link>
-                            <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
+                            </button>
+                            <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
                               <span>V{variantOrder(asset) + 1}</span>
                               <span className="truncate">{asset.title}</span>
                             </div>
@@ -704,9 +1135,12 @@ export default function MediaLibraryPage() {
                       <div className="mt-4 divide-y divide-white/[0.06]">
                         {group.items.map((asset) => (
                           <div key={asset.id} className="flex items-center gap-4 py-3">
-                            <Link to={`/projects/${asset.project_id}`} className="block h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03]">
+                            <button
+                              onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
+                              className="block h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03] text-left"
+                            >
                               <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="h-full w-full object-cover" />
-                            </Link>
+                            </button>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium text-white">{asset.title}</div>
                               <div className="mt-1 text-xs text-zinc-500">Variation {variantOrder(asset) + 1}</div>
@@ -741,7 +1175,7 @@ export default function MediaLibraryPage() {
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
@@ -768,15 +1202,9 @@ export default function MediaLibraryPage() {
                             <InlineActionMenu>
                               <MenuAction
                                 disabled={menuBusy}
-                                onClick={async () => {
-                                  const nextTitle = window.prompt('Rename collection', project.title)
-                                  if (!nextTitle || nextTitle === project.title) return
-                                  try {
-                                    await updateProjectMutation.mutateAsync({ projectId: project.id, title: nextTitle, description: project.description })
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
+                                onClick={() => {
+                                  setRenameState({ kind: 'project', id: project.id, title: project.title, description: project.description })
+                                  setActionMenu(null)
                                 }}
                               >
                                 Rename
@@ -792,14 +1220,16 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 tone="danger"
                                 disabled={menuBusy}
-                                onClick={async () => {
-                                  if (!window.confirm(`Delete "${project.title}"? Empty collections can be removed permanently.`)) return
-                                  try {
-                                    await deleteProjectMutation.mutateAsync(project.id)
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
+                                onClick={() => {
+                                  setActionMenu(null)
+                                  if (projectAssets.length > 0) {
+                                    setNoticeState({
+                                      title: 'Collection has images',
+                                      body: 'Move or remove items before deleting this collection.',
+                                    })
+                                    return
                                   }
+                                  setConfirmState({ kind: 'delete-project', projectId: project.id, title: project.title })
                                 }}
                               >
                                 Delete
@@ -842,15 +1272,9 @@ export default function MediaLibraryPage() {
                               <InlineActionMenu>
                                 <MenuAction
                                   disabled={menuBusy}
-                                  onClick={async () => {
-                                    const nextTitle = window.prompt('Rename collection', project.title)
-                                    if (!nextTitle || nextTitle === project.title) return
-                                    try {
-                                      await updateProjectMutation.mutateAsync({ projectId: project.id, title: nextTitle, description: project.description })
-                                      setActionMenu(null)
-                                    } catch (error) {
-                                      handleMenuError(error)
-                                    }
+                                  onClick={() => {
+                                    setRenameState({ kind: 'project', id: project.id, title: project.title, description: project.description })
+                                    setActionMenu(null)
                                   }}
                                 >
                                   Rename
@@ -866,14 +1290,16 @@ export default function MediaLibraryPage() {
                                 <MenuAction
                                   tone="danger"
                                   disabled={menuBusy}
-                                  onClick={async () => {
-                                    if (!window.confirm(`Delete "${project.title}"? Empty collections can be removed permanently.`)) return
-                                    try {
-                                      await deleteProjectMutation.mutateAsync(project.id)
-                                      setActionMenu(null)
-                                    } catch (error) {
-                                      handleMenuError(error)
+                                  onClick={() => {
+                                    setActionMenu(null)
+                                    if (projectAssets.length > 0) {
+                                      setNoticeState({
+                                        title: 'Collection has images',
+                                        body: 'Move or remove items before deleting this collection.',
+                                      })
+                                      return
                                     }
+                                    setConfirmState({ kind: 'delete-project', projectId: project.id, title: project.title })
                                   }}
                                 >
                                   Delete
@@ -1036,7 +1462,7 @@ export default function MediaLibraryPage() {
 
       <ConfirmDialog
         state={confirmState}
-        busy={isBusy}
+        busy={isBusy || deleteProjectMutation.isPending}
         onCancel={() => setConfirmState(null)}
         onConfirm={() => {
           if (!confirmState) return
@@ -1044,7 +1470,107 @@ export default function MediaLibraryPage() {
             permanentDeleteMutation.mutate(confirmState.asset.id)
             return
           }
+          if (confirmState.kind === 'delete-project') {
+            deleteProjectMutation.mutate(confirmState.projectId)
+            return
+          }
           emptyTrashMutation.mutate()
+        }}
+      />
+      <NoticeDialog state={noticeState} onClose={() => setNoticeState(null)} />
+      <RenameDialog
+        state={renameState}
+        busy={updatePostMutation.isPending || updateProjectMutation.isPending}
+        onCancel={() => setRenameState(null)}
+        onConfirm={async (title) => {
+          if (!renameState) return
+          const nextTitle = title.trim()
+          if (!nextTitle || nextTitle === renameState.title) {
+            setRenameState(null)
+            return
+          }
+          try {
+            if (renameState.kind === 'post') {
+              await updatePostMutation.mutateAsync({ postId: renameState.id, payload: { title: nextTitle } })
+              return
+            }
+            await updateProjectMutation.mutateAsync({
+              projectId: renameState.id,
+              title: nextTitle,
+              description: renameState.description,
+            })
+          } catch (error) {
+            handleMenuError(error)
+          }
+        }}
+      />
+      <AssetLightbox
+        state={previewState}
+        busy={menuBusy || movePostMutation.isPending}
+        onClose={() => setPreviewState(null)}
+        onSelect={(index) => setPreviewState((current) => (current ? { ...current, index } : current))}
+        onOpenProject={() => {
+          if (!previewState) return
+          navigate(`/projects/${previewState.group.projectId}`)
+          setPreviewState(null)
+        }}
+        onReusePrompt={() => {
+          if (!previewState) return
+          openComposeWith({
+            prompt: previewState.group.prompt,
+            model: previewState.group.model,
+            projectId: previewState.group.projectId,
+          })
+          setPreviewState(null)
+        }}
+        onReuseStyle={() => {
+          if (!previewState) return
+          openComposeWith({
+            model: previewState.group.model,
+            projectId: previewState.group.projectId,
+          })
+          setPreviewState(null)
+        }}
+        onMove={() => {
+          if (!previewState) return
+          setMoveState({
+            postId: previewState.group.id,
+            currentProjectId: previewState.group.projectId,
+            title: previewState.group.title,
+          })
+          setPreviewState(null)
+        }}
+        onSetVisibility={async (visibility) => {
+          if (!previewState) return
+          try {
+            await updatePostMutation.mutateAsync({ postId: previewState.group.id, payload: { visibility } })
+          } catch (error) {
+            handleMenuError(error)
+          }
+        }}
+        onTrash={async () => {
+          if (!previewState) return
+          try {
+            await trashPostMutation.mutateAsync(previewState.group.id)
+            setPreviewState(null)
+          } catch (error) {
+            handleMenuError(error)
+          }
+        }}
+      />
+      <MovePostDialog
+        state={moveState}
+        projects={projects}
+        busy={movePostMutation.isPending}
+        onClose={() => setMoveState(null)}
+        onMove={async (projectId) => {
+          if (!moveState) return
+          try {
+            await movePostMutation.mutateAsync({ postId: moveState.postId, projectId })
+            setMoveState(null)
+          } catch (error) {
+            handleMenuError(error)
+          }
         }}
       />
     </>

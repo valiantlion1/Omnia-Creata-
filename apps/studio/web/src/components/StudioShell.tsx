@@ -35,6 +35,7 @@ type NavItem = {
   label: string
   icon: ComponentType<{ className?: string }>
   aliases?: string[]
+  exactAliases?: string[]
   expandOnMainClick?: boolean
 }
 
@@ -52,7 +53,7 @@ const primaryNav: NavItem[] = [
 ]
 
 const libraryNav: NavItem[] = [
-  { to: '/library/images', label: 'My images', icon: ImageIcon, aliases: ['/library', '/media', '/history'] },
+  { to: '/library/images', label: 'My images', icon: ImageIcon, aliases: ['/media', '/history'], exactAliases: ['/library'] },
   { to: '/library/collections', label: 'Collections', icon: Folder },
   { to: '/library/likes', label: 'Favorites', icon: Heart },
   { to: '/library/trash', label: 'Trash', icon: Trash2 },
@@ -68,6 +69,7 @@ const utilityNav: NavItem[] = [
 
 function isActive(pathname: string, item: NavItem) {
   if (pathname === item.to || pathname.startsWith(`${item.to}/`)) return true
+  if (item.exactAliases?.some((alias) => pathname === alias)) return true
   return item.aliases?.some((alias) => pathname === alias || pathname.startsWith(`${alias}/`)) ?? false
 }
 
