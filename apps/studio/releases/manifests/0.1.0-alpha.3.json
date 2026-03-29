@@ -1,0 +1,23 @@
+{
+  "version": "0.1.0-alpha.3",
+  "channel": "alpha",
+  "build": "2026.03.29.03",
+  "codename": "Explore Foundation",
+  "date": "2026-03-29",
+  "internal_notes": [
+    "Explore feed now reads only curated explore_state=live|featured posts.",
+    "Post publish flow now separates visibility from explore_state moderation.",
+    "Heuristic ranking foundation added with recency, likes, style diversity, quality, owner, and feature signals."
+  ],
+  "public_notes": [
+    "Explore now runs as a curated public layer instead of automatic public dump.",
+    "New work remains private by default; publishing to Explore now requires explicit action.",
+    "Release system now keeps internal manifest + public What's New entries for shipped versions."
+  ],
+  "rollback_target": "0.1.0-alpha.2",
+  "migration_notes": [
+    "Backfilled posts default to explore_state=hidden.",
+    "Any private post is normalized to explore_state=hidden."
+  ],
+  "published": true
+}

@@ -28,6 +28,7 @@ from .models import (
     CheckoutKind,
     CreditEntryType,
     CreditLedgerEntry,
+    ExploreState,
     GenerationJob,
     GenerationOutput,
     IdentityPlan,
@@ -475,6 +476,7 @@ class StudioService:
                 cover_asset_id=asset_ids[0],
                 asset_ids=asset_ids,
                 visibility=identity.default_visibility,
+                explore_state=ExploreState.HIDDEN,
                 style_tags=self._infer_style_tags(generation),
                 liked_by=[],
                 created_at=generation.created_at,
@@ -504,6 +506,9 @@ class StudioService:
                 )
             ):
                 post.visibility = Visibility.PRIVATE
+                changed = True
+            if post.visibility != Visibility.PUBLIC and post.explore_state != ExploreState.HIDDEN:
+                post.explore_state = ExploreState.HIDDEN
                 changed = True
             if changed:
                 post.updated_at = now
@@ -571,11 +576,15 @@ class StudioService:
                 public_preview=public_preview,
             ),
             "visibility": post.visibility.value,
+            "explore_state": post.explore_state.value,
             "like_count": len(post.liked_by),
             "viewer_has_liked": bool(viewer_identity_id and viewer_identity_id in post.liked_by),
             "created_at": post.created_at.isoformat(),
             "project_id": post.project_id,
             "style_tags": post.style_tags,
+            "quality_score": post.quality_score,
+            "feature_score": post.feature_score,
+            "owner_score": post.owner_score,
         }
 
     def serialize_asset(
@@ -963,6 +972,16 @@ class StudioService:
         prompt = self._normalize_public_post_text(post.prompt or "")[:140]
         return f"{post.owner_username}|{title}|{prompt}"
 
+    def _explore_ranking_score(self, post: PublicPost) -> float:
+        age_hours = max((utc_now() - post.created_at).total_seconds() / 3600, 1)
+        recency_score = max(0.0, 72 - age_hours) / 72
+        likes_score = min(len(post.liked_by) / 20, 1.0)
+        style_score = min(len(post.style_tags) / 4, 1.0)
+        quality_score = post.quality_score if post.quality_score is not None else 0.5
+        owner_score = post.owner_score if post.owner_score is not None else 0.5
+        feature_boost = post.feature_score if post.feature_score is not None else (0.35 if post.explore_state == ExploreState.FEATURED else 0.0)
+        return (recency_score * 0.32) + (likes_score * 0.24) + (style_score * 0.08) + (quality_score * 0.16) + (owner_score * 0.12) + (feature_boost * 0.08)
+
     async def _assert_public_asset_preview_access(self, asset_id: str) -> None:
         posts = await self.store.list_models("posts", PublicPost)
         identities = await self.store.list_models("identities", OmniaIdentity)
@@ -1232,6 +1251,8 @@ class StudioService:
         for post in posts:
             if post.visibility != Visibility.PUBLIC:
                 continue
+            if post.explore_state not in {ExploreState.LIVE, ExploreState.FEATURED}:
+                continue
             if self._should_hide_post_from_public(
                 post,
                 identity=identities_by_id.get(post.identity_id),
@@ -1258,14 +1279,7 @@ class StudioService:
         elif sort == "styles":
             public_posts.sort(key=lambda item: (len(item.style_tags), len(item.liked_by), item.created_at), reverse=True)
         else:
-            public_posts.sort(
-                key=lambda item: (
-                    len(item.liked_by) * 5
-                    + len(item.style_tags) * 2,
-                    item.created_at,
-                ),
-                reverse=True,
-            )
+            public_posts.sort(key=lambda item: (self._explore_ranking_score(item), item.created_at), reverse=True)
 
         deduped_posts: List[PublicPost] = []
         seen_keys: set[str] = set()
@@ -1455,6 +1469,8 @@ class StudioService:
                     current.title = cleaned
             if visibility is not None:
                 current.visibility = visibility
+                if visibility != Visibility.PUBLIC:
+                    current.explore_state = ExploreState.HIDDEN
             current.updated_at = utc_now()
             state.posts[current.id] = current
 
@@ -1473,10 +1489,61 @@ class StudioService:
             raise KeyError("Post not found")
         return updated
 
+    async def publish_post_to_explore(self, identity_id: str, post_id: str) -> PublicPost:
+        post = await self._owned_post(identity_id, post_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            current.visibility = Visibility.PUBLIC
+            if current.explore_state in {ExploreState.HIDDEN, ExploreState.REJECTED}:
+                current.explore_state = ExploreState.PENDING
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def remove_post_from_explore(self, identity_id: str, post_id: str) -> PublicPost:
+        post = await self._owned_post(identity_id, post_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            current.explore_state = ExploreState.HIDDEN
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
+    async def moderate_explore_post(self, post_id: str, *, decision: ExploreState, feature_score: Optional[float] = None) -> PublicPost:
+        if decision not in {ExploreState.LIVE, ExploreState.FEATURED, ExploreState.REJECTED}:
+            raise ValueError("Unsupported moderation decision")
+        post = await self._get_post(post_id)
+
+        def mutation(state: StudioState) -> None:
+            current = state.posts[post.id]
+            current.explore_state = decision
+            if feature_score is not None:
+                current.feature_score = max(0.0, min(feature_score, 1.0))
+            current.updated_at = utc_now()
+            state.posts[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_model("posts", post.id, PublicPost)
+        if updated is None:
+            raise KeyError("Post not found")
+        return updated
+
     async def like_post(self, identity_id: str, post_id: str) -> PublicPost:
         await self.get_identity(identity_id)
         post = await self._get_post(post_id)
-        if post.visibility != Visibility.PUBLIC:
+        if post.visibility != Visibility.PUBLIC or post.explore_state not in {ExploreState.LIVE, ExploreState.FEATURED}:
             raise PermissionError("Only public posts can be liked")
 
         def mutation(state: StudioState) -> None:
@@ -2269,6 +2336,7 @@ class StudioService:
                     cover_asset_id=created_assets[0].id if created_assets else None,
                     asset_ids=[asset.id for asset in created_assets],
                     visibility=visibility,
+                    explore_state=ExploreState.HIDDEN,
                     style_tags=self._infer_style_tags(current_job),
                     liked_by=[],
                     created_at=current_job.created_at,

@@ -72,7 +72,7 @@ function PostCard({
         </button>
 
         <div className="absolute left-3 top-3 flex flex-wrap items-center gap-1.5 opacity-70 transition duration-300 group-hover:opacity-100">
-          {post.style_tags.slice(0, 1).map((tag) => (
+          {post.style_tags.slice(0, 2).map((tag) => (
             <StatusPill key={tag} tone="neutral">
               {tag}
             </StatusPill>
@@ -104,10 +104,16 @@ function ExploreLightbox({
   post,
   open,
   onClose,
+  canUseAccount,
+  onRequireAuth,
+  onLike,
 }: {
   post: PublicPost | null
   open: boolean
   onClose: () => void
+  canUseAccount: boolean
+  onRequireAuth: () => void
+  onLike: (post: PublicPost) => void
 }) {
   const [assetIndex, setAssetIndex] = useState(0)
 
@@ -231,7 +237,7 @@ function ExploreLightbox({
               </div>
             ) : null}
 
-            <p className="mt-5 line-clamp-5 text-sm leading-7 text-zinc-400">{post.prompt}</p>
+            <div className="mt-5 text-xs uppercase tracking-[0.2em] text-zinc-600">Curated details in progress</div>
           </div>
 
           <div className="space-y-3">
@@ -240,6 +246,29 @@ function ExploreLightbox({
               <span>{post.like_count} likes</span>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => (canUseAccount ? onLike(post) : onRequireAuth())}
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+              >
+                {canUseAccount ? 'Like' : 'Like (Sign in)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => (canUseAccount ? onClose() : onRequireAuth())}
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+              >
+                {canUseAccount ? 'Save later' : 'Save later (Sign in)'}
+              </button>
+              <Link
+                to={canUseAccount ? '/create' : '/login?next=%2Fcreate'}
+                onClick={() => {
+                  if (!canUseAccount) onRequireAuth()
+                }}
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+              >
+                Open compose
+              </Link>
               <Link
                 to={`/u/${post.owner_username}`}
                 className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
@@ -358,7 +387,17 @@ export default function DashboardPage() {
         />
       )}
 
-      <ExploreLightbox post={selectedPost} open={Boolean(selectedPost)} onClose={() => setSelectedPost(null)} />
+      <ExploreLightbox
+        post={selectedPost}
+        open={Boolean(selectedPost)}
+        onClose={() => setSelectedPost(null)}
+        canUseAccount={canUseAccount}
+        onRequireAuth={() => {
+          setStudioPostAuthRedirect('/explore')
+          navigate('/login?next=%2Fexplore')
+        }}
+        onLike={handleLike}
+      />
     </AppPage>
   )
 }

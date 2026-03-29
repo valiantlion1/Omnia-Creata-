@@ -751,6 +751,14 @@ export default function MediaLibraryPage() {
       await invalidateLibrary()
     },
   })
+  const publishToExploreMutation = useMutation({
+    mutationFn: (postId: string) => studioApi.publishToExplore(postId),
+    onSuccess: invalidateLibrary,
+  })
+  const removeFromExploreMutation = useMutation({
+    mutationFn: (postId: string) => studioApi.removeFromExplore(postId),
+    onSuccess: invalidateLibrary,
+  })
 
   const movePostMutation = useMutation({
     mutationFn: ({ postId, projectId }: { postId: string; projectId: string }) => studioApi.movePost(postId, { project_id: projectId }),
@@ -783,6 +791,8 @@ export default function MediaLibraryPage() {
     permanentDeleteMutation.isPending ||
     emptyTrashMutation.isPending ||
     updatePostMutation.isPending ||
+    publishToExploreMutation.isPending ||
+    removeFromExploreMutation.isPending ||
     movePostMutation.isPending ||
     trashPostMutation.isPending ||
     updateProjectMutation.isPending ||
@@ -1092,6 +1102,32 @@ export default function MediaLibraryPage() {
                                 }}
                               >
                                 Set private
+                              </MenuAction>
+                              <MenuAction
+                                disabled={menuBusy}
+                                onClick={async () => {
+                                  try {
+                                    await publishToExploreMutation.mutateAsync(group.id)
+                                    setActionMenu(null)
+                                  } catch (error) {
+                                    handleMenuError(error)
+                                  }
+                                }}
+                              >
+                                Publish to Explore
+                              </MenuAction>
+                              <MenuAction
+                                disabled={menuBusy}
+                                onClick={async () => {
+                                  try {
+                                    await removeFromExploreMutation.mutateAsync(group.id)
+                                    setActionMenu(null)
+                                  } catch (error) {
+                                    handleMenuError(error)
+                                  }
+                                }}
+                              >
+                                Remove from Explore
                               </MenuAction>
                               <MenuAction
                                 onClick={() => {

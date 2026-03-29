@@ -23,6 +23,14 @@ class Visibility(str, Enum):
     PRIVATE = "private"
 
 
+class ExploreState(str, Enum):
+    HIDDEN = "hidden"
+    PENDING = "pending"
+    LIVE = "live"
+    FEATURED = "featured"
+    REJECTED = "rejected"
+
+
 class SubscriptionStatus(str, Enum):
     NONE = "none"
     ACTIVE = "active"
@@ -230,8 +238,12 @@ class PublicPost(BaseModel):
     cover_asset_id: Optional[str] = None
     asset_ids: List[str] = Field(default_factory=list)
     visibility: Visibility = Visibility.PUBLIC
+    explore_state: ExploreState = ExploreState.HIDDEN
     style_tags: List[str] = Field(default_factory=list)
     liked_by: List[str] = Field(default_factory=list)
+    quality_score: Optional[float] = None
+    feature_score: Optional[float] = None
+    owner_score: Optional[float] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

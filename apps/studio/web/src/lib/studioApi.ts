@@ -6,6 +6,7 @@ export type IdentityPlan = 'guest' | 'free' | 'pro'
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retryable_failed'
 export type CheckoutKind = 'pro_monthly' | 'top_up_small' | 'top_up_large'
 export type Visibility = 'public' | 'private'
+export type ExploreState = 'hidden' | 'pending' | 'live' | 'featured' | 'rejected'
 
 export type PlanInfo = {
   id: IdentityPlan
@@ -171,11 +172,15 @@ export type PublicPost = {
   cover_asset: MediaAsset | null
   preview_assets: MediaAsset[]
   visibility: Visibility
+  explore_state: ExploreState
   like_count: number
   viewer_has_liked: boolean
   created_at: string
   project_id: string
   style_tags: string[]
+  quality_score?: number | null
+  feature_score?: number | null
+  owner_score?: number | null
 }
 
 export type ProfileSummary = {
@@ -451,6 +456,11 @@ export const studioApi = {
   unlikePost: (postId: string) => apiFetch<{ post: PublicPost }>(`/posts/${postId}/like`, { method: 'DELETE' }),
   updatePost: (postId: string, payload: { title?: string; visibility?: Visibility }) =>
     apiFetch<{ post: PublicPost }>(`/posts/${postId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  publishToExplore: (postId: string) => apiFetch<{ post: PublicPost }>(`/posts/${postId}/publish`, { method: 'POST' }),
+  removeFromExplore: (postId: string) => apiFetch<{ post: PublicPost }>(`/posts/${postId}/remove-from-explore`, { method: 'POST' }),
+  featureInExplore: (postId: string, payload?: { feature_score?: number }) =>
+    apiFetch<{ post: PublicPost }>(`/admin/posts/${postId}/feature`, { method: 'POST', body: JSON.stringify(payload ?? {}) }),
+  rejectFromExplore: (postId: string) => apiFetch<{ post: PublicPost }>(`/admin/posts/${postId}/reject`, { method: 'POST' }),
   movePost: (postId: string, payload: { project_id: string }) =>
     apiFetch<{ post: PublicPost }>(`/posts/${postId}/move`, { method: 'POST', body: JSON.stringify(payload) }),
   trashPost: (postId: string) =>

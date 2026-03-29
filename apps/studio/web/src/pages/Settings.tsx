@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AppPage, EditTextDialog, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type HealthProvider, type HealthResponse } from '@/lib/studioApi'
+import { LATEST_WHATS_NEW } from '@/lib/releaseNotes'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { useStudioUiPrefs } from '@/lib/studioUi'
 
@@ -241,8 +242,12 @@ export default function SettingsPage() {
         />
         <Row
           title="What’s new"
-          value={<StatusPill tone="neutral">Planned</StatusPill>}
-          description="Small release popups and update notes will arrive here instead of cluttering the main app."
+          value={<StatusPill tone="neutral">{LATEST_WHATS_NEW ? `v${LATEST_WHATS_NEW.version}` : 'Planned'}</StatusPill>}
+          description={
+            LATEST_WHATS_NEW
+              ? `${LATEST_WHATS_NEW.title} (${LATEST_WHATS_NEW.date})`
+              : 'Small release popups and update notes will arrive here instead of cluttering the main app.'
+          }
         />
       </Section>
 

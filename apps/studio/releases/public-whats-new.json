@@ -1,0 +1,13 @@
+[
+  {
+    "version": "0.1.0-alpha.3",
+    "channel": "alpha",
+    "date": "2026-03-29",
+    "title": "Explore + Publish foundation",
+    "notes": [
+      "Explore now shows only curated work marked live or featured.",
+      "Set public and Publish to Explore are now separate steps.",
+      "Version manifests and rollback targets are now tracked per release."
+    ]
+  }
+]

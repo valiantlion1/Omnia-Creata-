@@ -11,7 +11,7 @@ from security.auth import User as AuthUser
 from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
 
-from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
+from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, ExploreState, GenerationJob, IdentityPlan, PublicPost, Visibility
 from .service import PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
@@ -105,6 +105,11 @@ class PostUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: Optional[str] = Field(default=None, min_length=1, max_length=72)
     visibility: Optional[Visibility] = None
+
+
+class ExploreFeatureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feature_score: Optional[float] = Field(default=None, ge=0, le=1)
 
 
 class PostMoveRequest(BaseModel):
@@ -706,6 +711,60 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         try:
             await service.move_post(auth_user.id, post_id, payload.project_id)
             post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/posts/{post_id}/publish")
+    async def post_publish_to_explore(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.publish_post_to_explore(auth_user.id, post_id)
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/posts/{post_id}/remove-from-explore")
+    async def post_remove_from_explore(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.remove_post_from_explore(auth_user.id, post_id)
+            post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/admin/posts/{post_id}/feature")
+    async def post_feature_in_explore(
+        post_id: str,
+        payload: ExploreFeatureRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        owner = await _require_owner(current_user)
+        try:
+            await service.moderate_explore_post(post_id, decision=ExploreState.FEATURED, feature_score=payload.feature_score)
+            post = await service.get_post_payload(post_id, viewer_identity_id=owner.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/admin/posts/{post_id}/approve")
+    async def post_approve_explore(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        owner = await _require_owner(current_user)
+        try:
+            await service.moderate_explore_post(post_id, decision=ExploreState.LIVE)
+            post = await service.get_post_payload(post_id, viewer_identity_id=owner.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        return {"post": post}
+
+    @router.post("/admin/posts/{post_id}/reject")
+    async def post_reject_explore(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        owner = await _require_owner(current_user)
+        try:
+            await service.moderate_explore_post(post_id, decision=ExploreState.REJECTED)
+            post = await service.get_post_payload(post_id, viewer_identity_id=owner.id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
         return {"post": post}
