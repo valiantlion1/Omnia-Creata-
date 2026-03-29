@@ -230,6 +230,7 @@ export type ChatMessage = {
   content: string
   attachments: ChatAttachment[]
   suggested_actions: ChatSuggestedAction[]
+  metadata?: Record<string, unknown>
   created_at: string
 }
 

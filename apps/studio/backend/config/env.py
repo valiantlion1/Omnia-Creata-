@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
     gemini_model: str = "gemini-2.5-flash"
+    openrouter_model: str = "google/gemini-2.5-flash"
     openai_model: str = "gpt-4o-mini"
+    chat_primary_provider: str = "gemini"
+    chat_fallback_provider: str = "openrouter"
     
     # ComfyUI Configuration
     comfyui_base_url: str = "http://127.0.0.1:8188"
@@ -173,6 +176,14 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"local", "supabase"}:
             raise ValueError("ASSET_STORAGE_BACKEND must be either 'local' or 'supabase'")
+        return normalized
+
+    @field_validator("chat_primary_provider", "chat_fallback_provider")
+    @classmethod
+    def validate_chat_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"gemini", "openrouter", "heuristic"}:
+            raise ValueError("Chat providers must be gemini, openrouter, or heuristic")
         return normalized
 
     @model_validator(mode="after")

@@ -222,6 +222,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const [identityPaneOpen, setIdentityPaneOpen] = useState(false)
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const isGuestShell = !canLoadPrivate
 
   useEffect(() => {
     const saved = window.localStorage.getItem('oc-studio-rail-collapsed')
@@ -281,6 +282,31 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const renderExpandedPanel = (item: NavItem) => {
     if (item.to !== '/settings' || desktopCollapsed) return null
 
+    if (!canLoadPrivate) {
+      return (
+        <div className="rounded-[20px] border border-white/[0.06] bg-black/20 p-3 ring-1 ring-white/[0.04]">
+          <div className="text-sm font-semibold text-white">Public access</div>
+          <div className="mt-1 text-xs leading-6 text-zinc-500">Explore and Help stay open. Compose, Chat, Library, and account actions unlock after sign in.</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Link
+              to="/login?next=%2Fexplore"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-2xl bg-white/[0.04] px-3 py-2 text-center text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              Log in
+            </Link>
+            <Link
+              to="/signup"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-2xl bg-white px-3 py-2 text-center text-[12px] font-semibold text-black transition hover:opacity-90"
+            >
+              Start free
+            </Link>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="rounded-[20px] border border-white/[0.06] bg-black/20 p-3 ring-1 ring-white/[0.04]">
         <div className="flex items-start justify-between gap-3">
@@ -335,7 +361,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   const rail = (collapsed: boolean) => (
     <>
-      <div className={`flex h-[82px] border-b border-white/[0.015] ${collapsed ? 'flex-col items-center justify-center gap-2 px-2' : 'items-center justify-between px-4.5'}`}>
+      <div className={`flex h-[78px] border-b border-white/[0.015] ${collapsed ? 'flex-col items-center justify-center gap-2 px-2' : 'items-center justify-between px-4'}`}>
         <Link to="/landing" className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`} title="Open Omnia Creata landing page">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl">
             <img src="/omnia-crest.png" alt="Omnia Creata" className="h-9 w-9 object-contain" />
@@ -373,23 +399,29 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         <Section title="Utility" items={utilityNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      <div className="relative border-t border-white/[0.015] p-3">
+      <div className="relative border-t border-white/[0.015] p-2.5">
         {identityPaneOpen ? (
           <div
             className={`absolute bottom-full z-20 mb-3 bg-[#111216] shadow-[0_28px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/[0.08] ${
-              collapsed ? 'left-3 w-[220px] rounded-[22px] p-3' : 'left-3 right-3 rounded-[24px] p-4'
+              collapsed ? 'left-3 w-[220px] rounded-[20px] p-3' : 'left-2.5 right-2.5 rounded-[20px] p-3.5'
             }`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}</div>
-                <div className="mt-1 text-xs text-zinc-500">@{auth?.identity.username ?? 'guest'} / {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}</div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  {isGuestShell
+                    ? 'Public explore mode'
+                    : `@${auth?.identity.username ?? 'guest'} / ${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
+                </div>
               </div>
-              <div className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-200 ring-1 ring-white/[0.06]">
-                {usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits
-              </div>
+              {!isGuestShell ? (
+                <div className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-200 ring-1 ring-white/[0.06]">
+                  {usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits
+                </div>
+              ) : null}
             </div>
-            {usageSummary ? (
+            {!isGuestShell && usageSummary ? (
               <div className="mt-4 space-y-2">
                 <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
                   <div className="h-full rounded-full bg-white" style={{ width: `${usagePercent}%` }} />
@@ -400,44 +432,60 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 </div>
               </div>
             ) : null}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <Link to="/account" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
-                Profile
-              </Link>
-              <Link to="/subscription" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
-                Subscription
-              </Link>
-              <Link to="/settings" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-2 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
-                Settings
-              </Link>
-              <button onClick={handleSignOut} className="rounded-full px-3 py-2 text-[12px] text-rose-300 transition hover:bg-rose-500/[0.08] hover:text-rose-200">
-                Log out
-              </button>
-            </div>
+            {isGuestShell ? (
+              <div className="mt-3.5 grid grid-cols-2 gap-2">
+                <Link to="/login?next=%2Fexplore" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-1.5 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                  Log in
+                </Link>
+                <Link to="/signup" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white px-3 py-1.5 text-center text-[12px] font-semibold text-black transition hover:opacity-90">
+                  Start free
+                </Link>
+                <Link to="/help" onClick={() => setIdentityPaneOpen(false)} className="col-span-2 rounded-full bg-white/[0.04] px-3 py-1.5 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                  Help
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-3.5 grid grid-cols-2 gap-2">
+                <Link to="/account" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-1.5 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                  Profile
+                </Link>
+                <Link to="/subscription" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-1.5 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                  Subscription
+                </Link>
+                <Link to="/settings" onClick={() => setIdentityPaneOpen(false)} className="rounded-full bg-white/[0.04] px-3 py-1.5 text-center text-[12px] text-white transition hover:bg-white/[0.08]">
+                  Settings
+                </Link>
+                <button onClick={handleSignOut} className="rounded-full px-3 py-1.5 text-[12px] text-rose-300 transition hover:bg-rose-500/[0.08] hover:text-rose-200">
+                  Log out
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
 
         <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-3'}`}>
           <Link
-            to="/account"
-            className={`min-w-0 flex-1 rounded-full px-2.5 py-2 transition hover:bg-white/[0.04] ${collapsed ? 'flex h-11 w-11 items-center justify-center bg-white/[0.05]' : 'flex items-center gap-3'}`}
-            title="Open profile"
+            to={isGuestShell ? '/signup' : '/account'}
+            className={`min-w-0 flex-1 rounded-full px-2 py-1.5 transition hover:bg-white/[0.04] ${collapsed ? 'flex h-10 w-10 items-center justify-center bg-white/[0.05]' : 'flex items-center gap-2.5'}`}
+            title={isGuestShell ? 'Create an account' : 'Open profile'}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-sm font-semibold text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-sm font-semibold text-white">
               {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
             </div>
             {!collapsed ? (
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-white">{auth?.identity.display_name ?? 'Guest'}</div>
-                <div className="mt-0.5 text-xs text-zinc-500">
-                  {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'} / {usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits
+                <div className="truncate text-[13px] font-medium text-white">{auth?.identity.display_name ?? 'Guest'}</div>
+                <div className="mt-0.5 text-[11px] text-zinc-500">
+                  {isGuestShell
+                    ? 'Public explore'
+                    : `${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'} / ${usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits`}
                 </div>
               </div>
             ) : null}
           </Link>
           <button
             onClick={() => setIdentityPaneOpen((value) => !value)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.04] hover:text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.04] hover:text-white"
             title={identityPaneOpen ? 'Hide account panel' : 'Show account panel'}
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -536,29 +584,46 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 <div className="mb-3 rounded-[22px] bg-white/[0.03] p-3 ring-1 ring-white/[0.06]">
                   <div className="text-sm font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    @{auth?.identity.username ?? 'guest'} / {usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}
+                    {isGuestShell
+                      ? 'Public explore mode'
+                      : `@${auth?.identity.username ?? 'guest'} / ${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.05]">
-                    <div className="h-full rounded-full bg-white" style={{ width: `${usagePercent}%` }} />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-zinc-500">
-                    <span>{usageSummary?.credits_remaining ?? auth?.credits.remaining ?? 0} credits</span>
-                    {usageSummary?.reset_at ? <span>{new Date(usageSummary.reset_at).toLocaleDateString()}</span> : null}
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Link to="/account" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
-                      Profile
-                    </Link>
-                    <Link to="/subscription" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
-                      Subscription
-                    </Link>
-                    <Link to="/settings" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
-                      Settings
-                    </Link>
-                    <button onClick={handleSignOut} className="rounded-full px-3 py-2 text-[12px] text-rose-300">
-                      Log out
-                    </button>
-                  </div>
+                  {!isGuestShell && usageSummary ? (
+                    <>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                        <div className="h-full rounded-full bg-white" style={{ width: `${usagePercent}%` }} />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                        <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits</span>
+                        {usageSummary.reset_at ? <span>{new Date(usageSummary.reset_at).toLocaleDateString()}</span> : null}
+                      </div>
+                    </>
+                  ) : null}
+                  {isGuestShell ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Link to="/login?next=%2Fexplore" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                        Log in
+                      </Link>
+                      <Link to="/signup" onClick={() => setMobileOpen(false)} className="rounded-full bg-white px-3 py-2 text-center text-[12px] font-semibold text-black">
+                        Start free
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Link to="/account" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                        Profile
+                      </Link>
+                      <Link to="/subscription" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                        Subscription
+                      </Link>
+                      <Link to="/settings" onClick={() => setMobileOpen(false)} className="rounded-full bg-white/[0.05] px-3 py-2 text-center text-[12px] text-white">
+                        Settings
+                      </Link>
+                      <button onClick={handleSignOut} className="rounded-full px-3 py-2 text-[12px] text-rose-300">
+                        Log out
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : null}
               <button

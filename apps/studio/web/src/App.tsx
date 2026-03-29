@@ -28,7 +28,6 @@ function PublicRoutes() {
       <Route path="/landing" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route path="/explore" element={<DashboardPage />} />
       <Route path="/help" element={<DocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
@@ -48,6 +47,8 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route path="/explore" element={<DashboardPage />} />
+      <Route path="/community" element={<Navigate to="/explore" replace />} />
+      <Route path="/social" element={<Navigate to="/explore" replace />} />
       <Route path="/dashboard" element={<Navigate to="/explore" replace />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/compose" element={<Navigate to="/create" replace />} />
@@ -60,8 +61,6 @@ function ProtectedRoutes() {
       <Route path="/library/collections" element={<MediaLibraryPage />} />
       <Route path="/library/likes" element={<MediaLibraryPage />} />
       <Route path="/library/trash" element={<MediaLibraryPage />} />
-      <Route path="/community" element={<Navigate to="/explore" replace />} />
-      <Route path="/social" element={<Navigate to="/explore" replace />} />
       <Route path="/media" element={<Navigate to="/library/images" replace />} />
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
@@ -89,6 +88,10 @@ function AppFrame() {
   const location = useLocation()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const nextPath = `${location.pathname}${location.search}`
+  const isPublicShellRoute =
+    location.pathname === '/explore' ||
+    location.pathname === '/community' ||
+    location.pathname === '/social'
   const isAlwaysPublic =
     location.pathname === '/' ||
     location.pathname === '/landing' ||
@@ -97,7 +100,6 @@ function AppFrame() {
     location.pathname.startsWith('/shared/') ||
     location.pathname.startsWith('/u/')
   const isPublicCapable =
-    location.pathname === '/explore' ||
     location.pathname === '/help' ||
     location.pathname === '/docs' ||
     location.pathname === '/faq' ||
@@ -106,23 +108,24 @@ function AppFrame() {
     location.pathname === '/usage-policy' ||
     location.pathname === '/learn'
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const shouldRenderWithShell = isPublicShellRoute || canRenderWithShell
 
   useEffect(() => {
-    if (isAlwaysPublic || isPublicCapable) return
+    if (isAlwaysPublic || isPublicCapable || isPublicShellRoute) return
     if (isLoading || isAuthSyncing) return
     if (isAuthenticated && !auth?.guest) return
     setStudioPostAuthRedirect(nextPath)
-  }, [auth?.guest, isAlwaysPublic, isAuthSyncing, isAuthenticated, isLoading, isPublicCapable, nextPath])
+  }, [auth?.guest, isAlwaysPublic, isAuthSyncing, isAuthenticated, isLoading, isPublicCapable, isPublicShellRoute, nextPath])
 
-  if (isAlwaysPublic || (isPublicCapable && !canRenderWithShell)) {
+  if (isAlwaysPublic || (isPublicCapable && !shouldRenderWithShell)) {
     return <div className="min-h-screen bg-[rgb(var(--bg))]">{<PublicRoutes />}</div>
   }
 
-  if (!isPublicCapable && (isLoading || isAuthSyncing)) {
+  if (!isPublicCapable && !isPublicShellRoute && (isLoading || isAuthSyncing)) {
     return <div className="flex min-h-screen items-center justify-center bg-[#0b0b0d] text-sm text-zinc-500">Opening Studio...</div>
   }
 
-  if (!canRenderWithShell) {
+  if (!shouldRenderWithShell) {
     return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />
   }
 

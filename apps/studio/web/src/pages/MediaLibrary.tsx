@@ -487,10 +487,14 @@ function MovePostDialog({
 
 function InlineActionMenu({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute right-0 top-full z-30 mt-2 w-[min(220px,calc(100vw-2rem))] overflow-hidden rounded-[18px] bg-[#111216]/98 p-1.5 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl">
+    <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl">
       <div className="space-y-1">{children}</div>
     </div>
   )
+}
+
+function MenuDivider() {
+  return <div className="my-1 border-t border-white/[0.06]" />
 }
 
 function MenuAction({
@@ -501,7 +505,7 @@ function MenuAction({
   return (
     <button
       {...props}
-      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
+      className={`flex w-full items-center justify-between gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] transition ${
         tone === 'danger'
           ? 'text-rose-300 hover:bg-rose-500/[0.08] hover:text-rose-200'
           : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
@@ -517,14 +521,14 @@ function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (view: Vie
     <div className="flex items-center gap-1 rounded-full bg-white/[0.03] p-1 ring-1 ring-white/8">
       <button
         onClick={() => onChange('grid')}
-        className={`flex h-8 w-8 items-center justify-center rounded-full transition ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
         title="Grid view"
       >
         <Grid2X2 className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={() => onChange('list')}
-        className={`flex h-8 w-8 items-center justify-center rounded-full transition ${value === 'list' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'list' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
         title="List view"
       >
         <List className="h-3.5 w-3.5" />
@@ -543,12 +547,12 @@ function FilterBar<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {options.map((option) => (
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`rounded-full px-3 py-1.5 text-xs transition ${value === option.id ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+          className={`rounded-full px-2.5 py-1.5 text-[11px] transition ${value === option.id ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
         >
           {option.label}
         </button>
@@ -577,15 +581,15 @@ function Toolbar({
   actions?: ReactNode
 }) {
   return (
-    <section className="border-b border-white/[0.06] pb-2.5">
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
+    <section className="border-b border-white/[0.06] pb-2">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[1.9rem] font-semibold tracking-[-0.04em] text-white md:text-[2.3rem]">{title}</h1>
-          <p className="mt-1.5 text-sm text-zinc-500">{description}</p>
-          {filters ? <div className="mt-2.5">{filters}</div> : null}
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white md:text-[2.1rem]">{title}</h1>
+          <p className="mt-1 text-sm text-zinc-500">{description}</p>
+          {filters ? <div className="mt-2">{filters}</div> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="flex min-w-[180px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-sm text-zinc-400 ring-1 ring-white/8">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <label className="flex min-w-[170px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-400 ring-1 ring-white/8">
             <Search className="h-3.5 w-3.5" />
             <input
               value={search}
@@ -937,12 +941,12 @@ export default function MediaLibraryPage() {
             />
 
             {pendingGenerations.length ? (
-              <section className="border-b border-white/[0.06] pb-6">
+              <section className="border-b border-white/[0.06] pb-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-sm font-medium text-white">In progress</div>
                   <StatusPill tone="brand">{pendingGenerations.length} running</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4' : 'mt-4 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {pendingGenerations.map((generation) => (
                     <PendingPreview key={generation.job_id} generation={generation} view={activeView} />
                   ))}
@@ -959,13 +963,13 @@ export default function MediaLibraryPage() {
                 />
               )
             ) : filteredImageGroups.length ? (
-              <section className="space-y-5">
+              <section className="space-y-4">
                 {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="group border-b border-white/[0.06] pb-4">
+                  <section key={group.id} className="group border-b border-white/[0.06] pb-3.5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[1.05rem] font-semibold text-white">{group.title}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                        <div className="text-base font-semibold text-white">{group.title}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
                           <span>{formatDate(group.createdAt)}</span>
                           <span>/</span>
                           <span>{group.model}</span>
@@ -973,27 +977,27 @@ export default function MediaLibraryPage() {
                           <span>{group.items.length} variation{group.items.length > 1 ? 's' : ''}</span>
                         </div>
                         <div
-                          className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500"
+                          className="mt-1 max-w-2xl text-[13px] leading-5 text-zinc-500"
                           style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                         >
                           {group.prompt}
                         </div>
-                        <div className="mt-2.5 flex flex-wrap gap-1.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                        <div className="mt-2 flex flex-wrap gap-1.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           <button
                             onClick={() => openPreview(group, 0)}
-                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
                           >
                             Open
                           </button>
                           <button
                             onClick={() => openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })}
-                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
                           >
                             Reuse prompt
                           </button>
                           <button
                             onClick={() => setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })}
-                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
                           >
                             Move
                           </button>
@@ -1005,7 +1009,7 @@ export default function MediaLibraryPage() {
                                 handleMenuError(error)
                               }
                             }}
-                            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
                           >
                             Public
                           </button>
@@ -1017,20 +1021,20 @@ export default function MediaLibraryPage() {
                                 handleMenuError(error)
                               }
                             }}
-                            className="rounded-full bg-rose-500/[0.1] px-3 py-1.5 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/[0.16]"
+                            className="rounded-full bg-rose-500/[0.1] px-2.5 py-1.5 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/[0.16]"
                           >
                             Trash
                           </button>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Link to={`/projects/${group.projectId}`} className="pt-1 text-sm text-white transition hover:text-zinc-200">
+                        <Link to={`/projects/${group.projectId}`} className="pt-0.5 text-[13px] text-white transition hover:text-zinc-200">
                           {group.projectTitle}
                         </Link>
                         <div className="relative" data-library-menu-root="true">
                           <button
                             onClick={() => setActionMenu((current) => (current === `post:${group.id}` ? null : `post:${group.id}`))}
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
                             title="Image set actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -1062,6 +1066,7 @@ export default function MediaLibraryPage() {
                               >
                                 Reuse style
                               </MenuAction>
+                              <MenuDivider />
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={async () => {
@@ -1096,6 +1101,7 @@ export default function MediaLibraryPage() {
                               >
                                 Move to collection
                               </MenuAction>
+                              <MenuDivider />
                               <MenuAction
                                 tone="danger"
                                 disabled={menuBusy}
@@ -1117,9 +1123,9 @@ export default function MediaLibraryPage() {
                     </div>
 
                     {activeView === 'grid' ? (
-                      <div className="mt-3.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {group.items.map((asset) => (
-                        <div key={asset.id} className="space-y-2">
+                          <div key={asset.id} className="space-y-1.5">
                             <button
                               onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
                               className="block w-full overflow-hidden rounded-[20px] bg-white/[0.03] text-left"
@@ -1181,7 +1187,7 @@ export default function MediaLibraryPage() {
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
@@ -1199,7 +1205,7 @@ export default function MediaLibraryPage() {
                           </Link>
                           <button
                             onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
-                            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
                             title="Collection actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -1223,6 +1229,7 @@ export default function MediaLibraryPage() {
                               >
                                 Open in Compose
                               </MenuAction>
+                              <MenuDivider />
                               <MenuAction
                                 tone="danger"
                                 disabled={menuBusy}
@@ -1244,8 +1251,8 @@ export default function MediaLibraryPage() {
                           ) : null}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-[15px] font-medium text-white">{project.title}</div>
-                          <div className="mt-1 text-xs text-zinc-500">
+                          <div className="truncate text-sm font-medium text-white">{project.title}</div>
+                          <div className="mt-1 text-[11px] text-zinc-500">
                             {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} / {formatDate(project.updated_at)}
                           </div>
                         </div>
@@ -1270,7 +1277,7 @@ export default function MediaLibraryPage() {
                           <div className="relative" data-library-menu-root="true">
                             <button
                               onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                              className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
@@ -1293,6 +1300,7 @@ export default function MediaLibraryPage() {
                                 >
                                   Open in Compose
                                 </MenuAction>
+                                <MenuDivider />
                                 <MenuAction
                                   tone="danger"
                                   disabled={menuBusy}
@@ -1358,7 +1366,7 @@ export default function MediaLibraryPage() {
                 filteredTrash.length ? (
                   <button
                     onClick={() => setConfirmState({ kind: 'empty-trash', count: filteredTrash.length })}
-                    className="rounded-full bg-white/[0.05] px-3.5 py-2 text-xs font-medium text-white transition hover:bg-white/[0.08]"
+                    className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.08]"
                   >
                     Empty trash
                   </button>

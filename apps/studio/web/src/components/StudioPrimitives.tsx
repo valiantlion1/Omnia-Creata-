@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Link } from 'react-router-dom'
+import { APP_BUILD_LABEL, APP_RELEASE_CHANNEL, APP_VERSION_LABEL } from '@/lib/appVersion'
 
 export function AppPage({
   children,
@@ -9,7 +10,7 @@ export function AppPage({
   children: ReactNode
   className?: string
 }) {
-  return <div className={clsx('mx-auto flex w-full max-w-[1520px] flex-col gap-5 px-4 py-5 md:px-5 xl:px-6', className)}>{children}</div>
+  return <div className={clsx('mx-auto flex w-full max-w-[1480px] flex-col gap-4 px-4 py-4 md:px-5 xl:px-6', className)}>{children}</div>
 }
 
 export function PageHeader({
@@ -167,12 +168,12 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <Surface tone="muted" className="border-dashed text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.04] text-lg text-white ring-1 ring-white/8">+</div>
+    <section className="border-y border-dashed border-white/[0.06] py-10 text-center">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.04] text-base text-white ring-1 ring-white/8">+</div>
       <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</h3>
-      <p className="mx-auto mt-2.5 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
-      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
-    </Surface>
+      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    </section>
   )
 }
 
@@ -198,7 +199,12 @@ export function LegalFooter({ className }: { className?: string }) {
   return (
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>OmniaCreata TM 2026</div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>OmniaCreata TM 2026</span>
+          <span className="text-zinc-600">{APP_VERSION_LABEL}</span>
+          <span className="text-zinc-700">{APP_RELEASE_CHANNEL}</span>
+          <span className="text-zinc-700">build {APP_BUILD_LABEL}</span>
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/help#terms" className="transition hover:text-white">
             Terms

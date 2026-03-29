@@ -510,13 +510,13 @@ export default function ChatPage() {
   }, [timeline, pendingAttachments.length])
 
   return (
-    <AppPage className="!max-w-[1180px] !gap-0 !py-2.5">
+    <AppPage className="!max-w-[1080px] !gap-0 !py-2">
       <section
-        className={`flex flex-col overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#111216] shadow-[0_28px_80px_rgba(0,0,0,0.24)] ${
-          timeline.length ? 'min-h-[calc(100vh-3rem)]' : 'min-h-[620px]'
+        className={`flex flex-col ${
+          timeline.length ? 'min-h-[calc(100vh-3.5rem)]' : 'min-h-[520px]'
         }`}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.03] px-4 py-3 md:px-5">
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] pb-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Chat</div>
             <div className="mt-1 truncate text-lg font-semibold text-white">{activeConversation?.title || 'New chat'}</div>
@@ -532,7 +532,7 @@ export default function ChatPage() {
           ) : null}
         </div>
 
-        <div className={`min-h-0 overflow-y-auto px-4 md:px-5 ${timeline.length ? 'flex-1 py-4' : 'py-6'}`}>
+        <div className={`min-h-0 overflow-y-auto ${timeline.length ? 'flex-1 py-4' : 'py-4'}`}>
           {conversationDetailQuery.isLoading ? (
             <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -633,15 +633,17 @@ export default function ChatPage() {
               <div ref={bottomRef} />
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-2xl pt-6 text-center">
-              <div className="text-[1.55rem] font-semibold text-white">Start with one message.</div>
-              <div className="mt-2 text-sm text-zinc-400">Ask for a prompt, an edit pass, or a stronger direction.</div>
-              <div className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-2">
+            <div className="mx-auto w-full max-w-3xl border-b border-white/[0.05] pb-6 pt-2">
+              <div className="max-w-xl">
+                <div className="text-[1.35rem] font-semibold text-white">Start with one message.</div>
+                <div className="mt-1.5 text-sm text-zinc-400">Ask for a prompt, an edit pass, or a stronger direction.</div>
+              </div>
+              <div className="mt-4 flex max-w-2xl flex-wrap gap-2">
                 {['Build a stronger prompt', 'Turn this into a visual concept', 'Help me edit an image'].map((hint) => (
                   <button
                     key={hint}
                     onClick={() => setDraft(hint)}
-                    className="rounded-full bg-white/[0.04] px-3 py-1.5 text-[11px] text-zinc-200 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
+                    className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-zinc-200 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
                   >
                     {hint}
                   </button>
@@ -651,8 +653,8 @@ export default function ChatPage() {
           )}
         </div>
 
-        <div className="border-t border-white/[0.03] px-4 py-3 md:px-5">
-          <div className="mx-auto w-full max-w-3xl rounded-[22px] bg-[#0f1013] px-3 py-2 ring-1 ring-white/[0.08]">
+        <div className="border-t border-white/[0.05] py-3">
+          <div className="mx-auto w-full max-w-3xl rounded-[20px] bg-[#0f1013]/70 px-3 py-2 ring-1 ring-white/[0.08]">
             {pendingAttachments.length ? (
               <div className="mb-2.5 flex flex-wrap gap-2 border-b border-white/[0.03] pb-2.5">
                 {pendingAttachments.map((attachment) => (
@@ -680,10 +682,10 @@ export default function ChatPage() {
 
               <button
                 onClick={handleUploadClick}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white/[0.04] text-zinc-300 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
+                className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[13px] bg-white/[0.04] text-zinc-300 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
                 title="Upload files"
               >
-                <Plus className="h-4.5 w-4.5" />
+                <Plus className="h-4 w-4" />
               </button>
 
               <textarea
@@ -692,14 +694,14 @@ export default function ChatPage() {
                 onKeyDown={handleComposerKeyDown}
                 rows={1}
                 placeholder={auth?.guest ? 'Sign in to start chatting...' : 'Message Studio...'}
-                className="max-h-36 min-h-[40px] flex-1 resize-none bg-transparent px-1.5 py-1.5 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
+                className="max-h-32 min-h-[38px] flex-1 resize-none bg-transparent px-1.5 py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
               />
 
               <label className="relative shrink-0">
                 <select
                   value={composeMode}
                   onChange={(event) => setComposeMode(event.target.value as ComposeMode)}
-                  className="appearance-none rounded-[14px] border border-white/[0.08] bg-white/[0.04] py-2 pl-3.5 pr-8 text-sm text-zinc-200 outline-none transition hover:bg-white/[0.08]"
+                  className="appearance-none rounded-[13px] border border-white/[0.08] bg-white/[0.04] py-2 pl-3 pr-8 text-sm text-zinc-200 outline-none transition hover:bg-white/[0.08]"
                 >
                   {composeModes.map((mode) => (
                     <option key={mode} value={mode}>
@@ -713,7 +715,7 @@ export default function ChatPage() {
               <button
                 onClick={handleSend}
                 disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || createConversationMutation.isPending}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[13px] bg-white text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send"
               >
                 {sendMessageMutation.isPending || createConversationMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

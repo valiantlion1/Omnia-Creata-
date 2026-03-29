@@ -175,7 +175,7 @@ export default function AccountPage() {
   const activeDefaultVisibility = payload.profile.default_visibility
 
   return (
-    <AppPage className="max-w-[1260px] gap-6 py-5">
+    <AppPage className="max-w-[1080px] gap-5 py-3">
       <PageHeader
         eyebrow={payload.own_profile ? 'Account' : 'Profile'}
         title={title}
@@ -199,7 +199,7 @@ export default function AccountPage() {
             {payload.own_profile ? (
               <Link
                 to="/settings"
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3.5 py-1.5 text-sm text-white transition hover:bg-white/[0.08]"
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] text-white transition hover:bg-white/[0.08]"
               >
                 <Settings className="h-4 w-4" />
                 Settings
@@ -209,15 +209,15 @@ export default function AccountPage() {
         }
       />
 
-      <section className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="space-y-4 border-b border-white/[0.06] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-6">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.05] text-lg font-semibold text-white">
+      <section className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="space-y-3.5 border-b border-white/[0.06] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.05] text-base font-semibold text-white">
               {(payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()}
             </div>
             <div>
-              <div className="text-lg font-semibold text-white">{payload.profile.display_name}</div>
-              <div className="mt-1 text-sm text-zinc-500">@{payload.profile.username}</div>
+              <div className="text-[1.05rem] font-semibold text-white">{payload.profile.display_name}</div>
+              <div className="mt-0.5 text-sm text-zinc-500">@{payload.profile.username}</div>
             </div>
           </div>
 
@@ -226,13 +226,13 @@ export default function AccountPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setEditingField('name')}
-                className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-white transition hover:bg-white/[0.08]"
+                className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white transition hover:bg-white/[0.08]"
               >
                 Edit name
               </button>
               <button
                 onClick={() => setEditingField('bio')}
-                className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-white transition hover:bg-white/[0.08]"
+                className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white transition hover:bg-white/[0.08]"
               >
                 {payload.profile.bio ? 'Edit bio' : 'Add bio'}
               </button>
@@ -240,7 +240,7 @@ export default function AccountPage() {
           ) : null}
 
           {usage ? (
-            <div className="space-y-2.5 border-y border-white/[0.06] py-3.5">
+            <div className="space-y-2 border-y border-white/[0.06] py-3">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-zinc-500">Plan</span>
                 <span className="font-medium text-white">{usage.plan_label}</span>
@@ -277,7 +277,7 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <section className="space-y-4">
+        <section className="space-y-3.5">
           <div className="border-b border-white/[0.06] pb-3">
             <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Your work' : 'Public work'}</div>
             <div className="mt-1 text-sm text-zinc-500">

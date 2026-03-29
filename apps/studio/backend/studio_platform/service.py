@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-import httpx
 from PIL import Image
 import jwt
 
@@ -19,6 +18,7 @@ from .asset_storage import (
     ResolvedAssetDelivery,
     build_asset_storage_registry,
 )
+from .llm import StudioLLMGateway
 from .models import (
     ChatAttachment,
     ChatConversation,
@@ -199,6 +199,7 @@ class StudioService:
         self._asset_token_secret = settings.jwt_secret or "dev-asset-secret"
         self._asset_token_ttl_seconds = 60 * 20
         self.asset_storage = build_asset_storage_registry(settings, media_dir)
+        self.llm_gateway = StudioLLMGateway()
         self._public_safety_blocklist = (
             "nsfw",
             "nude",
@@ -244,6 +245,8 @@ class StudioService:
             "test render",
             "security check",
         )
+        self._internal_public_email_suffixes = ("@omnia.local",)
+        self._internal_public_email_prefixes = ("codex.", "security-check")
 
     async def initialize(self) -> None:
         await self.store.load()
@@ -305,7 +308,7 @@ class StudioService:
         marketing_opt_in: bool = False,
         bio: str = "",
         avatar_url: str | None = None,
-        default_visibility: Visibility = Visibility.PUBLIC,
+        default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
         holder: Dict[str, OmniaIdentity] = {}
 
@@ -333,7 +336,7 @@ class StudioService:
                     marketing_opt_in=marketing_opt_in,
                     bio=bio.strip(),
                     avatar_url=avatar_url,
-                    default_visibility=default_visibility,
+                    default_visibility=default_visibility or Visibility.PRIVATE,
                     subscription_status=SubscriptionStatus.ACTIVE if plan == IdentityPlan.PRO else SubscriptionStatus.NONE,
                     monthly_credits_remaining=plan_config.monthly_credits,
                     monthly_credit_allowance=plan_config.monthly_credits,
@@ -373,7 +376,8 @@ class StudioService:
                 identity.marketing_opt_in = identity.marketing_opt_in or marketing_opt_in
                 identity.bio = bio or identity.bio
                 identity.avatar_url = avatar_url or identity.avatar_url
-                identity.default_visibility = default_visibility or identity.default_visibility
+                if default_visibility is not None:
+                    identity.default_visibility = default_visibility
                 self._refresh_monthly_credits_locked(state, identity)
                 identity.updated_at = now
                 state.identities[identity.id] = identity
@@ -420,7 +424,16 @@ class StudioService:
         }
 
     def _initialize_state_locked(self, state: StudioState) -> None:
+        self._migrate_identity_visibility_defaults_locked(state)
         self._backfill_posts_locked(state)
+        self._normalize_public_posts_locked(state)
+
+    def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
+        now = utc_now()
+        for identity in state.identities.values():
+            if identity.default_visibility == Visibility.PUBLIC:
+                identity.default_visibility = Visibility.PRIVATE
+                identity.updated_at = now
 
     def _backfill_posts_locked(self, state: StudioState) -> None:
         for generation in state.generations.values():
@@ -468,6 +481,33 @@ class StudioService:
                 updated_at=generation.updated_at,
             )
 
+    def _normalize_public_posts_locked(self, state: StudioState) -> None:
+        now = utc_now()
+        generations_by_id = state.generations
+        for post in state.posts.values():
+            identity = state.identities.get(post.identity_id)
+            changed = False
+            next_username = self._identity_public_username(identity, fallback=post.owner_username)
+            next_display_name = self._identity_public_display_name(identity, fallback=post.owner_display_name)
+            if post.owner_username != next_username:
+                post.owner_username = next_username
+                changed = True
+            if post.owner_display_name != next_display_name:
+                post.owner_display_name = next_display_name
+                changed = True
+            if (
+                post.visibility == Visibility.PUBLIC
+                and self._should_hide_post_from_public(
+                    post,
+                    identity=identity,
+                    generations_by_id=generations_by_id,
+                )
+            ):
+                post.visibility = Visibility.PRIVATE
+                changed = True
+            if changed:
+                post.updated_at = now
+
     def get_public_plan_payload(self) -> Dict[str, Any]:
         return {
             "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values() if plan.id != IdentityPlan.GUEST],
@@ -505,14 +545,16 @@ class StudioService:
         post: PublicPost,
         *,
         assets_by_id: Dict[str, MediaAsset],
+        identities_by_id: Optional[Dict[str, OmniaIdentity]] = None,
         viewer_identity_id: Optional[str] = None,
         public_preview: bool = False,
     ) -> Dict[str, Any]:
         cover_asset = assets_by_id.get(post.cover_asset_id or "")
+        identity = identities_by_id.get(post.identity_id) if identities_by_id else None
         return {
             "id": post.id,
-            "owner_username": post.owner_username,
-            "owner_display_name": post.owner_display_name,
+            "owner_username": self._identity_public_username(identity, fallback=post.owner_username),
+            "owner_display_name": self._identity_public_display_name(identity, fallback=post.owner_display_name),
             "title": post.title,
             "prompt": post.prompt,
             "cover_asset": self.serialize_asset(
@@ -846,6 +888,49 @@ class StudioService:
             return True
         return False
 
+    def _identity_public_username(self, identity: Optional[OmniaIdentity], *, fallback: str = "creator") -> str:
+        if identity is None:
+            return fallback
+        return (identity.username or identity.email.split("@")[0] or fallback).strip().lower()
+
+    def _identity_public_display_name(self, identity: Optional[OmniaIdentity], *, fallback: str = "Creator") -> str:
+        if identity is None:
+            return fallback
+        return (identity.display_name or fallback).strip() or fallback
+
+    def _is_internal_identity(self, identity: Optional[OmniaIdentity]) -> bool:
+        if identity is None:
+            return True
+        email = (identity.email or "").strip().lower()
+        username = (identity.username or "").strip().lower()
+        return (
+            any(email.endswith(suffix) for suffix in self._internal_public_email_suffixes)
+            or any(email.startswith(prefix) for prefix in self._internal_public_email_prefixes)
+            or username.startswith("codex")
+            or username == "security-check"
+        )
+
+    def _generation_provider_for_post(
+        self,
+        post: PublicPost,
+        generations_by_id: Dict[str, GenerationJob],
+    ) -> str:
+        generation = generations_by_id.get(post.id)
+        if generation is None:
+            return ""
+        return str(generation.provider or "").strip().lower()
+
+    def _should_hide_post_from_public(
+        self,
+        post: PublicPost,
+        *,
+        identity: Optional[OmniaIdentity],
+        generations_by_id: Dict[str, GenerationJob],
+    ) -> bool:
+        if self._is_internal_identity(identity):
+            return True
+        return self._generation_provider_for_post(post, generations_by_id) == "demo"
+
     def _is_publicly_safe_post(self, post: PublicPost) -> bool:
         prompt = (post.prompt or "").lower()
         title = (post.title or "").lower()
@@ -880,8 +965,18 @@ class StudioService:
 
     async def _assert_public_asset_preview_access(self, asset_id: str) -> None:
         posts = await self.store.list_models("posts", PublicPost)
+        identities = await self.store.list_models("identities", OmniaIdentity)
+        generations = await self.store.list_models("generations", GenerationJob)
+        identities_by_id = {identity.id: identity for identity in identities}
+        generations_by_id = {generation.id: generation for generation in generations}
         for post in posts:
             if post.visibility != Visibility.PUBLIC:
+                continue
+            if self._should_hide_post_from_public(
+                post,
+                identity=identities_by_id.get(post.identity_id),
+                generations_by_id=generations_by_id,
+            ):
                 continue
             if not self._is_publicly_showcase_ready_post(post):
                 continue
@@ -1008,13 +1103,42 @@ class StudioService:
             content=sanitized_content,
             attachments=attachment_models,
         )
-        response_body, suggested_actions = self._build_chat_reply(sanitized_content, attachment_models)
+        resolved_mode = self._resolve_chat_mode(model or conversation.model)
+        llm_reply = await self.llm_gateway.generate_chat_reply(
+            requested_model=model or conversation.model,
+            mode=resolved_mode,
+            history=messages,
+            content=sanitized_content,
+            attachments=attachment_models,
+        )
+        if llm_reply:
+            response_body = llm_reply.text
+            suggested_actions = self._build_chat_suggested_actions(sanitized_content, attachment_models)
+            metadata = {
+                "provider": llm_reply.provider,
+                "model": llm_reply.model,
+                "mode": resolved_mode,
+                "prompt_tokens": llm_reply.prompt_tokens,
+                "completion_tokens": llm_reply.completion_tokens,
+                "estimated_cost_usd": llm_reply.estimated_cost_usd,
+                "used_fallback": llm_reply.used_fallback,
+            }
+        else:
+            response_body, suggested_actions = self._build_chat_reply(sanitized_content, attachment_models)
+            metadata = {
+                "provider": "heuristic",
+                "model": "studio-assist",
+                "mode": resolved_mode,
+                "estimated_cost_usd": 0.0,
+                "used_fallback": True,
+            }
         assistant_message = ChatMessage(
             conversation_id=conversation.id,
             identity_id=identity.id,
             role=ChatRole.ASSISTANT,
             content=response_body,
             suggested_actions=suggested_actions,
+            metadata=metadata,
         )
 
         def mutation(state: StudioState) -> None:
@@ -1098,11 +1222,21 @@ class StudioService:
     ) -> List[Dict[str, Any]]:
         posts = await self.store.list_models("posts", PublicPost)
         assets = await self.store.list_models("assets", MediaAsset)
+        identities = await self.store.list_models("identities", OmniaIdentity)
+        generations = await self.store.list_models("generations", GenerationJob)
         assets_by_id = {asset.id: asset for asset in assets}
+        identities_by_id = {identity.id: identity for identity in identities}
+        generations_by_id = {generation.id: generation for generation in generations}
 
         public_posts = []
         for post in posts:
             if post.visibility != Visibility.PUBLIC:
+                continue
+            if self._should_hide_post_from_public(
+                post,
+                identity=identities_by_id.get(post.identity_id),
+                generations_by_id=generations_by_id,
+            ):
                 continue
             if not self._is_publicly_showcase_ready_post(post):
                 continue
@@ -1146,6 +1280,7 @@ class StudioService:
             self.serialize_post(
                 post,
                 assets_by_id=assets_by_id,
+                identities_by_id=identities_by_id,
                 viewer_identity_id=viewer_identity_id,
                 public_preview=True,
             )
@@ -1168,7 +1303,9 @@ class StudioService:
 
         posts = await self.store.list_models("posts", PublicPost)
         assets = await self.store.list_models("assets", MediaAsset)
+        generations = await self.store.list_models("generations", GenerationJob)
         assets_by_id = {asset.id: asset for asset in assets}
+        generations_by_id = {generation.id: generation for generation in generations}
         own_profile = bool(viewer_identity_id and viewer_identity_id == identity.id)
 
         visible_posts = []
@@ -1176,6 +1313,15 @@ class StudioService:
             if post.identity_id != identity.id:
                 continue
             if not own_profile and post.visibility != Visibility.PUBLIC:
+                continue
+            if (
+                not own_profile
+                and self._should_hide_post_from_public(
+                    post,
+                    identity=identity,
+                    generations_by_id=generations_by_id,
+                )
+            ):
                 continue
             if not own_profile and not self._is_publicly_showcase_ready_post(post):
                 continue
@@ -1195,6 +1341,11 @@ class StudioService:
                 for post in posts
                 if post.identity_id == identity.id
                 and post.visibility == Visibility.PUBLIC
+                and not self._should_hide_post_from_public(
+                    post,
+                    identity=identity,
+                    generations_by_id=generations_by_id,
+                )
                 and self._is_publicly_showcase_ready_post(post)
             ]
         )
@@ -1214,6 +1365,7 @@ class StudioService:
                 self.serialize_post(
                     post,
                     assets_by_id=assets_by_id,
+                    identities_by_id={identity.id: identity},
                     viewer_identity_id=viewer_identity_id,
                     public_preview=not own_profile,
                 )
@@ -1262,10 +1414,28 @@ class StudioService:
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
         post = await self._get_post(post_id)
         assets = await self.store.list_models("assets", MediaAsset)
+        identities = await self.store.list_models("identities", OmniaIdentity)
+        generations = await self.store.list_models("generations", GenerationJob)
         assets_by_id = {asset.id: asset for asset in assets}
+        identities_by_id = {identity.id: identity for identity in identities}
+        generations_by_id = {generation.id: generation for generation in generations}
         if post.visibility != Visibility.PUBLIC and viewer_identity_id != post.identity_id:
             raise PermissionError("Post is private")
-        return self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+        if (
+            viewer_identity_id != post.identity_id
+            and self._should_hide_post_from_public(
+                post,
+                identity=identities_by_id.get(post.identity_id),
+                generations_by_id=generations_by_id,
+            )
+        ):
+            raise PermissionError("Post is private")
+        return self.serialize_post(
+            post,
+            assets_by_id=assets_by_id,
+            identities_by_id=identities_by_id,
+            viewer_identity_id=viewer_identity_id,
+        )
 
     async def update_post(
         self,
@@ -1894,6 +2064,12 @@ class StudioService:
         words = content.strip().split()
         return " ".join(words[:6]).strip()[:72] or "New chat"
 
+    def _resolve_chat_mode(self, requested_model: str | None) -> str:
+        normalized = (requested_model or "think").strip().lower()
+        if normalized in {"think", "vision", "edit"}:
+            return normalized
+        return "think"
+
     def _build_chat_reply(
         self,
         content: str,
@@ -1952,6 +2128,14 @@ class StudioService:
             ],
         )
 
+    def _build_chat_suggested_actions(
+        self,
+        content: str,
+        attachments: List[ChatAttachment],
+    ) -> List[ChatSuggestedAction]:
+        _, actions = self._build_chat_reply(content, attachments)
+        return actions
+
     def _compact_prompt(self, content: str) -> str:
         cleaned = " ".join(content.strip().split())
         if not cleaned:
@@ -1966,11 +2150,11 @@ class StudioService:
         if not cleaned:
             raise ValueError("Prompt cannot be empty")
 
-        llm_prompt = await self._try_gemini_prompt_improvement(cleaned)
-        if llm_prompt:
+        llm_result = await self.llm_gateway.improve_prompt(cleaned)
+        if llm_result:
             return {
-                "prompt": llm_prompt,
-                "provider": "gemini",
+                "prompt": llm_result.text,
+                "provider": llm_result.provider,
                 "used_llm": True,
             }
 
@@ -1979,72 +2163,6 @@ class StudioService:
             "provider": "heuristic",
             "used_llm": False,
         }
-
-    async def _try_gemini_prompt_improvement(self, prompt: str) -> Optional[str]:
-        settings = get_settings()
-        if not settings.gemini_api_key:
-            return None
-
-        request_body = {
-            "system_instruction": {
-                "parts": [
-                    {
-                        "text": (
-                            "You improve image-generation prompts. Keep the user's intent, remove filler, "
-                            "and add only useful visual detail. Return only the final improved prompt."
-                        )
-                    }
-                ]
-            },
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "text": (
-                                "Improve this prompt for a high-quality image generation request. "
-                                "Keep it concise, visual, and production-ready.\n\n"
-                                f"Prompt: {prompt}"
-                            )
-                        }
-                    ],
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.45,
-                "topP": 0.9,
-                "maxOutputTokens": 220,
-            },
-        }
-
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=4.0)) as client:
-                response = await client.post(url, json=request_body)
-                response.raise_for_status()
-        except Exception:
-            return None
-
-        try:
-            payload = response.json()
-            candidates = payload.get("candidates") or []
-            parts = ((candidates[0] or {}).get("content") or {}).get("parts") or []
-            text = "".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
-        except Exception:
-            return None
-
-        normalized = self._normalize_improved_prompt(text)
-        return normalized or None
-
-    def _normalize_improved_prompt(self, prompt: str) -> str:
-        normalized = prompt.strip().strip("`").strip().strip('"').strip("'")
-        normalized = re.sub(r"^\s*(prompt|improved prompt)\s*:\s*", "", normalized, flags=re.IGNORECASE)
-        normalized = " ".join(normalized.split())
-        return normalized[:420]
 
     def _fallback_enhanced_prompt(self, prompt: str) -> str:
         cleaned = prompt.strip().strip(",.")

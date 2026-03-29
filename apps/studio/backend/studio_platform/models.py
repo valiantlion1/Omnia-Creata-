@@ -73,7 +73,7 @@ class OmniaIdentity(BaseModel):
     marketing_opt_in: bool = False
     bio: str = ""
     avatar_url: Optional[str] = None
-    default_visibility: Visibility = Visibility.PUBLIC
+    default_visibility: Visibility = Visibility.PRIVATE
     workspace_id: str = Field(default_factory=lambda: str(uuid4()))
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE
     monthly_credits_remaining: int = 60
@@ -157,6 +157,7 @@ class ChatMessage(BaseModel):
     content: str
     attachments: List[ChatAttachment] = Field(default_factory=list)
     suggested_actions: List[ChatSuggestedAction] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
 
 

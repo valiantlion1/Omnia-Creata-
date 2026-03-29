@@ -38,95 +38,78 @@ const defaultPlans: PublicPlansPayload = {
 const atmosphereRows = [
   {
     motion: 'landing-drift-a',
-    depthBlur: 1.05,
-    opacity: 0.18,
-    scale: 1.03,
-    top: '5%',
-    left: '-16%',
+    depthBlur: 0.8,
+    opacity: 0.16,
+    scale: 1,
+    top: '19%',
+    left: '-8%',
     items: [
-      { src: '/atmosphere/atmosphere-05-desert-courtyard.png', width: '21rem', rotate: '-4deg', rise: '1.2rem', focus: '60% center' },
-      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '24rem', rotate: '2deg', rise: '2.9rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '20rem', rotate: '-2deg', rise: '0.2rem', focus: '68% center' },
-      { src: '/atmosphere/atmosphere-02-conservatory.png', width: '23rem', rotate: '4deg', rise: '2.2rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '22rem', rotate: '-3deg', rise: '0.8rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '24rem', rotate: '2deg', rise: '1.8rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-05-desert-courtyard.png', width: '22rem', rotate: '-2deg', rise: '0rem', focus: 'center center' },
     ],
   },
   {
     motion: 'landing-drift-b',
-    depthBlur: 0.3,
-    opacity: 0.25,
+    depthBlur: 0.45,
+    opacity: 0.19,
     scale: 1,
-    top: '24%',
-    left: '-8%',
+    top: '48%',
+    left: '-4%',
     items: [
-      { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '25rem', rotate: '3deg', rise: '1.6rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '22rem', rotate: '-4deg', rise: '0rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-02-conservatory.png', width: '21rem', rotate: '2deg', rise: '2.2rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-05-desert-courtyard.png', width: '24rem', rotate: '-3deg', rise: '0.5rem', focus: '55% center' },
+      { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '22rem', rotate: '3deg', rise: '0.8rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-02-conservatory.png', width: '23rem', rotate: '-3deg', rise: '0rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '24rem', rotate: '2deg', rise: '1.6rem', focus: 'center center' },
     ],
   },
   {
     motion: 'landing-drift-c',
-    depthBlur: 1.45,
-    opacity: 0.16,
-    scale: 1.05,
-    top: '49%',
-    left: '-14%',
+    depthBlur: 1.15,
+    opacity: 0.13,
+    scale: 1.02,
+    top: '76%',
+    left: '-8%',
     items: [
-      { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '22rem', rotate: '-5deg', rise: '2.7rem', focus: '72% center' },
-      { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '24rem', rotate: '4deg', rise: '0.4rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-05-desert-courtyard.png', width: '23rem', rotate: '-2deg', rise: '2.1rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '20rem', rotate: '5deg', rise: '0.8rem', focus: 'center center' },
-    ],
-  },
-  {
-    motion: 'landing-drift-d',
-    depthBlur: 0.2,
-    opacity: 0.22,
-    scale: 0.97,
-    top: '71%',
-    left: '-5%',
-    items: [
-      { src: '/atmosphere/atmosphere-02-conservatory.png', width: '21rem', rotate: '3deg', rise: '0.7rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '24rem', rotate: '-4deg', rise: '2.1rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-03-skyline-garden.png', width: '22rem', rotate: '2deg', rise: '0.9rem', focus: 'center center' },
-      { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '20rem', rotate: '-3deg', rise: '2.6rem', focus: '66% center' },
+      { src: '/atmosphere/atmosphere-05-desert-courtyard.png', width: '21rem', rotate: '-4deg', rise: '1rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-01-brutalist.png', width: '20rem', rotate: '3deg', rise: '0.2rem', focus: 'center center' },
+      { src: '/atmosphere/atmosphere-04-snow-leopard.png', width: '22rem', rotate: '-2deg', rise: '1.4rem', focus: 'center center' },
     ],
   },
 ]
 
 const heroAnchors = [
   {
-    src: '/atmosphere/atmosphere-03-skyline-garden.png',
-    width: '28rem',
-    height: '17rem',
-    top: '8%',
+    src: '/atmosphere/atmosphere-02-conservatory.png',
+    width: '26rem',
+    height: '16rem',
+    top: '10%',
     right: '8%',
-    rotate: '5deg',
-    opacity: 0.32,
-    blur: 0.1,
+    rotate: '4deg',
+    opacity: 0.38,
+    blur: 0.35,
+    focus: 'center center',
+  },
+  {
+    src: '/atmosphere/atmosphere-03-skyline-garden.png',
+    width: '24rem',
+    height: '14.5rem',
+    top: '36%',
+    right: '3%',
+    rotate: '-5deg',
+    opacity: 0.34,
+    blur: 0.45,
     focus: 'center center',
   },
   {
     src: '/atmosphere/atmosphere-05-desert-courtyard.png',
-    width: '26rem',
-    height: '15.5rem',
-    top: '34%',
-    right: '2%',
-    rotate: '-4deg',
-    opacity: 0.28,
-    blur: 0.2,
-    focus: '58% center',
-  },
-  {
-    src: '/atmosphere/atmosphere-04-snow-leopard.png',
-    width: '24rem',
-    height: '15rem',
+    width: '23rem',
+    height: '14.5rem',
     top: '58%',
-    right: '13%',
-    rotate: '3deg',
-    opacity: 0.24,
-    blur: 0.4,
-    focus: '68% center',
+    right: '12%',
+    rotate: '2deg',
+    opacity: 0.3,
+    blur: 0.65,
+    focus: 'center center',
   },
 ]
 
@@ -233,6 +216,7 @@ export default function HomePage() {
   const planData = plansQuery.data ?? defaultPlans
   const primaryCta = isAuthenticated ? '/studio' : '/signup'
   const primaryLabel = isAuthenticated ? 'Open Studio' : 'Enter OmniaCreata'
+  const exploreCta = '/explore'
 
   return (
     <div
@@ -256,14 +240,9 @@ export default function HomePage() {
           0% { transform: translate3d(0, 0, 0); }
           100% { transform: translate3d(-4%, 0, 0); }
         }
-        @keyframes landingDriftD {
-          0% { transform: translate3d(-2.5%, 0, 0); }
-          100% { transform: translate3d(5%, 0, 0); }
-        }
         .landing-drift-a { animation: landingDriftA 66s linear infinite alternate; }
         .landing-drift-b { animation: landingDriftB 74s linear infinite alternate; }
         .landing-drift-c { animation: landingDriftC 82s linear infinite alternate; }
-        .landing-drift-d { animation: landingDriftD 90s linear infinite alternate; }
       `}</style>
 
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -323,6 +302,9 @@ export default function HomePage() {
           </Link>
 
           <nav className="hidden items-center gap-6 text-sm text-zinc-300 md:flex">
+            <Link to={exploreCta} className="transition hover:text-white">
+              Explore
+            </Link>
             <a href="#capabilities" className="transition hover:text-white">
               Capabilities
             </a>
@@ -362,8 +344,8 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               {!isAuthenticated ? (
-                <Link to="/signup" className="rounded-full bg-white/[0.06] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
-                  Start free
+                <Link to={exploreCta} className="rounded-full bg-white/[0.06] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                  Browse Explore
                 </Link>
               ) : null}
             </div>
@@ -521,8 +503,8 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               {!isAuthenticated ? (
-                <Link to="/login" className="rounded-full bg-white/[0.06] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
-                  Log in
+                <Link to={exploreCta} className="rounded-full bg-white/[0.06] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                  Explore first
                 </Link>
               ) : null}
             </div>

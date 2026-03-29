@@ -1,0 +1,2 @@
+EMAIL=codex.audit.2260f986@example.com
+PASSWORD=Codex!23456

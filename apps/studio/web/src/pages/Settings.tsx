@@ -17,10 +17,10 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="border-b border-white/[0.06] py-5 first:pt-0 last:border-b-0">
+    <section className="border-b border-white/[0.06] py-4 first:pt-0 last:border-b-0">
       <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">{label}</div>
-      <div className="mt-1.5 text-base font-semibold text-white">{title}</div>
-      <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06] bg-white/[0.015]">
+      <div className="mt-1 text-[15px] font-semibold text-white">{title}</div>
+      <div className="mt-2.5 divide-y divide-white/[0.06] border-y border-white/[0.06]">
         {children}
       </div>
     </section>
@@ -39,13 +39,13 @@ function Row({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2.5 px-4 py-3.5 md:flex-row md:items-start md:justify-between">
+    <div className="grid gap-2 px-3.5 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start md:gap-4">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-zinc-100">{title}</div>
-        {description ? <div className="mt-1 text-sm leading-6 text-zinc-500">{description}</div> : null}
+        {description ? <div className="mt-1 text-[13px] leading-6 text-zinc-500">{description}</div> : null}
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {value ? <div className="text-sm text-zinc-300">{value}</div> : null}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+        {value ? <div className="text-sm text-zinc-300 md:text-right">{value}</div> : null}
         {actions}
       </div>
     </div>
@@ -56,7 +56,7 @@ function SoftButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButto
   return (
     <button
       {...props}
-      className={`rounded-full bg-white/[0.04] px-3 py-1.5 text-sm text-white transition hover:bg-white/[0.08] ${props.className ?? ''}`}
+      className={`rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[12px] text-white transition hover:bg-white/[0.08] ${props.className ?? ''}`}
     >
       {children}
     </button>
@@ -109,11 +109,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppPage className="max-w-[1220px] gap-0 py-4">
+    <AppPage className="max-w-[1040px] gap-0 py-3">
       <div className="border-b border-white/[0.06] pb-4">
         <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Settings</div>
-        <h1 className="mt-1.5 text-[2rem] font-semibold tracking-[-0.04em] text-white">Studio settings</h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500">
+        <h1 className="mt-1 text-[1.85rem] font-semibold tracking-[-0.04em] text-white">Studio settings</h1>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
           Keep account, security, notifications, and documentation in one quiet place.
         </p>
       </div>

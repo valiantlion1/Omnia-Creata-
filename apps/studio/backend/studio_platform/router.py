@@ -160,6 +160,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             "content": message.content,
             "attachments": [attachment.model_dump(mode="json") for attachment in message.attachments],
             "suggested_actions": [action.model_dump(mode="json") for action in message.suggested_actions],
+            "metadata": message.metadata,
             "created_at": message.created_at.isoformat(),
         }
 
