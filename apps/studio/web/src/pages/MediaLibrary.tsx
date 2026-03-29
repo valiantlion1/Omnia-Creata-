@@ -577,15 +577,15 @@ function Toolbar({
   actions?: ReactNode
 }) {
   return (
-    <section className="border-b border-white/[0.06] pb-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <section className="border-b border-white/[0.06] pb-2.5">
+      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[2rem]">{title}</h1>
-          <p className="mt-2 text-sm text-zinc-500">{description}</p>
-          {filters ? <div className="mt-3">{filters}</div> : null}
+          <h1 className="text-[1.9rem] font-semibold tracking-[-0.04em] text-white md:text-[2.3rem]">{title}</h1>
+          <p className="mt-1.5 text-sm text-zinc-500">{description}</p>
+          {filters ? <div className="mt-2.5">{filters}</div> : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="flex min-w-[200px] items-center gap-2 rounded-full bg-white/[0.03] px-3.5 py-2 text-sm text-zinc-400 ring-1 ring-white/8">
+          <label className="flex min-w-[180px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-sm text-zinc-400 ring-1 ring-white/8">
             <Search className="h-3.5 w-3.5" />
             <input
               value={search}
@@ -606,16 +606,22 @@ function EmptyInline({
   icon,
   title,
   description,
+  compact = false,
 }: {
   icon: ReactNode
   title: string
   description: string
+  compact?: boolean
 }) {
   return (
-    <section className="flex min-h-[28vh] flex-col items-center justify-center gap-3 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.03] text-zinc-300 ring-1 ring-white/8">{icon}</div>
-      <div className="text-lg font-semibold text-white">{title}</div>
-      <div className="max-w-xl text-sm leading-7 text-zinc-500">{description}</div>
+    <section
+      className={`flex flex-col gap-2.5 py-4 ${
+        compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'
+      }`}
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.03] text-zinc-300 ring-1 ring-white/8">{icon}</div>
+      <div className="text-base font-semibold text-white">{title}</div>
+      <div className={`text-sm leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
     </section>
   )
 }
@@ -917,7 +923,7 @@ export default function MediaLibraryPage() {
 
   return (
     <>
-      <AppPage className="max-w-[1480px] gap-5 py-4">
+      <AppPage className="max-w-[1420px] gap-4 py-3.5">
         {section === 'images' ? (
           <>
             <Toolbar
@@ -953,9 +959,9 @@ export default function MediaLibraryPage() {
                 />
               )
             ) : filteredImageGroups.length ? (
-              <section className="space-y-6">
+              <section className="space-y-5">
                 {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="group border-b border-white/[0.06] pb-5">
+                  <section key={group.id} className="group border-b border-white/[0.06] pb-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[1.05rem] font-semibold text-white">{group.title}</div>
@@ -967,12 +973,12 @@ export default function MediaLibraryPage() {
                           <span>{group.items.length} variation{group.items.length > 1 ? 's' : ''}</span>
                         </div>
                         <div
-                          className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500"
+                          className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500"
                           style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                         >
                           {group.prompt}
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                        <div className="mt-2.5 flex flex-wrap gap-1.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           <button
                             onClick={() => openPreview(group, 0)}
                             className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
@@ -1111,12 +1117,12 @@ export default function MediaLibraryPage() {
                     </div>
 
                     {activeView === 'grid' ? (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      <div className="mt-3.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                         {group.items.map((asset) => (
-                        <div key={asset.id} className="space-y-2.5">
+                        <div key={asset.id} className="space-y-2">
                             <button
                               onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
-                              className="block w-full overflow-hidden rounded-[22px] bg-white/[0.03] text-left"
+                              className="block w-full overflow-hidden rounded-[20px] bg-white/[0.03] text-left"
                             >
                               <img
                                 src={asset.thumbnail_url ?? asset.url}
@@ -1124,7 +1130,7 @@ export default function MediaLibraryPage() {
                                 className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
                               />
                             </button>
-                            <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
                               <span>V{variantOrder(asset) + 1}</span>
                               <span className="truncate">{asset.title}</span>
                             </div>
@@ -1175,14 +1181,14 @@ export default function MediaLibraryPage() {
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
                     return (
-                      <div key={project.id} className="space-y-3">
+                      <div key={project.id} className="space-y-2.5">
                         <div className="relative" data-library-menu-root="true">
-                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[22px] bg-white/[0.03]">
+                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[20px] bg-white/[0.03]">
                             {cover ? (
                               <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.02]" />
                             ) : (
@@ -1238,7 +1244,7 @@ export default function MediaLibraryPage() {
                           ) : null}
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">{project.title}</div>
+                          <div className="truncate text-[15px] font-medium text-white">{project.title}</div>
                           <div className="mt-1 text-xs text-zinc-500">
                             {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} / {formatDate(project.updated_at)}
                           </div>
@@ -1314,7 +1320,7 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <EmptyInline icon={<Folder className="h-4 w-4" />} title="No collections yet." description="Collections appear as your projects start holding real work." />
+              <EmptyInline compact icon={<Folder className="h-4 w-4" />} title="No collections yet." description="Collections appear as your projects start holding real work." />
             )}
           </>
         ) : null}
@@ -1330,6 +1336,7 @@ export default function MediaLibraryPage() {
               onViewChange={(view) => setViews((current) => ({ ...current, likes: view }))}
             />
             <EmptyInline
+              compact
               icon={<Heart className="h-4 w-4" />}
               title="No favorites yet."
               description="When you start saving references or favorite generations, they will show up here."
@@ -1361,10 +1368,10 @@ export default function MediaLibraryPage() {
 
             {filteredTrash.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredTrash.map((asset) => (
-                    <div key={asset.id} className="space-y-3">
-                      <div className="relative overflow-hidden rounded-[22px] bg-white/[0.03]" data-library-menu-root="true">
+                    <div key={asset.id} className="space-y-2.5">
+                      <div className="relative overflow-hidden rounded-[20px] bg-white/[0.03]" data-library-menu-root="true">
                         <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-[4/5] w-full object-cover opacity-75" />
                         <button
                           onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
@@ -1454,7 +1461,7 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <EmptyInline icon={<Trash2 className="h-4 w-4" />} title="Trash is empty." description="Restore or permanently delete work here when you need to clean up." />
+              <EmptyInline compact icon={<Trash2 className="h-4 w-4" />} title="Trash is empty." description="Restore or permanently delete work here when you need to clean up." />
             )}
           </>
         ) : null}

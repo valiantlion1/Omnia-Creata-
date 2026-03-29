@@ -84,8 +84,8 @@ function getModelCostLabel(model: ModelCatalogEntry | undefined) {
 
 function getModelCostSummary(model: ModelCatalogEntry | undefined, width: number, height: number) {
   if (!model) return `${width} x ${height}`
-  if (model.runtime === 'local') return `Local runtime · no credit spend · ${width} x ${height}`
-  return `Cost ${model.credit_cost} credits · ${width} x ${height}`
+  if (model.runtime === 'local') return `Local runtime / no credit spend / ${width} x ${height}`
+  return `Cost ${model.credit_cost} credits / ${width} x ${height}`
 }
 
 export default function CreatePage() {
@@ -330,12 +330,12 @@ export default function CreatePage() {
 
   return (
     <>
-      <AppPage className="h-full max-w-[1180px] py-4">
-        <section className="flex h-full min-h-0 flex-col px-2 py-2 md:px-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <AppPage className="max-w-[980px] gap-3 py-2.5">
+        <section className="px-2 py-1 md:px-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
-              <p className="mt-3 text-sm text-zinc-500">Prompt. Model. Ratio. Generate. Results land in Library.</p>
+              <h1 className="text-[2.35rem] font-semibold tracking-[-0.05em] text-white md:text-[3rem]">Compose</h1>
+              <p className="mt-1.5 text-sm text-zinc-500">Prompt, model, ratio, generate. Results land in Library.</p>
             </div>
             <div className="flex items-center gap-2">
               <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
@@ -343,13 +343,13 @@ export default function CreatePage() {
             </div>
           </div>
 
-          <div className="mt-8 flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
+          <div className="mt-3.5">
+            <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2.5">
               <div className="text-sm text-zinc-500">Prompt</div>
               <button
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3.5 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 Improve prompt
@@ -362,13 +362,13 @@ export default function CreatePage() {
                 setPrompt(event.target.value)
                 if (improveState !== 'idle') setImproveState('idle')
               }}
-              rows={9}
+              rows={6}
               placeholder="Describe the image you want to generate..."
-              className="mt-4 min-h-[250px] w-full flex-1 resize-none bg-transparent text-[1.08rem] leading-8 text-white outline-none placeholder:text-zinc-500 md:min-h-[290px] md:text-[1.14rem]"
+              className="mt-2.5 min-h-[150px] w-full resize-none bg-transparent text-[0.98rem] leading-7 text-white outline-none placeholder:text-zinc-500 md:min-h-[180px] md:text-[1.02rem]"
             />
 
-            <div className="mt-6 border-t border-white/[0.06] pt-5">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="mt-3 border-t border-white/[0.06] pt-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => (
                   <button key={ratio} onClick={() => setAspectRatio(ratio)}>
                     <ButtonChip active={aspectRatio === ratio}>
@@ -380,9 +380,9 @@ export default function CreatePage() {
                 <div ref={modelPickerRef} className="relative">
                   <button
                     onClick={() => setModelPickerOpen((value) => !value)}
-                    className="inline-flex min-w-[240px] items-center justify-between gap-3 rounded-full bg-white/[0.05] px-4 py-3 text-left text-sm text-white transition hover:bg-white/[0.08]"
+                    className="inline-flex min-w-[220px] items-center justify-between gap-3 rounded-full bg-white/[0.05] px-4 py-2 text-left text-sm text-white transition hover:bg-white/[0.08]"
                   >
-                      <div className="min-w-0">
+                    <div className="min-w-0">
                       <div className="truncate font-medium">{selectedModel?.label ?? 'Select model'}</div>
                       <div className="mt-0.5 text-xs text-zinc-500">{getModelCostLabel(selectedModel)}</div>
                     </div>
@@ -421,8 +421,8 @@ export default function CreatePage() {
                 <div className="text-sm text-zinc-500">{getModelCostSummary(selectedModel, activeAspect.width, activeAspect.height)}</div>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-4">
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   {improveState === 'done' ? <span className="text-xs text-emerald-200">Prompt improved.</span> : null}
                   {improveState === 'fallback' ? <span className="text-xs text-zinc-400">Prompt tightened.</span> : null}
                   <Link to="/library/images" className="text-sm text-white transition hover:text-zinc-200">
@@ -433,7 +433,7 @@ export default function CreatePage() {
                 <button
                   onClick={handleGenerate}
                   disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4.5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                   {submittingCount ? 'Starting...' : 'Generate'}

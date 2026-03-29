@@ -1,0 +1,113 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - link "Omnia Creata Omnia Creata Studio" [ref=e7] [cursor=pointer]:
+        - /url: /landing
+        - img "Omnia Creata" [ref=e9]
+        - generic [ref=e10]:
+          - generic [ref=e11]: Omnia Creata
+          - generic [ref=e12]: Studio
+      - button "Collapse sidebar" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+    - generic [ref=e16]:
+      - generic [ref=e18]:
+        - link "Explore" [ref=e21] [cursor=pointer]:
+          - /url: /explore
+          - img [ref=e22]
+          - generic [ref=e25]: Explore
+        - link "Compose" [ref=e28] [cursor=pointer]:
+          - /url: /create
+          - img [ref=e29]
+          - generic [ref=e31]: Compose
+        - generic [ref=e33]:
+          - link "Chat" [ref=e34] [cursor=pointer]:
+            - /url: /chat
+            - img [ref=e35]
+            - generic [ref=e37]: Chat
+          - button "Show Chat options" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+      - generic [ref=e41]:
+        - generic [ref=e42]: Library
+        - generic [ref=e43]:
+          - link "My images" [ref=e46] [cursor=pointer]:
+            - /url: /library/images
+            - img [ref=e47]
+            - generic [ref=e51]: My images
+          - link "Collections" [ref=e54] [cursor=pointer]:
+            - /url: /library/collections
+            - img [ref=e55]
+            - generic [ref=e57]: Collections
+          - link "Favorites" [ref=e60] [cursor=pointer]:
+            - /url: /library/likes
+            - img [ref=e61]
+            - generic [ref=e63]: Favorites
+          - link "Trash" [ref=e66] [cursor=pointer]:
+            - /url: /library/trash
+            - img [ref=e67]
+            - generic [ref=e70]: Trash
+      - generic [ref=e71]:
+        - generic [ref=e72]: Elements
+        - link "Styles" [ref=e76] [cursor=pointer]:
+          - /url: /elements/styles
+          - img [ref=e77]
+          - generic [ref=e81]: Styles
+      - generic [ref=e82]:
+        - generic [ref=e83]: Utility
+        - generic [ref=e84]:
+          - link "Help" [ref=e87] [cursor=pointer]:
+            - /url: /help
+            - img [ref=e88]
+            - generic [ref=e90]: Help
+          - link "Subscription" [ref=e93] [cursor=pointer]:
+            - /url: /subscription
+            - img [ref=e94]
+            - generic [ref=e96]: Subscription
+          - link "Settings" [ref=e99] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e100]
+            - generic [ref=e103]: Settings
+    - generic [ref=e105]:
+      - link "C Codex Audit Free / 60 credits" [ref=e106] [cursor=pointer]:
+        - /url: /account
+        - generic [ref=e107]: C
+        - generic [ref=e108]:
+          - generic [ref=e109]: Codex Audit
+          - generic [ref=e110]: Free / 60 credits
+      - button "Show account panel" [ref=e111] [cursor=pointer]:
+        - img [ref=e112]
+  - main [ref=e118]:
+    - generic [ref=e119]:
+      - generic [ref=e121]:
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - heading "Collections" [level=1] [ref=e125]
+            - paragraph [ref=e126]: Projects keep related images together so you can return to them later without digging.
+            - generic [ref=e128]:
+              - button "All" [ref=e129] [cursor=pointer]
+              - button "With work" [ref=e130] [cursor=pointer]
+              - button "Empty" [ref=e131] [cursor=pointer]
+          - generic [ref=e132]:
+            - generic [ref=e133]:
+              - img [ref=e134]
+              - textbox [ref=e137]:
+                - /placeholder: Search
+            - generic [ref=e138]:
+              - button "Grid view" [ref=e139] [cursor=pointer]:
+                - img [ref=e140]
+              - button "List view" [ref=e142] [cursor=pointer]:
+                - img [ref=e143]
+        - generic [ref=e144]:
+          - img [ref=e146]
+          - generic [ref=e148]: No collections yet.
+          - generic [ref=e149]: Collections appear as your projects start holding real work.
+      - generic [ref=e151]:
+        - generic [ref=e152]: OmniaCreata TM 2026
+        - generic [ref=e153]:
+          - link "Terms" [ref=e154] [cursor=pointer]:
+            - /url: /help#terms
+          - link "Privacy" [ref=e155] [cursor=pointer]:
+            - /url: /help#privacy
+          - link "Usage Policy" [ref=e156] [cursor=pointer]:
+            - /url: /help#usage-policy
+          - link "FAQ" [ref=e157] [cursor=pointer]:
+            - /url: /help#faq

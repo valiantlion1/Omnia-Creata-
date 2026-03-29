@@ -1,8 +1,8 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, EditTextDialog, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type HealthProvider, type HealthResponse } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { useStudioUiPrefs } from '@/lib/studioUi'
@@ -17,10 +17,10 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="border-b border-white/[0.06] py-6 first:pt-0 last:border-b-0">
+    <section className="border-b border-white/[0.06] py-5 first:pt-0 last:border-b-0">
       <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">{label}</div>
-      <div className="mt-2 text-lg font-semibold text-white">{title}</div>
-      <div className="mt-4 divide-y divide-white/[0.06] border-y border-white/[0.06] bg-white/[0.015]">
+      <div className="mt-1.5 text-base font-semibold text-white">{title}</div>
+      <div className="mt-3 divide-y divide-white/[0.06] border-y border-white/[0.06] bg-white/[0.015]">
         {children}
       </div>
     </section>
@@ -39,10 +39,10 @@ function Row({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-start md:justify-between">
+    <div className="flex flex-col gap-2.5 px-4 py-3.5 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-zinc-100">{title}</div>
-        {description ? <div className="mt-1 text-sm leading-7 text-zinc-500">{description}</div> : null}
+        {description ? <div className="mt-1 text-sm leading-6 text-zinc-500">{description}</div> : null}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         {value ? <div className="text-sm text-zinc-300">{value}</div> : null}
@@ -56,7 +56,7 @@ function SoftButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButto
   return (
     <button
       {...props}
-      className={`rounded-full bg-white/[0.04] px-3.5 py-1.5 text-sm text-white transition hover:bg-white/[0.08] ${props.className ?? ''}`}
+      className={`rounded-full bg-white/[0.04] px-3 py-1.5 text-sm text-white transition hover:bg-white/[0.08] ${props.className ?? ''}`}
     >
       {children}
     </button>
@@ -74,6 +74,7 @@ export default function SettingsPage() {
   const { auth, isAuthenticated, isLoading, isAuthSyncing, signOut } = useStudioAuth()
   const { prefs, setTipsEnabled, resetTips } = useStudioUiPrefs()
   const queryClient = useQueryClient()
+  const [editingField, setEditingField] = useState<'name' | 'bio' | null>(null)
 
   const settingsQuery = useQuery({
     queryKey: ['settings-bootstrap'],
@@ -108,11 +109,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppPage className="max-w-[1320px] gap-0 py-5">
-      <div className="border-b border-white/[0.06] pb-5">
+    <AppPage className="max-w-[1220px] gap-0 py-4">
+      <div className="border-b border-white/[0.06] pb-4">
         <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Settings</div>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Studio settings</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-500">
+        <h1 className="mt-1.5 text-[2rem] font-semibold tracking-[-0.04em] text-white">Studio settings</h1>
+        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500">
           Keep account, security, notifications, and documentation in one quiet place.
         </p>
       </div>
@@ -125,13 +126,7 @@ export default function SettingsPage() {
           value={auth?.identity.display_name ?? 'Guest'}
           actions={
             !auth?.guest ? (
-              <SoftButton
-                onClick={async () => {
-                  const nextName = window.prompt('Display name', auth?.identity.display_name ?? '')
-                  if (!nextName) return
-                  await updateProfileMutation.mutateAsync({ display_name: nextName })
-                }}
-              >
+              <SoftButton onClick={() => setEditingField('name')}>
                 Edit
               </SoftButton>
             ) : null
@@ -159,13 +154,7 @@ export default function SettingsPage() {
           title="Profile bio"
           description={auth?.identity.bio ? auth.identity.bio : 'Add a short bio for your public profile.'}
           actions={
-            <SoftButton
-              onClick={async () => {
-                const nextBio = window.prompt('Profile bio', auth?.identity.bio ?? '')
-                if (nextBio === null) return
-                await updateProfileMutation.mutateAsync({ bio: nextBio })
-              }}
-            >
+            <SoftButton onClick={() => setEditingField('bio')}>
               {auth?.identity.bio ? 'Edit bio' : 'Add bio'}
             </SoftButton>
           }
@@ -309,6 +298,36 @@ export default function SettingsPage() {
           />
         ))}
       </Section>
+
+      <EditTextDialog
+        open={editingField === 'name'}
+        title="Display name"
+        description="Update the name shown on your profile, public posts, and account surfaces."
+        label="Name"
+        initialValue={auth?.identity.display_name ?? ''}
+        placeholder="Your display name"
+        busy={updateProfileMutation.isPending}
+        onCancel={() => setEditingField(null)}
+        onConfirm={async (value) => {
+          await updateProfileMutation.mutateAsync({ display_name: value.trim() })
+          setEditingField(null)
+        }}
+      />
+      <EditTextDialog
+        open={editingField === 'bio'}
+        title="Profile bio"
+        description="Add a short bio for your public profile and account surfaces."
+        label="Bio"
+        initialValue={auth?.identity.bio ?? ''}
+        placeholder="A short bio"
+        busy={updateProfileMutation.isPending}
+        multiline
+        onCancel={() => setEditingField(null)}
+        onConfirm={async (value) => {
+          await updateProfileMutation.mutateAsync({ bio: value.trim() })
+          setEditingField(null)
+        }}
+      />
     </AppPage>
   )
 }

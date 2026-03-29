@@ -506,9 +506,9 @@ class StudioService:
         *,
         assets_by_id: Dict[str, MediaAsset],
         viewer_identity_id: Optional[str] = None,
+        public_preview: bool = False,
     ) -> Dict[str, Any]:
         cover_asset = assets_by_id.get(post.cover_asset_id or "")
-        public_preview = viewer_identity_id is None
         return {
             "id": post.id,
             "owner_username": post.owner_username,
@@ -1143,7 +1143,12 @@ class StudioService:
             deduped_posts.append(post)
 
         return [
-            self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+            self.serialize_post(
+                post,
+                assets_by_id=assets_by_id,
+                viewer_identity_id=viewer_identity_id,
+                public_preview=True,
+            )
             for post in deduped_posts
         ]
 
@@ -1206,7 +1211,12 @@ class StudioService:
                 "public_post_count": public_post_count,
             },
             "posts": [
-                self.serialize_post(post, assets_by_id=assets_by_id, viewer_identity_id=viewer_identity_id)
+                self.serialize_post(
+                    post,
+                    assets_by_id=assets_by_id,
+                    viewer_identity_id=viewer_identity_id,
+                    public_preview=not own_profile,
+                )
                 for post in visible_posts
             ],
             "own_profile": own_profile,

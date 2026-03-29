@@ -510,9 +510,13 @@ export default function ChatPage() {
   }, [timeline, pendingAttachments.length])
 
   return (
-    <AppPage className="h-full !max-w-[1560px] !gap-0 !py-4">
-      <section className="flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[28px] border border-white/[0.05] bg-[#111216] shadow-[0_28px_80px_rgba(0,0,0,0.24)]">
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.03] px-4 py-3.5 md:px-5">
+    <AppPage className="!max-w-[1180px] !gap-0 !py-2.5">
+      <section
+        className={`flex flex-col overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#111216] shadow-[0_28px_80px_rgba(0,0,0,0.24)] ${
+          timeline.length ? 'min-h-[calc(100vh-3rem)]' : 'min-h-[620px]'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.03] px-4 py-3 md:px-5">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Chat</div>
             <div className="mt-1 truncate text-lg font-semibold text-white">{activeConversation?.title || 'New chat'}</div>
@@ -528,24 +532,24 @@ export default function ChatPage() {
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-5">
+        <div className={`min-h-0 overflow-y-auto px-4 md:px-5 ${timeline.length ? 'flex-1 py-4' : 'py-6'}`}>
           {conversationDetailQuery.isLoading ? (
             <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading chat...
             </div>
           ) : timeline.length ? (
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
               {timeline.map((item) => {
                 if (item.kind === 'message') {
                   const message = item.message
                   return (
                     <div key={item.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className="max-w-3xl space-y-3">
+                      <div className="max-w-2xl space-y-2.5">
                         {message.attachments.length ? (
-                          <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="grid gap-2.5 sm:grid-cols-2">
                             {message.attachments.map((attachment) => (
-                              <div key={attachment.url} className="overflow-hidden rounded-[22px] border border-white/[0.06] bg-black/20">
+                              <div key={attachment.url} className="overflow-hidden rounded-[20px] border border-white/[0.06] bg-black/20">
                                 {attachment.kind === 'image' ? (
                                   <img src={attachment.url} alt={attachment.label} className="aspect-[4/3] w-full object-cover" />
                                 ) : (
@@ -557,7 +561,7 @@ export default function ChatPage() {
                         ) : null}
 
                         <div
-                          className={`rounded-[24px] px-5 py-4 text-sm leading-7 ${
+                          className={`rounded-[22px] px-4 py-3.5 text-sm leading-6 ${
                             message.role === 'user'
                               ? 'rounded-br-md bg-violet-500/12 text-violet-50 ring-1 ring-violet-300/12'
                               : 'bg-black/20 text-zinc-200 ring-1 ring-white/[0.06]'
@@ -572,7 +576,7 @@ export default function ChatPage() {
                               <button
                                 key={action.id}
                                 onClick={() => handleSuggestedAction(action.value, action.label)}
-                                className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-200 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
+                                className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-zinc-200 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
                               >
                                 {action.label}
                               </button>
@@ -587,7 +591,7 @@ export default function ChatPage() {
                 const visual = item.visual
                 return (
                   <div key={item.id} className="flex justify-start">
-                    <div className="max-w-3xl rounded-[26px] bg-black/20 p-4 ring-1 ring-white/[0.06]">
+                    <div className="max-w-2xl rounded-[24px] bg-black/20 p-3.5 ring-1 ring-white/[0.06]">
                       {visual.status === 'completed' && visual.outputs.length ? (
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
@@ -629,25 +633,34 @@ export default function ChatPage() {
               <div ref={bottomRef} />
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="w-full max-w-2xl text-center">
-                <div className="text-2xl font-semibold text-white">Start with one message.</div>
-                <div className="mt-3 text-sm text-zinc-400">Ask for a prompt, an edit pass, or a stronger direction.</div>
+            <div className="mx-auto w-full max-w-2xl pt-6 text-center">
+              <div className="text-[1.55rem] font-semibold text-white">Start with one message.</div>
+              <div className="mt-2 text-sm text-zinc-400">Ask for a prompt, an edit pass, or a stronger direction.</div>
+              <div className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-2">
+                {['Build a stronger prompt', 'Turn this into a visual concept', 'Help me edit an image'].map((hint) => (
+                  <button
+                    key={hint}
+                    onClick={() => setDraft(hint)}
+                    className="rounded-full bg-white/[0.04] px-3 py-1.5 text-[11px] text-zinc-200 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
+                  >
+                    {hint}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        <div className="border-t border-white/[0.03] px-4 py-4 md:px-5">
-          <div className="mx-auto w-full max-w-4xl rounded-[28px] bg-[#0f1013] px-3 py-3 ring-1 ring-white/[0.08]">
+        <div className="border-t border-white/[0.03] px-4 py-3 md:px-5">
+          <div className="mx-auto w-full max-w-3xl rounded-[22px] bg-[#0f1013] px-3 py-2 ring-1 ring-white/[0.08]">
             {pendingAttachments.length ? (
-              <div className="mb-3 flex flex-wrap gap-2 border-b border-white/[0.03] pb-3">
+              <div className="mb-2.5 flex flex-wrap gap-2 border-b border-white/[0.03] pb-2.5">
                 {pendingAttachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center gap-2 rounded-2xl bg-white/[0.04] px-2.5 py-2 text-xs text-zinc-200 ring-1 ring-white/[0.08]">
+                  <div key={attachment.id} className="flex items-center gap-2 rounded-2xl bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-200 ring-1 ring-white/[0.08]">
                     {attachment.kind === 'image' ? (
-                      <img src={attachment.url} alt={attachment.label} className="h-9 w-9 rounded-xl object-cover" />
+                      <img src={attachment.url} alt={attachment.label} className="h-8 w-8 rounded-xl object-cover" />
                     ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/20 text-[11px] font-semibold text-zinc-300">FILE</div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/20 text-[11px] font-semibold text-zinc-300">FILE</div>
                     )}
                     <span className="max-w-[160px] truncate">{attachment.label}</span>
                     <button
@@ -667,7 +680,7 @@ export default function ChatPage() {
 
               <button
                 onClick={handleUploadClick}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.04] text-zinc-300 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white/[0.04] text-zinc-300 ring-1 ring-white/8 transition hover:bg-white/[0.08]"
                 title="Upload files"
               >
                 <Plus className="h-4.5 w-4.5" />
@@ -679,14 +692,14 @@ export default function ChatPage() {
                 onKeyDown={handleComposerKeyDown}
                 rows={1}
                 placeholder={auth?.guest ? 'Sign in to start chatting...' : 'Message Studio...'}
-                className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-zinc-500"
+                className="max-h-36 min-h-[40px] flex-1 resize-none bg-transparent px-1.5 py-1.5 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
               />
 
               <label className="relative shrink-0">
                 <select
                   value={composeMode}
                   onChange={(event) => setComposeMode(event.target.value as ComposeMode)}
-                  className="appearance-none rounded-2xl border border-white/[0.08] bg-white/[0.04] py-3 pl-4 pr-9 text-sm text-zinc-200 outline-none transition hover:bg-white/[0.08]"
+                  className="appearance-none rounded-[14px] border border-white/[0.08] bg-white/[0.04] py-2 pl-3.5 pr-8 text-sm text-zinc-200 outline-none transition hover:bg-white/[0.08]"
                 >
                   {composeModes.map((mode) => (
                     <option key={mode} value={mode}>
@@ -700,7 +713,7 @@ export default function ChatPage() {
               <button
                 onClick={handleSend}
                 disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || createConversationMutation.isPending}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send"
               >
                 {sendMessageMutation.isPending || createConversationMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -709,7 +722,7 @@ export default function ChatPage() {
           </div>
 
           {sendMessageMutation.error ? (
-            <div className="mx-auto mt-3 w-full max-w-4xl rounded-[18px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+            <div className="mx-auto mt-3 w-full max-w-3xl rounded-[16px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
               {sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : 'Unable to send message.'}
             </div>
           ) : null}

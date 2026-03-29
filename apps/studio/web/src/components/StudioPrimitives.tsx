@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Link } from 'react-router-dom'
 
@@ -9,7 +9,7 @@ export function AppPage({
   children: ReactNode
   className?: string
 }) {
-  return <div className={clsx('mx-auto flex w-full max-w-[1520px] flex-col gap-6 px-4 py-6 md:px-5 xl:px-6', className)}>{children}</div>
+  return <div className={clsx('mx-auto flex w-full max-w-[1520px] flex-col gap-5 px-4 py-5 md:px-5 xl:px-6', className)}>{children}</div>
 }
 
 export function PageHeader({
@@ -215,5 +215,94 @@ export function LegalFooter({ className }: { className?: string }) {
         </div>
       </div>
     </footer>
+  )
+}
+
+export function EditTextDialog({
+  open,
+  title,
+  description,
+  label,
+  initialValue,
+  placeholder,
+  actionLabel = 'Save',
+  busy = false,
+  multiline = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  title: string
+  description: string
+  label: string
+  initialValue: string
+  placeholder?: string
+  actionLabel?: string
+  busy?: boolean
+  multiline?: boolean
+  onCancel: () => void
+  onConfirm: (value: string) => void
+}) {
+  const [value, setValue] = useState(initialValue)
+
+  useEffect(() => {
+    if (open) setValue(initialValue)
+  }, [initialValue, open])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-lg font-semibold text-white">{title}</div>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">{description}</p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+            title="Close"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="mt-5">
+          <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">{label}</label>
+          {multiline ? (
+            <textarea
+              autoFocus
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={placeholder}
+              rows={5}
+              className="mt-2 w-full resize-none rounded-[18px] bg-white/[0.03] px-4 py-3 text-sm leading-7 text-white outline-none ring-1 ring-white/8 transition focus:ring-white/20"
+            />
+          ) : (
+            <input
+              autoFocus
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={placeholder}
+              className="mt-2 w-full rounded-[18px] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none ring-1 ring-white/8 transition focus:ring-white/20"
+            />
+          )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button onClick={onCancel} className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white">
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(value)}
+            disabled={busy || !value.trim() || value.trim() === initialValue.trim()}
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? 'Saving...' : actionLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
