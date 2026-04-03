@@ -1,10 +1,11 @@
 {
   "product": "OmniaCreata Studio",
-  "version": "0.1.0-alpha.1",
+  "brand": "OmniaCreata",
+  "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.03.29.01",
-  "codename": "Foundation",
+  "build": "2026.04.02.01",
+  "codename": "Identity",
   "status": "prelaunch",
-  "releaseDate": "2026-03-29",
-  "notes": "First structured prelaunch version after landing/studio split, auth foundation, library UX passes, public surfaces, and chat gateway groundwork."
+  "releaseDate": "2026-04-02",
+  "notes": "Sprint 7 Phase 2: SSO, GDPR Compliance and LemonSqueezy Payments."
 }

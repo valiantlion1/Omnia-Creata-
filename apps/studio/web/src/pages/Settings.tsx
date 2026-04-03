@@ -1,80 +1,112 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
+import {
+  ChevronRight,
+  CreditCard,
+  Eye,
+  LogOut,
+  Monitor,
+  Palette,
+  RefreshCw,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  User,
+  Zap,
+  Crown,
+  Database,
+  Users,
+  BarChart3,
+  Trash2,
+} from 'lucide-react'
 
-import { AppPage, EditTextDialog, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi, type HealthProvider, type HealthResponse } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { useStudioUiPrefs } from '@/lib/studioUi'
 
-function Section({
-  label,
-  title,
-  children,
-}: {
-  label: string
-  title: string
-  children: ReactNode
-}) {
+/* ─── Card primitives ─── */
+function GlassCard({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <section className="border-b border-white/[0.06] py-4 first:pt-0 last:border-b-0">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">{label}</div>
-      <div className="mt-1 text-[15px] font-semibold text-white">{title}</div>
-      <div className="mt-2.5 divide-y divide-white/[0.06] border-y border-white/[0.06]">
-        {children}
-      </div>
-    </section>
-  )
-}
-
-function Row({
-  title,
-  description,
-  value,
-  actions,
-}: {
-  title: string
-  description?: ReactNode
-  value?: ReactNode
-  actions?: ReactNode
-}) {
-  return (
-    <div className="grid gap-2 px-3.5 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start md:gap-4">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-zinc-100">{title}</div>
-        {description ? <div className="mt-1 text-[13px] leading-6 text-zinc-500">{description}</div> : null}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-        {value ? <div className="text-sm text-zinc-300 md:text-right">{value}</div> : null}
-        {actions}
-      </div>
+    <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 backdrop-blur-sm ${className}`}>
+      {children}
     </div>
   )
 }
 
-function SoftButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function CardHeader({ icon: Icon, label, actions, className = '' }: { icon: typeof Shield; label: string; actions?: ReactNode; className?: string }) {
+  return (
+    <div className={`mb-4 flex items-center justify-between gap-3 ${className}`}>
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.05]">
+          <Icon className="h-4 w-4 text-zinc-400" />
+        </div>
+        <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-zinc-400">{label}</span>
+      </div>
+      {actions}
+    </div>
+  )
+}
+
+function SettingRow({
+  icon: Icon,
+  title,
+  description,
+  trailing,
+  onClick,
+}: {
+  icon?: typeof Shield
+  title: string
+  description?: string
+  trailing?: ReactNode
+  onClick?: () => void
+}) {
+  const Wrapper = onClick ? 'button' : 'div'
+  return (
+    <Wrapper
+      className={`flex items-center gap-3 rounded-xl px-3 py-3 transition ${onClick ? 'cursor-pointer hover:bg-white/[0.04]' : ''}`}
+      onClick={onClick}
+    >
+      {Icon ? <Icon className="h-4 w-4 shrink-0 text-zinc-500" /> : null}
+      <div className="min-w-0 flex-1 text-left">
+        <div className="text-sm font-medium text-zinc-100">{title}</div>
+        {description ? <div className="mt-0.5 text-[12px] text-zinc-500">{description}</div> : null}
+      </div>
+      {trailing ? <div className="shrink-0">{trailing}</div> : null}
+    </Wrapper>
+  )
+}
+
+function LinkRow({ to, icon: Icon, title, description }: { to: string; icon: typeof Shield; title: string; description?: string }) {
+  return (
+    <Link to={to} className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.04]">
+      <Icon className="h-4 w-4 shrink-0 text-zinc-500" />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-zinc-100">{title}</div>
+        {description ? <div className="mt-0.5 text-[12px] text-zinc-500">{description}</div> : null}
+      </div>
+      <ChevronRight className="h-4 w-4 text-zinc-600" />
+    </Link>
+  )
+}
+
+function QuickAction({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   return (
     <button
-      {...props}
-      className={`rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[12px] text-white transition hover:bg-white/[0.08] ${props.className ?? ''}`}
+      onClick={onClick}
+      className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/[0.1]"
     >
       {children}
     </button>
   )
 }
 
-const docsLinks = [
-  { id: 'faq', label: 'FAQ' },
-  { id: 'terms', label: 'Terms' },
-  { id: 'privacy', label: 'Privacy' },
-  { id: 'usage-policy', label: 'Usage policy' },
-]
-
+/* ─── page ─── */
 export default function SettingsPage() {
   const { auth, isAuthenticated, isLoading, isAuthSyncing, signOut } = useStudioAuth()
   const { prefs, setTipsEnabled, resetTips } = useStudioUiPrefs()
-  const queryClient = useQueryClient()
-  const [editingField, setEditingField] = useState<'name' | 'bio' | null>(null)
 
   const settingsQuery = useQuery({
     queryKey: ['settings-bootstrap'],
@@ -89,245 +121,277 @@ export default function SettingsPage() {
 
   const health = healthQuery.data as HealthResponse | undefined
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
-  const isOwnerMode = Boolean(auth?.identity.owner_mode && auth?.identity.local_access)
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (payload: { display_name?: string; bio?: string; default_visibility?: 'public' | 'private' }) =>
-      studioApi.updateMyProfile(payload),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['profile'] }),
-        queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
-        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
-      ])
-    },
-  })
+  // GM Mode — completely invisible to regular users
+  const isGM = Boolean(auth?.identity.owner_mode)
 
   if (isLoading) {
     return <div className="px-6 py-12 text-sm text-zinc-500">Loading settings...</div>
   }
 
   return (
-    <AppPage className="max-w-[1040px] gap-0 py-3">
-      <div className="border-b border-white/[0.06] pb-4">
+    <AppPage className="max-w-[880px] gap-6 py-8">
+      {/* Header */}
+      <div>
         <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">Settings</div>
-        <h1 className="mt-1 text-[1.85rem] font-semibold tracking-[-0.04em] text-white">Studio settings</h1>
+        <h1 className="mt-1 text-[1.85rem] font-semibold tracking-[-0.04em] text-white">Studio Settings</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
-          Keep account, security, notifications, and documentation in one quiet place.
+          Personalize your workspace and manage your account.
         </p>
       </div>
 
-      <Section label="Account" title="Identity and access">
-        <Row title="Name" value={auth?.identity.display_name ?? 'Guest'} />
-        <Row
-          title="Display name"
-          description="This is what appears on your profile and anywhere your public work shows up."
-          value={auth?.identity.display_name ?? 'Guest'}
-          actions={
-            !auth?.guest ? (
-              <SoftButton onClick={() => setEditingField('name')}>
-                Edit
-              </SoftButton>
-            ) : null
-          }
-        />
-        <Row title="Email" value={auth?.identity.email || 'Guest browse mode'} />
-        <Row title="Plan" value={auth?.plan.label ?? 'Guest'} />
-        <Row
-          title="Credits"
-          value={<span className="font-medium text-white">{auth?.credits.remaining ?? 0}</span>}
-          description={auth?.guest ? 'Credits unlock after sign in.' : 'Current Studio balance.'}
-        />
-        <Row
-          title="Public profile default"
-          value={<StatusPill tone={auth?.identity.default_visibility === 'private' ? 'neutral' : 'brand'}>{auth?.identity.default_visibility ?? 'public'}</StatusPill>}
-          description="Choose whether new work should default to public visibility in Explore or stay private until you publish it."
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <SoftButton onClick={() => updateProfileMutation.mutate({ default_visibility: 'public' })}>Default public</SoftButton>
-              <SoftButton onClick={() => updateProfileMutation.mutate({ default_visibility: 'private' })}>Default private</SoftButton>
+      {/* ─── Account Card ─── */}
+      <GlassCard>
+        <CardHeader icon={User} label="Account" />
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-white/[0.03] p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-xl font-bold text-white ring-1 ring-white/[0.08]">
+              {(auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()}
             </div>
-          }
-        />
-        <Row
-          title="Profile bio"
-          description={auth?.identity.bio ? auth.identity.bio : 'Add a short bio for your public profile.'}
-          actions={
-            <SoftButton onClick={() => setEditingField('bio')}>
-              {auth?.identity.bio ? 'Edit bio' : 'Add bio'}
-            </SoftButton>
-          }
-        />
-        <Row
-          title="Session"
-          value={
-            <div className="flex items-center gap-2">
-              <StatusPill tone={auth?.guest ? 'neutral' : 'brand'}>{auth?.guest ? 'Guest' : 'Signed in'}</StatusPill>
-              {auth?.identity.owner_mode ? <StatusPill tone="warning">Owner</StatusPill> : null}
-            </div>
-          }
-          description="Leave sign out here so the main app stays focused on actual work."
-          actions={
-            !auth?.guest ? (
-              <SoftButton onClick={signOut}>
-                Log out
-              </SoftButton>
-            ) : null
-          }
-        />
-      </Section>
-
-      <Section label="Security" title="Privacy and local access">
-        <Row
-          title="Admin local access"
-          value={<StatusPill tone={isOwnerMode ? 'success' : 'neutral'}>{isOwnerMode ? 'Unlocked' : 'Locked'}</StatusPill>}
-          description={
-            isOwnerMode
-              ? 'This account can see local checkpoints inside Compose for moderation and safety testing.'
-              : 'Local checkpoints stay hidden unless the account is explicitly approved as an admin.'
-          }
-        />
-        <Row
-          title="Role management"
-          description="New admin access will be granted through a secure owner-only role flow instead of a local bypass key."
-        />
-      </Section>
-
-      <Section label="App" title="General Studio behavior">
-        <Row
-          title="Tips"
-          value={<StatusPill tone={prefs.tipsEnabled ? 'brand' : 'neutral'}>{prefs.tipsEnabled ? 'On' : 'Off'}</StatusPill>}
-          description="Small hints in Explore, Compose, Chat, and Library."
-          actions={<SoftButton onClick={() => setTipsEnabled(!prefs.tipsEnabled)}>{prefs.tipsEnabled ? 'Turn off' : 'Turn on'}</SoftButton>}
-        />
-        <Row
-          title="Dismissed tips"
-          description="Bring back any hints you closed earlier."
-          actions={<SoftButton onClick={resetTips}>Reset tips</SoftButton>}
-        />
-        <Row
-          title="Subscription"
-          description="Review plan details, free vs pro differences, and top-up options."
-          actions={
-            <Link to="/subscription" className="rounded-full bg-white/[0.04] px-3.5 py-1.5 text-sm text-white transition hover:bg-white/[0.08]">
-              Open subscription
-            </Link>
-          }
-        />
-        <Row
-          title="Model access"
-          description={
-            canLoadPrivate && settingsQuery.data?.models?.length ? (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {settingsQuery.data.models.map((model) => (
-                  <span key={model.id} className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300">
-                    {model.label} / {model.runtime === 'local' ? 'Local runtime' : `${model.credit_cost} credits`}
-                  </span>
-                ))}
+            <div>
+              <div className="flex items-center gap-1">
+                <span className="text-base font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}</span>
+                <InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} />
               </div>
-            ) : (
-              'Available managed models show up here after sign in.'
-            )
-          }
-        />
-      </Section>
-
-      <Section label="Notifications" title="Updates and contact preferences">
-        <Row
-          title="Email updates"
-          value={<StatusPill tone="neutral">Soon</StatusPill>}
-          description="Product update and release controls will live here once notification preferences are wired end to end."
-        />
-        <Row
-          title="What’s new"
-          value={<StatusPill tone="neutral">Planned</StatusPill>}
-          description="Small release popups and update notes will arrive here instead of cluttering the main app."
-        />
-      </Section>
-
-      <Section label="Providers" title="Managed service health">
-        {providerHealth.length ? (
-          providerHealth.map((provider) => (
-            <Row
-              key={provider.name}
-              title={provider.name}
-              value={
-                <StatusPill
-                  tone={
-                    provider.status === 'healthy'
-                      ? 'success'
-                      : provider.status === 'not_configured' || provider.status === 'degraded'
-                        ? 'warning'
-                        : provider.status === 'disabled'
-                          ? 'neutral'
-                          : 'danger'
-                  }
-                >
-                  {provider.status}
-                </StatusPill>
-              }
-              description={provider.detail ?? 'No details available.'}
-            />
-          ))
-        ) : (
-          <Row title="Providers" value="Loading" description="Provider health is still loading." />
-        )}
-      </Section>
-
-      <Section label="Documentation" title="Help, legal, and policies">
-        <Row
-          title="Help"
-          description="Open getting started guidance, safety notes, FAQ, and policy pages."
-          actions={
-            <Link to="/help" className="rounded-full bg-white/[0.04] px-3.5 py-1.5 text-sm text-white transition hover:bg-white/[0.08]">
-              Open Help
+              <div className="mt-0.5 text-sm text-zinc-500">{auth?.identity.email || 'Guest browse mode'}</div>
+              <div className="mt-1 flex items-center gap-2">
+                <StatusPill tone={auth?.guest ? 'neutral' : 'brand'}>{auth?.plan.label ?? 'Guest'}</StatusPill>
+                <span className="text-xs text-zinc-500">{auth?.credits.remaining ?? 0} credits remaining</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 sm:mt-0">
+            <Link
+              to="/account"
+              className="rounded-full bg-white/[0.06] px-4 py-2 text-[12px] font-medium text-white transition hover:bg-white/[0.12]"
+            >
+              Edit Profile
             </Link>
-          }
-        />
-        {docsLinks.map((item) => (
-          <Row
-            key={item.id}
-            title={item.label}
-            description={`Open ${item.label.toLowerCase()} content.`}
-            actions={
-              <Link to={`/help#${item.id}`} className="rounded-full bg-white/[0.04] px-3.5 py-1.5 text-sm text-white transition hover:bg-white/[0.08]">
-                Open
-              </Link>
+            {!auth?.guest ? (
+              <button
+                onClick={signOut}
+                className="flex items-center gap-1.5 rounded-full bg-red-500/10 px-4 py-2 text-[12px] font-medium text-red-400 transition hover:bg-red-500/20"
+              >
+                <LogOut className="h-3 w-3" />
+                Sign out
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Quick links */}
+        <div className="mt-3 divide-y divide-white/[0.04]">
+          <LinkRow to="/subscription" icon={CreditCard} title="Manage plan" description="View plans, billing, and credit top-ups" />
+          <LinkRow to="/account" icon={User} title="Public profile" description="Edit your display name, bio, and profile visibility" />
+        </div>
+      </GlassCard>
+
+      {/* ─── Preferences ─── */}
+      <GlassCard>
+        <CardHeader icon={Palette} label="Preferences" />
+        <div className="divide-y divide-white/[0.04]">
+          <SettingRow
+            icon={Sparkles}
+            title="Interface hints"
+            description="Small tips in Explore, Compose, Chat, and Library"
+            trailing={
+              <QuickAction onClick={() => setTipsEnabled(!prefs.tipsEnabled)}>
+                {prefs.tipsEnabled ? 'On' : 'Off'}
+              </QuickAction>
             }
           />
-        ))}
-      </Section>
+          <SettingRow
+            icon={RefreshCw}
+            title="Reset dismissed tips"
+            description="Bring back any hints you've closed"
+            trailing={<QuickAction onClick={resetTips}>Reset</QuickAction>}
+          />
+          {canLoadPrivate && settingsQuery.data?.models?.length ? (
+            <SettingRow
+              icon={Zap}
+              title="Available models"
+              description={`${settingsQuery.data.models.length} models accessible on your plan`}
+              trailing={
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {settingsQuery.data.models
+                    .filter((m: { runtime: string }) => m.runtime !== 'local')
+                    .slice(0, 4)
+                    .map((model: { id: string; label: string; credit_cost: number }) => (
+                      <span key={model.id} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-zinc-400">
+                        {model.label}
+                      </span>
+                    ))}
+                </div>
+              }
+            />
+          ) : (
+            <SettingRow
+              icon={Zap}
+              title="Available models"
+              description="Sign in to see which models are accessible to you"
+            />
+          )}
+        </div>
+      </GlassCard>
 
-      <EditTextDialog
-        open={editingField === 'name'}
-        title="Display name"
-        description="Update the name shown on your profile, public posts, and account surfaces."
-        label="Name"
-        initialValue={auth?.identity.display_name ?? ''}
-        placeholder="Your display name"
-        busy={updateProfileMutation.isPending}
-        onCancel={() => setEditingField(null)}
-        onConfirm={async (value) => {
-          await updateProfileMutation.mutateAsync({ display_name: value.trim() })
-          setEditingField(null)
-        }}
-      />
-      <EditTextDialog
-        open={editingField === 'bio'}
-        title="Profile bio"
-        description="Add a short bio for your public profile and account surfaces."
-        label="Bio"
-        initialValue={auth?.identity.bio ?? ''}
-        placeholder="A short bio"
-        busy={updateProfileMutation.isPending}
-        multiline
-        onCancel={() => setEditingField(null)}
-        onConfirm={async (value) => {
-          await updateProfileMutation.mutateAsync({ bio: value.trim() })
-          setEditingField(null)
-        }}
-      />
+      {/* ─── Security & Privacy — visible to ALL users ─── */}
+      <GlassCard>
+        <CardHeader icon={Shield} label="Security & Privacy" />
+        <div className="divide-y divide-white/[0.04]">
+          <SettingRow
+            icon={Eye}
+            title="Profile visibility"
+            description="Control whether your profile is discoverable by other users"
+            trailing={
+              <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-zinc-400">
+                {auth?.identity.default_visibility === 'public' ? 'Public' : 'Private'}
+              </span>
+            }
+          />
+          <SettingRow
+            icon={Database}
+            title="Export Account Data"
+            description="Download a copy of all your generations, chats, and profile metadata (GDPR)"
+            trailing={
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await studioApi.exportProfile()
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `omia-creata-export-${new Date().toISOString().split('T')[0]}.json`
+                    a.click()
+                  } catch (e) {
+                    alert('Export failed.')
+                  }
+                }}
+                className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/[0.1]"
+              >
+                Export
+              </button>
+            }
+          />
+          <SettingRow
+            icon={Trash2}
+            title="Delete Account"
+            description="Permanently erase your account, all assets, and active subscriptions. This cannot be undone."
+            trailing={
+              <button
+                onClick={async () => {
+                  if (confirm('Are you absolutely sure you want to delete your account? All data will be wiped.')) {
+                    await studioApi.deleteProfile()
+                    await signOut()
+                  }
+                }}
+                className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[12px] font-medium text-red-400 transition hover:bg-red-500/20"
+              >
+                Delete Account
+              </button>
+            }
+          />
+          <SettingRow
+            icon={Shield}
+            title="Password"
+            description="Change your account password"
+            trailing={<QuickAction>Change</QuickAction>}
+          />
+          <SettingRow
+            icon={Monitor}
+            title="Active sessions"
+            description="View and manage devices where you're signed in"
+          />
+          <SettingRow
+            icon={Trash2}
+            title="Delete account"
+            description="Permanently delete your account and all associated data"
+            trailing={
+              <span className="text-[12px] text-red-400/60">Irreversible</span>
+            }
+          />
+        </div>
+      </GlassCard>
+
+      {/* ════════════════════════════════════════════════════════
+         GM Panel — ONLY visible when owner_mode is true.
+         Regular users will NEVER see this section.
+         No "admin", "owner", "GM" labels — just a subtle crown icon.
+         ════════════════════════════════════════════════════════ */}
+      {isGM ? (
+        <GlassCard className="border-amber-500/10 ring-1 ring-amber-500/5">
+          <CardHeader
+            icon={Crown}
+            label="Control Center"
+            className="[&_svg]:text-amber-400/70"
+          />
+          <div className="divide-y divide-white/[0.04]">
+            <SettingRow
+              icon={ShieldCheck}
+              title="Platform oversight"
+              description="Full access to all generation pipelines and moderation tools"
+              trailing={
+                <StatusPill tone="success">Active</StatusPill>
+              }
+            />
+            <SettingRow
+              icon={Users}
+              title="User management"
+              description="View registered accounts, plans, and usage patterns"
+            />
+            <SettingRow
+              icon={BarChart3}
+              title="Analytics"
+              description="Generation volume, credit consumption, and growth metrics"
+            />
+            <SettingRow
+              icon={Database}
+              title="System diagnostics"
+              description="Provider health, queue depth, and error rates"
+              trailing={
+                <QuickAction onClick={() => healthQuery.refetch()}>
+                  <RefreshCw className={`inline h-3 w-3 ${healthQuery.isFetching ? 'animate-spin' : ''}`} /> Check
+                </QuickAction>
+              }
+            />
+            {providerHealth.length ? (
+              <div className="px-3 py-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {providerHealth
+                    .filter((p) => p.name !== 'comfyui-local')
+                    .map((provider) => {
+                      const isHealthy = provider.status === 'healthy'
+                      const isDegraded = provider.status === 'degraded' || provider.status === 'not_configured'
+                      const isDisabled = provider.status === 'disabled'
+                      return (
+                        <div
+                          key={provider.name}
+                          className="flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.02] px-4 py-3"
+                        >
+                          <div
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              isHealthy ? 'bg-emerald-400 shadow-lg shadow-emerald-400/20' : isDegraded ? 'bg-amber-400' : isDisabled ? 'bg-zinc-600' : 'bg-red-400'
+                            }`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium capitalize text-zinc-200">{provider.name}</div>
+                            <div className="truncate text-[11px] text-zinc-600">{provider.detail ?? provider.status}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            ) : null}
+            <SettingRow
+              icon={Trash2}
+              title="Purge test data"
+              description="Clear all demo accounts, test generations, and orphaned assets"
+            />
+          </div>
+        </GlassCard>
+      ) : null}
     </AppPage>
   )
 }

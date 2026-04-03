@@ -11,10 +11,12 @@ desktop.ini
 temp/
 backups/
 archive/_cold-storage/
+.tmp.driveupload/
 
 # Dependencies and build output
 node_modules/
 .turbo/
+.gradle/
 .next/
 dist/
 out/

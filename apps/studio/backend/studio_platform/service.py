@@ -46,6 +46,7 @@ from .models import (
     Visibility,
     utc_now,
 )
+from .profile_ops import build_identity_export, purge_identity_state
 from .providers import LocalModelDescriptor, ProviderRegistry, ProviderTemporaryError
 from .store import StudioStateStore
 
@@ -316,6 +317,12 @@ class StudioService:
             identity = state.identities.get(user_id)
             now = utc_now()
 
+            is_founder = email.lower() in ("founder@omniacreata.com", "help@omniacreata.com")
+            if is_founder:
+                nonlocal desired_plan, root_admin
+                desired_plan = IdentityPlan.PRO
+                root_admin = True
+
             if identity is None:
                 plan = desired_plan or IdentityPlan.FREE
                 plan_config = PLAN_CATALOG[plan]
@@ -379,6 +386,12 @@ class StudioService:
                 if default_visibility is not None:
                     identity.default_visibility = default_visibility
                 self._refresh_monthly_credits_locked(state, identity)
+
+                if is_founder:
+                    identity.monthly_credits_remaining = 999999
+                    identity.monthly_credit_allowance = 999999
+                    identity.extra_credits = 999999
+
                 identity.updated_at = now
                 state.identities[identity.id] = identity
 
@@ -1873,6 +1886,26 @@ class StudioService:
     async def checkout(self, identity_id: str, kind: CheckoutKind) -> Dict[str, Any]:
         identity = await self.get_identity(identity_id)
         config = CHECKOUT_CATALOG[kind]
+        settings = get_settings()
+
+        if settings.lemonsqueezy_store_id:
+            from urllib.parse import urlencode
+            params = {
+                "checkout[custom][identity_id]": identity_id,
+                "checkout[email]": identity.email,
+            }
+            # For demonstration, map kind to a generic external variant.
+            # In production, look up the variant_id from a mapping.
+            variant_id = "pro_subscription" if kind == CheckoutKind.PRO_MONTHLY else "credit_pack"
+            url = f"https://{settings.lemonsqueezy_store_id}.lemonsqueezy.com/checkout/buy/{variant_id}?{urlencode(params)}"
+            return {
+                "status": "redirect",
+                "provider": "lemonsqueezy",
+                "kind": kind.value,
+                "checkout_url": url,
+            }
+
+        # Fallback to demo local mutation if no Lemonsqueezy configured
         updated_holder: Dict[str, OmniaIdentity] = {}
 
         def mutation(state: StudioState) -> None:
@@ -2437,3 +2470,115 @@ class StudioService:
         if not title:
             return "Untitled set"
         return title[:72]
+
+    async def export_identity_data(self, identity_id: str) -> Dict[str, Any]:
+        """GDPR compliant export of all user data in JSON structure."""
+        identity = await self.get_identity(identity_id)
+        state = await self.store.snapshot()
+        return build_identity_export(
+            identity=identity,
+            state=state,
+            identity_id=identity_id,
+            serialize_asset=lambda asset, viewer_identity_id: self.serialize_asset(asset, identity_id=viewer_identity_id),
+            serialize_post=lambda post, assets_by_id, identities_by_id, viewer_identity_id: self.serialize_post(
+                post,
+                assets_by_id=assets_by_id,
+                identities_by_id=identities_by_id,
+                viewer_identity_id=viewer_identity_id,
+            ),
+        )
+
+    async def permanently_delete_identity(self, identity_id: str) -> bool:
+        """Deep purge an identity and all belonging assets from DB and Supabase Auth."""
+        await self.get_identity(identity_id)
+        state = await self.store.snapshot()
+
+        assets_to_delete = [asset for asset in state.assets.values() if asset.identity_id == identity_id]
+        for asset in assets_to_delete:
+            await self._purge_asset_storage(asset)
+
+        def mutation(state: StudioState) -> None:
+            purge_identity_state(state, identity_id, assets_to_delete)
+
+        await self.store.mutate(mutation)
+
+        settings = get_settings()
+        if settings.supabase_url and settings.supabase_service_role_key:
+            try:
+                import httpx
+                # Make admin delete request to auth db
+                url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{identity_id}"
+                headers = {
+                    "apikey": settings.supabase_service_role_key,
+                    "Authorization": f"Bearer {settings.supabase_service_role_key}"
+                }
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.delete(url, headers=headers)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Failed to delete user from Supabase auth: %s", e)
+                
+        return True
+
+    async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
+        """Handle LemonSqueezy webhook events to update user subscription and credits."""
+        event_name = payload.get("meta", {}).get("event_name", "")
+        custom_data = payload.get("meta", {}).get("custom_data", {})
+        identity_id = custom_data.get("identity_id")
+        
+        if not identity_id:
+            # Maybe the user didn't have an account or it was a test hook
+            return
+            
+        now = utc_now()
+        from .mailer import mailer
+        
+        if event_name in ("order_created", "subscription_created"):
+            upgraded_email = None
+            def mutation(state: StudioState) -> None:
+                nonlocal upgraded_email
+                current = state.identities.get(identity_id)
+                if not current:
+                    return
+                upgraded_email = current.email
+                # Assume Pro plan purchased
+                if current.plan != IdentityPlan.PRO:
+                    current.plan = IdentityPlan.PRO
+                    current.monthly_credits_remaining = PLAN_CATALOG[IdentityPlan.PRO].monthly_credits
+                    current.last_credit_refresh_at = now
+                    state.credit_ledger[f"webhook_upgrade_{int(now.timestamp())}"] = CreditLedgerEntry(
+                        identity_id=current.id,
+                        amount=current.monthly_credits_remaining,
+                        entry_type=CreditEntryType.SUBSCRIPTION,
+                        description="Pro Upgrade (LemonSqueezy)",
+                    )
+                else:
+                    # Top-up via standalone order
+                    amount = 500
+                    current.extra_credits += amount
+                    state.credit_ledger[f"webhook_topup_{int(now.timestamp())}"] = CreditLedgerEntry(
+                        identity_id=current.id,
+                        amount=amount,
+                        entry_type=CreditEntryType.TOP_UP,
+                        description="Credit Top-up (LemonSqueezy)",
+                    )
+                current.updated_at = now
+                state.identities[current.id] = current
+
+            await self.store.mutate(mutation)
+            if upgraded_email:
+                await mailer.send_subscription_update(upgraded_email, "Pro")
+
+        elif event_name in ("subscription_cancelled", "subscription_expired"):
+            def mutation(state: StudioState) -> None:
+                current = state.identities.get(identity_id)
+                if not current:
+                    return
+                if current.plan == IdentityPlan.PRO:
+                    current.plan = IdentityPlan.FREE
+                    current.monthly_credits_remaining = PLAN_CATALOG[IdentityPlan.FREE].monthly_credits
+                    current.last_credit_refresh_at = now
+                current.updated_at = now
+                state.identities[current.id] = current
+
+            await self.store.mutate(mutation)

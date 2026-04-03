@@ -457,6 +457,8 @@ export const studioApi = {
     apiFetch<{ post_id: string; trashed_count: number }>(`/posts/${postId}/trash`, { method: 'POST' }),
   getProfile: (username: string) => apiFetch<ProfilePayload>(`/profiles/${encodeURIComponent(username)}`),
   getMyProfile: () => apiFetch<ProfilePayload>('/profiles/me'),
+  exportProfile: () => apiFetch<Record<string, unknown>>('/profiles/me/export'),
+  deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
   updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>
     apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 }

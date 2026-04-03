@@ -1,44 +1,100 @@
-import { useMemo } from 'react'
+import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, Sparkles, Zap, Crown } from 'lucide-react'
 
-import { AppPage, LegalFooter, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { studioApi, type CheckoutKind } from '@/lib/studioApi'
 
-const defaultPlans = {
-  featured_plan: 'pro' as const,
-  plans: [
-    {
-      id: 'free' as const,
-      label: 'Free',
-      monthly_credits: 60,
-      queue_priority: 'standard',
-      max_resolution: '1024 x 1024',
-      share_links: false,
-      can_generate: true,
-    },
-    {
-      id: 'pro' as const,
-      label: 'Pro',
-      monthly_credits: 1200,
-      queue_priority: 'priority',
-      max_resolution: '2048 x 2048',
-      share_links: true,
-      can_generate: true,
-    },
-  ],
-  top_ups: [
-    { kind: 'top_up_small' as const, label: 'Top up 250', credits: 250, price_usd: 9, plan: null },
-    { kind: 'top_up_large' as const, label: 'Top up 1200', credits: 1200, price_usd: 29, plan: null },
-  ],
-}
+/* ─── tier data ─── */
+const tiers = [
+  {
+    id: 'free' as const,
+    label: 'Free',
+    icon: Sparkles,
+    monthlyPrice: 0,
+    annualPrice: 0,
+    credits: 60,
+    badge: null,
+    features: [
+      '60 monthly credits',
+      'Core generation models',
+      'Prompt improvement',
+      '1024 × 1024 max resolution',
+      'Standard queue',
+      'Library & collections',
+      'Public profile',
+    ],
+    cta: 'Get Started',
+    ctaStyle: 'outline' as const,
+  },
+  {
+    id: 'pro' as const,
+    label: 'Pro',
+    icon: Zap,
+    monthlyPrice: 15,
+    annualPrice: 12,
+    credits: 1200,
+    badge: 'Most Popular',
+    features: [
+      '1,200 monthly credits',
+      'All generation models',
+      'Priority queue',
+      '2048 × 2048 max resolution',
+      'Share links enabled',
+      'Prompt history & analytics',
+      'Extended library storage',
+      'Commercial usage license',
+    ],
+    cta: 'Upgrade to Pro',
+    ctaStyle: 'gradient' as const,
+  },
+  {
+    id: 'creator' as const,
+    label: 'Creator',
+    icon: Crown,
+    monthlyPrice: 35,
+    annualPrice: 28,
+    credits: 5000,
+    badge: null,
+    features: [
+      '5,000 monthly credits',
+      'All models + early access',
+      'Priority+ queue (fastest)',
+      '4096 × 4096 max resolution',
+      'API access (coming soon)',
+      'Dedicated support',
+      'Team workspace (coming soon)',
+      'Unlimited library storage',
+      'Full commercial rights',
+    ],
+    cta: 'Go Creator',
+    ctaStyle: 'white' as const,
+  },
+]
 
-function planBullets(planId: string) {
-  if (planId === 'pro') {
-    return ['1200 monthly credits', 'Priority queue', 'Higher output ceiling', 'Share links enabled']
-  }
-  return ['60 monthly credits', 'Core generation access', 'Prompt improvement', 'Upgrade only when needed']
+const topUpOptions = [
+  { kind: 'top_up_small' as CheckoutKind, label: 'Top-up 200', credits: 200, price: 5 },
+  { kind: 'top_up_large' as CheckoutKind, label: 'Top-up 800', credits: 800, price: 15 },
+]
+
+/* ─── comparison features ─── */
+const comparisonRows = [
+  { label: 'Monthly credits', free: '60', pro: '1,200', creator: '5,000' },
+  { label: 'Max resolution', free: '1024px', pro: '2048px', creator: '4096px' },
+  { label: 'Queue priority', free: 'Standard', pro: 'Priority', creator: 'Priority+' },
+  { label: 'Models', free: 'Core', pro: 'All', creator: 'All + Early Access' },
+  { label: 'Share links', free: '—', pro: '✓', creator: '✓' },
+  { label: 'Commercial license', free: '—', pro: '✓', creator: '✓' },
+  { label: 'API access', free: '—', pro: '—', creator: 'Coming soon' },
+  { label: 'Dedicated support', free: '—', pro: '—', creator: '✓' },
+]
+
+function formatPrice(price: number | null): string {
+  if (price === null) return 'Coming soon'
+  if (price === 0) return '$0'
+  return `$${price}`
 }
 
 export default function BillingPage() {
@@ -46,13 +102,10 @@ export default function BillingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
-  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const welcomeMode = new URLSearchParams(location.search).get('welcome') === '1'
+  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
-  const publicPlansQuery = useQuery({
-    queryKey: ['public-plans', 'subscription'],
-    queryFn: () => studioApi.getPublicPlans(),
-  })
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly')
 
   const billingQuery = useQuery({
     queryKey: ['billing-summary', 'subscription'],
@@ -62,130 +115,227 @@ export default function BillingPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: (kind: CheckoutKind) => studioApi.checkout(kind),
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
       await queryClient.invalidateQueries()
+      
+      // Navigate to external checkout layout if provided
+      if (data && data.checkout_url) {
+        window.location.href = data.checkout_url
+        return
+      }
+
       navigate('/studio', { replace: true })
     },
   })
 
-  const plans = useMemo(() => publicPlansQuery.data?.plans ?? defaultPlans.plans, [publicPlansQuery.data])
-  const topUps = useMemo(() => publicPlansQuery.data?.top_ups ?? defaultPlans.top_ups, [publicPlansQuery.data])
   const currentPlanId = auth?.plan.id ?? 'guest'
 
   return (
-    <AppPage className="max-w-[1180px] gap-10 py-6">
-      <section className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr]">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Subscription</div>
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">
-            {welcomeMode ? 'Choose how you want to start.' : 'Pick the plan that matches the work.'}
-          </h1>
-          <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-400">
-            Free gets you inside the product. Pro gives you more credits, faster access, and more room to work. Top-ups are there when you only need more generation power.
-          </p>
-          {canLoadPrivate && billingQuery.data ? (
-            <div className="mt-6 space-y-2 text-sm text-zinc-300">
-              <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-2">
-                <span>Current plan</span>
-                <span className="font-medium text-white">{billingQuery.data.plan.label}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-2">
-                <span>Credits remaining</span>
-                <span className="font-medium text-white">{billingQuery.data.credits.remaining}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4 py-2">
-                <span>Monthly allowance</span>
-                <span className="font-medium text-white">{billingQuery.data.credits.monthly_allowance}</span>
-              </div>
-            </div>
-          ) : null}
+    <AppPage className="max-w-[1280px] gap-8 py-6">
+      {/* ── Header ── */}
+      <section className="text-center">
+        <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Pricing</div>
+        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">
+          {welcomeMode ? 'Welcome — choose your starting point.' : canLoadPrivate ? 'Pick the plan that matches the work.' : 'Simple, transparent pricing.'}
+        </h1>
+        <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-400">
+          Start free, upgrade when you need more power. All plans include full access to Library, Collections, and your public profile.
+        </p>
+
+        {/* ── Monthly/Annual toggle ── */}
+        <div className="mt-8 inline-flex items-center gap-1 rounded-full bg-white/[0.04] p-1 ring-1 ring-white/[0.08]">
+          <button
+            onClick={() => setBilling('monthly')}
+            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'monthly' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setBilling('annual')}
+            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'annual' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+          >
+            Annual <span className="ml-1 text-[10px] font-semibold text-emerald-400">Save 20%</span>
+          </button>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-2">
-          {plans.map((plan) => {
-            const isCurrent = currentPlanId === plan.id
-            const isPro = plan.id === 'pro'
-            return (
-              <div key={plan.id} className="border-t border-white/[0.06] pt-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-2xl font-semibold text-white">{plan.label}</div>
-                    <div className="mt-1 text-sm text-zinc-500">
-                      {plan.id === 'pro' ? '$24 / month' : '$0'} - {plan.monthly_credits} monthly credits
-                    </div>
-                  </div>
-                  {isCurrent ? <StatusPill tone="brand">Current</StatusPill> : null}
-                </div>
-
-                <div className="mt-5 space-y-2.5 text-sm text-zinc-300">
-                  {planBullets(plan.id).map((line) => (
-                    <div key={line} className="flex items-start gap-3 leading-6">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/70" />
-                      <span>{line}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  {isPro ? (
-                    canLoadPrivate ? (
-                      <button
-                        onClick={() => checkoutMutation.mutate('pro_monthly')}
-                        disabled={checkoutMutation.isPending}
-                        className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {checkoutMutation.isPending ? 'Opening checkout...' : 'Upgrade to Pro'}
-                      </button>
-                    ) : (
-                      <Link to="/signup" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-                        Start with Pro
-                      </Link>
-                    )
-                  ) : (
-                    <button
-                      onClick={() => navigate('/studio')}
-                      className="rounded-full bg-white/[0.05] px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-                    >
-                      Continue with Free
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-
-          <div className="border-t border-white/[0.06] pt-5 lg:col-span-2">
-            <div className="text-lg font-semibold text-white">Top-ups</div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {topUps.map((option) => (
-                <div key={option.kind} className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
-                  <div>
-                    <div className="text-sm font-medium text-white">{option.label}</div>
-                    <div className="mt-1 text-sm text-zinc-500">
-                      {option.credits} credits - ${option.price_usd}
-                    </div>
-                  </div>
-                  {canLoadPrivate ? (
-                    <button
-                      onClick={() => checkoutMutation.mutate(option.kind)}
-                      disabled={checkoutMutation.isPending}
-                      className="rounded-full bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Buy
-                    </button>
-                  ) : (
-                    <Link to="/signup" className="rounded-full bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]">
-                      Sign up
-                    </Link>
-                  )}
-                </div>
-              ))}
-            </div>
+        {canLoadPrivate && billingQuery.data ? (
+          <div className="mx-auto mt-6 flex max-w-md items-center justify-center gap-6 text-sm text-zinc-400">
+            <span>Current: <span className="font-medium text-white">{billingQuery.data.plan.label}</span></span>
+            <span className="h-3 w-px bg-white/10" />
+            <span>Credits: <span className="font-medium text-white">{billingQuery.data.credits.remaining}</span></span>
           </div>
+        ) : null}
+      </section>
+
+      {/* ── Tier Cards ── */}
+      <section className="grid gap-6 lg:grid-cols-3">
+        {tiers.map((tier) => {
+          const isCurrent = currentPlanId === tier.id
+          const price = billing === 'annual' ? tier.annualPrice : tier.monthlyPrice
+          const isPro = tier.id === 'pro'
+          const isCreator = tier.id === 'creator'
+          const ctaLabel = tier.cta
+
+          return (
+            <div
+              key={tier.id}
+              className={`relative overflow-hidden rounded-[28px] border p-6 transition ${
+                isPro
+                  ? 'border-cyan-500/30 bg-gradient-to-b from-cyan-950/20 via-[#0a1018] to-[#0a1018] shadow-[0_0_40px_rgba(6,182,212,0.08)]'
+                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+              }`}
+            >
+              {tier.badge ? (
+                <div className="absolute right-4 top-4">
+                  <StatusPill tone="brand">{tier.badge}</StatusPill>
+                </div>
+              ) : null}
+
+              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? 'bg-gradient-to-br from-cyan-500/20 to-blue-600/20' : 'bg-white/[0.05]'}`}>
+                <tier.icon className={`h-5 w-5 ${isPro ? 'text-cyan-400' : 'text-white'}`} />
+              </div>
+
+              <div className="mt-4">
+                <div className="text-xl font-semibold text-white">{tier.label}</div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className={`text-3xl font-bold ${isPro ? 'text-cyan-400' : 'text-white'}`}>
+                    {formatPrice(price)}
+                  </span>
+                  {price !== null && price > 0 ? (
+                    <span className="text-sm text-zinc-500">/ {billing === 'annual' ? 'year' : 'month'}</span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-sm text-zinc-500">{tier.credits.toLocaleString()} credits / month</div>
+              </div>
+
+              <ul className="mt-6 space-y-3">
+                {tier.features.map((f) => (
+                  <li key={f} className="flex items-start gap-3 text-sm text-zinc-300">
+                    <Check className={`mt-0.5 h-4 w-4 shrink-0 ${isPro ? 'text-cyan-400' : 'text-zinc-600'}`} />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-8">
+                {isCurrent ? (
+                  <div className="flex items-center justify-center rounded-full border border-white/[0.08] px-5 py-3 text-sm font-medium text-zinc-400">
+                    Current plan
+                  </div>
+                ) : tier.ctaStyle === 'gradient' ? (
+                  canLoadPrivate ? (
+                    <button
+                      onClick={() => checkoutMutation.mutate('pro_monthly')}
+                      disabled={checkoutMutation.isPending}
+                      className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110 disabled:opacity-60"
+                    >
+                      {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
+                    </button>
+                  ) : (
+                    <Link to="/signup" className="block w-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-center text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110">
+                      {ctaLabel}
+                    </Link>
+                  )
+                ) : tier.ctaStyle === 'white' ? (
+                  isCreator ? (
+                    <button
+                      disabled
+                      className="w-full cursor-not-allowed rounded-full bg-white/[0.08] px-5 py-3 text-sm font-semibold text-zinc-500"
+                    >
+                      Coming soon
+                    </button>
+                  ) : canLoadPrivate ? (
+                    <button
+                      onClick={() => checkoutMutation.mutate('pro_monthly')}
+                      disabled={checkoutMutation.isPending}
+                      className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:opacity-60"
+                    >
+                      {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
+                    </button>
+                  ) : (
+                    <Link to="/signup" className="block w-full rounded-full bg-white px-5 py-3 text-center text-sm font-semibold text-black transition hover:opacity-90">
+                      {ctaLabel}
+                    </Link>
+                  )
+                ) : (
+                  <Link
+                  to={canLoadPrivate ? '/create' : '/signup'}
+                  className="block w-full rounded-full border border-white/[0.12] px-5 py-3 text-center text-sm font-medium text-white transition hover:bg-white/[0.06]"
+                >
+                  {ctaLabel}
+                </Link>
+              )}
+              </div>
+            </div>
+          )
+        })}
+      </section>
+
+      {/* ── Feature Comparison Table ── */}
+      <section className="overflow-hidden rounded-[24px] border border-white/[0.06] bg-white/[0.02]">
+        <div className="border-b border-white/[0.06] px-6 py-4">
+          <div className="text-lg font-semibold text-white">Feature comparison</div>
+          <div className="mt-1 text-sm text-zinc-500">Everything included in each plan at a glance.</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-left">
+                <th className="px-6 py-3 font-medium text-zinc-400">Feature</th>
+                <th className="px-6 py-3 font-medium text-zinc-400">Free</th>
+                <th className="px-6 py-3 font-medium text-cyan-400">Pro</th>
+                <th className="px-6 py-3 font-medium text-zinc-400">Creator</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonRows.map((row) => (
+                <tr key={row.label} className="border-b border-white/[0.04] last:border-b-0">
+                  <td className="px-6 py-3 text-zinc-300">{row.label}</td>
+                  <td className="px-6 py-3 text-zinc-500">{row.free}</td>
+                  <td className="px-6 py-3 text-white">{row.pro}</td>
+                  <td className="px-6 py-3 text-zinc-300">{row.creator}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <LegalFooter className="pt-8" />
+      {/* ── Top-ups ── */}
+      <section className="rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="text-lg font-semibold text-white">Credit top-ups</div>
+        <div className="mt-1 text-sm text-zinc-500">Need more credits mid-cycle? Grab a one-time boost.</div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {topUpOptions.map((option) => (
+            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+              <div>
+                <div className="text-sm font-medium text-white">{option.label}</div>
+                <div className="mt-1 text-sm text-zinc-500">
+                  {option.credits} credits · {option.price !== null ? `$${option.price}` : 'TBD'}
+                </div>
+              </div>
+              {canLoadPrivate ? (
+                <button
+                  onClick={() => checkoutMutation.mutate(option.kind)}
+                  disabled={checkoutMutation.isPending}
+                  className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-60"
+                >
+                  Buy
+                </button>
+              ) : (
+                <Link to="/signup" className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                  Sign up
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── TBD Notice ── */}
+      <div className="text-center text-xs text-zinc-600">
+        Pricing is subject to change during the alpha period. Final pricing will be announced before general availability.
+      </div>
     </AppPage>
   )
 }

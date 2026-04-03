@@ -57,6 +57,11 @@ export default function SplashPage() {
           <div className="tracking-[0.28em]">OmniaCreata</div>
           <div className="mt-1 tracking-[0.38em] text-zinc-500">Studio</div>
         </div>
+        <div className="mt-4 flex items-center gap-1.5" style={{ animation: 'omniaSplashWord 2.2s ease forwards' }}>
+          <span className="h-1 w-1 rounded-full bg-zinc-500 animate-pulse" style={{ animationDelay: '0ms' }} />
+          <span className="h-1 w-1 rounded-full bg-zinc-500 animate-pulse" style={{ animationDelay: '200ms' }} />
+          <span className="h-1 w-1 rounded-full bg-zinc-500 animate-pulse" style={{ animationDelay: '400ms' }} />
+        </div>
       </div>
     </div>
   )

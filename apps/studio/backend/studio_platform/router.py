@@ -1,4 +1,6 @@
 from __future__ import annotations
+import hmac
+import hashlib
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -10,6 +12,7 @@ from security.auth import User, UserRole, create_user_tokens, get_current_user, 
 from security.auth import User as AuthUser
 from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
+from security.moderation import check_prompt_safety, ModerationResult
 
 from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
 from .service import PRESET_CATALOG, PLAN_CATALOG, StudioService
@@ -439,6 +442,24 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
+    @router.get("/profiles/me/export")
+    async def export_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            data = await service.export_identity_data(identity_id=auth_user.id)
+            return data
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    @router.delete("/profiles/me")
+    async def delete_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            await service.permanently_delete_identity(identity_id=auth_user.id)
+            return {"status": "deleted"}
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
     @router.patch("/profiles/me")
     async def patch_my_profile(
         payload: ProfileUpdateRequest,
@@ -479,6 +500,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
+        identity = await service.get_identity(auth_user.id)
+        if identity.plan != IdentityPlan.PRO:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Chat is a PRO-only feature. Please upgrade to access."
+            )
+            
         await _consume_rate_limit(request, "chat:new-conversation", limit=20, identifier=auth_user.id)
         conversation = await service.create_conversation(auth_user.id, payload.title, payload.model)
         return _serialize_conversation(conversation)
@@ -512,6 +540,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
+        identity = await service.get_identity(auth_user.id)
+        if identity.plan != IdentityPlan.PRO:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Chat is a PRO-only feature. Please upgrade to access."
+            )
+            
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
         try:
             result = await service.send_chat_message(
@@ -550,6 +585,18 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = _require_auth(current_user)
         await _consume_rate_limit(request, "generation:create", limit=24, identifier=auth_user.id)
+        
+        # Verify safety rules
+        mod_result, flagged_term = await check_prompt_safety(payload.prompt)
+        if mod_result == ModerationResult.HARD_BLOCK:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Safety violation: Your prompt contains prohibited content and has been blocked."
+            )
+        elif mod_result == ModerationResult.SOFT_BLOCK:
+            # In a real app we might write to an audit log table here.
+            pass
+            
         try:
             job = await service.create_generation(
                 identity_id=auth_user.id,
@@ -795,5 +842,38 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def get_settings_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
         auth_user = _require_auth(current_user)
         return await service.get_settings_payload(auth_user.id)
+
+    @router.post("/webhooks/lemonsqueezy")
+    async def post_lemonsqueezy_webhook(request: Request):
+        settings = get_settings()
+        secret = settings.lemonsqueezy_webhook_secret
+        if not secret:
+            return Response("Webhook secret not configured", status_code=500)
+            
+        payload_bytes = await request.body()
+        signature = request.headers.get("X-Signature") or request.headers.get("x-signature")
+        
+        if not signature:
+            # If no signature, reject
+            return Response("Missing signature", status_code=401)
+            
+        # Verify HMAC signature
+        expected = hmac.new(
+            secret.encode("utf-8"), 
+            payload_bytes, 
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(expected, signature):
+            return Response("Invalid signature", status_code=401)
+            
+        import json
+        try:
+            payload = json.loads(payload_bytes)
+        except json.JSONDecodeError:
+            return Response("Invalid JSON", status_code=400)
+            
+        await service.process_lemonsqueezy_webhook(payload)
+        return {"status": "ok"}
 
     return router

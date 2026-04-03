@@ -173,6 +173,75 @@ class PollinationsProvider(StudioImageProvider):
         )
 
 
+class HuggingFaceImageProvider(StudioImageProvider):
+    name = "huggingface"
+
+    def __init__(self, api_token: Optional[str] = None):
+        self.api_token = api_token
+
+    async def is_available(self) -> bool:
+        return bool(self.api_token)
+
+    async def health(self, probe: bool = True) -> Dict[str, object]:
+        if not self.api_token:
+            return {"name": self.name, "status": "disabled", "detail": "Missing HUGGINGFACE_TOKEN"}
+        return {"name": self.name, "status": "healthy", "detail": "Configured"}
+
+    async def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int,
+        model_id: Optional[str] = None,
+        steps: int = 30,
+        cfg_scale: float = 6.5,
+    ) -> ProviderResult:
+        if not self.api_token:
+            raise ProviderTemporaryError("HuggingFace provider is disabled")
+
+        # Map 'flux-schnell' etc to HF repo IDs if possible, else use default.
+        hf_model = "black-forest-labs/FLUX.1-schnell" if "flux" in str(model_id).lower() else "stabilityai/stable-diffusion-xl-base-1.0"
+        
+        url = f"https://api-inference.huggingface.co/models/{hf_model}"
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+        
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
+                "guidance_scale": cfg_scale,
+                "num_inference_steps": min(steps, 50),
+            }
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                # HF might return 503 if model is loading. We raise temporary error to either retry or fail gracefully.
+                if response.status_code == 503:
+                    raise ProviderTemporaryError(f"HuggingFace model is currently loading: {response.text}")
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ProviderTemporaryError(f"HuggingFace returned {exc.response.status_code}: {exc.response.text}") from exc
+        except Exception as exc:
+            raise ProviderTemporaryError(f"HuggingFace request failed: {exc}") from exc
+
+        content_type = response.headers.get("content-type", "image/jpeg")
+        return ProviderResult(
+            provider=self.name,
+            image_bytes=response.content,
+            mime_type=content_type.split(";")[0],
+            width=width,
+            height=height,
+            estimated_cost=0.01,
+        )
+
+
+
 class DemoImageProvider(StudioImageProvider):
     name = "demo"
 
@@ -518,11 +587,20 @@ class LocalComfyProvider(StudioImageProvider):
 class ProviderRegistry:
     def __init__(self) -> None:
         self.local_provider = LocalComfyProvider()
-        self.providers: List[StudioImageProvider] = [
-            RunwareProvider(os.getenv("RUNWARE_API_KEY")),
-            DemoImageProvider(),
-            PollinationsProvider(enabled=os.getenv("STUDIO_ENABLE_POLLINATIONS", "true").lower() != "false"),
-        ]
+        
+        self.providers: List[StudioImageProvider] = []
+        
+        # Add HuggingFace if token exists
+        hf_token = os.getenv("HUGGINGFACE_TOKEN")
+        if hf_token:
+            self.providers.append(HuggingFaceImageProvider(hf_token))
+            
+        # Add pollinations (free generic provider)
+        if os.getenv("STUDIO_ENABLE_POLLINATIONS", "true").lower() != "false":
+            self.providers.append(PollinationsProvider(enabled=True))
+            
+        # Fallback to demo
+        self.providers.append(DemoImageProvider())
 
     def is_local_model(self, model_id: Optional[str]) -> bool:
         return bool(model_id and model_id.startswith(LOCAL_MODEL_PREFIX))

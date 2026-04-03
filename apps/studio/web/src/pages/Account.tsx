@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2X2, List, Settings } from 'lucide-react'
 
-import { AppPage, ButtonChip, EditTextDialog, EmptyState, LegalFooter, PageHeader, StatusPill } from '@/components/StudioPrimitives'
+import { EditTextDialog, EmptyState, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type ProfilePayload, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -46,19 +46,25 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
 
   if (view === 'list') {
     return (
-      <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+      <div className="divide-y divide-white/[0.04]">
         {posts.map((post) => (
-          <article key={post.id} className="grid gap-3 py-3.5 md:grid-cols-[96px_minmax(0,1fr)_auto] md:items-center">
-            <div className="overflow-hidden rounded-[16px] bg-white/[0.03]">
+          <article key={post.id} className="group grid gap-4 py-4 md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center transition-colors hover:bg-white/[0.01] px-2 rounded-xl">
+            <div className="overflow-hidden rounded-xl bg-white/[0.03] ring-1 ring-white/[0.05] shadow-lg shadow-black/20 relative">
               {post.cover_asset ? (
-                <img src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} alt={post.title} className="aspect-[4/5] w-full object-cover" />
+                <img 
+                  src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} 
+                  alt={post.title} 
+                  className="aspect-[4/5] w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" 
+                />
               ) : (
                 <div className="aspect-[4/5] w-full bg-white/[0.04]" />
               )}
+              {/* Optional subtle overlay on hover */}
+              <div className="absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/20" />
             </div>
-            <div className="min-w-0">
-              <div className="truncate text-base font-semibold text-white">{post.title}</div>
-              <div className="mt-1.5 line-clamp-2 text-sm leading-6 text-zinc-400">{post.prompt}</div>
+            <div className="min-w-0 pr-4">
+              <div className="truncate text-base font-medium text-white/90 group-hover:text-white transition-colors">{post.title}</div>
+              <div className="mt-1.5 line-clamp-2 text-sm leading-6 text-zinc-400 group-hover:text-zinc-300 transition-colors">{post.prompt}</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {ownProfile ? (
@@ -73,22 +79,39 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-1">
       {posts.map((post) => (
-        <article key={post.id} className="space-y-2.5 border-b border-white/[0.06] pb-3.5">
-          <div className="overflow-hidden rounded-[20px] bg-white/[0.03]">
+        <article key={post.id} className="group relative flex flex-col gap-3">
+          <div className="relative overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.06] shadow-xl shadow-black/40 transition-shadow duration-500 group-hover:shadow-black/60 group-hover:ring-white/[0.12]">
             {post.cover_asset ? (
-              <img src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} alt={post.title} className="aspect-[4/5] w-full object-cover" />
+              <img 
+                src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} 
+                alt={post.title} 
+                className="aspect-[4/5] w-full object-cover transition-transform duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:scale-[1.03]" 
+              />
             ) : (
-              <div className="aspect-[4/5] w-full bg-white/[0.04]" />
+              <div className="aspect-[4/5] w-full bg-zinc-900" />
             )}
+            
+            {/* Subtle gradient overlay at bottom for labels */}
+            <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between opacity-0 transition-all duration-300 translate-y-2 group-hover:translate-y-0 group-hover:opacity-100">
+              <div className="flex items-center gap-2">
+                <StatusPill tone="neutral" className="bg-black/60 backdrop-blur-md">{post.like_count} likes</StatusPill>
+              </div>
+              {ownProfile && (
+                <StatusPill tone={post.visibility === 'public' ? 'brand' : 'neutral'} className="bg-black/60 backdrop-blur-md">
+                  {post.visibility.charAt(0).toUpperCase()}
+                </StatusPill>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {ownProfile ? <StatusPill tone={post.visibility === 'public' ? 'brand' : 'neutral'}>{post.visibility}</StatusPill> : null}
-            <StatusPill tone="neutral">{post.like_count} likes</StatusPill>
+          
+          <div className="px-1">
+            <h3 className="truncate text-sm font-medium text-white/90 group-hover:text-white transition-colors">{post.title}</h3>
+            <p className="mt-0.5 truncate text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{post.prompt}</p>
           </div>
-          <div className="text-base font-semibold text-white">{post.title}</div>
-          <div className="line-clamp-2 text-sm leading-6 text-zinc-400">{post.prompt}</div>
         </article>
       ))}
     </div>
@@ -104,22 +127,22 @@ export default function AccountPage() {
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const ownAccount = !username
   const optimisticPayload = useMemo<ProfilePayload | undefined>(() => {
-    if (!ownAccount || !auth) return undefined
+    if (!ownAccount || !auth || !auth.identity) return undefined
 
-    const allowance = Math.max(auth.plan.monthly_credits || auth.credits.remaining || 0, 0)
-    const creditsRemaining = Math.max(auth.credits.remaining, 0)
+    const allowance = Math.max(auth.plan?.monthly_credits || auth.credits?.remaining || 0, 0)
+    const creditsRemaining = Math.max(auth.credits?.remaining || 0, 0)
     const consumedPercent = allowance ? Math.min(100, Math.max(0, Math.round(((allowance - creditsRemaining) / allowance) * 100))) : 0
 
     return {
       profile: {
-        display_name: auth.identity.display_name,
+        display_name: auth.identity.display_name ?? 'Guest',
         username: auth.identity.username ?? 'profile',
         avatar_url: auth.identity.avatar_url ?? null,
         bio: auth.identity.bio ?? '',
-        plan: auth.identity.plan,
+        plan: auth.identity.plan ?? 'free',
         default_visibility: auth.identity.default_visibility ?? 'public',
         usage_summary: {
-          plan_label: auth.plan.label,
+          plan_label: auth.plan?.label ?? 'Free',
           credits_remaining: creditsRemaining,
           allowance,
           reset_at: null,
@@ -171,111 +194,129 @@ export default function AccountPage() {
     return <div className="px-6 py-10 text-sm text-rose-300">Profile not found.</div>
   }
 
-  const title = payload.own_profile ? 'Your profile' : `${payload.profile.display_name}`
   const activeDefaultVisibility = payload.profile.default_visibility
 
   return (
-    <AppPage className="max-w-[1080px] gap-5 py-3">
-      <PageHeader
-        eyebrow={payload.own_profile ? 'Account' : 'Profile'}
-        title={title}
-        description={
-          payload.profile.bio ||
-          (payload.own_profile
-            ? 'Manage how your work appears publicly while keeping private projects out of public view.'
-            : 'Public work published from OmniaCreata.'
-          )
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill tone="brand">@{payload.profile.username}</StatusPill>
-            <StatusPill tone="neutral">{payload.profile.public_post_count} public posts</StatusPill>
-            {payload.own_profile ? <StatusPill tone="neutral">{payload.profile.plan}</StatusPill> : null}
-          </div>
-        }
-        aside={
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <ViewToggle value={view} onChange={setView} />
-            {payload.own_profile ? (
-              <Link
-                to="/settings"
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] text-white transition hover:bg-white/[0.08]"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            ) : null}
-          </div>
-        }
-      />
-
-      <section className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="space-y-3.5 border-b border-white/[0.06] pb-5 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.05] text-base font-semibold text-white">
-              {(payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <div className="text-[1.05rem] font-semibold text-white">{payload.profile.display_name}</div>
-              <div className="mt-0.5 text-sm text-zinc-500">@{payload.profile.username}</div>
-            </div>
-          </div>
-
-          {payload.profile.bio ? <div className="text-sm leading-6 text-zinc-400">{payload.profile.bio}</div> : null}
+    <div className="flex flex-col min-h-full pb-10">
+      {/* Cinematic Banner Header */}
+      <div className="relative h-[240px] md:h-[300px] w-full shrink-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-black to-amber-900/20" />
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
+        
+        {/* Banner Actions */}
+        <div className="absolute top-4 right-6 flex flex-wrap items-center gap-2">
+          <ViewToggle value={view} onChange={setView} />
           {payload.own_profile ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setEditingField('name')}
-                className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white transition hover:bg-white/[0.08]"
-              >
-                Edit name
-              </button>
-              <button
-                onClick={() => setEditingField('bio')}
-                className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white transition hover:bg-white/[0.08]"
-              >
-                {payload.profile.bio ? 'Edit bio' : 'Add bio'}
-              </button>
-            </div>
-          ) : null}
-
-          {usage ? (
-            <div className="space-y-2 border-y border-white/[0.06] py-3">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-zinc-500">Plan</span>
-                <span className="font-medium text-white">{usage.plan_label}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-zinc-500">Credits left</span>
-                <span className="font-medium text-white">{usage.credits_remaining}</span>
-              </div>
-              <div className="space-y-2">
-                <div className="h-2 overflow-hidden rounded-full bg-white/[0.04]">
-                  <div className="h-full rounded-full bg-white" style={{ width: `${100 - usage.progress_percent}%` }} />
-                </div>
-                <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
-                  <span>{usage.allowance} monthly allowance</span>
-                  {usageLabel ? <span>Resets {usageLabel}</span> : null}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {payload.own_profile ? (
-            <div className="space-y-2 text-sm">
-              <div className="font-medium text-white">Visibility</div>
-              <div className="text-zinc-500">Public posts appear in Explore and on your profile. Private work stays in your own account and Library.</div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button onClick={() => updateProfileMutation.mutate({ default_visibility: 'public' })}>
-                  <ButtonChip active={activeDefaultVisibility === 'public'}>Default public</ButtonChip>
-                </button>
-                <button onClick={() => updateProfileMutation.mutate({ default_visibility: 'private' })}>
-                  <ButtonChip active={activeDefaultVisibility === 'private'}>Default private</ButtonChip>
-                </button>
-              </div>
-            </div>
+            <Link
+              to="/settings"
+              className="inline-flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md px-4 py-2 text-[13px] font-medium text-white shadow-lg shadow-black/20 ring-1 ring-white/10 transition hover:bg-white/10"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
           ) : null}
         </div>
+      </div>
+
+      {/* Main Content Layout */}
+      <div className="mx-auto w-full max-w-[1080px] px-4 md:px-8">
+        <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] -mt-20 relative z-10">
+          
+          {/* Glassmorphic Sidebar Card */}
+          <div className="flex flex-col space-y-6 rounded-[24px] bg-zinc-900/60 p-6 backdrop-blur-xl ring-1 ring-white/10 shadow-2xl h-max">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-white/10 to-white/5 text-3xl font-bold text-white shadow-inner ring-4 ring-black/50 mb-4 relative">
+                {(payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()}
+                {payload.profile.plan === 'pro' && (
+                  <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-black shadow-lg ring-4 ring-zinc-900">
+                    <span className="text-[10px] font-black tracking-wider">PRO</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-xl font-bold text-white tracking-tight">{payload.profile.display_name}</div>
+              <div className="mt-1 flex items-center justify-center gap-2">
+                <span className="text-sm font-medium text-zinc-400">@{payload.profile.username}</span>
+                {payload.own_profile && payload.profile.plan !== 'pro' ? (
+                  <StatusPill tone="neutral" className="scale-90">{payload.profile.plan.toUpperCase()}</StatusPill>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="text-center">
+              {payload.profile.bio ? (
+                <div className="text-sm leading-relaxed text-zinc-300">{payload.profile.bio}</div>
+              ) : (
+                payload.own_profile && <div className="text-sm text-zinc-500 italic">No bio written yet.</div>
+              )}
+            </div>
+
+            {payload.own_profile ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => setEditingField('name')}
+                  className="rounded-full bg-white/[0.06] px-3.5 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/[0.12] ring-1 ring-white/[0.05]"
+                >
+                  Edit name
+                </button>
+                <button
+                  onClick={() => setEditingField('bio')}
+                  className="rounded-full bg-white/[0.06] px-3.5 py-1.5 text-[12px] font-medium text-white transition hover:bg-white/[0.12] ring-1 ring-white/[0.05]"
+                >
+                  {payload.profile.bio ? 'Edit bio' : 'Add bio'}
+                </button>
+              </div>
+            ) : null}
+
+            {payload.own_profile && usage ? (
+              <div className="space-y-4 rounded-xl bg-black/40 p-4 ring-1 ring-white/5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-400 font-medium">Credits remaining</span>
+                  <span className={`font-bold ${usage.plan_label.toLowerCase() === 'pro' ? 'text-amber-400' : 'text-white'}`}>
+                    {usage.credits_remaining}
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ${usage.plan_label.toLowerCase() === 'pro' ? 'bg-gradient-to-r from-amber-600 to-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'bg-white'}`} 
+                      style={{ width: `${Math.max(2, 100 - usage.progress_percent)}%` }} 
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
+                    <span>{usage.allowance} limit</span>
+                    {usageLabel ? <span>Resets {usageLabel}</span> : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {payload.own_profile ? (
+              <div className="space-y-3 pt-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Default Visibility</div>
+                <div className="flex grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => updateProfileMutation.mutate({ default_visibility: 'public' })}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${activeDefaultVisibility === 'public' ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                  >
+                    Public
+                  </button>
+                  <button 
+                    onClick={() => updateProfileMutation.mutate({ default_visibility: 'private' })}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${activeDefaultVisibility === 'private' ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                  >
+                    Private
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            
+            <div className="flex items-center justify-between border-t border-white/5 pt-4 text-[13px] font-medium text-white/80">
+              <span className="text-zinc-500">Public visibility</span>
+              <span>{payload.profile.public_post_count} posts</span>
+            </div>
+          </div>
 
         <section className="space-y-3.5">
           <div className="border-b border-white/[0.06] pb-3">
@@ -290,8 +331,9 @@ export default function AccountPage() {
         </section>
       </section>
 
-      {!payload.own_profile ? <LegalFooter /> : null}
 
+      </div>
+      
       <EditTextDialog
         open={editingField === 'name'}
         title="Display name"
@@ -321,6 +363,6 @@ export default function AccountPage() {
           setEditingField(null)
         }}
       />
-    </AppPage>
+    </div>
   )
 }

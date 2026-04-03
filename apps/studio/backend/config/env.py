@@ -83,10 +83,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 10
     
-    # Stripe Configuration
-    stripe_secret_key: Optional[str] = None
-    stripe_publishable_key: Optional[str] = None
-    stripe_webhook_secret: Optional[str] = None
+    # LemonSqueezy Configuration
+    lemonsqueezy_api_key: Optional[str] = None
+    lemonsqueezy_webhook_secret: Optional[str] = None
+    lemonsqueezy_store_id: Optional[str] = None
+    
+    # Mailer Configuration
+    resend_api_key: Optional[str] = None
     
     # Monitoring
     sentry_dsn: Optional[str] = None

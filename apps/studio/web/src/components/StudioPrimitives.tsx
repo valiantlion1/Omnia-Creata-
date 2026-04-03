@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Link } from 'react-router-dom'
-import { APP_BUILD_LABEL, APP_RELEASE_CHANNEL, APP_VERSION_LABEL } from '@/lib/appVersion'
+import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
 
 export function AppPage({
   children,
@@ -180,9 +180,11 @@ export function EmptyState({
 export function StatusPill({
   children,
   tone = 'neutral',
+  className,
 }: {
   children: ReactNode
   tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'brand'
+  className?: string
 }) {
   const toneMap = {
     neutral: 'border-white/10 bg-white/[0.05] text-zinc-300',
@@ -192,7 +194,7 @@ export function StatusPill({
     brand: 'border-violet-300/20 bg-violet-300/10 text-violet-100',
   }
 
-  return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone])}>{children}</span>
+  return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone], className)}>{children}</span>
 }
 
 export function LegalFooter({ className }: { className?: string }) {
@@ -200,10 +202,11 @@ export function LegalFooter({ className }: { className?: string }) {
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span>OmniaCreata TM 2026</span>
+          <span>© OmniaCreata 2026</span>
+          <span className="text-zinc-600">·</span>
           <span className="text-zinc-600">{APP_VERSION_LABEL}</span>
-          <span className="text-zinc-700">{APP_RELEASE_CHANNEL}</span>
-          <span className="text-zinc-700">build {APP_BUILD_LABEL}</span>
+          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-600">build {APP_BUILD_LABEL}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/help#terms" className="transition hover:text-white">

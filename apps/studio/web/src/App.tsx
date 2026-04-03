@@ -1,7 +1,23 @@
 import { useEffect } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { LightboxProvider } from '@/components/Lightbox'
+import posthog from 'posthog-js'
+import { PostHogProvider } from 'posthog-js/react'
 
 import StudioShell from '@/components/StudioShell'
+
+// Initialize PostHog globally
+if (typeof window !== 'undefined') {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY || 'phc_placeholder', {
+    api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com',
+    loaded: (posthog_instance) => {
+      if (import.meta.env.DEV) {
+        posthog_instance.opt_out_capturing()
+      }
+    },
+  })
+}
 import AccountPage from '@/pages/Account'
 import BillingPage from '@/pages/Billing'
 import ChatPage from '@/pages/Chat'
@@ -12,7 +28,6 @@ import ElementsPage from '@/pages/Elements'
 import HomePage from '@/pages/Home'
 import LoginPage from '@/pages/Login'
 import MediaLibraryPage from '@/pages/MediaLibrary'
-import OwnerLocalLabPage from '@/pages/OwnerLocalLab'
 import ProjectPage from '@/pages/Project'
 import SettingsPage from '@/pages/Settings'
 import SharedPage from '@/pages/Shared'
@@ -74,7 +89,6 @@ function ProtectedRoutes() {
       <Route path="/learn" element={<Navigate to="/help" replace />} />
       <Route path="/subscription" element={<BillingPage />} />
       <Route path="/account" element={<AccountPage />} />
-      <Route path="/owner/local-lab" element={<OwnerLocalLabPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/studio" element={<Navigate to="/explore" replace />} />
       <Route path="/gallery" element={<Navigate to="/library/images" replace />} />
@@ -91,7 +105,8 @@ function AppFrame() {
   const isPublicShellRoute =
     location.pathname === '/explore' ||
     location.pathname === '/community' ||
-    location.pathname === '/social'
+    location.pathname === '/social' ||
+    location.pathname === '/subscription'
   const isAlwaysPublic =
     location.pathname === '/' ||
     location.pathname === '/landing' ||
@@ -138,8 +153,14 @@ function AppFrame() {
 
 export default function App() {
   return (
-    <Router>
-      <AppFrame />
-    </Router>
+    <ErrorBoundary>
+      <PostHogProvider client={posthog}>
+        <LightboxProvider>
+          <Router>
+            <AppFrame />
+          </Router>
+        </LightboxProvider>
+      </PostHogProvider>
+    </ErrorBoundary>
   )
 }

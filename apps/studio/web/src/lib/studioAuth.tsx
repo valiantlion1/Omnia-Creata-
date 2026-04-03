@@ -29,7 +29,7 @@ type StudioAuthContextValue = {
   isAuthenticated: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (input: SignupInput) => Promise<void>
-  signInWithGoogle: (nextPath?: string) => Promise<void>
+  signInWithProvider: (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath?: string) => Promise<void>
   signInDemo: (plan?: IdentityPlan, displayName?: string) => Promise<void>
   signOut: () => Promise<void>
   consumeRedirectAfterAuth: () => string | null
@@ -179,11 +179,11 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
     [queryClient],
   )
 
-  const signInWithGoogle = React.useCallback(async (nextPath = '/studio') => {
+  const signInWithProvider = React.useCallback(async (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath = '/studio') => {
     setStudioPostAuthRedirect(nextPath)
     const redirectTo = `${window.location.origin}/login?oauth=1`
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo },
     })
     if (error) throw error
@@ -206,7 +206,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
       isAuthenticated: Boolean(token && !authQuery.data?.guest),
       signIn,
       signUp,
-      signInWithGoogle,
+      signInWithProvider,
       signInDemo,
       signOut,
       consumeRedirectAfterAuth: () => consumeStudioPostAuthRedirect(),
@@ -218,7 +218,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
       bootstrapped,
       signIn,
       signUp,
-      signInWithGoogle,
+      signInWithProvider,
       signInDemo,
       signOut,
       token,

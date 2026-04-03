@@ -1,12 +1,148 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Heart, Lock, Sparkles, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Crown, Heart, Lock, Sparkles, X, Zap } from 'lucide-react'
 
-import { AppPage, ButtonChip, EmptyState, PageHeader, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, ButtonChip, PageHeader, StatusPill } from '@/components/StudioPrimitives'
+import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
+
+function metadataString(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md" onClick={onClose}>
+      <div
+        className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0d12]/95 p-8 shadow-[0_36px_120px_rgba(0,0,0,0.6)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white/[0.06]">
+          <Sparkles className="h-6 w-6 text-white" />
+        </div>
+
+        <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
+          Create a free account to continue
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          Sign up to like images, create your own, save favorites, and join the community. It takes less than a minute.
+        </p>
+
+        <div className="mt-6 flex flex-col gap-3">
+          <Link
+            to="/signup"
+            className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90"
+          >
+            Sign up for free
+          </Link>
+          <Link
+            to="/login"
+            className="flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.06]"
+          >
+            Already have an account? Log in
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── welcome pricing overlay ─── */
+function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null
+  const miniTiers = [
+    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '60', features: ['Core models', '1024px max', 'Standard queue'], style: 'outline' as const },
+    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '1,200', features: ['All models', '2048px max', 'Priority queue', 'Commercial license'], style: 'gradient' as const },
+    { id: 'creator', label: 'Creator', icon: Crown, price: 'TBD', credits: '5,000', features: ['All + early access', '4096px max', 'Priority+', 'API (soon)'], style: 'white' as const },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 px-4 backdrop-blur-lg" onClick={onClose}>
+      <div
+        className="relative w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#0a0d12]/98 p-8 shadow-[0_36px_120px_rgba(0,0,0,0.7)] md:p-10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
+          title="Skip"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
+            <Sparkles className="h-6 w-6 text-cyan-400" />
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">Welcome to OmniaCreata</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">Choose a plan to get started. You can always change later.</p>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {miniTiers.map((tier) => {
+            const isPro = tier.id === 'pro'
+            return (
+              <div
+                key={tier.id}
+                className={`rounded-[20px] border p-5 transition ${
+                  isPro
+                    ? 'border-cyan-500/30 bg-gradient-to-b from-cyan-950/20 to-transparent'
+                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                }`}
+              >
+                <tier.icon className={`h-5 w-5 ${isPro ? 'text-cyan-400' : 'text-white'}`} />
+                <div className="mt-3 text-lg font-semibold text-white">{tier.label}</div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className={`text-2xl font-bold ${isPro ? 'text-cyan-400' : 'text-white'}`}>{tier.price}</span>
+                  {tier.price !== '$0' && tier.price !== 'TBD' ? <span className="text-xs text-zinc-500">/mo</span> : null}
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">{tier.credits} credits/month</div>
+                <ul className="mt-4 space-y-2">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-xs text-zinc-400">
+                      <Check className={`h-3 w-3 ${isPro ? 'text-cyan-400' : 'text-zinc-600'}`} />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to="/subscription"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110"
+          >
+            Compare plans <ArrowRight className="h-4 w-4" />
+          </Link>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            Skip for now
+          </button>
+        </div>
+
+        <div className="mt-4 text-center text-[10px] text-zinc-600">Pricing is subject to change during the alpha period.</div>
+      </div>
+    </div>
+  )
+}
 
 type ExploreSort = 'trending' | 'newest' | 'top' | 'styles'
 
@@ -110,6 +246,7 @@ function ExploreLightbox({
   onClose: () => void
 }) {
   const [assetIndex, setAssetIndex] = useState(0)
+  const { openLightbox } = useLightbox()
 
   useEffect(() => {
     setAssetIndex(0)
@@ -158,13 +295,23 @@ function ExploreLightbox({
         </button>
 
         <div className="min-w-0">
-          <div className="relative overflow-hidden rounded-[24px] bg-black/50">
+          <div className="group relative overflow-hidden rounded-[24px] bg-black/50">
             {activeAsset ? (
-              <img
-                src={activeAsset.url}
-                alt={activeAsset.title}
-                className="max-h-[78vh] min-h-[320px] w-full object-contain"
-              />
+              <div className="relative">
+                <img
+                  src={activeAsset.url}
+                  alt={activeAsset.title}
+                  className="max-h-[78vh] min-h-[320px] w-full cursor-zoom-in object-contain"
+                  onClick={() => openLightbox(activeAsset.url, activeAsset.title, {
+                    title: post.title,
+                    prompt: post.prompt,
+                    authorName: post.owner_display_name,
+                    authorUsername: post.owner_username,
+                    likes: post.like_count,
+                    aspectRatio: metadataString(activeAsset.metadata, 'aspect_ratio')
+                  })}
+                />
+              </div>
             ) : (
               <div className="flex min-h-[420px] items-center justify-center text-sm text-zinc-500">No preview available</div>
             )}
@@ -262,12 +409,23 @@ function ExploreLightbox({
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const [sort, setSort] = useState<ExploreSort>('trending')
   const [selectedPost, setSelectedPost] = useState<PublicPost | null>(null)
+  const [authPromptOpen, setAuthPromptOpen] = useState(false)
   const canUseAccount = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+
+  // Welcome pricing overlay — show once after first signup
+  const isNewUser = new URLSearchParams(location.search).get('welcome') === '1'
+  const [showWelcome, setShowWelcome] = useState(false)
+  useEffect(() => {
+    if (isNewUser && canUseAccount && !sessionStorage.getItem('omnia_welcome_shown')) {
+      setShowWelcome(true)
+      sessionStorage.setItem('omnia_welcome_shown', '1')
+    }
+  }, [isNewUser, canUseAccount])
 
   const postsQuery = useQuery({
     queryKey: ['public-posts', sort, auth?.identity.id ?? 'guest'],
@@ -287,7 +445,21 @@ export default function DashboardPage() {
     },
   })
 
+  const [searchQuery, setSearchQuery] = useState('')
+
   const posts = postsQuery.data?.posts ?? []
+  
+  const filteredPosts = useMemo(() => {
+    if (!searchQuery.trim()) return posts
+    const lowerQuery = searchQuery.toLowerCase()
+    return posts.filter((p: PublicPost) => 
+      p.prompt?.toLowerCase().includes(lowerQuery) || 
+      p.title?.toLowerCase().includes(lowerQuery) ||
+      p.style_tags?.some((tag: string) => tag.toLowerCase().includes(lowerQuery)) ||
+      p.owner_display_name?.toLowerCase().includes(lowerQuery)
+    )
+  }, [posts, searchQuery])
+
   const styleTags = useMemo(() => {
     const counts = new Map<string, number>()
     for (const post of posts) {
@@ -304,7 +476,7 @@ export default function DashboardPage() {
   const handleLike = (post: PublicPost) => {
     if (!canUseAccount) {
       setStudioPostAuthRedirect('/explore')
-      navigate('/login?next=%2Fexplore')
+      setAuthPromptOpen(true)
       return
     }
     toggleLikeMutation.mutate(post)
@@ -314,15 +486,27 @@ export default function DashboardPage() {
     <AppPage className="max-w-[1380px] gap-8 py-8">
       <PageHeader
         eyebrow="Explore"
-        title="See what people are making with OmniaCreata."
-        description="Browse public work, spot strong directions, and save the ones worth chasing."
+        title="See what people are creating."
+        description="Explore public images, discover new styles, and get inspired for your next creation."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {sortOptions.map((option) => (
-              <button key={option.id} onClick={() => setSort(option.id)}>
-                <ButtonChip active={sort === option.id}>{option.label}</ButtonChip>
-              </button>
-            ))}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/[0.08] px-4 py-2 focus-within:border-white/20 transition backdrop-blur-md max-w-md">
+              <Sparkles className="h-4 w-4 text-zinc-500" />
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by prompt, title, style or creator..."
+                className="bg-transparent border-none outline-none text-sm text-white placeholder:text-zinc-600 w-full min-w-[280px]"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {sortOptions.map((option) => (
+                <button key={option.id} onClick={() => setSort(option.id)}>
+                  <ButtonChip active={sort === option.id}>{option.label}</ButtonChip>
+                </button>
+              ))}
+            </div>
           </div>
         }
         aside={
@@ -343,19 +527,62 @@ export default function DashboardPage() {
         }
       />
 
+      <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
+      <WelcomePricingOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
+
       {postsQuery.isLoading ? (
         <div className="py-12 text-sm text-zinc-500">Loading community feed...</div>
-      ) : posts.length ? (
+      ) : filteredPosts.length ? (
         <section className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
-          {posts.map((post, index) => (
+          {filteredPosts.map((post: PublicPost, index: number) => (
             <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} index={index} onOpen={setSelectedPost} />
           ))}
         </section>
       ) : (
-        <EmptyState
-          title="No public posts yet"
-          description="Public work will start showing up here as soon as people publish images from their own library."
-        />
+        <section>
+          <div className="rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-6 text-center">
+            <Sparkles className="mx-auto h-6 w-6 text-cyan-400" />
+            <div className="mt-3 text-lg font-semibold text-white">Community gallery is warming up</div>
+            <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-400">
+              Be the first to publish — or get inspired by these sample generations made with OmniaCreata.
+            </p>
+          </div>
+          <div className="mt-6 columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
+            {[
+              { src: '/atmosphere/showcase-01-neon-cityscape.png', label: 'Neon Cityscape' },
+              { src: '/atmosphere/showcase-02-editorial-portrait.png', label: 'Editorial Portrait' },
+              { src: '/atmosphere/showcase-03-architecture.png', label: 'Architecture' },
+              { src: '/atmosphere/showcase-04-fantasy-dragon.png', label: 'Fantasy Art' },
+              { src: '/atmosphere/showcase-05-product-photo.png', label: 'Product Photo' },
+              { src: '/atmosphere/showcase-06-luxury-interior.png', label: 'Luxury Interior' },
+              { src: '/atmosphere/showcase-08-anime-warrior.png', label: 'Anime Art' },
+              { src: '/atmosphere/showcase-09-scifi-cityscape.png', label: 'Sci-Fi City' },
+              { src: '/atmosphere/showcase-10-food-photography.png', label: 'Food Photography' },
+              { src: '/atmosphere/showcase-11-nature-macro.png', label: 'Nature Macro' },
+            ].map((img, i) => (
+              <div key={img.src} className="group mb-4 break-inside-avoid">
+                <div className="relative overflow-hidden rounded-[22px] border border-white/[0.06] bg-white/[0.03]">
+                  <img
+                    src={img.src}
+                    alt={img.label}
+                    loading="lazy"
+                    className={`w-full object-cover transition duration-500 ease-out group-hover:scale-[1.03] ${
+                      i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-square' : 'aspect-[5/6]'
+                    }`}
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
+                  <div className="absolute inset-x-0 bottom-0 p-3 opacity-0 transition duration-300 group-hover:opacity-100">
+                    <div className="text-sm font-semibold text-white">{img.label}</div>
+                    <div className="mt-0.5 text-[10px] text-zinc-400">Showcase · OmniaCreata</div>
+                  </div>
+                  <div className="pointer-events-none absolute left-3 top-3 opacity-60">
+                    <StatusPill tone="brand">Showcase</StatusPill>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <ExploreLightbox post={selectedPost} open={Boolean(selectedPost)} onClose={() => setSelectedPost(null)} />

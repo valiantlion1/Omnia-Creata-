@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { LightboxTrigger } from '@/components/ImageLightbox'
+import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type Generation, type MediaAsset, type Project } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -78,6 +80,16 @@ function formatDate(value: string) {
   return new Date(value).toLocaleString()
 }
 
+function metadataString(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function metadataNumber(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key]
+  return typeof value === 'number' ? value : undefined
+}
+
 function variantOrder(asset: MediaAsset) {
   const raw = Number((asset.metadata as Record<string, unknown>).variation_index ?? 0)
   return Number.isFinite(raw) ? raw : 0
@@ -96,7 +108,6 @@ function ConfirmDialog({
 }) {
   if (!state) return null
 
-  const title = state.kind === 'empty-trash' ? 'Empty trash?' : 'Delete forever?'
   const body =
     state.kind === 'empty-trash'
       ? `This will permanently remove ${state.count} item${state.count > 1 ? 's' : ''} from Trash. This cannot be undone.`
@@ -262,6 +273,8 @@ function AssetLightbox({
   onSetVisibility: (visibility: 'public' | 'private') => void
   onTrash: () => void
 }) {
+  const { openLightbox } = useLightbox()
+
   useEffect(() => {
     if (!state) return
 
@@ -323,12 +336,28 @@ function AssetLightbox({
       ) : null}
 
       <div className="relative z-[1] grid w-full max-w-[1380px] gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
-        <div className="flex min-h-0 items-center justify-center">
+        <div className="group relative flex min-h-0 items-center justify-center">
           <img
             src={asset.url}
             alt={asset.title}
-            className="max-h-[78vh] w-auto max-w-full rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+            className="max-h-[78vh] w-auto max-w-full cursor-zoom-in rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+            onClick={() => openLightbox(asset.url, asset.title, {
+              title: state.group.title,
+              prompt: state.group.prompt,
+              authorName: "You",
+              authorUsername: "creator",
+              aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
+              likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
+            })}
           />
+          <LightboxTrigger onClick={() => openLightbox(asset.url, asset.title, {
+              title: state.group.title,
+              prompt: state.group.prompt,
+              authorName: "You",
+              authorUsername: "creator",
+              aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
+              likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
+          })} />
         </div>
 
         <div className="space-y-4 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md">
@@ -932,7 +961,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="My Images"
-              description="Finished results stay here. Running generations preview here until they complete."
+              description="Your generated images live here. Running generations will preview until they complete."
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1066,6 +1095,22 @@ export default function MediaLibraryPage() {
                               >
                                 Reuse style
                               </MenuAction>
+                              <MenuAction
+                                onClick={() => {
+                                  openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId, tool: 'regenerate' })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Regenerate
+                              </MenuAction>
+                              <MenuAction
+                                onClick={() => {
+                                  openComposeWith({ prompt: `Refine: ${group.prompt.slice(0, 200)}`, model: group.model, projectId: group.projectId, tool: 'edit' })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Edit (img2img)
+                              </MenuAction>
                               <MenuDivider />
                               <MenuAction
                                 disabled={menuBusy}
@@ -1177,7 +1222,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Collections"
-              description="Projects keep related images together so you can return to them later without digging."
+              description="Projects keep related images together so you can revisit them anytime."
               search={search}
               onSearchChange={setSearch}
               view={activeView}

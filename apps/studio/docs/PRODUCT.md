@@ -1,6 +1,6 @@
 # Studio Product Notes
 
-Studio is one of the highest-priority Omnia Creata products.
+OmniaCreata Studio (OCS) is one of the highest-priority Omnia Creata products.
 
 Canonical surfaces:
 

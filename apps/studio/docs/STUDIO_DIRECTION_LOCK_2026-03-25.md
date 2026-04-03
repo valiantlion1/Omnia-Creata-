@@ -4,7 +4,7 @@ Last updated: 2026-03-25
 
 ## Product Position
 
-OmniaCreata Studio is a premium AI visual product for everyone, not only for creators.
+OmniaCreata Studio (OCS) is a premium AI visual product for everyone, not only for creators.
 
 Target audience includes:
 - everyday users

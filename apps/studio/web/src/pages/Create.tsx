@@ -1,18 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, RefreshCw, Sparkles, Wand2, X } from 'lucide-react'
+import { Check, ChevronDown, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
 
-import { AppPage, ButtonChip, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type Generation, type JobStatus, type ModelCatalogEntry } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
+/* ─── Placeholder prompts ──────────────────────────── */
+
+const PLACEHOLDER_PROMPTS = [
+  'A neon-lit Tokyo alley at midnight, rain-soaked reflections, cinematic mood...',
+  'Minimalist perfume bottle on dark marble, studio lighting, product photography...',
+  'Ancient dragon perched on crystal ruins, aurora borealis, fantasy concept art...',
+  'Fashion editorial, model in flowing silk, golden hour, soft bokeh background...',
+  'Futuristic architecture overlooking the ocean, glass and concrete, sunset...',
+]
+
+/* ─── Aspect presets ───────────────────────────────── */
+
 const aspectPresets = {
-  '1:1': { width: 1024, height: 1024, label: 'Square' },
-  '16:9': { width: 1280, height: 720, label: 'Landscape' },
-  '4:5': { width: 1024, height: 1280, label: 'Portrait' },
-  '3:4': { width: 960, height: 1280, label: 'Vertical' },
+  '1:1':  { width: 1024, height: 1024, label: 'Square',    icon: Square },
+  '16:9': { width: 1280, height: 720,  label: 'Landscape', icon: Monitor },
+  '4:5':  { width: 1024, height: 1280, label: 'Portrait',  icon: Smartphone },
+  '3:4':  { width: 960,  height: 1280, label: 'Vertical',  icon: RectangleVertical },
 } as const
+
+/* ─── Toast types ──────────────────────────────────── */
 
 type GenerationToast = {
   id: string
@@ -37,24 +51,18 @@ function getToastTone(status: JobStatus): 'brand' | 'success' | 'warning' | 'dan
 
 function getToastLabel(status: JobStatus) {
   switch (status) {
-    case 'pending':
-      return 'Generation started'
-    case 'processing':
-      return 'Processing'
-    case 'completed':
-      return 'Completed'
-    case 'retryable_failed':
-      return 'Needs retry'
-    case 'failed':
-      return 'Failed'
-    default:
-      return 'Queued'
+    case 'pending': return 'Starting...'
+    case 'processing': return 'Generating'
+    case 'completed': return 'Done'
+    case 'retryable_failed': return 'Retry needed'
+    case 'failed': return 'Failed'
+    default: return 'Queued'
   }
 }
 
 function getToastDescription(job: GenerationToast) {
   if (job.status === 'completed') return 'Saved to Library / My Images.'
-  if (job.status === 'processing' || job.status === 'pending') return 'Your image is being rendered.'
+  if (job.status === 'processing' || job.status === 'pending') return 'Your image is being rendered...'
   return job.error || 'This run did not finish successfully.'
 }
 
@@ -76,17 +84,7 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
     .sort((a, b) => Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost)
 }
 
-function getModelCostLabel(model: ModelCatalogEntry | undefined) {
-  if (!model) return 'Select a model'
-  if (model.runtime === 'local') return 'Local runtime'
-  return `${model.credit_cost} credits`
-}
-
-function getModelCostSummary(model: ModelCatalogEntry | undefined, width: number, height: number) {
-  if (!model) return `${width} x ${height}`
-  if (model.runtime === 'local') return `Local runtime / no credit spend / ${width} x ${height}`
-  return `Cost ${model.credit_cost} credits / ${width} x ${height}`
-}
+/* ─── Main page ────────────────────────────────────── */
 
 export default function CreatePage() {
   const queryClient = useQueryClient()
@@ -110,6 +108,9 @@ export default function CreatePage() {
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  /* ─── Queries ─────────────────────────────────── */
 
   const modelsQuery = useQuery({
     queryKey: ['models', 'create'],
@@ -130,6 +131,8 @@ export default function CreatePage() {
   const runtimeCredits = auth?.credits.remaining ?? 0
   const activeAspect = aspectPresets[aspectRatio]
 
+  /* ─── Effects ─────────────────────────────────── */
+
   useEffect(() => {
     if (!models.length) return
     if (!models.some((entry) => entry.id === selectedModelId)) {
@@ -146,7 +149,6 @@ export default function CreatePage() {
     const nextPrompt = searchParams.get('prompt')
     const nextModel = searchParams.get('model')
     const nextAspect = searchParams.get('aspect_ratio') as keyof typeof aspectPresets | null
-
     if (nextPrompt) setPrompt(nextPrompt)
     if (nextModel) setSelectedModelId(nextModel)
     if (nextAspect && nextAspect in aspectPresets) setAspectRatio(nextAspect)
@@ -165,10 +167,20 @@ export default function CreatePage() {
       if (modelPickerRef.current.contains(event.target as Node)) return
       setModelPickerOpen(false)
     }
-
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  /* ─── Auto-resize textarea ────────────────────── */
+
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
+  }, [prompt])
+
+  /* ─── Poll running jobs for status ────────────── */
 
   useEffect(() => {
     if (!canLoadPrivate) return
@@ -195,11 +207,7 @@ export default function CreatePage() {
           .map((job) => {
             const snapshot = snapshotMap.get(job.id)
             if (!snapshot) return job
-
-            if (!isTerminalStatus(job.status) && isTerminalStatus(snapshot.status)) {
-              invalidate = true
-            }
-
+            if (!isTerminalStatus(job.status) && isTerminalStatus(snapshot.status)) invalidate = true
             return {
               ...job,
               title: snapshot.title,
@@ -225,24 +233,19 @@ export default function CreatePage() {
     setModelPickerOpen(false)
   }, [selectedModelId])
 
+  /* ─── Handlers ────────────────────────────────── */
+
   const ensureProjectId = useCallback(async () => {
     if (resolvedProjectId) return resolvedProjectId
-
     if (!projectPromiseRef.current) {
       projectPromiseRef.current = studioApi
-        .createProject({
-          title: 'New image set',
-          description: 'Created from Studio Create',
-        })
+        .createProject({ title: 'New image set', description: 'Created from Studio Create' })
         .then((project) => {
           setResolvedProjectId(project.id)
           return project.id
         })
-        .finally(() => {
-          projectPromiseRef.current = null
-        })
+        .finally(() => { projectPromiseRef.current = null })
     }
-
     return projectPromiseRef.current
   }, [resolvedProjectId])
 
@@ -260,7 +263,6 @@ export default function CreatePage() {
 
   const handleImprovePrompt = useCallback(async () => {
     if (!prompt.trim()) return
-
     setImproveState('working')
     try {
       const response = await studioApi.improvePrompt({ prompt })
@@ -274,10 +276,8 @@ export default function CreatePage() {
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || !selectedModel) return
-
     setCreateError(null)
     setSubmittingCount((value) => value + 1)
-
     try {
       const projectId = await ensureProjectId()
       const generation = await studioApi.createGeneration({
@@ -293,7 +293,6 @@ export default function CreatePage() {
         aspect_ratio: aspectRatio,
         output_count: 1,
       })
-
       setGenerationToasts((current) => [mapGenerationToToast(generation, projectId), ...current.filter((job) => job.id !== generation.job_id)])
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
@@ -305,21 +304,37 @@ export default function CreatePage() {
     }
   }, [activeAspect.height, activeAspect.width, aspectRatio, ensureProjectId, prompt, queryClient, selectedModel])
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault()
+      handleGenerate()
+    }
+  }
+
+  /* ─── Render: Loading ─────────────────────────── */
+
   if (isLoading) {
     return <div className="px-6 py-10 text-sm text-zinc-500">Loading compose...</div>
   }
 
+  /* ─── Render: Guest ───────────────────────────── */
+
   if (!isAuthenticated || auth?.guest) {
     return (
-      <AppPage className="max-w-[1040px] py-8">
-        <section className="px-2 py-8 md:px-4">
-          <h1 className="text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-400">Write the prompt, choose the model, pick the ratio, generate. The result lands in Library automatically.</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/signup" className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+      <AppPage className="max-w-[860px] py-16">
+        <section className="flex flex-col items-center text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 ring-1 ring-white/[0.08]">
+            <Wand2 className="h-7 w-7 text-cyan-300" />
+          </div>
+          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
+          <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
+            Write a prompt, pick a model, choose a ratio, and generate. Your creations land straight in your Library.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
               Start free
             </Link>
-            <Link to="/login" className="rounded-full bg-white/[0.05] px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.08]">
+            <Link to="/login" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
               Log in
             </Link>
           </div>
@@ -328,163 +343,213 @@ export default function CreatePage() {
     )
   }
 
+  /* ─── Render: Main ────────────────────────────── */
+
   return (
     <>
-      <AppPage className="max-w-[900px] gap-2 py-2">
-        <section className="px-1 py-1 md:px-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[2.1rem] font-semibold tracking-[-0.05em] text-white md:text-[2.65rem]">Compose</h1>
-              <p className="mt-1 text-sm text-zinc-500">Prompt, model, ratio, generate. Results land in Library.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
-              {runningJobs ? <StatusPill tone="neutral">{runningJobs} running</StatusPill> : null}
-            </div>
+      <AppPage className="max-w-[860px] gap-0 py-6 md:py-10">
+
+        {/* ── Header ─────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Compose</h1>
+            <p className="mt-1 text-sm text-zinc-500">Describe your vision and generate.</p>
           </div>
+          <div className="flex items-center gap-2">
+            <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
+            {runningJobs ? <StatusPill tone="neutral">{runningJobs} running</StatusPill> : null}
+          </div>
+        </div>
 
-          <div className="mt-2.5">
-            <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-2">
-              <div className="text-sm text-zinc-500">Prompt</div>
-              <button
-                onClick={handleImprovePrompt}
-                disabled={!prompt.trim() || improveState === 'working'}
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Improve prompt
-              </button>
-            </div>
+        {/* ── Prompt card ────────────────────────── */}
+        <div className="rounded-[24px] border border-white/[0.06] bg-[#111216]/80 p-1 shadow-[0_8px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl ring-1 ring-white/[0.03]">
 
+          {/* Prompt area */}
+          <div className="relative rounded-[20px] bg-[#0c0d10]/60 px-5 py-4">
             <textarea
+              ref={textareaRef}
               value={prompt}
               onChange={(event) => {
                 setPrompt(event.target.value)
                 if (improveState !== 'idle') setImproveState('idle')
               }}
-              rows={5}
-              placeholder="Describe the image you want to generate..."
-              className="mt-2 min-h-[112px] w-full resize-none bg-transparent text-[0.97rem] leading-7 text-white outline-none placeholder:text-zinc-500 md:min-h-[132px] md:text-[1rem]"
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
+              className="w-full resize-none bg-transparent text-[1rem] leading-7 text-white outline-none placeholder:text-zinc-600 md:text-[1.05rem]"
+              style={{ minHeight: '80px' }}
             />
 
-            <div className="mt-2.5 border-t border-white/[0.06] pt-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => (
-                  <button key={ratio} onClick={() => setAspectRatio(ratio)}>
-                    <ButtonChip active={aspectRatio === ratio} className="px-3 py-1.5 text-[11px]">
-                      {ratio} - {config.label}
-                    </ButtonChip>
-                  </button>
-                ))}
+            {/* ✨ Improve button — inside the prompt area top right */}
+            <button
+              onClick={handleImprovePrompt}
+              disabled={!prompt.trim() || improveState === 'working'}
+              title="Improve prompt with AI"
+              className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-zinc-300 ring-1 ring-white/[0.06] transition hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Tightened' : 'Improve'}
+            </button>
+          </div>
 
-                <div ref={modelPickerRef} className="relative">
+          {/* Controls bar */}
+          <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+            {/* Left: aspect ratio + model */}
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* Aspect ratio buttons */}
+              {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => {
+                const Icon = config.icon
+                const active = aspectRatio === ratio
+                return (
                   <button
-                    onClick={() => setModelPickerOpen((value) => !value)}
-                    className="inline-flex min-w-[210px] items-center justify-between gap-3 rounded-full bg-white/[0.05] px-3.5 py-2 text-left text-sm text-white transition hover:bg-white/[0.08]"
+                    key={ratio}
+                    onClick={() => setAspectRatio(ratio)}
+                    title={`${ratio} — ${config.label}`}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium transition ${
+                      active
+                        ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.12)]'
+                        : 'bg-white/[0.04] text-zinc-400 ring-1 ring-white/[0.06] hover:bg-white/[0.08] hover:text-white'
+                    }`}
                   >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{selectedModel?.label ?? 'Select model'}</div>
-                      <div className="mt-0.5 text-xs text-zinc-500">{getModelCostLabel(selectedModel)}</div>
-                    </div>
-                    <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{config.label}</span>
                   </button>
+                )
+              })}
 
-                  {modelPickerOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+10px)] z-20 w-[min(420px,calc(100vw-56px))] overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                      {models.slice(0, 6).map((entry) => {
-                        const active = entry.id === selectedModel?.id
-                        return (
-                          <button
-                            key={entry.id}
-                            onClick={() => setSelectedModelId(entry.id)}
-                            className={`flex w-full items-start justify-between gap-4 rounded-[18px] px-3.5 py-3 text-left transition ${
-                              active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 text-sm font-medium">
-                                {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
-                                <span className="truncate">{entry.label}</span>
-                              </div>
-                              <div className="mt-1 pl-[1.3rem] text-xs leading-5 text-zinc-500">{entry.description}</div>
-                            </div>
-                            <div className="shrink-0 text-right text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                              {entry.runtime === 'local' ? 'Local' : `${entry.credit_cost} cr`}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </div>
+              {/* Divider */}
+              <div className="mx-1 hidden h-6 w-px bg-white/[0.06] sm:block" />
 
-                <div className="text-[13px] text-zinc-500">{getModelCostSummary(selectedModel, activeAspect.width, activeAspect.height)}</div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {improveState === 'done' ? <span className="text-xs text-emerald-200">Prompt improved.</span> : null}
-                  {improveState === 'fallback' ? <span className="text-xs text-zinc-400">Prompt tightened.</span> : null}
-                  <Link to="/library/images" className="text-sm text-white transition hover:text-zinc-200">
-                    Open My Images
-                  </Link>
-                </div>
-
+              {/* Model picker */}
+              <div ref={modelPickerRef} className="relative">
                 <button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => setModelPickerOpen((value) => !value)}
+                  className="flex items-center gap-2.5 rounded-full bg-white/[0.04] px-3.5 py-2 text-left text-sm ring-1 ring-white/[0.06] transition hover:bg-white/[0.08]"
                 >
-                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                  {submittingCount ? 'Starting...' : 'Generate'}
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-medium text-white">{selectedModel?.label ?? 'Select model'}</div>
+                    <div className="text-[10px] text-zinc-500">
+                      {selectedModel ? (selectedModel.runtime === 'local' ? 'Local' : `${selectedModel.credit_cost} credits`) : ''}
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
                 </button>
-              </div>
 
-              {createError ? <div className="mt-4 text-sm text-rose-200">{createError}</div> : null}
+                {modelPickerOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-[min(400px,calc(100vw-48px))] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+                    {models.slice(0, 6).map((entry) => {
+                      const active = entry.id === selectedModel?.id
+                      return (
+                        <button
+                          key={entry.id}
+                          onClick={() => setSelectedModelId(entry.id)}
+                          className={`flex w-full items-start justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
+                            active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-[13px] font-medium">
+                              {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
+                              <span className="truncate">{entry.label}</span>
+                            </div>
+                            <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
+                          </div>
+                          <div className="shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            {entry.runtime === 'local' ? 'Local' : `${entry.credit_cost} cr`}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Right: generate button */}
+            <div className="flex items-center gap-3">
+              <div className="text-[11px] text-zinc-500">
+                {selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}
+                {selectedModel && selectedModel.runtime !== 'local' ? ` · ${selectedModel.credit_cost} cr` : ''}
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_32px_rgba(34,211,238,0.15)] transition hover:shadow-[0_0_48px_rgba(34,211,238,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              >
+                {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                {submittingCount ? 'Generating...' : 'Generate'}
+              </button>
             </div>
           </div>
-        </section>
+
+          {/* Feedback row */}
+          {(createError || improveState === 'done' || improveState === 'fallback') ? (
+            <div className="border-t border-white/[0.04] px-5 py-3">
+              {createError ? <div className="text-sm text-rose-300">{createError}</div> : null}
+              {improveState === 'done' ? <div className="text-xs text-emerald-300">✓ Prompt improved by AI</div> : null}
+              {improveState === 'fallback' ? <div className="text-xs text-zinc-400">Prompt tightened (offline mode)</div> : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Shortcut hint ──────────────────────── */}
+        <div className="mt-4 flex items-center justify-between text-[11px] text-zinc-600">
+          <span>⌘ + Enter to generate</span>
+          <Link to="/library/images" className="flex items-center gap-1.5 text-zinc-400 transition hover:text-white">
+            <ImageIcon className="h-3.5 w-3.5" />
+            Open My Images
+          </Link>
+        </div>
+
       </AppPage>
 
+      {/* ── Toast stack ──────────────────────────── */}
       {visibleToasts.length ? (
-        <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-[360px] max-w-[calc(100vw-24px)] flex-col gap-3">
+        <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3">
           {visibleToasts.slice(0, 5).map((job) => (
             <div
               key={job.id}
-              className="pointer-events-auto rounded-[24px] border border-white/[0.08] bg-[#17181d]/95 p-4 shadow-[0_28px_80px_rgba(0,0,0,0.4)] backdrop-blur"
+              className="pointer-events-auto overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-600">{getToastLabel(job.status)}</div>
-                  <div className="mt-2 line-clamp-2 text-sm font-semibold text-white">{job.title}</div>
+              {/* Progress bar for running jobs */}
+              {!isTerminalStatus(job.status) ? (
+                <div className="h-[3px] w-full overflow-hidden bg-white/[0.03]">
+                  <div className="h-full animate-pulse rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: '60%' }} />
                 </div>
-                <button
-                  onClick={() => dismissToast(job.id)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
-                  title="Dismiss"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              ) : null}
 
-              <div className="mt-3 text-sm leading-6 text-zinc-400">{getToastDescription(job)}</div>
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <StatusPill tone={getToastTone(job.status)}>{getToastLabel(job.status)}</StatusPill>
+                      <span className="text-[10px] text-zinc-600">{job.outputCount} output{job.outputCount > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-sm font-medium text-white">{job.title}</div>
+                  </div>
+                  <button
+                    onClick={() => dismissToast(job.id)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+                    title="Dismiss"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <StatusPill tone={getToastTone(job.status)}>{job.status}</StatusPill>
-                <StatusPill tone="neutral">
-                  {job.outputCount} output{job.outputCount > 1 ? 's' : ''}
-                </StatusPill>
-              </div>
+                <div className="mt-2.5 text-[13px] leading-6 text-zinc-400">{getToastDescription(job)}</div>
 
-              <div className="mt-4 flex items-center gap-3">
                 {job.status === 'completed' ? (
-                  <Link to="/library/images" className="text-sm font-medium text-white transition hover:text-zinc-200">
-                    Open My Images
-                  </Link>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Link to="/library/images" className="text-[13px] font-medium text-white transition hover:text-zinc-200">
+                      Open My Images
+                    </Link>
+                    <Link to={`/projects/${job.projectId}`} className="text-[13px] text-zinc-400 transition hover:text-white">
+                      Open project
+                    </Link>
+                  </div>
                 ) : null}
-                <Link to={`/projects/${job.projectId}`} className="text-sm text-zinc-400 transition hover:text-white">
-                  Open project
-                </Link>
               </div>
             </div>
           ))}

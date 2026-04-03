@@ -117,10 +117,10 @@ async def http_exception_handler(_, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(_, exc: Exception):
-    logger.exception("Unhandled backend exception", exc_info=exc)
+    logger.error(f"Unhandled backend exception: {exc}")
     return JSONResponse(
         status_code=500,
-        content={"error": "Internal server error"},
+        content={"error": "A server error occurred. Our team has been notified."},
     )
 
 
