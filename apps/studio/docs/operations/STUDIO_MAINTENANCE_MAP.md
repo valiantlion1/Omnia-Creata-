@@ -49,6 +49,9 @@ Last updated: 2026-04-05
 - Store backend selection now supports `postgres`, which is the intended staging/production metadata path while `sqlite` remains the local durable default.
 - Repository helpers now cover identity-scoped projects, conversations, chat messages, generations, shares, and ledger reads, so more service read paths stop reaching for collection-wide lists first.
 - Asset delivery now rejects deleted/trashed assets even if an older signed token still exists, which closes a stale-link access gap for owner/share/public preview flows.
+- Generation runtime now supports explicit `all`, `web`, and `worker` modes, so the API process can stop executing jobs locally and hand queued generations off to a dedicated worker process when we are ready to run that topology.
+- A dedicated backend worker entrypoint now exists at `apps/studio/backend/scripts/generation_worker.py`, which boots Studio in `worker` mode for the first safe step toward a split API/worker runtime.
+- Worker mode now starts generation maintenance even when it boots with an empty queue, so jobs created later by the web/API process can still be discovered and processed without requiring a restart.
 
 ## Domain map
 
@@ -88,6 +91,11 @@ Last updated: 2026-04-05
   - generation execution loop and reference image loading
 - `backend/studio_platform/services/generation_dispatcher.py`
   - in-process queue dispatch, concurrency control, and restart recovery handoff
+  - now sits behind a runtime-mode split so API-only and worker-only processes are possible
+- `backend/studio_platform/services/generation_broker.py`
+  - shared queue broker abstraction for generation jobs
+  - supports in-memory broker tests today and Redis-backed queue mode when available
+  - now tracks claimed jobs plus stale-claim recovery so crashed workers do not silently strand brokered work
 - `backend/studio_platform/services/asset_protection.py`
   - visible watermark overlay, hidden provenance embedding, and forensic verification helpers
 - `backend/studio_platform/repository.py`
@@ -120,3 +128,11 @@ Last updated: 2026-04-05
 - Manual-gated live provider smoke harness now exists at `apps/studio/backend/scripts/provider_smoke.py`; it exercises `fal` and `Runware` deliberately and only runs when `ENABLE_LIVE_PROVIDER_SMOKE=true`.
 - Studio version tracking is now centralized through `apps/studio/version.json`, exposed by backend `/v1/version`, and mirrored in `apps/studio/docs/operations/STUDIO_RELEASE_LEDGER.md`.
 - Generation job lifecycle has been upgraded toward durable worker semantics: canonical statuses now follow `queued`, `running`, `succeeded`, `failed`, `retryable_failed`, `cancelled`, `timed_out` while legacy values still coerce safely during transition.
+- Runtime mode split now supports a shared queue handoff path: web processes can enqueue into a broker without processing locally, and worker processes can claim brokered jobs into the local dispatcher. If Redis is configured but unavailable, the backend now falls back gracefully instead of failing startup.
+- Shared broker claims now receive heartbeats while local workers run jobs, and stale claims can be recycled back into the queue for crash recovery.
+- Generation jobs now carry durable claim metadata (`claimed_by`, `claim_token`, `claim_expires_at`, `last_claim_heartbeat_at`), so worker ownership and stale-running recovery decisions no longer depend on broker state alone.
+- Running-job recovery now treats expired claims deterministically: fresh claims are left alone, expired claims requeue when retry budget remains, and expired claims time out once retry budget is exhausted.
+- Shared broker reconciliation now prunes missing jobs, terminal jobs, and duplicate queued copies of already-running jobs before the worker drains the queue, which reduces ghost work and double-processing risk.
+- Worker claim leases are now configurable independently from stale-running timeout, which lets crash recovery happen faster without forcing aggressive running-job timeouts.
+- `web` runtime without an active broker now degrades into explicit local processing instead of silently accepting jobs that would never be drained, so split-topology mistakes are visible in health and less likely to strand generations.
+- Worker task cancellation now leaves shared broker claims intact until they expire, so shutdown/crash recovery follows the same stale-claim recycle path instead of pretending the claimed job finished cleanly.

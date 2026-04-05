@@ -1,0 +1,370 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import httpx
+import pytest
+from fastapi import FastAPI, Request
+
+import studio_platform.router as router_module
+from security.auth import User, UserRole
+from security.rate_limit import InMemoryRateLimiter
+from studio_platform.models import GenerationJob, PromptSnapshot
+from studio_platform.providers import ProviderRegistry
+from studio_platform.router import create_router
+from studio_platform.service import GenerationCapacityError, StudioService
+from studio_platform.store import StudioStateStore
+
+
+async def _safe_prompt(_: str):
+    return router_module.ModerationResult.SAFE, None
+
+
+def _build_generation_job() -> GenerationJob:
+    return GenerationJob(
+        id="job-test",
+        workspace_id="ws-user-1",
+        project_id="project-1",
+        identity_id="user-1",
+        title="Test Job",
+        provider="pollinations",
+        provider_rollout_tier="standard",
+        provider_billable=False,
+        requested_quality_tier="standard",
+        selected_quality_tier="standard",
+        degraded=False,
+        routing_strategy="free-first",
+        routing_reason="free_standard_default",
+        prompt_profile="generic",
+        provider_candidates=["pollinations", "huggingface", "demo"],
+        model="flux-schnell",
+        estimated_cost=0.0,
+        credit_cost=6,
+        output_count=1,
+        prompt_snapshot=PromptSnapshot(
+            prompt="test prompt",
+            negative_prompt="",
+            model="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=1,
+            aspect_ratio="1:1",
+        ),
+    )
+
+
+async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMemoryRateLimiter]:
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    rate_limiter = InMemoryRateLimiter()
+    await rate_limiter.initialize()
+    await service.initialize()
+
+    app = FastAPI()
+
+    async def _current_user(request: Request) -> User:
+        user_id = request.headers.get("X-Test-User", "user-1")
+        email = request.headers.get("X-Test-Email", f"{user_id}@example.com")
+        return User(
+            id=user_id,
+            email=email,
+            username=user_id,
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+        )
+
+    app.dependency_overrides[router_module.get_current_user] = _current_user
+    app.include_router(create_router(service, rate_limiter))
+    return app, service, rate_limiter
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_returns_structured_queue_full_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        raise GenerationCapacityError(
+            "Generation queue is currently full. Please try again shortly.",
+            queue_full=True,
+            estimated_wait_seconds=90,
+        )
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial portrait",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 429
+        assert response.json()["queue_full"] is True
+        assert response.json()["estimated_wait_seconds"] == 90
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial portrait",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 202
+        payload = response.json()
+        assert payload["provider"] == "pollinations"
+        assert payload["requested_quality_tier"] == "standard"
+        assert payload["selected_quality_tier"] == "standard"
+        assert payload["degraded"] is False
+        assert payload["routing_strategy"] == "free-first"
+        assert payload["routing_reason"] == "free_standard_default"
+        assert payload["prompt_profile"] == "generic"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_enforces_per_user_rate_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        for index in range(10):
+            response = await client.post(
+                "/v1/generations",
+                headers={"X-Test-User": "user-1"},
+                json={
+                    "project_id": "project-1",
+                    "prompt": f"editorial portrait {index}",
+                    "negative_prompt": "",
+                    "model": "flux-schnell",
+                    "width": 1024,
+                    "height": 1024,
+                    "steps": 28,
+                    "cfg_scale": 6.5,
+                    "seed": index,
+                    "aspect_ratio": "1:1",
+                    "output_count": 1,
+                },
+            )
+            assert response.status_code == 202
+
+        blocked = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "blocked request",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 77,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert blocked.status_code == 429
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_enforces_per_ip_rate_limit_across_users(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        for index in range(20):
+            response = await client.post(
+                "/v1/generations",
+                headers={"X-Test-User": f"user-{index}"},
+                json={
+                    "project_id": "project-1",
+                    "prompt": f"editorial portrait {index}",
+                    "negative_prompt": "",
+                    "model": "flux-schnell",
+                    "width": 1024,
+                    "height": 1024,
+                    "steps": 28,
+                    "cfg_scale": 6.5,
+                    "seed": index,
+                    "aspect_ratio": "1:1",
+                    "output_count": 1,
+                },
+            )
+            assert response.status_code == 202
+
+        blocked = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-21"},
+            json={
+                "project_id": "project-1",
+                "prompt": "blocked by ip limit",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 21,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert blocked.status_code == 429
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_rejects_negative_prompt_over_limit(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial portrait",
+                "negative_prompt": "x" * 501,
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 422
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_bypasses_rate_limit_for_privileged_email(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = router_module.get_settings()
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+    settings.studio_owner_emails = "alierdincyigitaslan@gmail.com,ghostsofter12@gmail.com"
+    settings.studio_root_admin_emails = "alierdincyigitaslan@gmail.com,ghostsofter12@gmail.com"
+
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        for index in range(12):
+            response = await client.post(
+                "/v1/generations",
+                headers={
+                    "X-Test-User": "owner-1",
+                    "X-Test-Email": "ghostsofter12@gmail.com",
+                },
+                json={
+                    "project_id": "project-1",
+                    "prompt": f"owner portrait {index}",
+                    "negative_prompt": "",
+                    "model": "flux-schnell",
+                    "width": 1024,
+                    "height": 1024,
+                    "steps": 28,
+                    "cfg_scale": 6.5,
+                    "seed": index,
+                    "aspect_ratio": "1:1",
+                    "output_count": 1,
+                },
+            )
+            assert response.status_code == 202
+
+    try:
+        pass
+    finally:
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        await service.shutdown()

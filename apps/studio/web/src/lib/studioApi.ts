@@ -143,9 +143,12 @@ export type Generation = {
   status: JobStatus
   project_id: string
   provider: string
+  provider_rollout_tier?: string | null
+  provider_billable?: boolean | null
   model: string
   prompt_snapshot: PromptSnapshot
   estimated_cost: number
+  actual_cost_usd?: number | null
   credit_cost: number
   output_count: number
   outputs: GenerationOutput[]

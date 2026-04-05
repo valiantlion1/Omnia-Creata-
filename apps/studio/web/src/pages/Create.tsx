@@ -135,9 +135,11 @@ export default function CreatePage() {
   const [generationToasts, setGenerationToasts] = useState<GenerationToast[]>([])
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(requestedProjectId ?? null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
+  const modelPickerButtonRef = useRef<HTMLButtonElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   /* ─── Queries ─────────────────────────────────── */
@@ -265,6 +267,17 @@ export default function CreatePage() {
   useEffect(() => {
     setModelPickerOpen(false)
   }, [selectedModelId])
+
+  useEffect(() => {
+    if (!modelPickerOpen) return
+    const trigger = modelPickerButtonRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const estimatedHeight = Math.min(Math.max(models.slice(0, 6).length * 82 + 16, 180), 360)
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    setModelPickerDirection(spaceBelow < estimatedHeight && spaceAbove > spaceBelow ? 'up' : 'down')
+  }, [modelPickerOpen, models])
 
   /* ─── Handlers ────────────────────────────────── */
 
@@ -395,7 +408,7 @@ export default function CreatePage() {
         </div>
 
         {/* ── Prompt card: Holographic Console ────────────────────────── */}
-        <div className="overflow-hidden rounded-[24px] border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_16px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl ring-1 ring-white/[0.02]">
+          <div className="overflow-visible rounded-[24px] border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_16px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl ring-1 ring-white/[0.02]">
           
           {/* Prompt Matrix Area */}
           <div className="relative flex flex-col bg-[#090a0d] p-6 pb-14 shadow-inner transition-all duration-500 focus-within:shadow-[0_0_80px_rgb(var(--primary-light)/0.06)_inset]">
@@ -467,6 +480,7 @@ export default function CreatePage() {
               {/* Model picker */}
               <div ref={modelPickerRef} className="relative">
                 <button
+                  ref={modelPickerButtonRef}
                   onClick={() => setModelPickerOpen((value) => !value)}
                   className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
                 >
@@ -482,7 +496,7 @@ export default function CreatePage() {
                 </button>
 
                 {modelPickerOpen ? (
-                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-[min(400px,calc(100vw-48px))] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+                  <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-30 w-[min(400px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
                     {models.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
                       return (

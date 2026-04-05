@@ -96,6 +96,9 @@ async def test_generation_runtime_executes_reference_guided_variations(tmp_path:
     execution = await runtime.execute_job(job)
 
     assert execution.provider_name == "stub-provider"
+    assert execution.provider_rollout_tier == "fallback"
+    assert execution.provider_billable is False
+    assert execution.actual_cost_usd == 0.0
     assert [output.asset_id for output in execution.generated_outputs] == ["asset-0", "asset-1"]
     assert len(providers.calls) == 2
     assert providers.calls[0]["seed"] == 42

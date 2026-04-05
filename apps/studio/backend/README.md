@@ -13,12 +13,48 @@ AI Image Generation Platform Backend with Multi-Provider Support
 - **RESTful API**: OpenAPI/Swagger documentation
 - **Background Tasks**: Async image generation with status tracking
 
+## Runtime Topologies
+
+Studio generation now supports three explicit runtime modes:
+
+- `all`
+  - local development convenience
+  - the API can accept generation work and process it in the same process
+- `web`
+  - accepts generation requests
+  - writes durable job state
+  - enqueues work into the shared broker
+  - never processes generation jobs locally
+- `worker`
+  - claims brokered generation jobs
+  - sends durable claim heartbeats while work is running
+  - completes or recovers jobs without serving API traffic
+
+### Expected setups
+
+- Local dev without Redis
+  - use `GENERATION_RUNTIME_MODE=all`
+  - Studio falls back to the local dispatcher
+- Local split web/worker with Redis
+  - run the API with `GENERATION_RUNTIME_MODE=web`
+  - run `python scripts/generation_worker.py` in a second terminal
+  - set `REDIS_URL` for the shared queue broker
+- Staging / production
+  - run API and worker as separate processes
+  - keep `REDIS_URL` configured
+  - treat `all` mode as development-only convenience
+
+If `REDIS_URL` is configured but Redis is unavailable, Studio starts in degraded mode and falls back to the local queue instead of crashing. In `web` runtime without an active shared broker, Studio also marks itself degraded and temporarily processes generations locally instead of leaving jobs stranded forever. Inspect `/v1/healthz` to confirm whether the shared broker is active.
+Broker/state reconciliation also runs during generation maintenance, so terminal, missing, or duplicate running jobs that reappear in the broker are discarded instead of being processed twice.
+`GENERATION_CLAIM_LEASE_SECONDS` controls how long a worker claim remains valid before recovery logic can recycle the job. Keep it comfortably above `GENERATION_MAINTENANCE_INTERVAL_SECONDS`; Studio normalizes unsafe values automatically.
+When a worker task is cancelled during shutdown or crash-like interruption, Studio intentionally keeps the shared broker claim alive until it goes stale, so another worker can recover it through normal stale-claim recycling instead of treating it as successfully completed.
+
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
-- Redis (for background tasks)
+- Redis only when running split `web` / `worker` topology
 
 ### Installation
 
@@ -54,12 +90,48 @@ AI Image Generation Platform Backend with Multi-Provider Support
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
+### Split runtime example
+
+Run the API process:
+
+```bash
+set GENERATION_RUNTIME_MODE=web
+set REDIS_URL=redis://127.0.0.1:6379/0
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Run the worker process in another terminal:
+
+```bash
+set GENERATION_RUNTIME_MODE=worker
+set REDIS_URL=redis://127.0.0.1:6379/0
+python scripts/generation_worker.py
+```
+
 ### API Documentation
 
 Once running, visit:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 - **OpenAPI JSON**: http://localhost:8000/openapi.json
+
+## API Notes
+
+- `/v1/healthz` now reports:
+  - `generation_runtime_mode`
+  - `generation_broker.enabled`
+  - `generation_broker.kind`
+  - `generation_broker.queued_by_priority`
+  - `generation_broker.claimed`
+  - `generation_worker.processing_active`
+- Generation job lifecycle uses:
+  - `queued`
+  - `running`
+  - `succeeded`
+  - `failed`
+  - `retryable_failed`
+  - `cancelled`
+  - `timed_out`
 
 ## API Endpoints
 

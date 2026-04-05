@@ -85,6 +85,19 @@ class GenerationDispatcher:
             tasks.add(self._drain_task)
         return tasks
 
+    def available_capacity(self) -> int:
+        tracked = len(self._queued_ids) + len(self._running_ids)
+        return max(0, self._max_concurrent_jobs - tracked)
+
+    def is_queued(self, job_id: str) -> bool:
+        return job_id in self._queued_ids
+
+    def is_running(self, job_id: str) -> bool:
+        return job_id in self._running_ids
+
+    def is_tracked(self, job_id: str) -> bool:
+        return self.is_queued(job_id) or self.is_running(job_id)
+
     def _ensure_drain_task(self) -> None:
         if self._drain_task is None or self._drain_task.done():
             self._drain_task = asyncio.create_task(self._drain_loop())

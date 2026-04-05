@@ -4,7 +4,7 @@ import hashlib
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from config.env import get_settings
@@ -15,7 +15,7 @@ from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
 
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
-from .service import PRESET_CATALOG, PLAN_CATALOG, StudioService
+from .service import GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
 class DemoLoginRequest(BaseModel):
@@ -64,13 +64,13 @@ class PromptImproveRequest(BaseModel):
 class GenerationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     project_id: str
-    prompt: str = Field(min_length=1, max_length=1600)
-    negative_prompt: str = ""
+    prompt: str = Field(min_length=1, max_length=2000)
+    negative_prompt: str = Field(default="", max_length=500)
     reference_asset_id: Optional[str] = None
     model: str = "flux-schnell"
     width: int = Field(default=1024, ge=512, le=1536)
     height: int = Field(default=1024, ge=512, le=1536)
-    steps: int = Field(default=28, ge=8, le=60)
+    steps: int = Field(default=28, ge=1, le=50)
     cfg_scale: float = Field(default=6.5, ge=1, le=20)
     seed: int = Field(default=20260316, ge=0, le=2**32 - 1)
     aspect_ratio: str = "1:1"
@@ -209,6 +209,23 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 "X-RateLimit-Remaining": str(decision.remaining),
                 "X-RateLimit-Reset": str(decision.retry_after),
             },
+        )
+
+    async def _consume_generation_rate_limits(request: Request, auth_user: AuthUser) -> None:
+        normalized_email = (auth_user.email or "").strip().lower()
+        privileged_emails = set(settings.owner_emails_list) | set(settings.root_admin_emails_list)
+        if normalized_email in privileged_emails:
+            return
+        await _consume_rate_limit(
+            request,
+            "generation:create:user",
+            limit=10,
+            identifier=auth_user.id,
+        )
+        await _consume_rate_limit(
+            request,
+            "generation:create:ip",
+            limit=20,
         )
 
     @router.post("/auth/demo-login")
@@ -687,7 +704,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
-        await _consume_rate_limit(request, "generation:create", limit=24, identifier=auth_user.id)
+        await _consume_generation_rate_limits(request, auth_user)
         
         # Verify safety rules
         mod_result, flagged_term = await check_prompt_safety(payload.prompt)
@@ -718,6 +735,19 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             )
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except GenerationCapacityError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={
+                    "error": str(exc),
+                    "queue_full": exc.queue_full,
+                    "estimated_wait_seconds": exc.estimated_wait_seconds,
+                },
+                headers={
+                    "Retry-After": str(exc.estimated_wait_seconds or 30),
+                    "X-Queue-Full": "true",
+                },
+            )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         except KeyError as exc:

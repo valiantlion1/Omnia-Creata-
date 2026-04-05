@@ -364,6 +364,7 @@ export default function ChatPage() {
   const { openLightbox } = useLightbox()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const [searchParams] = useSearchParams()
+  const requestedNewConversation = searchParams.get('new') === '1'
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
@@ -393,6 +394,18 @@ export default function ChatPage() {
     const requestedConversation = searchParams.get('conversation')
     if (requestedConversation) setActiveConversationId(requestedConversation)
   }, [searchParams])
+
+  useEffect(() => {
+    if (!requestedNewConversation) return
+    autoCreateRequestRef.current = null
+    shouldSnapToBottomRef.current = false
+    setActiveConversationId(null)
+    setComposeMode('Think')
+    setPendingAttachments([])
+    if (!searchParams.get('draft')) {
+      setDraft('')
+    }
+  }, [requestedNewConversation, searchParams])
 
   useEffect(() => {
     setVisualMessages(readStoredJson<ChatVisualMessage[]>(CHAT_VISUAL_STORAGE_KEY, []))
@@ -442,16 +455,15 @@ export default function ChatPage() {
   useEffect(() => {
     const conversations = conversationsQuery.data?.conversations ?? []
     const requestedConversation = searchParams.get('conversation')
-    const requestedNew = searchParams.get('new') === '1'
-    if (!activeConversationId && conversations.length && !requestedConversation && !requestedNew) {
+    if (!activeConversationId && conversations.length && !requestedConversation && !requestedNewConversation) {
       setActiveConversationId(conversations[0].id)
     }
-  }, [activeConversationId, conversationsQuery.data, searchParams])
+  }, [activeConversationId, conversationsQuery.data, requestedNewConversation, searchParams])
 
   const conversationDetailQuery = useQuery({
     queryKey: ['conversation', activeConversationId],
     queryFn: () => studioApi.getConversation(activeConversationId as string),
-    enabled: canLoadPrivate && Boolean(activeConversationId),
+    enabled: canLoadPrivate && Boolean(activeConversationId) && !requestedNewConversation,
     staleTime: 10_000,
   })
 
@@ -501,16 +513,15 @@ export default function ChatPage() {
   /* ─── New conversation effect ─────────────────── */
 
   useEffect(() => {
-    const requestedNew = searchParams.get('new') === '1'
     const requestKey = searchParams.toString()
-    if (!requestedNew) {
+    if (!requestedNewConversation) {
       autoCreateRequestRef.current = null
       if (activeConversationId && createConversationMutation.isPending) {
         createConversationMutation.reset()
       }
       return
     }
-    if (!requestedNew || !canLoadPrivate || createConversationMutation.isPending) return
+    if (!canLoadPrivate || createConversationMutation.isPending) return
     if (autoCreateRequestRef.current === requestKey) return
     autoCreateRequestRef.current = requestKey
     let cancelled = false
@@ -532,7 +543,7 @@ export default function ChatPage() {
     }
     void run()
     return () => { cancelled = true }
-  }, [activeConversationId, canLoadPrivate, createConversationMutation, navigate, queryClient, searchParams])
+  }, [activeConversationId, canLoadPrivate, createConversationMutation, navigate, queryClient, requestedNewConversation, searchParams])
 
   /* ─── Data derivations ────────────────────────── */
 

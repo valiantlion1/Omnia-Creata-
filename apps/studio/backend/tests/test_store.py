@@ -12,6 +12,32 @@ from studio_platform.store import (
 )
 
 
+class _FakeCursor:
+    def __init__(self, statements: list[str]) -> None:
+        self._statements = statements
+
+    def execute(self, sql: str, *args, **kwargs):
+        self._statements.append(sql)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeConnection:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+        self.commits = 0
+
+    def cursor(self):
+        return _FakeCursor(self.statements)
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
 @pytest.mark.asyncio
 async def test_sqlite_store_persists_models_across_reloads(tmp_path: Path):
     db_path = tmp_path / "studio-state.sqlite3"
@@ -153,3 +179,19 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
     assert sqlite_store.bootstrap_json_path == json_path
     assert postgres_store.dsn == postgres_settings.database_url
     assert postgres_store.bootstrap_json_path == json_path
+    assert postgres_store._pool_minconn == 2
+    assert postgres_store._pool_maxconn == 10
+    assert postgres_store._statement_timeout_ms == 30000
+
+
+def test_postgres_store_prepares_statement_timeout_and_generation_index():
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _FakeConnection()
+
+    store._prepare_connection(connection)
+    store._ensure_schema_sync(connection)
+
+    joined_sql = "\n".join(connection.statements)
+    assert "SET statement_timeout = 30000" in joined_sql
+    assert "idx_studio_state_records_generations_identity_status_created_at" in joined_sql
+    assert "payload ->> 'identity_id'" in joined_sql

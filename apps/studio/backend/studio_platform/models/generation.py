@@ -59,6 +59,8 @@ class JobStatus(str, Enum):
 class PromptSnapshot(BaseModel):
     prompt: str
     negative_prompt: str = ""
+    source_prompt: Optional[str] = None
+    source_negative_prompt: Optional[str] = None
     model: str
     workflow: str = "text_to_image"
     reference_asset_id: Optional[str] = None
@@ -92,11 +94,30 @@ class GenerationJob(BaseModel):
     model: str
     prompt_snapshot: PromptSnapshot
     estimated_cost: float
+    actual_cost_usd: Optional[float] = None
     credit_cost: int
+    reserved_credit_cost: int = 0
+    final_credit_cost: Optional[int] = None
+    credit_charge_policy: str = "none"
+    credit_status: str = "none"
+    provider_rollout_tier: Optional[str] = None
+    provider_billable: Optional[bool] = None
+    requested_quality_tier: str = "standard"
+    selected_quality_tier: str = "standard"
+    degraded: bool = False
+    routing_strategy: str = "free-first"
+    routing_reason: str = "free_standard_default"
+    prompt_profile: str = "generic"
+    provider_candidates: List[str] = Field(default_factory=list)
     output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)
     error: Optional[str] = None
+    error_code: Optional[str] = None
     attempt_count: int = 0
+    claimed_by: Optional[str] = None
+    claim_token: Optional[str] = None
+    claim_expires_at: Optional[datetime] = None
+    last_claim_heartbeat_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     started_at: Optional[datetime] = None

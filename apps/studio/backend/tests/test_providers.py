@@ -1,10 +1,16 @@
+import asyncio
 import json
+import time
 
 import httpx
 import pytest
 
+import studio_platform.providers as provider_module
+from studio_platform.models import IdentityPlan
 from studio_platform.providers import (
     FalProvider,
+    HuggingFaceImageProvider,
+    PollinationsProvider,
     ProviderCapabilities,
     ProviderFatalError,
     ProviderReferenceImage,
@@ -23,20 +29,25 @@ class _FakeProvider(StudioImageProvider):
         rollout_tier: str,
         capabilities: ProviderCapabilities,
         available: bool = True,
+        configured: bool = True,
     ) -> None:
         self.name = name
         self.rollout_tier = rollout_tier
         self.capabilities = capabilities
         self.available = available
+        self.configured = configured
         self.calls: list[dict[str, object]] = []
 
     async def is_available(self) -> bool:
         return self.available
 
+    def is_configured(self) -> bool:
+        return self.configured
+
     async def health(self, probe: bool = True) -> dict[str, object]:
         return {
             "name": self.name,
-            "status": "healthy" if self.available else "disabled",
+            "status": "healthy" if self.available and self.configured else "disabled",
             "detail": "fake",
         }
 
@@ -55,7 +66,37 @@ class _FakeProvider(StudioImageProvider):
 def _registry_with(*providers: StudioImageProvider) -> ProviderRegistry:
     registry = ProviderRegistry()
     registry.providers = list(providers)
+    registry._providers_by_name = {provider.name: provider for provider in providers}
+    registry._provider_circuits = {provider.name: provider_module.ProviderCircuitState() for provider in providers}
     return registry
+
+
+class _FlakyProvider(StudioImageProvider):
+    def __init__(self, *, name: str = "flaky", fail_times: int = 0) -> None:
+        self.name = name
+        self.rollout_tier = "primary"
+        self.capabilities = ProviderCapabilities(workflows=("text_to_image",))
+        self.fail_times = fail_times
+        self.calls = 0
+
+    async def is_available(self) -> bool:
+        return True
+
+    async def health(self, probe: bool = True) -> dict[str, object]:
+        return {"name": self.name, "status": "healthy", "detail": "flaky"}
+
+    async def generate(self, **kwargs) -> ProviderResult:
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise provider_module.ProviderTemporaryError("transient failure")
+        return ProviderResult(
+            provider=self.name,
+            image_bytes=b"ok",
+            mime_type="image/png",
+            width=int(kwargs["width"]),
+            height=int(kwargs["height"]),
+            estimated_cost=0.0,
+        )
 
 
 def test_preview_generation_provider_prefers_first_supported_provider() -> None:
@@ -80,6 +121,275 @@ def test_preview_generation_provider_prefers_first_supported_provider() -> None:
     )
 
     assert registry.preview_generation_provider(workflow="text_to_image") == "fal"
+
+
+def test_preview_generation_provider_skips_not_configured_provider() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="fal",
+            rollout_tier="primary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            available=False,
+            configured=False,
+        ),
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    assert registry.preview_generation_provider(workflow="text_to_image") == "pollinations"
+
+
+def test_provider_registry_uses_free_first_strategy_by_default() -> None:
+    settings = provider_module.get_settings()
+    original_strategy = settings.generation_provider_strategy
+    original_hf = settings.huggingface_token
+    original_pollinations = settings.enable_pollinations
+    original_fal = settings.fal_api_key
+    original_runware = settings.runware_api_key
+    try:
+        settings.generation_provider_strategy = "free-first"
+        settings.huggingface_token = "hf-token"
+        settings.enable_pollinations = True
+        settings.fal_api_key = None
+        settings.runware_api_key = None
+        registry = ProviderRegistry()
+        assert [provider.name for provider in registry.providers[:3]] == ["pollinations", "huggingface", "fal"]
+    finally:
+        settings.generation_provider_strategy = original_strategy
+        settings.huggingface_token = original_hf
+        settings.enable_pollinations = original_pollinations
+        settings.fal_api_key = original_fal
+        settings.runware_api_key = original_runware
+
+
+def test_plan_generation_route_prefers_pollinations_for_free_realistic_prompts() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.FREE,
+        prompt="editorial beauty portrait with luxury campaign lighting",
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[:2] == ("pollinations", "huggingface")
+    assert decision.prompt_profile == "realistic_editorial"
+    assert decision.routing_strategy == "free-first"
+
+
+def test_plan_generation_route_prefers_huggingface_for_free_stylized_prompts() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.FREE,
+        prompt="anime warrior princess illustration with dramatic lighting",
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[:2] == ("huggingface", "pollinations")
+    assert decision.prompt_profile == "stylized_illustration"
+
+
+def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="fal",
+            rollout_tier="primary",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="runware",
+            rollout_tier="secondary",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.PRO,
+        prompt="editorial fashion portrait for a luxury campaign",
+        model_id="realvis-xl",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[0] == "fal"
+    assert decision.requested_quality_tier == "premium"
+    assert decision.selected_quality_tier == "premium"
+    assert decision.degraded is False
+    assert decision.routing_reason == "premium_intent_managed_preferred"
+
+
+def test_plan_generation_route_marks_pro_premium_fallback_as_degraded_standard() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.PRO,
+        prompt="luxury product campaign shot for a perfume bottle",
+        model_id="realvis-xl",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[0] == "pollinations"
+    assert decision.selected_quality_tier == "standard"
+    assert decision.degraded is True
+    assert decision.routing_reason == "managed_unavailable_fallback_standard"
+
+
+def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="fal",
+            rollout_tier="primary",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.PRO,
+        prompt="make the campaign portrait more dramatic",
+        model_id="flux-schnell",
+        workflow="edit",
+        has_reference_image=True,
+    )
+
+    assert decision.provider_candidates == ("fal", "huggingface")
+    assert "pollinations" not in decision.provider_candidates
+    assert "demo" not in decision.provider_candidates
+
+
+@pytest.mark.asyncio
+async def test_provider_registry_opens_circuit_after_five_temporary_failures_and_recovers_half_open() -> None:
+    flaky = _FlakyProvider(fail_times=5)
+    fallback = _FakeProvider(
+        name="demo",
+        rollout_tier="fallback",
+        capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+    )
+    registry = _registry_with(flaky, fallback)
+
+    for _ in range(5):
+        result = await registry.generate(
+            prompt="portrait",
+            negative_prompt="",
+            width=512,
+            height=512,
+            seed=1,
+            model_id="flux-schnell",
+        )
+        assert result.provider == "demo"
+
+    health = await registry.health_snapshot(probe=False)
+    flaky_health = next(item for item in health if item["name"] == "flaky")
+    assert flaky_health["circuit_breaker"]["state"] == "open"
+
+    result = await registry.generate(
+        prompt="portrait",
+        negative_prompt="",
+        width=512,
+        height=512,
+        seed=2,
+        model_id="flux-schnell",
+    )
+    assert result.provider == "demo"
+    assert flaky.calls == 5
+
+    registry._provider_circuits["flaky"].opened_until_monotonic = time.monotonic() - 1
+    result = await registry.generate(
+        prompt="portrait",
+        negative_prompt="",
+        width=512,
+        height=512,
+        seed=3,
+        model_id="flux-schnell",
+    )
+    assert result.provider == "flaky"
+
+    health = await registry.health_snapshot(probe=False)
+    flaky_health = next(item for item in health if item["name"] == "flaky")
+    assert flaky_health["circuit_breaker"]["state"] == "closed"
 
 
 @pytest.mark.asyncio
@@ -390,6 +700,162 @@ async def test_runware_provider_surfaces_validation_errors_as_fatal() -> None:
             seed=12,
             model_id="flux-schnell",
         )
+
+
+@pytest.mark.asyncio
+async def test_fal_provider_retries_temporary_submit_failures_with_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+    submit_attempts = {"count": 0}
+
+    async def fake_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(provider_module.asyncio, "sleep", fake_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            submit_attempts["count"] += 1
+            if submit_attempts["count"] < 3:
+                raise httpx.ConnectTimeout("submit timed out", request=request)
+            return httpx.Response(
+                200,
+                json={
+                    "request_id": "req-retry",
+                    "status_url": "https://queue.fal.run/fal-ai/flux/schnell/requests/req-retry/status",
+                    "response_url": "https://queue.fal.run/fal-ai/flux/schnell/requests/req-retry",
+                },
+            )
+        if request.url.path.endswith("/status"):
+            return httpx.Response(200, json={"status": "COMPLETED"})
+        if request.url.path.endswith("/req-retry"):
+            return httpx.Response(
+                200,
+                json={
+                    "images": [
+                        {
+                            "url": "https://cdn.fal.ai/generated/retry.png",
+                            "content_type": "image/png",
+                            "width": 1024,
+                            "height": 1024,
+                        }
+                    ]
+                },
+            )
+        if str(request.url) == "https://cdn.fal.ai/generated/retry.png":
+            return httpx.Response(200, content=b"retry-bytes", headers={"content-type": "image/png"})
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    provider = FalProvider("test-key", transport=httpx.MockTransport(handler))
+    result = await provider.generate(
+        prompt="cinematic portrait",
+        negative_prompt="",
+        width=1024,
+        height=1024,
+        seed=77,
+        model_id="flux-schnell",
+    )
+
+    assert result.provider == "fal"
+    assert submit_attempts["count"] == 3
+    assert delays == [1.0, 2.0]
+
+
+@pytest.mark.asyncio
+async def test_runware_provider_retries_temporary_request_failures_with_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+    request_attempts = {"count": 0}
+
+    async def fake_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(provider_module.asyncio, "sleep", fake_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_attempts["count"] += 1
+        if request_attempts["count"] < 3:
+            raise httpx.ReadTimeout("runware timeout", request=request)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "taskType": "imageInference",
+                        "imageDataURI": f"data:image/png;base64,{base64_png('retry')}",
+                        "cost": 0.02,
+                        "NSFWContent": False,
+                    }
+                ]
+            },
+        )
+
+    provider = RunwareProvider("runware-key", transport=httpx.MockTransport(handler))
+    result = await provider.generate(
+        prompt="editorial portrait",
+        negative_prompt="",
+        width=768,
+        height=1024,
+        seed=88,
+        model_id="flux-schnell",
+    )
+
+    assert result.provider == "runware"
+    assert request_attempts["count"] == 3
+    assert delays == [1.0, 2.0]
+
+
+@pytest.mark.asyncio
+async def test_pollinations_provider_selects_higher_quality_model_for_realistic_prompts() -> None:
+    captured_url = ""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_url
+        captured_url = str(request.url)
+        return httpx.Response(200, content=b"pollinations-image", headers={"content-type": "image/jpeg"})
+
+    provider = PollinationsProvider(enabled=True, transport=httpx.MockTransport(handler))
+    result = await provider.generate(
+        prompt="luxury beauty portrait of a woman",
+        negative_prompt="blurry",
+        width=1024,
+        height=1024,
+        seed=5,
+        model_id="realvis-xl",
+    )
+
+    assert result.provider == "pollinations"
+    assert "model=gptimage" in captured_url
+    assert "quality=high" in captured_url
+    assert "negative=blurry" in captured_url
+
+
+@pytest.mark.asyncio
+async def test_huggingface_provider_falls_back_to_next_candidate_model_when_first_is_unavailable() -> None:
+    requested_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        if "FLUX.1-Krea-dev" in str(request.url):
+            return httpx.Response(410, text="model retired")
+        return httpx.Response(200, content=b"hf-image", headers={"content-type": "image/png"})
+
+    provider = HuggingFaceImageProvider("hf-token", transport=httpx.MockTransport(handler))
+    result = await provider.generate(
+        prompt="editorial beauty portrait",
+        negative_prompt="blurry",
+        width=1024,
+        height=1024,
+        seed=3,
+        model_id="realvis-xl",
+    )
+
+    assert result.provider == "huggingface"
+    assert any("FLUX.1-Krea-dev" in url for url in requested_urls)
+    assert any("playground-v2.5-1024px-aesthetic" in url for url in requested_urls)
+    assert result.mime_type == "image/png"
 
 
 def base64_png(text: str) -> str:

@@ -7,7 +7,7 @@ from .models import GenerationJob, MediaAsset, Project, StudioState
 
 ProjectSurface = Literal["compose", "chat"]
 SerializeGenerationFn = Callable[[GenerationJob, str], Dict[str, Any]]
-SerializeAssetsFn = Callable[[list[MediaAsset], str], list[Dict[str, Any]]]
+SerializeAssetsFn = Callable[..., list[Dict[str, Any]]]
 
 
 def normalize_project_surface(surface: Optional[str]) -> ProjectSurface:
@@ -56,7 +56,7 @@ def build_project_detail_payload(
     return {
         "project": project.model_dump(mode="json"),
         "recent_generations": [serialize_generation(job, identity_id) for job in generations[:10]],
-        "recent_assets": serialize_assets(assets[:16], identity_id),
+        "recent_assets": serialize_assets(assets[:16], identity_id=identity_id),
     }
 
 

@@ -18,6 +18,7 @@ from .models import (
     ChatMessage,
     CreditLedgerEntry,
     GenerationJob,
+    JobStatus,
     MediaAsset,
     OmniaIdentity,
     PromptSnapshot,
@@ -157,6 +158,19 @@ class StudioRepository:
                 if job.identity_id == identity_id and (project_id is None or job.project_id == project_id)
             ]
             return sorted(filtered, key=lambda item: item.created_at, reverse=True)
+
+        return await self.read(query)
+
+    async def list_generations_with_statuses(self, statuses: set[JobStatus]) -> list[GenerationJob]:
+        normalized_statuses = {JobStatus.coerce(status) for status in statuses}
+
+        def query(state: StudioState) -> list[GenerationJob]:
+            jobs = [
+                job.model_copy(deep=True)
+                for job in state.generations.values()
+                if job.status in normalized_statuses
+            ]
+            return sorted(jobs, key=lambda item: item.updated_at)
 
         return await self.read(query)
 

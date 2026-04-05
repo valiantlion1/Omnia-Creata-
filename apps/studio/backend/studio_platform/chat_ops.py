@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, List
 
 from .models import ChatAttachment, ChatMessage, ChatRole, ChatSuggestedAction
+from .prompt_engineering import compact_visual_prompt
 
 
 @dataclass(slots=True)
@@ -229,10 +230,7 @@ def compact_prompt(content: str) -> str:
     cleaned = " ".join(content.strip().split())
     if not cleaned:
         return ""
-    lowered = cleaned.lower()
-    if not any(keyword in lowered for keyword in ("lighting", "composition", "background", "style", "color")):
-        cleaned = f"{cleaned}, clean composition, controlled lighting, high detail"
-    return cleaned[:320]
+    return compact_visual_prompt(cleaned, limit=320)
 
 
 def _matches_any(content: str, keywords: tuple[str, ...]) -> bool:

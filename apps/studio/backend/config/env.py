@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     chat_primary_provider: str = "gemini"
     chat_fallback_provider: str = "openrouter"
+    generation_provider_strategy: str = "free-first"
     
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
@@ -100,6 +101,12 @@ class Settings(BaseSettings):
     max_concurrent_generations: int = 3
     max_queue_size: int = 100
     default_timeout_seconds: int = 300
+    generation_retry_attempt_limit: int = 3
+    generation_retry_delay_seconds: int = 20
+    generation_stale_running_seconds: int = 600
+    generation_claim_lease_seconds: int = 60
+    generation_maintenance_interval_seconds: int = 10
+    generation_runtime_mode: str = "all"
     enable_pollinations: bool = True
     
     # Cost Tracking
@@ -171,6 +178,27 @@ class Settings(BaseSettings):
             raise ValueError("Timeout must be positive")
         return v
 
+    @field_validator(
+        "generation_retry_attempt_limit",
+        "generation_retry_delay_seconds",
+        "generation_stale_running_seconds",
+        "generation_claim_lease_seconds",
+        "generation_maintenance_interval_seconds",
+    )
+    @classmethod
+    def validate_generation_runtime_limits(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("Generation runtime limits must be positive")
+        return v
+
+    @field_validator("generation_runtime_mode")
+    @classmethod
+    def validate_generation_runtime_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"all", "web", "worker"}:
+            raise ValueError("GENERATION_RUNTIME_MODE must be one of: all, web, worker")
+        return normalized
+
     @field_validator("asset_storage_backend")
     @classmethod
     def validate_asset_storage_backend(cls, value: str) -> str:
@@ -195,6 +223,14 @@ class Settings(BaseSettings):
             raise ValueError("Chat providers must be gemini, openrouter, or heuristic")
         return normalized
 
+    @field_validator("generation_provider_strategy")
+    @classmethod
+    def validate_generation_provider_strategy(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"free-first", "balanced", "managed-first"}:
+            raise ValueError("GENERATION_PROVIDER_STRATEGY must be one of: free-first, balanced, managed-first")
+        return normalized
+
     @model_validator(mode="after")
     def _ensure_jwt(self):
         default_non_prod = self.environment != Environment.PRODUCTION
@@ -210,6 +246,13 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET must be set in non-development environments")
         if len(self.jwt_secret) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters long")
+        if self.generation_stale_running_seconds < 120:
+            self.generation_stale_running_seconds = 180
+        minimum_claim_lease = max(30, self.generation_maintenance_interval_seconds * 3)
+        if self.generation_claim_lease_seconds < minimum_claim_lease:
+            self.generation_claim_lease_seconds = minimum_claim_lease
+        if self.generation_claim_lease_seconds > self.generation_stale_running_seconds:
+            self.generation_claim_lease_seconds = self.generation_stale_running_seconds
         return self
     
     def validate_production_requirements(self):

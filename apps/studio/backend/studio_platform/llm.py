@@ -10,6 +10,7 @@ import httpx
 from config.env import get_settings
 
 from .models import ChatAttachment, ChatMessage, ChatRole
+from .prompt_engineering import improve_prompt_candidate
 
 
 @dataclass(slots=True)
@@ -82,14 +83,18 @@ class StudioLLMGateway:
             return None
 
         request_text = (
-            "Improve this prompt for a high-quality image generation request. "
-            "Keep the intent, remove filler, and strengthen scene, composition, lighting, "
-            "surface detail, camera feel, and output quality. Return only the final prompt.\n\n"
+            "Rewrite this into one production-ready image generation prompt. "
+            "Preserve the user's intent, but sharpen subject clarity, composition, camera feel, lighting, "
+            "environment, material detail, and finish quality. "
+            "Infer only helpful visual details, avoid generic filler, and keep the result under 95 words. "
+            "Return only the final prompt.\n\n"
             f"Prompt: {cleaned}"
         )
         system_prompt = (
-            "You improve image-generation prompts for premium visual outputs. "
-            "Return one strong prompt only. No bullets, no labels, no explanation."
+            "You are OmniaCreata Studio's senior prompt director for premium image generation. "
+            "Rewrite weak prompts into commercially strong visual briefs. "
+            "Prioritize clear subject identity, intentional framing, controlled lighting, believable materials, "
+            "and a premium finish. Do not add artist names, no bullets, no labels, no explanation."
         )
 
         for provider, model, used_fallback in self._resolve_provider_plan("studio-assist"):
@@ -115,7 +120,7 @@ class StudioLLMGateway:
 
             if not result or not result.text.strip():
                 continue
-            result.text = self._normalize_prompt(result.text)
+            result.text = improve_prompt_candidate(self._normalize_prompt(result.text))
             result.used_fallback = used_fallback
             return result
 

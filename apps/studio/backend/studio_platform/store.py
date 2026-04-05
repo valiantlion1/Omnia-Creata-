@@ -344,6 +344,10 @@ class PostgresStudioStateStore:
             self.bootstrap_json_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
         self._state = StudioState()
+        self._pool = None
+        self._pool_minconn = 2
+        self._pool_maxconn = 10
+        self._statement_timeout_ms = 30000
 
     async def load(self) -> StudioState:
         async with self._lock:
@@ -404,13 +408,36 @@ class PostgresStudioStateStore:
             await asyncio.to_thread(self._replace_state_sync, self._state)
             return self._state.model_copy(deep=True)
 
-    def _connect(self):
+    def _ensure_pool(self):
         try:
-            import psycopg2
+            from psycopg2.pool import SimpleConnectionPool
         except ImportError as exc:
             raise RuntimeError("psycopg2 is required for the postgres state store") from exc
 
-        return psycopg2.connect(self.dsn)
+        if self._pool is None:
+            self._pool = SimpleConnectionPool(
+                self._pool_minconn,
+                self._pool_maxconn,
+                self.dsn,
+            )
+        return self._pool
+
+    def _connect(self):
+        pool = self._ensure_pool()
+        connection = pool.getconn()
+        self._prepare_connection(connection)
+        return connection
+
+    def _release_connection(self, connection, *, discard: bool = False) -> None:
+        if connection is None:
+            return
+        pool = self._ensure_pool()
+        pool.putconn(connection, close=discard)
+
+    def _prepare_connection(self, connection) -> None:
+        with connection.cursor() as cursor:
+            cursor.execute(f"SET statement_timeout = {self._statement_timeout_ms}")
+        connection.commit()
 
     def _load_sync(self) -> StudioState:
         connection = self._connect()
@@ -421,8 +448,11 @@ class PostgresStudioStateStore:
                 self._replace_state_sync(state, connection=connection)
                 return state
             return self._read_state_from_connection(connection)
+        except Exception:
+            connection.rollback()
+            raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def _bootstrap_or_empty_state_sync(self) -> StudioState:
         if self.bootstrap_json_path and self.bootstrap_json_path.exists():
@@ -458,6 +488,17 @@ class PostgresStudioStateStore:
                 )
                 """
             )
+            cursor.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS idx_{POSTGRES_RECORDS_TABLE}_generations_identity_status_created_at
+                ON {POSTGRES_RECORDS_TABLE} (
+                    ((payload ->> 'identity_id')),
+                    ((payload ->> 'status')),
+                    (((payload ->> 'created_at')::timestamptz))
+                )
+                WHERE collection = 'generations'
+                """
+            )
         connection.commit()
 
     def _has_records_sync(self, connection) -> bool:
@@ -491,9 +532,12 @@ class PostgresStudioStateStore:
             self._ensure_schema_sync(connection)
             rows = self._serialize_state_rows(state)
             self._replace_rows_sync(connection, rows)
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             if owns_connection:
-                connection.close()
+                self._release_connection(connection)
 
     def _save_model_sync(self, collection: str, model: BaseModel) -> None:
         payload = json.dumps(model.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":"))
@@ -511,8 +555,11 @@ class PostgresStudioStateStore:
                     (collection, model.id, payload),
                 )
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def _delete_model_sync(self, collection: str, model_id: str) -> None:
         connection = self._connect()
@@ -524,8 +571,11 @@ class PostgresStudioStateStore:
                     (collection, model_id),
                 )
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
-            connection.close()
+            self._release_connection(connection)
 
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")

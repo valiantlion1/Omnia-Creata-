@@ -11,6 +11,9 @@ from ..repository import StudioRepository
 @dataclass(slots=True)
 class ExecutedGenerationBatch:
     provider_name: Optional[str]
+    provider_rollout_tier: Optional[str]
+    provider_billable: Optional[bool]
+    actual_cost_usd: float
     generated_outputs: list[GenerationOutput]
     created_assets: list[MediaAsset]
 
@@ -50,6 +53,9 @@ class GenerationRuntime:
         generated_outputs: list[GenerationOutput] = []
         created_assets: list[MediaAsset] = []
         provider_name: Optional[str] = None
+        provider_rollout_tier: Optional[str] = None
+        provider_billable: Optional[bool] = None
+        actual_cost_usd = 0.0
         reference_image = await self.load_reference_image(job)
 
         for variation_index in range(job.output_count):
@@ -65,8 +71,12 @@ class GenerationRuntime:
                 steps=job.prompt_snapshot.steps,
                 cfg_scale=job.prompt_snapshot.cfg_scale,
                 workflow=job.prompt_snapshot.workflow,
+                provider_candidates=job.provider_candidates or None,
             )
             provider_name = result.provider
+            provider_rollout_tier = result.provider_rollout_tier
+            provider_billable = result.billable
+            actual_cost_usd += float(result.estimated_cost or 0.0)
             asset = await self._create_asset_from_result(
                 job=job,
                 provider=result.provider,
@@ -91,13 +101,27 @@ class GenerationRuntime:
 
         return ExecutedGenerationBatch(
             provider_name=provider_name,
+            provider_rollout_tier=provider_rollout_tier,
+            provider_billable=provider_billable,
+            actual_cost_usd=actual_cost_usd,
             generated_outputs=generated_outputs,
             created_assets=created_assets,
         )
 
 
-def initial_generation_provider_label(providers: ProviderRegistry, model_id: Optional[str]) -> str:
+def initial_generation_provider_label(
+    providers: ProviderRegistry,
+    model_id: Optional[str] = None,
+    workflow: str = "text_to_image",
+    has_reference_image: bool = False,
+) -> str:
     preview = getattr(providers, "preview_generation_provider", None)
     if callable(preview):
-        return preview()
+        try:
+            return preview(
+                workflow=workflow,
+                has_reference_image=has_reference_image,
+            )
+        except TypeError:
+            return preview()
     return "cloud"

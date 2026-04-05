@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from .billing_ops import BillingStateSnapshot
 from .models import ChatAttachment, IdentityPlan, OmniaIdentity, PlanCatalogEntry
 
 
@@ -46,10 +47,16 @@ def resolve_entitlements(
     *,
     identity: OmniaIdentity,
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
+    billing_state: BillingStateSnapshot | None = None,
 ) -> ResolvedEntitlements:
-    plan = plan_catalog[identity.plan]
+    effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
+    plan = plan_catalog[effective_plan]
+    monthly_credits = billing_state.monthly_allowance if billing_state is not None else identity.monthly_credit_allowance
+    monthly_remaining = billing_state.monthly_remaining if billing_state is not None else identity.monthly_credits_remaining
+    extra_credits = billing_state.extra_credits if billing_state is not None else identity.extra_credits
+    credits_remaining = billing_state.gross_remaining if billing_state is not None else identity.monthly_credits_remaining + identity.extra_credits
     return ResolvedEntitlements(
-        plan=identity.plan,
+        plan=effective_plan,
         queue_priority=plan.queue_priority,
         can_generate=plan.can_generate,
         can_access_chat=plan.can_access_chat,
@@ -59,10 +66,10 @@ def resolve_entitlements(
         allowed_chat_modes=tuple(plan.chat_modes),
         chat_message_limit=plan.chat_message_limit,
         max_chat_attachments=plan.max_chat_attachments,
-        monthly_credits=identity.monthly_credit_allowance,
-        monthly_credits_remaining=identity.monthly_credits_remaining,
-        extra_credits=identity.extra_credits,
-        credits_remaining=identity.monthly_credits_remaining + identity.extra_credits,
+        monthly_credits=monthly_credits,
+        monthly_credits_remaining=monthly_remaining,
+        extra_credits=extra_credits,
+        credits_remaining=credits_remaining,
     )
 
 
@@ -95,8 +102,9 @@ def ensure_chat_request_allowed(
     mode: str,
     attachments: Sequence[ChatAttachment],
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
+    billing_state: BillingStateSnapshot | None = None,
 ) -> ResolvedEntitlements:
-    entitlements = resolve_entitlements(identity=identity, plan_catalog=plan_catalog)
+    entitlements = resolve_entitlements(identity=identity, plan_catalog=plan_catalog, billing_state=billing_state)
     if not entitlements.can_access_chat:
         raise PermissionError("Studio chat is not available on this plan")
     if mode not in entitlements.allowed_chat_modes:
@@ -116,8 +124,9 @@ def ensure_clean_export_allowed(
     *,
     identity: OmniaIdentity,
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
+    billing_state: BillingStateSnapshot | None = None,
 ) -> ResolvedEntitlements:
-    entitlements = resolve_entitlements(identity=identity, plan_catalog=plan_catalog)
+    entitlements = resolve_entitlements(identity=identity, plan_catalog=plan_catalog, billing_state=billing_state)
     if not entitlements.can_clean_export:
         raise PermissionError("Clean export requires Pro")
     return entitlements
