@@ -1,6 +1,6 @@
 # OmniaCreata Studio Execution Plan
 
-Last updated: 2026-03-17
+Last updated: 2026-04-04
 
 ## Product North Star
 
@@ -41,7 +41,7 @@ These assumptions should remain active unless the product direction changes.
 - Local runtimes: optional future integration, not part of the core product path
 - Binary storage: Cloudflare R2
 - Metadata + auth + permissions: Supabase
-- Billing: Paddle-first with adapter boundary for future fallback
+- Billing: Lemon Squeezy-first with adapter boundary for future fallback
 - Progress UX: polling in V1
 
 ## Research-Aligned Platform Choices
@@ -64,7 +64,7 @@ These assumptions should remain active unless the product direction changes.
 - Local ComfyUI-style paths create setup friction and support burden
 - Provider adapters still allow future fallback or hybrid routing
 
-### Why Paddle behind an adapter
+### Why Lemon Squeezy behind an adapter
 
 - Subscription + one-off credit top-up can live behind one billing interface
 - Merchant-of-record helps with tax/compliance overhead
@@ -90,8 +90,10 @@ These assumptions should remain active unless the product direction changes.
 ### AI Services
 
 - Provider adapter contract
-- Runware-first managed image path
-- Demo/local fallback only for development or temporary degraded mode
+- fal.ai-first managed image path
+- Runware as the secondary managed fallback
+- Pollinations only for development or temporary degraded mode
+- Hugging Face Inference Providers optional for evaluation/routing, not the primary production billing/runtime truth
 - Clear output contract for every generation job
 
 ### Workspace
@@ -115,8 +117,9 @@ Core entities:
 
 - Supabase Auth + Postgres + RLS
 - Cloudflare R2
+- fal.ai
 - Runware
-- Paddle
+- Lemon Squeezy
 
 ## Refactor Priorities
 
@@ -207,7 +210,8 @@ Tasks:
 
 - Harden `POST /v1/generations` contract
 - Add provider capability map and model catalog
-- Route generation requests through Runware adapter
+- Route generation requests through fal.ai adapter first
+- Add Runware fallback path for supported degraded capability classes
 - Persist prompt snapshot, parameters, cost, status, and outputs
 - Surface generation states clearly in UI
 
@@ -328,8 +332,10 @@ Studio is ready for serious iteration when:
 
 Reference sources used for these decisions:
 
+- fal.ai queue and model docs: https://fal.ai/docs/documentation/model-apis/inference/queue
 - Runware pricing and product docs: https://runware.ai/pricing/
+- Hugging Face Inference Providers pricing: https://huggingface.co/docs/inference-providers/en/pricing
 - Supabase RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
 - Supabase Storage access control: https://supabase.com/docs/guides/storage/security/access-control
 - Cloudflare R2 pricing: https://developers.cloudflare.com/r2/pricing/
-- Paddle developer docs: https://developer.paddle.com/
+- Lemon Squeezy docs: https://docs.lemonsqueezy.com/

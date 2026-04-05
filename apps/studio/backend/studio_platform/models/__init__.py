@@ -10,8 +10,15 @@ from .identity import IdentityPlan, OmniaIdentity, SubscriptionStatus, Visibilit
 from .workspace import Project, StudioWorkspace
 from .generation import GenerationJob, GenerationOutput, JobStatus, PromptSnapshot
 from .media import MediaAsset, PublicPost, ShareLink
-from .chat import ChatAttachment, ChatConversation, ChatMessage, ChatRole, ChatSuggestedAction
-from .billing import CheckoutKind, CreditEntryType, CreditLedgerEntry, ModelCatalogEntry, PlanCatalogEntry
+from .chat import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, ChatRole, ChatSuggestedAction
+from .billing import (
+    BillingWebhookReceipt,
+    CheckoutKind,
+    CreditEntryType,
+    CreditLedgerEntry,
+    ModelCatalogEntry,
+    PlanCatalogEntry,
+)
 from .state import StudioState
 
 __all__ = [
@@ -36,6 +43,7 @@ __all__ = [
     # Chat
     "ChatAttachment",
     "ChatConversation",
+    "ChatFeedback",
     "ChatMessage",
     "ChatRole",
     "ChatSuggestedAction",
@@ -43,6 +51,7 @@ __all__ = [
     "CheckoutKind",
     "CreditEntryType",
     "CreditLedgerEntry",
+    "BillingWebhookReceipt",
     "ModelCatalogEntry",
     "PlanCatalogEntry",
     # State

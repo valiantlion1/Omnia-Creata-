@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, MessageCircle, Paperclip, Send, X } from 'lucide-react'
 
+import { LightboxTrigger } from '@/components/ImageLightbox'
+import { useLightbox } from '@/components/Lightbox'
 import { AppPage } from '@/components/StudioPrimitives'
-import { studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
+import { ChatBubble } from '@/components/ChatBubble'
+import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 /* ─── Constants ────────────────────────────────────── */
@@ -15,7 +18,14 @@ const CHAT_PROJECT_STORAGE_KEY = 'oc-chat-project-map-v1'
 const composeModes = ['Think', 'Vision', 'Edit'] as const
 type ComposeMode = (typeof composeModes)[number]
 
-type PendingAttachment = ChatAttachment & { id: string }
+type PendingAttachment = {
+  id: string
+  kind: string
+  asset_id: string | null
+  label: string
+  previewUrl: string
+  file: File | null
+}
 
 type ChatVisualMessage = {
   id: string
@@ -36,10 +46,68 @@ type ChatTimelineItem =
   | { kind: 'message'; id: string; createdAt: string; message: ChatMessage }
   | { kind: 'visual'; id: string; createdAt: string; visual: ChatVisualMessage }
 
+type ChatConversationDetail = Awaited<ReturnType<typeof studioApi.getConversation>>
+
 /* ─── Helpers ──────────────────────────────────────── */
 
 function titleFromDraft(input: string) {
   return input.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 72) || 'New chat'
+}
+
+function buildOptimisticUserMessage(
+  conversation: ChatConversation,
+  content: string,
+  attachments: ChatAttachment[],
+): ChatMessage {
+  return {
+    id: `optimistic-${crypto.randomUUID()}`,
+    conversation_id: conversation.id,
+    identity_id: conversation.identity_id,
+    role: 'user',
+    content,
+    attachments,
+    suggested_actions: [],
+    metadata: { optimistic: true },
+    created_at: new Date().toISOString(),
+  }
+}
+
+function mergeMessages(messages: ChatMessage[]): ChatMessage[] {
+  const seen = new Set<string>()
+  const merged: ChatMessage[] = []
+  for (const message of messages) {
+    if (seen.has(message.id)) continue
+    seen.add(message.id)
+    merged.push(message)
+  }
+  return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+}
+
+function upsertConversationSummary(
+  conversations: ChatConversation[],
+  conversation: ChatConversation,
+  lastMessageAt: string,
+  messageCountFloor?: number,
+): ChatConversation[] {
+  const next = conversations.filter((item) => item.id !== conversation.id)
+  next.unshift({
+    ...conversation,
+    last_message_at: lastMessageAt,
+    updated_at: lastMessageAt,
+    message_count: Math.max(messageCountFloor ?? conversation.message_count, conversation.message_count),
+  })
+  return next
+}
+
+function recreatePendingAttachment(attachment: PendingAttachment): PendingAttachment {
+  if (!attachment.file) {
+    return { ...attachment, id: crypto.randomUUID() }
+  }
+  return {
+    ...attachment,
+    id: crypto.randomUUID(),
+    previewUrl: URL.createObjectURL(attachment.file),
+  }
 }
 
 function readAsDataUrl(file: File) {
@@ -51,13 +119,29 @@ function readAsDataUrl(file: File) {
   })
 }
 
-async function toPendingAttachment(file: File): Promise<PendingAttachment> {
+function toPendingAttachment(file: File): PendingAttachment {
   return {
     id: crypto.randomUUID(),
     kind: file.type.startsWith('image/') ? 'image' : 'file',
-    url: await readAsDataUrl(file),
     asset_id: null,
     label: file.name,
+    previewUrl: URL.createObjectURL(file),
+    file,
+  }
+}
+
+async function toChatAttachmentPayload(attachment: PendingAttachment): Promise<ChatAttachment> {
+  return {
+    kind: attachment.kind,
+    url: attachment.file ? await readAsDataUrl(attachment.file) : attachment.previewUrl,
+    asset_id: attachment.asset_id,
+    label: attachment.label,
+  }
+}
+
+function releasePendingAttachment(attachment: PendingAttachment) {
+  if (attachment.previewUrl.startsWith('blob:')) {
+    URL.revokeObjectURL(attachment.previewUrl)
   }
 }
 
@@ -70,7 +154,7 @@ function readStoredJson<T>(key: string, fallback: T): T {
   }
 }
 
-function buildChatVisualPrompt(mode: ComposeMode, content: string, attachments: PendingAttachment[]) {
+function buildChatVisualPrompt(mode: ComposeMode, content: string, attachments: Array<Pick<ChatAttachment, 'kind' | 'label'>>) {
   const cleaned = content.trim()
   const imageHint = attachments.find((a) => a.kind === 'image')?.label
   if (mode === 'Edit') return cleaned || (imageHint ? `Refine the uploaded reference based on ${imageHint}` : 'Refine this visual with a premium direction')
@@ -78,14 +162,88 @@ function buildChatVisualPrompt(mode: ComposeMode, content: string, attachments: 
   return cleaned
 }
 
+function looksLikeAnalysisRequest(content: string) {
+  return /(analyze|analyse|describe|caption|what do you see|explain|feedback|review|thoughts|yorumla|incele|analiz|açıkla|ne görüyorsun|nasıl olmuş|ne gibi düzeltme|yorumun ne)/.test(content)
+}
+
+function shouldStartVisualGeneration(
+  mode: ComposeMode,
+  content: string,
+  attachments: Array<Pick<ChatAttachment, 'kind' | 'label'>>,
+) {
+  const lower = content.trim().toLowerCase()
+  const hasImage = attachments.some((attachment) => attachment.kind === 'image')
+  const asksForRender = /(generate|create|render|make|produce|design|visualize|illustrate|draw|variation|poster|cover|mockup|artwork|üret|oluştur|yarat|tasarla|çiz|varyasyon|render et|görsel üret|görsel oluştur)/.test(lower)
+  const asksForEditOperation = /(edit|remove|replace|retouch|cleanup|clean up|background|mask|inpaint|erase|düzenle|arka plan|mask|sil|temizle)/.test(lower)
+
+  if (mode === 'Edit') return hasImage || Boolean(lower)
+  if (mode !== 'Vision') return false
+  if (!lower) return hasImage
+  if (asksForEditOperation) return true
+  if (looksLikeAnalysisRequest(lower)) return false
+  return asksForRender
+}
+
+function resolveComposeModeForMessage(mode: ComposeMode, content: string, attachments: PendingAttachment[]): ComposeMode {
+  if (mode !== 'Think') return mode
+
+  const lower = content.trim().toLowerCase()
+  const hasImage = attachments.some((attachment) => attachment.kind === 'image')
+  const asksForEdit = /(edit|remove|replace|retouch|cleanup|clean up|background|mask|inpaint|erase)/.test(lower)
+  const asksForVisual = /(generate|create|render|make|image|photo|visual|illustration|poster|cover|artwork)/.test(lower)
+  const asksForAnalysis = /(analyze|analyse|describe|caption|what do you see|explain this image)/.test(lower)
+
+  if (hasImage && asksForEdit) return 'Edit'
+  if (hasImage || asksForVisual || asksForAnalysis) return 'Vision'
+  return mode
+}
+
+void shouldStartVisualGeneration
+void resolveComposeModeForMessage
+
+function looksLikeContextOnlyVisualRequest(content: string) {
+  return /(analyze|analyse|describe|caption|what do you see|explain|feedback|review|thoughts|suggest|advice|comment|yorum|incele|analiz|açıkla|ne görüyorsun|nasıl olmuş|ne gibi düzelt|nasıl düzelt|iyileştir|ne yapabiliriz|öneri|sence)/.test(content)
+}
+
+function shouldStartVisualGenerationSafely(
+  mode: ComposeMode,
+  content: string,
+  attachments: Array<Pick<ChatAttachment, 'kind' | 'label'>>,
+) {
+  const lower = content.trim().toLowerCase()
+  const hasImage = attachments.some((attachment) => attachment.kind === 'image')
+  const asksForRender = /(generate|create|render|make|produce|design|visualize|illustrate|draw|variation|poster|cover|mockup|artwork|üret|oluştur|yarat|tasarla|çiz|varyasyon|render et|görsel üret|görsel oluştur)/.test(lower)
+  const asksForEditOperation = /(edit|remove|replace|retouch|cleanup|clean up|background|mask|inpaint|erase|düzenle|arka plan|sil|temizle|değiştir)/.test(lower)
+
+  if (!lower) return false
+  if (looksLikeContextOnlyVisualRequest(lower)) return false
+  if (mode === 'Edit') return hasImage && (asksForEditOperation || asksForRender)
+  if (mode !== 'Vision') return false
+  return asksForEditOperation || asksForRender
+}
+
+function resolveComposeModeForMessageSafely(mode: ComposeMode, content: string, attachments: PendingAttachment[]): ComposeMode {
+  if (mode !== 'Think') return mode
+
+  const lower = content.trim().toLowerCase()
+  const hasImage = attachments.some((attachment) => attachment.kind === 'image')
+  const asksForEdit = /(edit|remove|replace|retouch|cleanup|clean up|background|mask|inpaint|erase|düzenle|arka plan|sil|temizle|değiştir)/.test(lower)
+  const asksForVisual = /(generate|create|render|make|image|photo|visual|illustration|poster|cover|artwork|görsel|resim|fotoğraf|çizim)/.test(lower)
+  const asksForAnalysis = /(analyze|analyse|describe|caption|what do you see|explain this image|yorumla|incele|analiz et|açıkla|ne görüyorsun)/.test(lower)
+
+  if (hasImage && asksForEdit) return 'Edit'
+  if (asksForVisual || asksForAnalysis) return 'Vision'
+  return mode
+}
+
 function isTerminalStatus(status: JobStatus) {
-  return status === 'completed' || status === 'failed' || status === 'retryable_failed'
+  return isTerminalJobStatus(status)
 }
 
 /* ─── Subcomponents ────────────────────────────────── */
 
 /** ChatGPT-style progressive image reveal */
-function ProgressiveImage({ src, alt }: { src: string; alt: string }) {
+function ProgressiveImage({ src, alt, onOpen }: { src: string; alt: string; onOpen?: () => void }) {
   const [loaded, setLoaded] = useState(false)
   const [revealed, setRevealed] = useState(false)
 
@@ -97,7 +255,18 @@ function ProgressiveImage({ src, alt }: { src: string; alt: string }) {
   }, [loaded])
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-[#15161a]">
+    <div
+      className={`group relative overflow-hidden rounded-2xl bg-[#15161a] ${onOpen ? 'cursor-zoom-in' : ''}`}
+      onClick={onOpen}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={onOpen ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      } : undefined}
+    >
       {/* Blurred background placeholder */}
       <img src={src} alt="" aria-hidden className="aspect-[4/5] w-full max-w-[360px] object-cover blur-xl saturate-110 scale-[1.08] opacity-40" />
       {/* Actual image with reveal animation */}
@@ -119,6 +288,7 @@ function ProgressiveImage({ src, alt }: { src: string; alt: string }) {
           style={{ transform: revealed ? 'translateY(400px)' : 'translateY(0)' }}
         />
       ) : null}
+      {onOpen ? <LightboxTrigger onClick={onOpen} /> : null}
     </div>
   )
 }
@@ -126,13 +296,17 @@ function ProgressiveImage({ src, alt }: { src: string; alt: string }) {
 /** Pending generation: blur + pulse placeholder */
 function GenerationPending({ title }: { title: string }) {
   return (
-    <div className="space-y-2">
-      <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-400/80">Generating...</div>
-      <div className="relative overflow-hidden rounded-2xl bg-[#15161a]">
-        <div className="aspect-[4/5] w-full max-w-[360px] animate-pulse bg-gradient-to-br from-white/[0.06] via-white/[0.02] to-transparent" />
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-cyan-500/[0.08] via-transparent to-transparent" />
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" style={{ boxShadow: '0 0 10px rgb(var(--primary-light))' }} />
+        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[rgb(var(--primary-light))] animate-pulse">Generating...</div>
       </div>
-      <div className="text-sm text-zinc-400">{title}</div>
+      <div className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+        <div className="aspect-[4/5] w-full max-w-[360px] bg-gradient-to-br from-white/[0.05] via-transparent to-[rgb(var(--primary-light)/0.03)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(var(--primary-light)/0.15),transparent_60%)] opacity-50 animate-[oc-pulse_3s_ease-in-out_infinite]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.1),transparent_70%)] animate-[oc-pulse_4s_ease-in-out_infinite_reverse]" />
+      </div>
+      <div className="text-sm font-medium text-zinc-400 pl-1">{title}</div>
     </div>
   )
 }
@@ -147,26 +321,34 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   ]
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-      <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 ring-1 ring-white/[0.08]">
-        <MessageCircle className="h-7 w-7 text-cyan-300" />
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 relative">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
+        <div className="h-[40rem] w-[40rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.04),transparent_60%)] blur-[80px]" />
       </div>
-      <h2 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
-        What would you like to create?
+
+      <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-[28px] ring-1 ring-white/10 shadow-[0_0_60px_rgb(var(--primary-light)/0.15)] bg-gradient-to-br from-[#1c1e26] to-[#0b0c10] overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light)/0.2)] to-[rgb(var(--accent)/0.05)] opacity-50" />
+        <MessageCircle className="relative z-10 h-8 w-8 text-[rgb(var(--primary-light))] drop-shadow-[0_0_15px_rgb(var(--primary-light)/0.5)]" />
+      </div>
+      <h2 className="relative z-10 mt-8 text-3xl font-bold tracking-tight text-white md:text-5xl drop-shadow-sm">
+        What would you like to
+        <span className="ml-3 bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>create</span>?
       </h2>
-      <p className="mt-3 max-w-lg text-center text-base leading-7 text-zinc-400">
+      <p className="relative z-10 mt-4 max-w-xl text-center text-[15px] leading-relaxed text-zinc-400">
         Describe an image, upload a photo to edit, or ask for creative guidance.
-        Images are generated directly in the conversation.
+        Images are generated organically right here.
       </p>
-      <div className="mt-8 grid max-w-2xl gap-2.5 sm:grid-cols-2">
+      
+      <div className="relative z-10 mt-10 grid max-w-2xl gap-3 sm:grid-cols-2 w-full">
         {suggestions.map((s) => (
           <button
             key={s.label}
             onClick={() => onHint(s.value)}
-            className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            className="group rounded-[20px] border border-white/[0.04] bg-[#111216]/60 backdrop-blur-xl px-5 py-4 text-left text-sm transition-all duration-300 hover:bg-[#1a1b23]/80 hover:border-[rgb(var(--primary-light)/0.3)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgb(var(--primary-light)/0.1)]"
           >
-            <span className="mr-2">{s.label.split(' ')[0]}</span>
-            <span className="text-zinc-400">{s.label.split(' ').slice(1).join(' ')}</span>
+            <div className="font-semibold text-white/90 group-hover:text-[rgb(var(--primary-light))] transition-colors drop-shadow-sm mb-1">{s.label.split(' ').slice(0, 2).join(' ')}</div>
+            <div className="text-zinc-500 leading-relaxed group-hover:text-zinc-300 transition-colors">{s.label.split(' ').slice(2).join(' ')}</div>
           </button>
         ))}
       </div>
@@ -179,12 +361,17 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
 export default function ChatPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { openLightbox } = useLightbox()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const [searchParams] = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const projectPromiseRef = useRef<Record<string, Promise<string>>>({})
+  const autoCreateRequestRef = useRef<string | null>(null)
+  const previousPendingAttachmentsRef = useRef<PendingAttachment[]>([])
+  const shouldSnapToBottomRef = useRef(false)
 
   const [draft, setDraft] = useState('')
   const [composeMode, setComposeMode] = useState<ComposeMode>(composeModes[0])
@@ -214,6 +401,13 @@ export default function ChatPage() {
 
   useEffect(() => { window.localStorage.setItem(CHAT_VISUAL_STORAGE_KEY, JSON.stringify(visualMessages)) }, [visualMessages])
   useEffect(() => { window.localStorage.setItem(CHAT_PROJECT_STORAGE_KEY, JSON.stringify(conversationProjects)) }, [conversationProjects])
+  useEffect(() => {
+    const previous = previousPendingAttachmentsRef.current
+    const activeIds = new Set(pendingAttachments.map((attachment) => attachment.id))
+    previous.filter((attachment) => !activeIds.has(attachment.id)).forEach(releasePendingAttachment)
+    previousPendingAttachmentsRef.current = pendingAttachments
+  }, [pendingAttachments])
+  useEffect(() => () => { previousPendingAttachmentsRef.current.forEach(releasePendingAttachment) }, [])
 
   /* ─── Auto-resize textarea ────────────────────── */
 
@@ -227,10 +421,14 @@ export default function ChatPage() {
   /* ─── Auto-detect mode from attachments ───────── */
 
   useEffect(() => {
-    if (pendingAttachments.some((a) => a.kind === 'image')) {
-      if (composeMode === 'Think') setComposeMode('Vision')
-    }
-  }, [pendingAttachments, composeMode])
+    if (!activeConversationId) return
+    const viewport = scrollViewportRef.current
+    if (!viewport) return
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'auto' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeConversationId])
 
   /* ─── Queries ─────────────────────────────────── */
 
@@ -238,6 +436,7 @@ export default function ChatPage() {
     queryKey: ['conversations'],
     queryFn: () => studioApi.listConversations(),
     enabled: canLoadPrivate,
+    staleTime: 30_000,
   })
 
   useEffect(() => {
@@ -253,6 +452,7 @@ export default function ChatPage() {
     queryKey: ['conversation', activeConversationId],
     queryFn: () => studioApi.getConversation(activeConversationId as string),
     enabled: canLoadPrivate && Boolean(activeConversationId),
+    staleTime: 10_000,
   })
 
   const createConversationMutation = useMutation({
@@ -263,12 +463,56 @@ export default function ChatPage() {
     mutationFn: async (payload: { conversationId: string; content: string; model?: string; attachments?: ChatAttachment[] }) =>
       studioApi.sendConversationMessage(payload.conversationId, { content: payload.content, model: payload.model, attachments: payload.attachments }),
   })
+  
+  const editMessageMutation = useMutation({
+    mutationFn: async (payload: { conversationId: string; messageId: string; content: string }) =>
+      studioApi.editConversationMessage(payload.conversationId, payload.messageId, { content: payload.content }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversation', activeConversationId] })
+  })
+
+  const regenerateMessageMutation = useMutation({
+    mutationFn: async (payload: { conversationId: string; messageId: string }) =>
+      studioApi.regenerateConversationMessage(payload.conversationId, payload.messageId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversation', activeConversationId] })
+  })
+
+  const feedbackMutation = useMutation({
+    mutationFn: async (payload: { conversationId: string; messageId: string; feedback: 'like' | 'dislike' | null }) =>
+      studioApi.setConversationMessageFeedback(payload.conversationId, payload.messageId, payload.feedback),
+  })
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    if (!activeConversationId) return
+    await editMessageMutation.mutateAsync({ conversationId: activeConversationId as string, messageId, content: newContent })
+  }
+
+  const handleRegenerateMessage = async (messageId: string) => {
+    if (!activeConversationId) return
+    await regenerateMessageMutation.mutateAsync({ conversationId: activeConversationId as string, messageId })
+  }
+
+  const handleMessageFeedback = async (messageId: string, feedback: 'like' | 'dislike' | null) => {
+    if (!activeConversationId) return
+    await feedbackMutation.mutateAsync({ conversationId: activeConversationId as string, messageId, feedback })
+  }
+
+  const isConversationBootstrapPending = createConversationMutation.isPending && !activeConversationId
 
   /* ─── New conversation effect ─────────────────── */
 
   useEffect(() => {
     const requestedNew = searchParams.get('new') === '1'
+    const requestKey = searchParams.toString()
+    if (!requestedNew) {
+      autoCreateRequestRef.current = null
+      if (activeConversationId && createConversationMutation.isPending) {
+        createConversationMutation.reset()
+      }
+      return
+    }
     if (!requestedNew || !canLoadPrivate || createConversationMutation.isPending) return
+    if (autoCreateRequestRef.current === requestKey) return
+    autoCreateRequestRef.current = requestKey
     let cancelled = false
     const run = async () => {
       try {
@@ -278,22 +522,34 @@ export default function ChatPage() {
         setDraft('')
         navigate(`/chat?conversation=${conversation.id}`, { replace: true })
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
-      } catch { /* handled by mutation */ }
+        createConversationMutation.reset()
+      } catch {
+        if (!cancelled) {
+          createConversationMutation.reset()
+          navigate('/chat', { replace: true })
+        }
+      }
     }
     void run()
     return () => { cancelled = true }
-  }, [canLoadPrivate, createConversationMutation, navigate, queryClient, searchParams])
+  }, [activeConversationId, canLoadPrivate, createConversationMutation, navigate, queryClient, searchParams])
 
   /* ─── Data derivations ────────────────────────── */
 
   const conversationList = conversationsQuery.data?.conversations ?? []
   const messages = conversationDetailQuery.data?.messages ?? []
   const activeConversation = conversationDetailQuery.data?.conversation ?? conversationList.find((item) => item.id === activeConversationId) ?? null
-  const latestAssistantMessage = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant') ?? null, [messages])
-  const suggestedActions = latestAssistantMessage?.suggested_actions ?? []
   const conversationVisuals = useMemo(
     () => visualMessages.filter((v) => v.conversationId === activeConversationId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [activeConversationId, visualMessages],
+  )
+  const pendingVisuals = useMemo(
+    () => visualMessages.filter((v) => v.jobId && !isTerminalStatus(v.status)).map((v) => ({ id: v.id, jobId: v.jobId as string })),
+    [visualMessages],
+  )
+  const pendingVisualPollKey = useMemo(
+    () => pendingVisuals.map((v) => `${v.id}:${v.jobId}`).join('|'),
+    [pendingVisuals],
   )
   const timeline = useMemo<ChatTimelineItem[]>(() => {
     const messageItems: ChatTimelineItem[] = messages.map((m) => ({ kind: 'message', id: m.id, createdAt: m.created_at, message: m }))
@@ -301,30 +557,64 @@ export default function ChatPage() {
     return [...messageItems, ...visualItems].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
   }, [conversationVisuals, messages])
 
+  const lastTimelineMessageId = useMemo(() => {
+    const msgItems = timeline.filter((t): t is Extract<ChatTimelineItem, { kind: 'message' }> => t.kind === 'message')
+    return msgItems.length ? msgItems[msgItems.length - 1].id : null
+  }, [timeline])
+
+  const lastTimelineUserId = useMemo(() => {
+    const msgItems = timeline.filter((t): t is Extract<ChatTimelineItem, { kind: 'message' }> => t.kind === 'message' && t.message.role === 'user')
+    return msgItems.length ? msgItems[msgItems.length - 1].message.id : null
+  }, [timeline])
+
   /* ─── Poll visual generation status ───────────── */
 
   useEffect(() => {
+    if (!shouldSnapToBottomRef.current) return
+    const viewport = scrollViewportRef.current
+    if (!viewport || !timeline.length) return
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'auto' })
+      if (!sendMessageMutation.isPending) {
+        shouldSnapToBottomRef.current = false
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [timeline.length, sendMessageMutation.isPending])
+
+  const composerHint = useMemo(() => {
+    if (composeMode === 'Think') {
+      return pendingAttachments.some((attachment) => attachment.kind === 'image')
+        ? 'Inspecting attachments in chat'
+        : 'Text-only conversation'
+    }
+    if (composeMode === 'Vision') return 'Vision mode is ready for visual generation'
+    return 'Edit mode is ready for image changes'
+  }, [composeMode, pendingAttachments])
+
+  useEffect(() => {
     if (!canLoadPrivate) return
-    const pending = visualMessages.filter((v) => v.jobId && !isTerminalStatus(v.status))
-    if (!pending.length) return
+    if (!pendingVisuals.length) return
 
     const interval = window.setInterval(async () => {
       const snapshots = await Promise.all(
-        pending.map(async (v) => {
+        pendingVisuals.map(async (v) => {
           try { const g = await studioApi.getGeneration(v.jobId as string); return [v.id, g] as const }
           catch { return null }
         }),
       )
       const snapshotMap = new Map(snapshots.filter(Boolean) as Array<readonly [string, Awaited<ReturnType<typeof studioApi.getGeneration>>]>)
       let invalidate = false
-      setVisualMessages((current) =>
-        current.map((v) => {
-          const snap = snapshotMap.get(v.id)
-          if (!snap) return v
-          if (!isTerminalStatus(v.status) && isTerminalStatus(snap.status)) invalidate = true
-          return { ...v, title: snap.title, status: snap.status, outputs: snap.outputs, error: snap.error, updatedAt: new Date().toISOString() }
-        }),
-      )
+      startTransition(() => {
+        setVisualMessages((current) =>
+          current.map((v) => {
+            const snap = snapshotMap.get(v.id)
+            if (!snap) return v
+            if (!isTerminalStatus(v.status) && isTerminalStatus(snap.status)) invalidate = true
+            return { ...v, title: snap.title, status: snap.status, outputs: snap.outputs, error: snap.error, updatedAt: new Date().toISOString() }
+          }),
+        )
+      })
       if (invalidate) {
         await queryClient.invalidateQueries({ queryKey: ['assets'] })
         await queryClient.invalidateQueries({ queryKey: ['generations'] })
@@ -332,21 +622,28 @@ export default function ChatPage() {
       }
     }, 1500)
     return () => window.clearInterval(interval)
-  }, [canLoadPrivate, queryClient, visualMessages])
+  }, [canLoadPrivate, pendingVisualPollKey, queryClient])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [timeline, pendingAttachments.length])
 
   /* ─── Handlers ────────────────────────────────── */
 
   const handleUploadClick = () => fileInputRef.current?.click()
 
-  const handleUploadChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     if (!files.length) return
     try {
-      const next = await Promise.all(files.slice(0, 4).map((f) => toPendingAttachment(f)))
-      setPendingAttachments((c) => [...c, ...next].slice(0, 4))
-    } finally { event.target.value = '' }
+      const next = files.slice(0, 4).map((file) => toPendingAttachment(file))
+      setPendingAttachments((current) => {
+        const combined = [...current, ...next]
+        const kept = combined.slice(0, 4)
+        combined.slice(4).forEach(releasePendingAttachment)
+        return kept
+      })
+    } finally { 
+      event.target.value = '' 
+      textareaRef.current?.focus()
+    }
   }
 
   const ensureConversationProjectId = useCallback(
@@ -355,7 +652,7 @@ export default function ChatPage() {
       if (existing) return existing
       if (!projectPromiseRef.current[conversation.id]) {
         projectPromiseRef.current[conversation.id] = studioApi
-          .createProject({ title: `Chat - ${conversation.title}`.slice(0, 60), description: 'Created from Studio Chat' })
+          .createProject({ title: `Chat - ${conversation.title}`.slice(0, 60), description: 'Created from Studio Chat', surface: 'chat' })
           .then((p) => { setConversationProjects((c) => ({ ...c, [conversation.id]: p.id })); return p.id })
           .finally(() => { delete projectPromiseRef.current[conversation.id] })
       }
@@ -364,13 +661,58 @@ export default function ChatPage() {
     [conversationProjects],
   )
 
+  const prepareChatAttachments = useCallback(
+    async (conversation: ChatConversation, attachments: PendingAttachment[]) => {
+      if (!attachments.length) return [] as ChatAttachment[]
+
+      let chatProjectId: string | null = null
+      return Promise.all(
+        attachments.map(async (attachment) => {
+          if (attachment.kind !== 'image' || !attachment.file) {
+            return toChatAttachmentPayload(attachment)
+          }
+
+          const dataUrl = await readAsDataUrl(attachment.file)
+          chatProjectId = chatProjectId ?? await ensureConversationProjectId(conversation)
+          const importedAsset = await studioApi.importAsset({
+            project_id: chatProjectId,
+            data_url: dataUrl,
+            title: attachment.label || 'Chat reference',
+          })
+
+          return {
+            kind: attachment.kind,
+            url: importedAsset.url,
+            asset_id: importedAsset.id,
+            label: attachment.label,
+          } satisfies ChatAttachment
+        }),
+      )
+    },
+    [ensureConversationProjectId],
+  )
+  void prepareChatAttachments
+
   const startVisualGeneration = useCallback(
-    async (conversation: ChatConversation, content: string, attachments: PendingAttachment[], mode: ComposeMode) => {
+    async (conversation: ChatConversation, content: string, attachments: ChatAttachment[], mode: ComposeMode) => {
       const prompt = buildChatVisualPrompt(mode, content, attachments)
       if (!prompt) return
       const projectId = await ensureConversationProjectId(conversation)
+      const referenceAttachment = attachments.find((attachment) => attachment.kind === 'image')
+      let referenceAssetId = referenceAttachment?.asset_id ?? null
+
+      if (!referenceAssetId && referenceAttachment?.url.startsWith('data:image/')) {
+        const importedAsset = await studioApi.importAsset({
+          project_id: projectId,
+          data_url: referenceAttachment.url,
+          title: referenceAttachment.label || 'Chat reference',
+        })
+        referenceAssetId = importedAsset.id
+      }
+
       const generation = await studioApi.createGeneration({
         project_id: projectId, prompt, negative_prompt: '', model: 'flux-schnell',
+        reference_asset_id: referenceAssetId,
         width: 1024, height: 1024, steps: 24, cfg_scale: 6,
         seed: Math.floor(Math.random() * 1_000_000_000),
         aspect_ratio: '1:1', output_count: 1,
@@ -388,38 +730,95 @@ export default function ChatPage() {
 
   const handleSend = useCallback(async () => {
     const content = draft.trim()
-    const attachments = pendingAttachments.map(({ id: _id, ...a }) => a)
-    if ((!content && !attachments.length) || sendMessageMutation.isPending || createConversationMutation.isPending || !canLoadPrivate) return
+    if ((!content && !pendingAttachments.length) || sendMessageMutation.isPending || isConversationBootstrapPending || !canLoadPrivate) return
+    const pendingAttachmentSnapshot = pendingAttachments
+    const attachments = await Promise.all(pendingAttachments.map((attachment) => toChatAttachmentPayload(attachment)))
+    const effectiveMode = resolveComposeModeForMessageSafely(composeMode, content, pendingAttachments)
+    const visualPrompt = buildChatVisualPrompt(effectiveMode, content, pendingAttachments)
+    const shouldGenerateVisual = shouldStartVisualGenerationSafely(effectiveMode, content, pendingAttachments)
+    if (effectiveMode !== composeMode) {
+      setComposeMode(effectiveMode)
+    }
 
     let conversation = conversationDetailQuery.data?.conversation ?? conversationsQuery.data?.conversations.find((c) => c.id === activeConversationId) ?? null
     if (!conversation) {
-      conversation = await createConversationMutation.mutateAsync({ title: titleFromDraft(content), model: composeMode.toLowerCase() })
+      conversation = await createConversationMutation.mutateAsync({ title: titleFromDraft(content), model: effectiveMode.toLowerCase() })
       setActiveConversationId(conversation.id)
       navigate(`/chat?conversation=${conversation.id}`, { replace: true })
+      createConversationMutation.reset()
     }
 
-    const result = await sendMessageMutation.mutateAsync({ conversationId: conversation.id, content, model: composeMode.toLowerCase(), attachments })
-    setActiveConversationId(result.conversation.id)
-    setDraft('')
-    setPendingAttachments([])
-    navigate(`/chat?conversation=${result.conversation.id}`, { replace: true })
+    const optimisticMessage = buildOptimisticUserMessage(conversation, content, attachments)
+    shouldSnapToBottomRef.current = true
+    startTransition(() => {
+      setDraft('')
+      setPendingAttachments([])
+      queryClient.setQueryData<ChatConversationDetail>(['conversation', conversation.id], (current) => ({
+        conversation: current?.conversation ?? conversation,
+        messages: mergeMessages([...(current?.messages ?? []), optimisticMessage]),
+      }))
+      queryClient.setQueryData<{ conversations: ChatConversation[] }>(['conversations'], (current) => ({
+        conversations: upsertConversationSummary(
+          current?.conversations ?? [],
+          conversation,
+          optimisticMessage.created_at,
+          (current?.conversations.find((item) => item.id === conversation.id)?.message_count ?? conversation.message_count) + 1,
+        ),
+      }))
+    })
 
-    await queryClient.invalidateQueries({ queryKey: ['conversations'] })
-    await queryClient.invalidateQueries({ queryKey: ['conversation', result.conversation.id] })
+    try {
+      const result = await sendMessageMutation.mutateAsync({ conversationId: conversation.id, content, model: effectiveMode.toLowerCase(), attachments })
+      setActiveConversationId(result.conversation.id)
+      navigate(`/chat?conversation=${result.conversation.id}`, { replace: true })
 
-    if (composeMode !== 'Think') {
-      try { await startVisualGeneration(result.conversation, content, pendingAttachments, composeMode) }
-      catch {
-        setVisualMessages((c) => [{
-          id: `visual-${crypto.randomUUID()}`, conversationId: result.conversation.id,
-          projectId: conversationProjects[result.conversation.id] ?? null, jobId: null,
-          title: titleFromDraft(content), prompt: content, mode: composeMode,
-          status: 'failed', outputs: [], error: 'Unable to start image generation.',
-          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        }, ...c])
+      startTransition(() => {
+        queryClient.setQueryData<ChatConversationDetail>(['conversation', result.conversation.id], (current) => ({
+          conversation: result.conversation,
+          messages: mergeMessages([
+            ...(current?.messages ?? []).filter((message) => message.id !== optimisticMessage.id),
+            result.user_message,
+            result.assistant_message,
+          ]),
+        }))
+        queryClient.setQueryData<{ conversations: ChatConversation[] }>(['conversations'], (current) => ({
+          conversations: upsertConversationSummary(
+            current?.conversations ?? [],
+            result.conversation,
+            result.assistant_message.created_at,
+            result.conversation.message_count,
+          ),
+        }))
+      })
+
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversation', result.conversation.id] })
+
+      if (shouldGenerateVisual) {
+        try { await startVisualGeneration(result.conversation, content, attachments, effectiveMode) }
+        catch {
+          setVisualMessages((c) => [{
+            id: `visual-${crypto.randomUUID()}`, conversationId: result.conversation.id,
+            projectId: conversationProjects[result.conversation.id] ?? null, jobId: null,
+            title: titleFromDraft(visualPrompt), prompt: visualPrompt, mode: effectiveMode,
+            status: 'failed', outputs: [], error: 'Unable to start image generation.',
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          }, ...c])
+        }
       }
+    } catch (error) {
+      shouldSnapToBottomRef.current = false
+      startTransition(() => {
+        queryClient.setQueryData<ChatConversationDetail>(['conversation', conversation.id], (current) => ({
+          conversation: current?.conversation ?? conversation,
+          messages: (current?.messages ?? []).filter((message) => message.id !== optimisticMessage.id),
+        }))
+      })
+      setDraft(content)
+      setPendingAttachments(pendingAttachmentSnapshot.map(recreatePendingAttachment))
+      throw error
     }
-  }, [activeConversationId, canLoadPrivate, composeMode, conversationDetailQuery.data?.conversation, conversationProjects, conversationsQuery.data?.conversations, createConversationMutation, draft, navigate, pendingAttachments, queryClient, sendMessageMutation, startVisualGeneration])
+  }, [activeConversationId, canLoadPrivate, composeMode, conversationDetailQuery.data?.conversation, conversationProjects, conversationsQuery.data?.conversations, createConversationMutation, draft, isConversationBootstrapPending, navigate, pendingAttachments, queryClient, sendMessageMutation, startVisualGeneration])
 
   const handleKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
@@ -440,22 +839,6 @@ export default function ChatPage() {
             <span className="truncate text-sm font-medium text-white">{activeConversation?.title || 'New chat'}</span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Mode pills */}
-            {composeModes.map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setComposeMode(mode)}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
-                  composeMode === mode
-                    ? mode === 'Think' ? 'bg-white/[0.1] text-white ring-1 ring-white/[0.12]'
-                    : mode === 'Vision' ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/20'
-                    : 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-400/20'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {mode === 'Think' ? '💭' : mode === 'Vision' ? '🎨' : '✏️'} {mode}
-              </button>
-            ))}
             {auth?.guest ? (
               <Link to="/signup" className="rounded-full bg-white px-4 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90">
                 Start free
@@ -465,63 +848,28 @@ export default function ChatPage() {
         </div>
 
         {/* ── Messages area ───────────────────────── */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollViewportRef} className="min-h-0 flex-1 overflow-y-auto">
           {conversationDetailQuery.isLoading ? (
             <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading chat...
             </div>
           ) : timeline.length ? (
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pb-10 pt-6">
               {timeline.map((item) => {
                 if (item.kind === 'message') {
                   const msg = item.message
-                  const isUser = msg.role === 'user'
                   return (
-                    <div key={item.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] space-y-2.5 md:max-w-[75%]`}>
-                        {/* Attachments */}
-                        {msg.attachments.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {msg.attachments.map((att) => (
-                              <div key={att.url} className="overflow-hidden rounded-2xl border border-white/[0.06]">
-                                {att.kind === 'image' ? (
-                                  <img src={att.url} alt={att.label} className="h-20 w-20 object-cover" />
-                                ) : (
-                                  <div className="flex h-20 w-20 items-center justify-center bg-white/[0.03] text-[10px] text-zinc-400">{att.label}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        {/* Message bubble */}
-                        <div
-                          className={`rounded-2xl px-4 py-3 text-[14px] leading-7 ${
-                            isUser
-                              ? 'rounded-br-md bg-[#1e293b] text-zinc-100'
-                              : 'bg-white/[0.04] text-zinc-200 ring-1 ring-white/[0.04]'
-                          }`}
-                        >
-                          {msg.content}
-                        </div>
-
-                        {/* Suggested actions */}
-                        {!isUser && msg.id === latestAssistantMessage?.id && suggestedActions.length ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {suggestedActions.slice(0, 4).map((action) => (
-                              <button
-                                key={action.id}
-                                onClick={() => setDraft(action.value || action.label)}
-                                className="rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
-                              >
-                                {action.label}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
+                    <ChatBubble 
+                      key={item.id} 
+                      message={msg}
+                      isLatest={item.id === lastTimelineMessageId}
+                      isLatestUser={msg.id === lastTimelineUserId}
+                      onEdit={handleEditMessage}
+                      onRegenerate={handleRegenerateMessage}
+                      onFeedback={handleMessageFeedback}
+                      onSuggestionClick={(val) => setDraft(val)}
+                    />
                   )
                 }
 
@@ -530,23 +878,30 @@ export default function ChatPage() {
                 return (
                   <div key={item.id} className="flex justify-start">
                     <div className="max-w-[85%] space-y-2 md:max-w-[75%]">
-                      {visual.status === 'completed' && visual.outputs.length ? (
+              {normalizeJobStatus(visual.status) === 'succeeded' && visual.outputs.length ? (
                         <div className="space-y-3">
                           {visual.outputs.map((output) => (
-                            <ProgressiveImage key={output.asset_id} src={output.url} alt={visual.title} />
+                            <ProgressiveImage
+                              key={output.asset_id}
+                              src={output.url}
+                              alt={visual.title}
+                              onOpen={() => openLightbox(output.url, visual.title, {
+                                title: visual.title,
+                                prompt: visual.prompt,
+                                authorName: 'You',
+                                authorUsername: auth?.identity.username || 'creator',
+                                model: visual.mode === 'Vision' ? 'FLUX.1 Schnell' : 'Omnia',
+                                aspectRatio: '1:1'
+                              })}
+                            />
                           ))}
                           <div className="flex items-center gap-3 text-sm">
                             <Link to="/library/images" className="font-medium text-white transition hover:text-zinc-200">
                               Open in Library
                             </Link>
-                            {visual.projectId ? (
-                              <Link to={`/projects/${visual.projectId}`} className="text-zinc-400 transition hover:text-white">
-                                Open project
-                              </Link>
-                            ) : null}
                           </div>
                         </div>
-                      ) : visual.status === 'failed' || visual.status === 'retryable_failed' ? (
+              ) : ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(visual.status)) ? (
                         <div className="space-y-2">
                           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
                             {visual.error || 'Image generation failed.'}
@@ -567,27 +922,32 @@ export default function ChatPage() {
         </div>
 
         {/* ── Composer bar ────────────────────────── */}
-        <div className="border-t border-white/[0.04] bg-[#0b0b0d]/80 px-4 py-3 backdrop-blur-xl">
+        <div className="relative border-t border-white/[0.04] bg-[#0c0d12]/90 px-4 py-4 backdrop-blur-2xl">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          
           <div className="mx-auto w-full max-w-3xl">
-            <div className="rounded-2xl border border-white/[0.08] bg-[#111216]/80 shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
-
+            <div className="relative rounded-[24px] border border-white/[0.08] bg-[#111216]/90 shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all duration-300 focus-within:shadow-[0_8px_40px_rgb(var(--primary-light)/0.15)] focus-within:border-[rgb(var(--primary-light)/0.3)] focus-within:bg-[#15161c]">
+              
+              {/* Optional inner glow line */}
+              <div className="pointer-events-none absolute inset-x-4 top-0 h-[1px] bg-gradient-to-r from-transparent via-[rgb(var(--primary-light)/0.3)] to-transparent opacity-0 transition-opacity duration-300" />
+              
               {/* Pending attachments */}
               {pendingAttachments.length ? (
-                <div className="flex flex-wrap gap-2 border-b border-white/[0.04] px-4 py-2.5">
+                <div className="flex flex-wrap gap-2 border-b border-white/[0.04] px-4 py-3">
                   {pendingAttachments.map((att) => (
                     <div key={att.id} className="group relative">
                       {att.kind === 'image' ? (
-                        <img src={att.url} alt={att.label} className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/[0.08]" />
+                        <img src={att.previewUrl} alt={att.label} className="h-16 w-16 rounded-xl object-cover ring-1 ring-white/10 shadow-md transition group-hover:brightness-110" loading="lazy" />
                       ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/[0.04] text-[10px] text-zinc-400 ring-1 ring-white/[0.08]">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-white/[0.04] text-[11px] font-medium text-zinc-400 ring-1 ring-white/10 shadow-md">
                           {att.label.split('.').pop()?.toUpperCase()}
                         </div>
                       )}
                       <button
                         onClick={() => setPendingAttachments((c) => c.filter((a) => a.id !== att.id))}
-                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 ring-1 ring-white/[0.1] opacity-0 transition group-hover:opacity-100 hover:bg-zinc-700"
+                        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-zinc-300 ring-1 ring-white/20 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -600,10 +960,10 @@ export default function ChatPage() {
 
                 <button
                   onClick={handleUploadClick}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white"
                   title="Attach image"
                 >
-                  <Paperclip className="h-4 w-4" />
+                  <Paperclip className="h-5 w-5" />
                 </button>
 
                 <textarea
@@ -612,28 +972,30 @@ export default function ChatPage() {
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={auth?.guest ? 'Sign in to start chatting...' : 'Message...'}
-                  className="max-h-[200px] min-h-[36px] flex-1 resize-none bg-transparent text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
+                  placeholder={auth?.guest ? 'Sign in to start chatting...' : 'Message Studio...'}
+                  className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-relaxed text-white outline-none placeholder:text-zinc-500"
                 />
 
                 <button
                   onClick={handleSend}
-                  disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || createConversationMutation.isPending}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+                  disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || isConversationBootstrapPending}
+                  className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all duration-300 hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:saturate-0"
+                  style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var(--primary-light)/0.3)' }}
                   title="Send"
                 >
-                  {sendMessageMutation.isPending || createConversationMutation.isPending ? (
+                  {sendMessageMutation.isPending || isConversationBootstrapPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Send className="h-4 w-4" />
+                    <Send className="h-4 w-4 translate-x-px" />
                   )}
                 </button>
               </div>
             </div>
 
             {/* Mode hint */}
-            <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-zinc-600">
-              <span>
+            <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-zinc-600" title={composerHint}>
+              <span>{composerHint}</span>
+              <span className="hidden">
                 {composeMode === 'Think' ? '💭 Text-only conversation' : composeMode === 'Vision' ? '🎨 Will generate images' : '✏️ Will edit/refine images'}
               </span>
               <span>Enter to send · Shift+Enter for new line</span>
@@ -641,9 +1003,13 @@ export default function ChatPage() {
           </div>
 
           {/* Error toast */}
-          {sendMessageMutation.error ? (
+          {(sendMessageMutation.error || createConversationMutation.error) ? (
             <div className="mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-              {sendMessageMutation.error instanceof Error ? sendMessageMutation.error.message : 'Unable to send message.'}
+              {sendMessageMutation.error instanceof Error
+                ? sendMessageMutation.error.message
+                : createConversationMutation.error instanceof Error
+                  ? createConversationMutation.error.message
+                  : 'Unable to send message.'}
             </div>
           ) : null}
         </div>

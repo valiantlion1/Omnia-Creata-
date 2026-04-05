@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
-import { studioApi, type Generation, type JobStatus, type ModelCatalogEntry } from '@/lib/studioApi'
+import { isTerminalJobStatus, normalizeJobStatus, studioApi, type Generation, type JobStatus, type ModelCatalogEntry } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 /* ─── Placeholder prompts ──────────────────────────── */
@@ -39,30 +39,34 @@ type GenerationToast = {
 }
 
 function isTerminalStatus(status: JobStatus) {
-  return status === 'completed' || status === 'failed' || status === 'retryable_failed'
+  return isTerminalJobStatus(status)
 }
 
 function getToastTone(status: JobStatus): 'brand' | 'success' | 'warning' | 'danger' {
-  if (status === 'completed') return 'success'
-  if (status === 'retryable_failed') return 'warning'
-  if (status === 'failed') return 'danger'
+  const normalized = normalizeJobStatus(status)
+  if (normalized === 'succeeded') return 'success'
+  if (normalized === 'retryable_failed') return 'warning'
+  if (normalized === 'failed' || normalized === 'cancelled' || normalized === 'timed_out') return 'danger'
   return 'brand'
 }
 
 function getToastLabel(status: JobStatus) {
-  switch (status) {
-    case 'pending': return 'Starting...'
-    case 'processing': return 'Generating'
-    case 'completed': return 'Done'
+  switch (normalizeJobStatus(status)) {
+    case 'queued': return 'Queued'
+    case 'running': return 'Generating'
+    case 'succeeded': return 'Done'
     case 'retryable_failed': return 'Retry needed'
     case 'failed': return 'Failed'
+    case 'cancelled': return 'Cancelled'
+    case 'timed_out': return 'Timed out'
     default: return 'Queued'
   }
 }
 
 function getToastDescription(job: GenerationToast) {
-  if (job.status === 'completed') return 'Saved to Library / My Images.'
-  if (job.status === 'processing' || job.status === 'pending') return 'Your image is being rendered...'
+  const normalized = normalizeJobStatus(job.status)
+  if (normalized === 'succeeded') return 'Saved to Library / My Images.'
+  if (normalized === 'running' || normalized === 'queued') return 'Your image is being rendered...'
   return job.error || 'This run did not finish successfully.'
 }
 
@@ -82,6 +86,32 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
   return [...models]
     .filter((entry) => !entry.owner_only || canUseLocal)
     .sort((a, b) => Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost)
+}
+
+function getProprietaryModelName(id: string, originalLabel: string): string {
+  const lower = id.toLowerCase()
+  
+  // Sektör standardı: Provider ismi (fal-ai, runware) gizlenir. Gerçek orijinal model ismi "Temiz" bir formatla verilir.
+  if (lower.includes('flux-schnell') || lower.includes('flux.1-schnell')) return 'FLUX.1 Schnell'
+  if (lower.includes('flux-dev') || lower.includes('flux.1-dev')) return 'FLUX.1 Dev'
+  if (lower.includes('flux-pro') || lower.includes('flux.1-pro')) return 'FLUX.1 Pro'
+  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl')) return 'SDXL 1.0'
+  if (lower.includes('stable-diffusion-3') || lower.includes('sd3')) return 'Stable Diffusion 3'
+  if (lower.includes('kandinsky')) return 'Kandinsky 3'
+  if (lower.includes('playground')) return 'Playground v2.5'
+  
+  // Eğer bilinmeyen bir şey gelirse, "fal-ai/" veya "runware/" kısımlarını kesip atar, sadece modelin ismini temizler.
+  const withoutProvider = originalLabel.split('/').pop() || originalLabel
+  
+  return withoutProvider
+    .split(/[-_ ]/)
+    .filter(Boolean)
+    .map(word => {
+      // API kısaltmaları için küçük bir harf dokunuşu
+      if (word.toUpperCase() === 'SDXL') return 'SDXL'
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    })
+    .join(' ')
 }
 
 /* ─── Main page ────────────────────────────────────── */
@@ -125,7 +155,10 @@ export default function CreatePage() {
   const selectedModel = useMemo(() => models.find((entry) => entry.id === selectedModelId) ?? models[0], [models, selectedModelId])
   const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
   const runningJobs = useMemo(
-    () => generationToasts.filter((job) => job.status === 'pending' || job.status === 'processing').length,
+    () => generationToasts.filter((job) => {
+      const normalized = normalizeJobStatus(job.status)
+      return normalized === 'queued' || normalized === 'running'
+    }).length,
     [generationToasts],
   )
   const runtimeCredits = auth?.credits.remaining ?? 0
@@ -239,7 +272,7 @@ export default function CreatePage() {
     if (resolvedProjectId) return resolvedProjectId
     if (!projectPromiseRef.current) {
       projectPromiseRef.current = studioApi
-        .createProject({ title: 'New image set', description: 'Created from Studio Create' })
+        .createProject({ title: 'New image set', description: 'Created from Studio Create', surface: 'compose' })
         .then((project) => {
           setResolvedProjectId(project.id)
           return project.id
@@ -361,11 +394,21 @@ export default function CreatePage() {
           </div>
         </div>
 
-        {/* ── Prompt card ────────────────────────── */}
-        <div className="rounded-[24px] border border-white/[0.06] bg-[#111216]/80 p-1 shadow-[0_8px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl ring-1 ring-white/[0.03]">
+        {/* ── Prompt card: Holographic Console ────────────────────────── */}
+        <div className="overflow-hidden rounded-[24px] border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_16px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl ring-1 ring-white/[0.02]">
+          
+          {/* Prompt Matrix Area */}
+          <div className="relative flex flex-col bg-[#090a0d] p-6 pb-14 shadow-inner transition-all duration-500 focus-within:shadow-[0_0_80px_rgb(var(--primary-light)/0.06)_inset]">
+            
+            {/* Subtle bottom border line */}
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
 
-          {/* Prompt area */}
-          <div className="relative rounded-[20px] bg-[#0c0d10]/60 px-5 py-4">
+            {/* Telemetry info */}
+            <div className="mb-4 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-[rgb(var(--primary-light))]" /> OPTICAL MATRIX</span>
+              <span>CHAR_COUNT: {prompt.length.toString().padStart(4, '0')}</span>
+            </div>
+
             <textarea
               ref={textareaRef}
               value={prompt}
@@ -376,24 +419,24 @@ export default function CreatePage() {
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
-              className="w-full resize-none bg-transparent text-[1rem] leading-7 text-white outline-none placeholder:text-zinc-600 md:text-[1.05rem]"
-              style={{ minHeight: '80px' }}
+              className="w-full resize-none bg-transparent text-[1.1rem] font-medium leading-[1.8] text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:text-white"
+              style={{ minHeight: '120px' }}
             />
 
-            {/* ✨ Improve button — inside the prompt area top right */}
+            {/* ✨ Improve button */}
             <button
               onClick={handleImprovePrompt}
               disabled={!prompt.trim() || improveState === 'working'}
               title="Improve prompt with AI"
-              className="absolute right-4 top-4 flex items-center gap-1.5 rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-zinc-300 ring-1 ring-white/[0.06] transition hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="absolute bottom-5 right-6 flex items-center gap-1.5 rounded-full bg-white/[0.02] px-4 py-2 text-[11px] font-semibold tracking-wide text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Tightened' : 'Improve'}
+              {improveState === 'done' ? 'IMPROVED ✓' : improveState === 'fallback' ? 'TIGHTENED' : 'IMPROVE'}
             </button>
           </div>
 
           {/* Controls bar */}
-          <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-white/[0.01]">
 
             {/* Left: aspect ratio + model */}
             <div className="flex flex-wrap items-center gap-2">
@@ -407,14 +450,13 @@ export default function CreatePage() {
                     key={ratio}
                     onClick={() => setAspectRatio(ratio)}
                     title={`${ratio} — ${config.label}`}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium transition ${
+                    className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] transition-all duration-300 ${
                       active
-                        ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.12)]'
-                        : 'bg-white/[0.04] text-zinc-400 ring-1 ring-white/[0.06] hover:bg-white/[0.08] hover:text-white'
+                        ? 'bg-[rgb(var(--primary-light)/0.1)] text-white shadow-[0_0_15px_rgb(var(--primary-light)/0.1)] ring-1 ring-[rgb(var(--primary-light)/0.2)]'
+                        : 'bg-white/[0.03] text-zinc-500 ring-1 ring-white/[0.04] hover:bg-white/[0.06] hover:text-zinc-300'
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{config.label}</span>
+                    <Icon className={`h-[22px] w-[22px] ${active ? 'opacity-100 drop-shadow-sm' : 'opacity-60 transition-opacity group-hover:opacity-100'}`} />
                   </button>
                 )
               })}
@@ -426,15 +468,17 @@ export default function CreatePage() {
               <div ref={modelPickerRef} className="relative">
                 <button
                   onClick={() => setModelPickerOpen((value) => !value)}
-                  className="flex items-center gap-2.5 rounded-full bg-white/[0.04] px-3.5 py-2 text-left text-sm ring-1 ring-white/[0.06] transition hover:bg-white/[0.08]"
+                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-[12px] font-medium text-white">{selectedModel?.label ?? 'Select model'}</div>
-                    <div className="text-[10px] text-zinc-500">
-                      {selectedModel ? (selectedModel.runtime === 'local' ? 'Local' : `${selectedModel.credit_cost} credits`) : ''}
+                    <div className="truncate text-[13px] font-semibold text-white">
+                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
+                    </div>
+                    <div className="mt-0.5 text-[10px] font-mono uppercase tracking-widest text-[#666a7a]">
+                      {selectedModel ? (selectedModel.runtime === 'local' ? 'LOCAL ENGINE' : `${selectedModel.credit_cost} CR_COST`) : ''}
                     </div>
                   </div>
-                  <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
+                  <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
                 </button>
 
                 {modelPickerOpen ? (
@@ -450,14 +494,14 @@ export default function CreatePage() {
                           }`}
                         >
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-[13px] font-medium">
+                            <div className="flex items-center gap-2 text-[13px] font-semibold tracking-wide">
                               {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
-                              <span className="truncate">{entry.label}</span>
+                              <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
                             </div>
                             <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
                           </div>
-                          <div className="shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                            {entry.runtime === 'local' ? 'Local' : `${entry.credit_cost} cr`}
+                          <div className="shrink-0 text-right text-[11px] font-mono uppercase tracking-widest text-[#666a7a]">
+                            {entry.runtime === 'local' ? 'LCL' : `${entry.credit_cost} CR`}
                           </div>
                         </button>
                       )
@@ -468,18 +512,22 @@ export default function CreatePage() {
             </div>
 
             {/* Right: generate button */}
-            <div className="flex items-center gap-3">
-              <div className="text-[11px] text-zinc-500">
-                {selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}
-                {selectedModel && selectedModel.runtime !== 'local' ? ` · ${selectedModel.credit_cost} cr` : ''}
+            <div className="flex items-center gap-4">
+              <div className="text-right text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+                <div className="mb-0.5">{selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}</div>
+                <div>{selectedModel && selectedModel.runtime !== 'local' ? `${selectedModel.credit_cost} CREDITS` : ''}</div>
               </div>
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_32px_rgba(34,211,238,0.15)] transition hover:shadow-[0_0_48px_rgba(34,211,238,0.25)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                className="group relative inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-[16px] px-8 text-[13px] font-bold tracking-widest uppercase text-white transition-all overflow-hidden disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-0"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }}
               >
-                {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                {submittingCount ? 'Generating...' : 'Generate'}
+                {/* Content */}
+                <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
+                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-white/90" /> : <Wand2 className="h-4 w-4 text-white/90" />}
+                  {submittingCount ? 'PROCESSING' : 'INITIALIZE'}
+                </span>
               </button>
             </div>
           </div>
@@ -496,7 +544,7 @@ export default function CreatePage() {
 
         {/* ── Shortcut hint ──────────────────────── */}
         <div className="mt-4 flex items-center justify-between text-[11px] text-zinc-600">
-          <span>⌘ + Enter to generate</span>
+          <span>{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'} + Enter to generate{prompt.length > 0 ? ` · ${prompt.length} chars` : ''}</span>
           <Link to="/library/images" className="flex items-center gap-1.5 text-zinc-400 transition hover:text-white">
             <ImageIcon className="h-3.5 w-3.5" />
             Open My Images
@@ -511,12 +559,12 @@ export default function CreatePage() {
           {visibleToasts.slice(0, 5).map((job) => (
             <div
               key={job.id}
-              className="pointer-events-auto overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+              className="pointer-events-auto animate-toast overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
             >
               {/* Progress bar for running jobs */}
               {!isTerminalStatus(job.status) ? (
                 <div className="h-[3px] w-full overflow-hidden bg-white/[0.03]">
-                  <div className="h-full animate-pulse rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: '60%' }} />
+                  <div className="h-full animate-pulse rounded-full transition-all" style={{ width: '60%', background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
                 </div>
               ) : null}
 
@@ -540,7 +588,7 @@ export default function CreatePage() {
 
                 <div className="mt-2.5 text-[13px] leading-6 text-zinc-400">{getToastDescription(job)}</div>
 
-                {job.status === 'completed' ? (
+                {normalizeJobStatus(job.status) === 'succeeded' ? (
                   <div className="mt-3 flex items-center gap-3">
                     <Link to="/library/images" className="text-[13px] font-medium text-white transition hover:text-zinc-200">
                       Open My Images

@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
-import os
+import json
 import textwrap
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 from urllib.parse import quote
-from uuid import uuid4
 
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
-
-LOCAL_MODEL_PREFIX = "local::"
-ALLOWED_LOCAL_MODEL_EXTENSIONS = {".safetensors", ".ckpt", ".pt", ".pth"}
+from config.env import get_settings
 
 
 class ProviderTemporaryError(Exception):
@@ -27,7 +26,7 @@ class ProviderFatalError(Exception):
     """Provider failed in a non-retryable way."""
 
 
-@dataclass
+@dataclass(slots=True)
 class ProviderResult:
     provider: str
     image_bytes: bytes
@@ -37,17 +36,54 @@ class ProviderResult:
     estimated_cost: float
 
 
-@dataclass
-class LocalModelDescriptor:
-    id: str
-    filename: str
-    path: str
-    label: str
-    size_bytes: int
+@dataclass(slots=True)
+class ProviderReferenceImage:
+    asset_id: str
+    image_bytes: bytes
+    mime_type: str
+    title: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderCapabilities:
+    workflows: tuple[str, ...]
+    supports_reference_image: bool = False
+    supports_analysis: bool = False
+    supports_upscale: bool = False
+    supports_async_queue: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "workflows": list(self.workflows),
+            "supports_reference_image": self.supports_reference_image,
+            "supports_analysis": self.supports_analysis,
+            "supports_upscale": self.supports_upscale,
+            "supports_async_queue": self.supports_async_queue,
+        }
+
+
+WORKFLOW_COMPATIBILITY: dict[str, tuple[str, ...]] = {
+    "text_to_image": ("text_to_image",),
+    "image_to_image": ("image_to_image",),
+    "edit": ("edit", "image_to_image"),
+}
+
+
+def normalize_generation_workflow(workflow: str | None, *, has_reference_image: bool = False) -> str:
+    normalized = (workflow or "").strip().lower()
+    if normalized in {"image_to_image", "img2img", "i2i"}:
+        return "image_to_image"
+    if normalized in {"edit", "inpaint", "outpaint"}:
+        return "edit"
+    if has_reference_image:
+        return "image_to_image"
+    return "text_to_image"
 
 
 class StudioImageProvider(ABC):
     name: str
+    rollout_tier: str = "fallback"
+    capabilities: ProviderCapabilities = ProviderCapabilities(workflows=("text_to_image",))
 
     @abstractmethod
     async def is_available(self) -> bool:
@@ -65,20 +101,50 @@ class StudioImageProvider(ABC):
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
         raise NotImplementedError
 
+    def supports_generation(self, workflow: str, *, has_reference_image: bool) -> bool:
+        normalized = normalize_generation_workflow(workflow, has_reference_image=has_reference_image)
+        accepted_workflows = WORKFLOW_COMPATIBILITY.get(normalized, ("text_to_image",))
+        if not any(candidate in self.capabilities.workflows for candidate in accepted_workflows):
+            return False
+        if has_reference_image and normalized in {"image_to_image", "edit"} and not self.capabilities.supports_reference_image:
+            return False
+        return True
 
-class RunwareProvider(StudioImageProvider):
-    """Architecture placeholder for the paid managed provider path."""
+    async def health_snapshot(self, probe: bool = True, *, priority: int) -> Dict[str, object]:
+        payload = await self.health(probe=probe)
+        return {
+            **payload,
+            "rollout_tier": self.rollout_tier,
+            "priority": priority,
+            "capabilities": self.capabilities.to_dict(),
+        }
 
-    name = "runware"
 
-    def __init__(self, api_key: Optional[str]):
+class FalProvider(StudioImageProvider):
+    name = "fal"
+    rollout_tier = "primary"
+    capabilities = ProviderCapabilities(
+        workflows=("text_to_image", "image_to_image", "edit"),
+        supports_reference_image=True,
+        supports_upscale=True,
+        supports_async_queue=True,
+    )
+
+    _QUEUE_BASE_URL = "https://queue.fal.run"
+    _DEFAULT_MEDIA_RETENTION_SECONDS = 60 * 60
+    _POLL_INTERVAL_SECONDS = 0.75
+
+    def __init__(self, api_key: Optional[str], *, transport: httpx.AsyncBaseTransport | None = None):
         self.api_key = api_key
+        self._transport = transport
 
     async def is_available(self) -> bool:
         return bool(self.api_key)
@@ -87,7 +153,7 @@ class RunwareProvider(StudioImageProvider):
         return {
             "name": self.name,
             "status": "healthy" if self.api_key else "not_configured",
-            "detail": "managed provider configured" if self.api_key else "RUNWARE_API_KEY missing",
+            "detail": "primary managed provider configured" if self.api_key else "FAL_API_KEY missing",
         }
 
     async def generate(
@@ -97,17 +163,437 @@ class RunwareProvider(StudioImageProvider):
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
-        raise ProviderTemporaryError(
-            "Runware adapter is configured as the primary managed path but a concrete API flow is not yet wired."
+        if not self.api_key:
+            raise ProviderTemporaryError("fal.ai is not configured")
+        if not self.supports_generation(workflow, has_reference_image=reference_image is not None):
+            raise ProviderTemporaryError("fal.ai does not support this generation workflow")
+
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
         )
+        model_path = self._resolve_model_path(
+            model_id=model_id,
+            workflow=normalized_workflow,
+            has_reference_image=reference_image is not None,
+        )
+        payload = self._build_payload(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            seed=seed,
+            reference_image=reference_image,
+            steps=steps,
+            cfg_scale=cfg_scale,
+            workflow=normalized_workflow,
+        )
+        queue_priority = "low" if normalized_workflow == "text_to_image" and reference_image is None else "normal"
+        submit_payload = await self._submit_request(
+            model_path=model_path,
+            payload=payload,
+            priority=queue_priority,
+        )
+        result_payload = await self._wait_for_result(
+            status_url=str(submit_payload["status_url"]),
+            response_url=str(submit_payload["response_url"]),
+        )
+        image_info = self._extract_image_info(result_payload)
+        image_bytes, mime_type = await self._download_result_image(
+            image_url=str(image_info["url"]),
+            fallback_mime_type=str(image_info.get("content_type") or "image/png"),
+        )
+
+        return ProviderResult(
+            provider=self.name,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            width=int(image_info.get("width") or width),
+            height=int(image_info.get("height") or height),
+            estimated_cost=self._estimate_cost(model_path),
+        )
+
+    def _resolve_model_path(
+        self,
+        *,
+        model_id: Optional[str],
+        workflow: str,
+        has_reference_image: bool,
+    ) -> str:
+        normalized_model = (model_id or "").strip().lower()
+        if workflow in {"image_to_image", "edit"} or has_reference_image:
+            return "fal-ai/flux-pro/kontext"
+        if normalized_model in {"realvis-xl", "juggernaut-xl"}:
+            return "fal-ai/flux-pro/kontext/text-to-image"
+        return "fal-ai/flux/schnell"
+
+    def _build_payload(
+        self,
+        *,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int,
+        reference_image: Optional[ProviderReferenceImage],
+        steps: int,
+        cfg_scale: float,
+        workflow: str,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "prompt": prompt,
+            "seed": seed,
+            "guidance_scale": cfg_scale,
+            "num_inference_steps": min(max(steps, 1), 50),
+            "num_images": 1,
+            "output_format": "png",
+            "enable_safety_checker": True,
+        }
+        if workflow == "text_to_image":
+            payload["image_size"] = {"width": width, "height": height}
+            if negative_prompt.strip():
+                payload["prompt"] = f"{prompt}\n\nAvoid: {negative_prompt.strip()}"
+            return payload
+
+        if reference_image is None:
+            raise ProviderTemporaryError("fal.ai image edit workflow requires a reference image")
+
+        payload["image_url"] = self._build_data_uri(reference_image)
+        payload["resolution_mode"] = "match_input"
+        payload["enhance_prompt"] = False
+        if negative_prompt.strip():
+            payload["prompt"] = f"{prompt}\n\nAvoid: {negative_prompt.strip()}"
+        return payload
+
+    async def _submit_request(
+        self,
+        *,
+        model_path: str,
+        payload: dict[str, object],
+        priority: str,
+    ) -> dict[str, object]:
+        url = f"{self._QUEUE_BASE_URL}/{model_path}"
+        async with self._build_client() as client:
+            try:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers=self._build_headers(),
+                    params={"priority": priority},
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_provider_error(
+                    status_code=exc.response.status_code,
+                    detail=exc.response.text,
+                )
+            except Exception as exc:
+                raise ProviderTemporaryError(f"fal.ai queue submit failed: {exc}") from exc
+        data = response.json()
+        if not data.get("status_url") or not data.get("response_url"):
+            raise ProviderTemporaryError("fal.ai queue submit response missing status/result URLs")
+        return data
+
+    async def _wait_for_result(
+        self,
+        *,
+        status_url: str,
+        response_url: str,
+    ) -> dict[str, object]:
+        deadline = time.monotonic() + max(get_settings().default_timeout_seconds, 30)
+        async with self._build_client() as client:
+            while time.monotonic() < deadline:
+                try:
+                    response = await client.get(
+                        status_url,
+                        headers=self._build_headers(),
+                        params={"logs": 1},
+                    )
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    self._raise_provider_error(
+                        status_code=exc.response.status_code,
+                        detail=exc.response.text,
+                    )
+                except Exception as exc:
+                    raise ProviderTemporaryError(f"fal.ai queue status failed: {exc}") from exc
+
+                status_payload = response.json()
+                status = str(status_payload.get("status") or "").upper()
+                if status in {"IN_QUEUE", "IN_PROGRESS"}:
+                    await asyncio.sleep(self._POLL_INTERVAL_SECONDS)
+                    continue
+
+                if status == "COMPLETED":
+                    error = status_payload.get("error")
+                    if error:
+                        error_type = str(status_payload.get("error_type") or "")
+                        self._raise_provider_error(
+                            status_code=422 if error_type else 503,
+                            detail=str(error),
+                        )
+                    try:
+                        result_response = await client.get(response_url, headers=self._build_headers())
+                        result_response.raise_for_status()
+                    except httpx.HTTPStatusError as exc:
+                        self._raise_provider_error(
+                            status_code=exc.response.status_code,
+                            detail=exc.response.text,
+                        )
+                    except Exception as exc:
+                        raise ProviderTemporaryError(f"fal.ai queue result fetch failed: {exc}") from exc
+                    return result_response.json()
+
+                raise ProviderTemporaryError(f"fal.ai returned unexpected queue status: {status or 'unknown'}")
+
+        raise ProviderTemporaryError("fal.ai queue request timed out before completion")
+
+    async def _download_result_image(self, *, image_url: str, fallback_mime_type: str) -> tuple[bytes, str]:
+        async with self._build_client() as client:
+            try:
+                response = await client.get(image_url)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise ProviderTemporaryError(
+                    f"fal.ai output download returned {exc.response.status_code}"
+                ) from exc
+            except Exception as exc:
+                raise ProviderTemporaryError(f"fal.ai output download failed: {exc}") from exc
+        content_type = response.headers.get("content-type", fallback_mime_type).split(";")[0]
+        return response.content, content_type
+
+    def _extract_image_info(self, result_payload: dict[str, object]) -> dict[str, object]:
+        images = result_payload.get("images")
+        if not isinstance(images, list) or not images:
+            raise ProviderTemporaryError("fal.ai result did not include images")
+        first = images[0]
+        if not isinstance(first, dict) or not first.get("url"):
+            raise ProviderTemporaryError("fal.ai result image is missing a downloadable URL")
+        return first
+
+    def _build_data_uri(self, reference_image: ProviderReferenceImage) -> str:
+        encoded = base64.b64encode(reference_image.image_bytes).decode("ascii")
+        return f"data:{reference_image.mime_type};base64,{encoded}"
+
+    def _estimate_cost(self, model_path: str) -> float:
+        if model_path.startswith("fal-ai/flux-pro/kontext"):
+            return 0.04
+        return 0.003
+
+    def _build_client(self) -> httpx.AsyncClient:
+        timeout = httpx.Timeout(max(get_settings().default_timeout_seconds, 30), connect=10.0)
+        return httpx.AsyncClient(timeout=timeout, transport=self._transport, follow_redirects=True)
+
+    def _build_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Key {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Fal-Store-IO": "0",
+            "X-Fal-Object-Lifecycle-Preference": json.dumps(
+                {"expiration_duration_seconds": self._DEFAULT_MEDIA_RETENTION_SECONDS}
+            ),
+        }
+
+    def _raise_provider_error(self, *, status_code: int, detail: str) -> None:
+        if status_code in {400, 401, 403, 404, 409, 422}:
+            raise ProviderFatalError(f"fal.ai rejected the request ({status_code}): {detail}")
+        raise ProviderTemporaryError(f"fal.ai request failed ({status_code}): {detail}")
+
+
+class RunwareProvider(StudioImageProvider):
+    name = "runware"
+    rollout_tier = "secondary"
+    capabilities = ProviderCapabilities(
+        workflows=("text_to_image", "image_to_image", "edit"),
+        supports_reference_image=True,
+        supports_upscale=True,
+        supports_async_queue=False,
+    )
+
+    _API_URL = "https://api.runware.ai/v1"
+    _DEFAULT_MODEL = "runware:101@1"
+
+    def __init__(self, api_key: Optional[str], *, transport: httpx.AsyncBaseTransport | None = None):
+        self.api_key = api_key
+        self._transport = transport
+
+    async def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    async def health(self, probe: bool = True) -> Dict[str, object]:
+        return {
+            "name": self.name,
+            "status": "healthy" if self.api_key else "not_configured",
+            "detail": "secondary managed provider configured" if self.api_key else "RUNWARE_API_KEY missing",
+        }
+
+    async def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
+        model_id: Optional[str] = None,
+        steps: int = 30,
+        cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
+    ) -> ProviderResult:
+        if not self.api_key:
+            raise ProviderTemporaryError("Runware is not configured")
+        if not self.supports_generation(workflow, has_reference_image=reference_image is not None):
+            raise ProviderTemporaryError("Runware does not support this generation workflow")
+
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
+        )
+        request_payload = self._build_payload(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            seed=seed,
+            reference_image=reference_image,
+            model_id=model_id,
+            steps=steps,
+            cfg_scale=cfg_scale,
+            workflow=normalized_workflow,
+        )
+
+        async with self._build_client() as client:
+            try:
+                response = await client.post(
+                    self._API_URL,
+                    json=[request_payload],
+                    headers=self._build_headers(),
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_provider_error(
+                    status_code=exc.response.status_code,
+                    detail=exc.response.text,
+                )
+            except Exception as exc:
+                raise ProviderTemporaryError(f"Runware request failed: {exc}") from exc
+
+        payload = response.json()
+        if payload.get("errors"):
+            first_error = payload["errors"][0]
+            self._raise_provider_error(
+                status_code=422,
+                detail=str(first_error.get("message") or first_error),
+            )
+
+        data = payload.get("data")
+        if not isinstance(data, list) or not data:
+            raise ProviderTemporaryError("Runware returned no result data")
+        result = data[0]
+        image_bytes, mime_type = self._extract_runware_image(result)
+
+        if result.get("NSFWContent") is True:
+            raise ProviderFatalError("Runware flagged the output as potentially sensitive")
+
+        return ProviderResult(
+            provider=self.name,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            width=width,
+            height=height,
+            estimated_cost=float(result.get("cost") or 0.0),
+        )
+
+    def _build_payload(
+        self,
+        *,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int,
+        reference_image: Optional[ProviderReferenceImage],
+        model_id: Optional[str],
+        steps: int,
+        cfg_scale: float,
+        workflow: str,
+    ) -> dict[str, object]:
+        task_uuid = str(__import__("uuid").uuid4())
+        payload: dict[str, object] = {
+            "taskType": "imageInference",
+            "taskUUID": task_uuid,
+            "outputType": "base64Data",
+            "outputFormat": "PNG",
+            "includeCost": True,
+            "checkNSFW": True,
+            "positivePrompt": prompt,
+            "negativePrompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "steps": min(max(steps, 1), 50),
+            "CFGScale": cfg_scale,
+            "seed": seed,
+            "numberResults": 1,
+            "model": self._resolve_model_id(model_id),
+        }
+        if workflow in {"image_to_image", "edit"}:
+            if reference_image is None:
+                raise ProviderTemporaryError("Runware image-to-image workflow requires a reference image")
+            payload["seedImage"] = self._build_data_uri(reference_image)
+            payload["strength"] = 0.45 if workflow == "edit" else 0.7
+        return payload
+
+    def _resolve_model_id(self, model_id: Optional[str]) -> str:
+        normalized_model = (model_id or "").strip().lower()
+        if normalized_model in {"realvis-xl", "juggernaut-xl", "sdxl-base", "flux-schnell"}:
+            return self._DEFAULT_MODEL
+        return self._DEFAULT_MODEL
+
+    def _extract_runware_image(self, result: dict[str, object]) -> tuple[bytes, str]:
+        image_data_uri = result.get("imageDataURI")
+        if isinstance(image_data_uri, str) and image_data_uri.startswith("data:"):
+            header, encoded = image_data_uri.split(",", 1)
+            mime_type = header.split(";", 1)[0].removeprefix("data:") or "image/png"
+            return base64.b64decode(encoded), mime_type
+
+        image_base64 = result.get("imageBase64Data")
+        if isinstance(image_base64, str) and image_base64:
+            return base64.b64decode(image_base64), "image/png"
+
+        raise ProviderTemporaryError("Runware result did not include image data")
+
+    def _build_client(self) -> httpx.AsyncClient:
+        timeout = httpx.Timeout(max(get_settings().default_timeout_seconds, 30), connect=10.0)
+        return httpx.AsyncClient(timeout=timeout, transport=self._transport, follow_redirects=True)
+
+    def _build_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def _build_data_uri(self, reference_image: ProviderReferenceImage) -> str:
+        encoded = base64.b64encode(reference_image.image_bytes).decode("ascii")
+        return f"data:{reference_image.mime_type};base64,{encoded}"
+
+    def _raise_provider_error(self, *, status_code: int, detail: str) -> None:
+        if status_code in {400, 401, 403, 404, 409, 422}:
+            raise ProviderFatalError(f"Runware rejected the request ({status_code}): {detail}")
+        raise ProviderTemporaryError(f"Runware request failed ({status_code}): {detail}")
 
 
 class PollinationsProvider(StudioImageProvider):
     name = "pollinations"
+    rollout_tier = "degraded"
+    capabilities = ProviderCapabilities(workflows=("text_to_image",))
 
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
@@ -141,12 +627,16 @@ class PollinationsProvider(StudioImageProvider):
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
         if not self.enabled:
             raise ProviderTemporaryError("Pollinations is disabled")
+        if not self.supports_generation(workflow, has_reference_image=reference_image is not None):
+            raise ProviderTemporaryError("Pollinations does not support this generation workflow")
 
         params = {"width": width, "height": height, "nologo": "true", "seed": seed}
         if negative_prompt.strip():
@@ -175,6 +665,8 @@ class PollinationsProvider(StudioImageProvider):
 
 class HuggingFaceImageProvider(StudioImageProvider):
     name = "huggingface"
+    rollout_tier = "optional-router"
+    capabilities = ProviderCapabilities(workflows=("text_to_image",))
 
     def __init__(self, api_token: Optional[str] = None):
         self.api_token = api_token
@@ -194,19 +686,24 @@ class HuggingFaceImageProvider(StudioImageProvider):
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
         if not self.api_token:
             raise ProviderTemporaryError("HuggingFace provider is disabled")
+        if not self.supports_generation(workflow, has_reference_image=reference_image is not None):
+            raise ProviderTemporaryError("HuggingFace provider does not support this generation workflow")
 
-        # Map 'flux-schnell' etc to HF repo IDs if possible, else use default.
-        hf_model = "black-forest-labs/FLUX.1-schnell" if "flux" in str(model_id).lower() else "stabilityai/stable-diffusion-xl-base-1.0"
-        
+        hf_model = (
+            "black-forest-labs/FLUX.1-schnell"
+            if "flux" in str(model_id).lower()
+            else "stabilityai/stable-diffusion-xl-base-1.0"
+        )
         url = f"https://api-inference.huggingface.co/models/{hf_model}"
         headers = {"Authorization": f"Bearer {self.api_token}"}
-        
         payload = {
             "inputs": prompt,
             "parameters": {
@@ -215,13 +712,12 @@ class HuggingFaceImageProvider(StudioImageProvider):
                 "height": height,
                 "guidance_scale": cfg_scale,
                 "num_inference_steps": min(steps, 50),
-            }
+            },
         }
-        
+
         try:
             async with httpx.AsyncClient(timeout=45.0) as client:
                 response = await client.post(url, headers=headers, json=payload)
-                # HF might return 503 if model is loading. We raise temporary error to either retry or fail gracefully.
                 if response.status_code == 503:
                     raise ProviderTemporaryError(f"HuggingFace model is currently loading: {response.text}")
                 response.raise_for_status()
@@ -241,9 +737,13 @@ class HuggingFaceImageProvider(StudioImageProvider):
         )
 
 
-
 class DemoImageProvider(StudioImageProvider):
     name = "demo"
+    rollout_tier = "local-fallback"
+    capabilities = ProviderCapabilities(
+        workflows=("text_to_image", "image_to_image", "edit"),
+        supports_reference_image=True,
+    )
 
     async def is_available(self) -> bool:
         return True
@@ -258,9 +758,11 @@ class DemoImageProvider(StudioImageProvider):
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
         image = Image.new("RGBA", (width, height), (12, 16, 28, 255))
         draw = ImageDraw.Draw(image)
@@ -276,13 +778,25 @@ class DemoImageProvider(StudioImageProvider):
         title = "OMNIACREATA STUDIO"
         wrapped_prompt = "\n".join(textwrap.wrap(prompt[:180], width=34)) or "Describe your first image."
         footer = "Demo fallback active. Configure a managed provider to replace this output."
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
+        )
+        if reference_image is not None:
+            footer = f"{normalized_workflow.replace('_', ' ').title()} demo output from {reference_image.asset_id}."
 
         draw.rounded_rectangle((32, 32, width - 32, height - 32), radius=28, outline=(70, 90, 130), width=2)
         draw.text((52, 56), title, fill=(245, 240, 255), font=font)
         draw.multiline_text((52, 120), wrapped_prompt, fill=(225, 229, 255), font=font, spacing=6)
         if negative_prompt.strip():
             neg = "Negative: " + negative_prompt[:120]
-            draw.multiline_text((52, height - 150), "\n".join(textwrap.wrap(neg, width=42)), fill=(255, 195, 195), font=font, spacing=4)
+            draw.multiline_text(
+                (52, height - 150),
+                "\n".join(textwrap.wrap(neg, width=42)),
+                fill=(255, 195, 195),
+                font=font,
+                spacing=4,
+            )
         draw.text((52, height - 68), footer, fill=(160, 174, 196), font=font)
 
         buffer = io.BytesIO()
@@ -297,322 +811,55 @@ class DemoImageProvider(StudioImageProvider):
         )
 
 
-class LocalComfyProvider(StudioImageProvider):
-    name = "comfyui-local"
-
-    def __init__(self) -> None:
-        self.enabled = os.getenv("STUDIO_ENABLE_LOCAL_PROVIDER", "true").lower() != "false"
-        self.base_url = os.getenv("STUDIO_LOCAL_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
-        self.model_dir = self._resolve_model_dir(os.getenv("STUDIO_LOCAL_MODEL_DIR"))
-        self.timeout_seconds = int(os.getenv("STUDIO_LOCAL_COMFYUI_TIMEOUT", "180"))
-
-    async def is_available(self) -> bool:
-        snapshot = await self.runtime_snapshot()
-        return bool(snapshot.get("available"))
-
-    async def health(self, probe: bool = True) -> Dict[str, object]:
-        snapshot = await self.runtime_snapshot(probe=probe)
-        return {
-            "name": self.name,
-            "status": snapshot["status"],
-            "detail": snapshot["detail"],
-            "model_directory": snapshot["model_directory"],
-            "discovered_models": snapshot["discovered_models"],
-            "url": snapshot["url"],
-        }
-
-    async def runtime_snapshot(self, probe: bool = True) -> Dict[str, object]:
-        if not self.enabled:
-            return {
-                "enabled": False,
-                "available": False,
-                "status": "disabled",
-                "detail": "Local provider disabled by configuration",
-                "url": self.base_url,
-                "model_directory": str(self.model_dir),
-                "discovered_models": 0,
-                "models": [],
-            }
-
-        discovered_models = await self.list_models()
-        if not self.model_dir.exists():
-            return {
-                "enabled": True,
-                "available": False,
-                "status": "not_configured",
-                "detail": "Local model directory was not found",
-                "url": self.base_url,
-                "model_directory": str(self.model_dir),
-                "discovered_models": 0,
-                "models": [],
-            }
-
-        if not probe:
-            return {
-                "enabled": True,
-                "available": bool(discovered_models),
-                "status": "healthy" if discovered_models else "degraded",
-                "detail": "Local runtime configured (probe skipped)",
-                "url": self.base_url,
-                "model_directory": str(self.model_dir),
-                "discovered_models": len(discovered_models),
-                "models": [model.filename for model in discovered_models],
-            }
-
-        is_ready, detail = await self._probe_server()
-        return {
-            "enabled": True,
-            "available": is_ready and bool(discovered_models),
-            "status": "healthy" if is_ready and discovered_models else "degraded" if is_ready else "unavailable",
-            "detail": detail if is_ready else detail,
-            "url": self.base_url,
-            "model_directory": str(self.model_dir),
-            "discovered_models": len(discovered_models),
-            "models": [model.filename for model in discovered_models],
-        }
-
-    async def list_models(self) -> List[LocalModelDescriptor]:
-        return await asyncio.to_thread(self._discover_models)
-
-    async def generate(
-        self,
-        prompt: str,
-        negative_prompt: str,
-        width: int,
-        height: int,
-        seed: int,
-        model_id: Optional[str] = None,
-        steps: int = 30,
-        cfg_scale: float = 6.5,
-    ) -> ProviderResult:
-        if not self.enabled:
-            raise ProviderTemporaryError("Local ComfyUI provider is disabled")
-        if model_id is None or not model_id.startswith(LOCAL_MODEL_PREFIX):
-            raise ProviderTemporaryError("Local provider requires a local model selection")
-
-        checkpoint_name = model_id[len(LOCAL_MODEL_PREFIX):]
-        available_models = {model.filename: model for model in await self.list_models()}
-        if checkpoint_name not in available_models:
-            raise ProviderTemporaryError(
-                f"Local model '{checkpoint_name}' was not found in {self.model_dir}"
-            )
-
-        is_ready, detail = await self._probe_server()
-        if not is_ready:
-            raise ProviderTemporaryError(
-                f"ComfyUI is not reachable at {self.base_url}. {detail}"
-            )
-
-        workflow = self._build_text_to_image_workflow(
-            checkpoint_name=checkpoint_name,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            width=width,
-            height=height,
-            seed=seed,
-            steps=steps,
-            cfg_scale=cfg_scale,
-        )
-        client_id = f"studio-{uuid4().hex}"
-
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds, connect=5.0)) as client:
-                response = await client.post(
-                    f"{self.base_url}/prompt",
-                    json={"prompt": workflow, "client_id": client_id},
-                )
-                response.raise_for_status()
-                prompt_id = response.json().get("prompt_id")
-                if not prompt_id:
-                    raise ProviderTemporaryError("ComfyUI did not return a prompt_id")
-
-                image_ref = await self._wait_for_output(client, prompt_id)
-                image_response = await client.get(f"{self.base_url}/view", params=image_ref)
-                image_response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise ProviderTemporaryError(f"ComfyUI returned {exc.response.status_code}") from exc
-        except ProviderTemporaryError:
-            raise
-        except Exception as exc:
-            raise ProviderTemporaryError(f"ComfyUI request failed: {exc}") from exc
-
-        content_type = image_response.headers.get("content-type", "image/png").split(";")[0]
-        return ProviderResult(
-            provider=self.name,
-            image_bytes=image_response.content,
-            mime_type=content_type,
-            width=width,
-            height=height,
-            estimated_cost=0.0,
-        )
-
-    def _resolve_model_dir(self, configured_dir: Optional[str]) -> Path:
-        candidates: List[Path] = []
-        if configured_dir:
-            candidates.append(Path(configured_dir))
-
-        candidates.extend(
-            [
-                Path("C:/AI/models/checkpoints"),
-                Path("C:/AI/ComfyUI_windows_portable/ComfyUI/models/checkpoints"),
-            ]
-        )
-
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-        return candidates[0]
-
-    def _discover_models(self) -> List[LocalModelDescriptor]:
-        if not self.model_dir.exists():
-            return []
-
-        descriptors: List[LocalModelDescriptor] = []
-        for path in sorted(self.model_dir.iterdir(), key=lambda item: item.name.lower()):
-            if not path.is_file() or path.suffix.lower() not in ALLOWED_LOCAL_MODEL_EXTENSIONS:
-                continue
-            try:
-                size_bytes = path.stat().st_size
-            except OSError:
-                size_bytes = 0
-            if size_bytes <= 0:
-                continue
-            descriptors.append(
-                LocalModelDescriptor(
-                    id=f"{LOCAL_MODEL_PREFIX}{path.name}",
-                    filename=path.name,
-                    path=str(path),
-                    label=self._humanize_model_name(path.stem),
-                    size_bytes=size_bytes,
-                )
-            )
-        return descriptors
-
-    async def _probe_server(self) -> tuple[bool, str]:
-        try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                response = await client.get(f"{self.base_url}/system_stats")
-                response.raise_for_status()
-                return True, f"ready at {self.base_url}"
-        except Exception as exc:
-            return False, str(exc)
-
-    async def _wait_for_output(self, client: httpx.AsyncClient, prompt_id: str) -> Dict[str, str]:
-        deadline = asyncio.get_running_loop().time() + self.timeout_seconds
-        while asyncio.get_running_loop().time() < deadline:
-            history_response = await client.get(f"{self.base_url}/history/{prompt_id}")
-            history_response.raise_for_status()
-            payload = history_response.json()
-            history = payload.get(prompt_id) if isinstance(payload, dict) else None
-
-            if history and "outputs" in history:
-                for output in history["outputs"].values():
-                    images = output.get("images") or []
-                    if images:
-                        image = images[0]
-                        return {
-                            "filename": image["filename"],
-                            "subfolder": image.get("subfolder", ""),
-                            "type": image.get("type", "output"),
-                        }
-
-            await asyncio.sleep(1.0)
-
-        raise ProviderTemporaryError("Timed out while waiting for ComfyUI output")
-
-    def _build_text_to_image_workflow(
-        self,
-        checkpoint_name: str,
-        prompt: str,
-        negative_prompt: str,
-        width: int,
-        height: int,
-        seed: int,
-        steps: int,
-        cfg_scale: float,
-    ) -> Dict[str, Dict[str, object]]:
-        return {
-            "4": {
-                "inputs": {"ckpt_name": checkpoint_name},
-                "class_type": "CheckpointLoaderSimple",
-            },
-            "6": {
-                "inputs": {"text": prompt, "clip": ["4", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            "7": {
-                "inputs": {"text": negative_prompt or "", "clip": ["4", 1]},
-                "class_type": "CLIPTextEncode",
-            },
-            "5": {
-                "inputs": {"width": width, "height": height, "batch_size": 1},
-                "class_type": "EmptyLatentImage",
-            },
-            "3": {
-                "inputs": {
-                    "seed": seed,
-                    "steps": steps,
-                    "cfg": cfg_scale,
-                    "sampler_name": "euler",
-                    "scheduler": "normal",
-                    "denoise": 1,
-                    "model": ["4", 0],
-                    "positive": ["6", 0],
-                    "negative": ["7", 0],
-                    "latent_image": ["5", 0],
-                },
-                "class_type": "KSampler",
-            },
-            "8": {
-                "inputs": {"samples": ["3", 0], "vae": ["4", 2]},
-                "class_type": "VAEDecode",
-            },
-            "9": {
-                "inputs": {
-                    "filename_prefix": f"omnia_creata_{uuid4().hex[:8]}",
-                    "images": ["8", 0],
-                },
-                "class_type": "SaveImage",
-            },
-        }
-
-    def _humanize_model_name(self, stem: str) -> str:
-        cleaned = stem.replace("_", " ").replace("-", " ").strip()
-        parts = [part for part in cleaned.split() if part]
-        if not parts:
-            return stem
-        return " ".join(word.upper() if word.isupper() else word.capitalize() for word in parts)
-
-
 class ProviderRegistry:
     def __init__(self) -> None:
-        self.local_provider = LocalComfyProvider()
-        
+        settings = get_settings()
         self.providers: List[StudioImageProvider] = []
-        
-        # Add HuggingFace if token exists
-        hf_token = os.getenv("HUGGINGFACE_TOKEN")
-        if hf_token:
-            self.providers.append(HuggingFaceImageProvider(hf_token))
-            
-        # Add pollinations (free generic provider)
-        if os.getenv("STUDIO_ENABLE_POLLINATIONS", "true").lower() != "false":
+
+        self.providers.append(FalProvider(settings.fal_api_key))
+        self.providers.append(RunwareProvider(settings.runware_api_key))
+        if settings.huggingface_token:
+            self.providers.append(HuggingFaceImageProvider(settings.huggingface_token))
+        if settings.enable_pollinations:
             self.providers.append(PollinationsProvider(enabled=True))
-            
-        # Fallback to demo
         self.providers.append(DemoImageProvider())
 
-    def is_local_model(self, model_id: Optional[str]) -> bool:
-        return bool(model_id and model_id.startswith(LOCAL_MODEL_PREFIX))
+    def _iter_supported_providers(
+        self,
+        *,
+        workflow: str,
+        reference_image: Optional[ProviderReferenceImage],
+    ) -> Sequence[StudioImageProvider]:
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
+        )
+        return [
+            provider
+            for provider in self.providers
+            if provider.supports_generation(normalized_workflow, has_reference_image=reference_image is not None)
+        ]
+
+    def preview_generation_provider(
+        self,
+        *,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> str:
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=has_reference_image,
+        )
+        for provider in self.providers:
+            if provider.supports_generation(normalized_workflow, has_reference_image=has_reference_image):
+                return provider.name
+        return "cloud"
 
     async def health_snapshot(self, probe: bool = True) -> List[Dict[str, object]]:
-        return [await self.local_provider.health(probe=probe), *[await provider.health(probe=probe) for provider in self.providers]]
-
-    async def list_local_models(self) -> List[LocalModelDescriptor]:
-        return await self.local_provider.list_models()
-
-    async def local_runtime_snapshot(self, probe: bool = True) -> Dict[str, object]:
-        return await self.local_provider.runtime_snapshot(probe=probe)
+        payload: list[dict[str, object]] = []
+        for priority, provider in enumerate(self.providers, start=1):
+            payload.append(await provider.health_snapshot(probe=probe, priority=priority))
+        return payload
 
     async def generate(
         self,
@@ -621,24 +868,21 @@ class ProviderRegistry:
         width: int,
         height: int,
         seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
         model_id: Optional[str] = None,
         steps: int = 30,
         cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
     ) -> ProviderResult:
-        if self.is_local_model(model_id):
-            return await self.local_provider.generate(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                width=width,
-                height=height,
-                seed=seed,
-                model_id=model_id,
-                steps=steps,
-                cfg_scale=cfg_scale,
-            )
-
         last_error: Optional[Exception] = None
-        for provider in self.providers:
+        supported_providers = self._iter_supported_providers(
+            workflow=workflow,
+            reference_image=reference_image,
+        )
+        if not supported_providers:
+            raise ProviderTemporaryError("No provider supports this generation workflow")
+
+        for provider in supported_providers:
             if not await provider.is_available():
                 continue
 
@@ -649,9 +893,11 @@ class ProviderRegistry:
                     width=width,
                     height=height,
                     seed=seed,
+                    reference_image=reference_image,
                     model_id=model_id,
                     steps=steps,
                     cfg_scale=cfg_scale,
+                    workflow=workflow,
                 )
             except ProviderFatalError:
                 raise

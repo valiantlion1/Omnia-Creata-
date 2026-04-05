@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.02.01",
-  "codename": "Identity",
+  "build": "2026.04.05.02",
+  "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-02",
-  "notes": "Sprint 7 Phase 2: SSO, GDPR Compliance and LemonSqueezy Payments."
+  "releaseDate": "2026-04-05",
+  "notes": "Backend durability pass: richer generation lifecycle statuses, provider smoke harness, Postgres production path, and queue hardening."
 }

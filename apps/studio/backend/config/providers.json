@@ -1,27 +1,5 @@
 {
   "providers": {
-    "native": {
-      "name": "native",
-      "baseUrl": "",
-      "timeout": 300,
-      "retries": 1,
-      "rateLimit": 10,
-      "costEstimate": 0.0,
-      "priority": 0,
-      "enabled": true,
-      "description": "Direct GPU generation using local models (RTX 4060)"
-    },
-    "comfyui": {
-      "name": "comfyui",
-      "baseUrl": "http://127.0.0.1:8188",
-      "timeout": 300,
-      "retries": 2,
-      "rateLimit": 10,
-      "costEstimate": 0.0,
-      "priority": 1,
-      "enabled": true,
-      "description": "Local ComfyUI instance for high-quality image generation"
-    },
     "huggingface": {
       "name": "huggingface",
       "baseUrl": "https://api-inference.huggingface.co",
@@ -90,10 +68,8 @@
     }
   },
   "fallback": {
-    "strategy": "local_first",
+    "strategy": "managed_first",
     "imageGeneration": [
-      "native",
-      "comfyui",
       "huggingface",
       "pollinations"
     ],
@@ -110,7 +86,6 @@
     "interval": 60,
     "timeout": 10,
     "endpoints": {
-      "comfyui": "/system_stats",
       "huggingface": "/models/runwayml/stable-diffusion-v1-5",
       "pollinations": "/",
       "gemini": "/v1beta/models/gemini-1.5-flash:generateContent",
@@ -123,11 +98,6 @@
     "default": {
       "image": "stabilityai/stable-diffusion-xl-base-1.0",
       "llm": "gemini-1.5-flash"
-    },
-    "comfyui": {
-      "checkpoint": "sd_xl_base_1.0.safetensors",
-      "vae": "sdxl_vae.safetensors",
-      "upscaler": "4x-UltraSharp.pth"
     },
     "huggingface": {
       "realistic": "stabilityai/stable-diffusion-xl-base-1.0",

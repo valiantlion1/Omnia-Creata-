@@ -1,7 +1,7 @@
 from __future__ import annotations
 import hmac
 import hashlib
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response
@@ -14,7 +14,7 @@ from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
 
-from .models import ChatAttachment, ChatConversation, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
+from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
 from .service import PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
@@ -29,6 +29,7 @@ class ProjectCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str
     description: str = ""
+    surface: Literal["compose", "chat"] = "compose"
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -65,6 +66,7 @@ class GenerationCreateRequest(BaseModel):
     project_id: str
     prompt: str = Field(min_length=1, max_length=1600)
     negative_prompt: str = ""
+    reference_asset_id: Optional[str] = None
     model: str = "flux-schnell"
     width: int = Field(default=1024, ge=512, le=1536)
     height: int = Field(default=1024, ge=512, le=1536)
@@ -94,14 +96,33 @@ class ConversationCreateRequest(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    content: str = Field(min_length=1, max_length=2400)
+    content: str = Field(default="", max_length=2400)
     model: Optional[str] = None
     attachments: list[ChatAttachment] = Field(default_factory=list, max_length=4)
+
+
+class ChatMessageEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content: str = Field(default="", max_length=2400)
+    model: Optional[str] = None
+    attachments: list[ChatAttachment] = Field(default_factory=list, max_length=4)
+
+
+class ChatFeedbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feedback: Optional[Literal["like", "dislike"]] = None
 
 
 class AssetRenameRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=72)
+
+
+class AssetImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str
+    data_url: str = Field(min_length=32, max_length=5_000_000)
+    title: str = Field(default="Reference upload", min_length=1, max_length=72)
 
 
 class PostUpdateRequest(BaseModel):
@@ -161,10 +182,14 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             "identity_id": message.identity_id,
             "role": message.role.value,
             "content": message.content,
+            "parent_message_id": message.parent_message_id,
             "attachments": [attachment.model_dump(mode="json") for attachment in message.attachments],
             "suggested_actions": [action.model_dump(mode="json") for action in message.suggested_actions],
+            "feedback": message.feedback.value if message.feedback else None,
             "metadata": message.metadata,
+            "version": message.version,
             "created_at": message.created_at.isoformat(),
+            "edited_at": message.edited_at.isoformat() if message.edited_at else None,
         }
 
     def _build_client_key(request: Request, scope: str, identifier: Optional[str] = None) -> str:
@@ -341,11 +366,10 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 identity = await service.get_identity(current_user.id)
             except KeyError:
                 identity = None
-        include_local_owner = bool(identity and identity.owner_mode and identity.local_access)
         return {
             "models": [
                 model.model_dump(mode="json")
-                for model in await service.list_models_for_identity(identity, include_local_owner=include_local_owner)
+                for model in await service.list_models_for_identity(identity)
             ]
         }
 
@@ -362,28 +386,23 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    @router.get("/owner/local-lab/bootstrap")
-    async def get_owner_local_lab_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = await _require_owner(current_user)
-        try:
-            return await service.get_owner_local_lab_payload(auth_user.id)
-        except PermissionError as exc:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
-
     @router.get("/presets")
     async def get_presets():
         return {"presets": PRESET_CATALOG}
 
     @router.get("/projects")
-    async def get_projects(current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def get_projects(
+        surface: Optional[Literal["compose", "chat"]] = Query(default=None),
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = _require_auth(current_user)
-        projects = await service.list_projects(auth_user.id)
+        projects = await service.list_projects(auth_user.id, surface=surface)
         return {"projects": [project.model_dump(mode="json") for project in projects]}
 
     @router.post("/projects", status_code=status.HTTP_201_CREATED)
     async def post_project(payload: ProjectCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
         auth_user = _require_auth(current_user)
-        project = await service.create_project(auth_user.id, payload.title, payload.description)
+        project = await service.create_project(auth_user.id, payload.title, payload.description, payload.surface)
         return project.model_dump(mode="json")
 
     @router.get("/projects/{project_id}")
@@ -500,13 +519,6 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
-        identity = await service.get_identity(auth_user.id)
-        if identity.plan != IdentityPlan.PRO:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
-                detail="Chat is a PRO-only feature. Please upgrade to access."
-            )
-            
         await _consume_rate_limit(request, "chat:new-conversation", limit=20, identifier=auth_user.id)
         conversation = await service.create_conversation(auth_user.id, payload.title, payload.model)
         return _serialize_conversation(conversation)
@@ -540,13 +552,6 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = _require_auth(current_user)
-        identity = await service.get_identity(auth_user.id)
-        if identity.plan != IdentityPlan.PRO:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
-                detail="Chat is a PRO-only feature. Please upgrade to access."
-            )
-            
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
         try:
             result = await service.send_chat_message(
@@ -567,6 +572,104 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             "user_message": _serialize_chat_message(ChatMessage.model_validate(result["user_message"])),
             "assistant_message": _serialize_chat_message(ChatMessage.model_validate(result["assistant_message"])),
         }
+
+    @router.patch("/conversations/{conversation_id}/messages/{message_id}")
+    async def patch_conversation_message(
+        conversation_id: str,
+        message_id: str,
+        payload: ChatMessageEditRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "chat:edit-message", limit=24, identifier=auth_user.id)
+        try:
+            result = await service.edit_chat_message(
+                auth_user.id,
+                conversation_id,
+                message_id,
+                payload.content,
+                model=payload.model,
+                attachments=[attachment.model_dump(mode="json") for attachment in payload.attachments],
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        return {
+            "conversation": _serialize_conversation(ChatConversation.model_validate(result["conversation"])),
+            "user_message": _serialize_chat_message(ChatMessage.model_validate(result["user_message"])),
+            "assistant_message": _serialize_chat_message(ChatMessage.model_validate(result["assistant_message"])),
+        }
+
+    @router.post("/conversations/{conversation_id}/messages/{message_id}/regenerate")
+    async def regenerate_conversation_message(
+        conversation_id: str,
+        message_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "chat:regenerate-message", limit=24, identifier=auth_user.id)
+        try:
+            result = await service.regenerate_chat_message(auth_user.id, conversation_id, message_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        return {
+            "conversation": _serialize_conversation(ChatConversation.model_validate(result["conversation"])),
+            "user_message": _serialize_chat_message(ChatMessage.model_validate(result["user_message"])),
+            "assistant_message": _serialize_chat_message(ChatMessage.model_validate(result["assistant_message"])),
+        }
+
+    @router.post("/conversations/{conversation_id}/messages/{message_id}/revert")
+    async def revert_conversation_message(
+        conversation_id: str,
+        message_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "chat:revert-message", limit=24, identifier=auth_user.id)
+        try:
+            result = await service.revert_chat_message(auth_user.id, conversation_id, message_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        return {
+            "conversation": _serialize_conversation(ChatConversation.model_validate(result["conversation"])),
+            "user_message": _serialize_chat_message(ChatMessage.model_validate(result["user_message"])),
+            "assistant_message": _serialize_chat_message(ChatMessage.model_validate(result["assistant_message"])),
+        }
+
+    @router.patch("/conversations/{conversation_id}/messages/{message_id}/feedback")
+    async def patch_conversation_message_feedback(
+        conversation_id: str,
+        message_id: str,
+        payload: ChatFeedbackRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            message = await service.set_chat_message_feedback(
+                auth_user.id,
+                conversation_id,
+                message_id,
+                ChatFeedback(payload.feedback) if payload.feedback else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        return _serialize_chat_message(message)
 
     @router.get("/generations")
     async def get_generations(
@@ -603,6 +706,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 project_id=payload.project_id,
                 prompt=payload.prompt,
                 negative_prompt=payload.negative_prompt,
+                reference_asset_id=payload.reference_asset_id,
                 model_id=payload.model,
                 width=payload.width,
                 height=payload.height,
@@ -638,6 +742,25 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = _require_auth(current_user)
         assets = await service.list_assets(auth_user.id, project_id=project_id, include_deleted=include_deleted)
         return {"assets": service.serialize_assets(assets, identity_id=auth_user.id)}
+
+    @router.post("/assets/import", status_code=status.HTTP_201_CREATED)
+    async def import_asset(
+        payload: AssetImportRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            asset = await service.import_asset_from_data_url(
+                identity_id=auth_user.id,
+                project_id=payload.project_id,
+                data_url=payload.data_url,
+                title=payload.title,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return service.serialize_asset(asset, identity_id=auth_user.id)
 
     @router.patch("/assets/{asset_id}")
     async def patch_asset(
@@ -721,6 +844,32 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         if delivery.local_path is not None:
             return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
+
+    @router.get("/assets/{asset_id}/clean-export")
+    async def get_asset_clean_export(
+        asset_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "assets:clean-export", limit=24, identifier=auth_user.id)
+        try:
+            delivery = await service.resolve_clean_asset_export(asset_id, auth_user.id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        headers = {"Content-Disposition": f'attachment; filename="{delivery.filename}"'}
+        if delivery.local_path is not None:
+            return FileResponse(
+                delivery.local_path,
+                media_type=delivery.media_type,
+                filename=delivery.filename,
+                headers=headers,
+            )
+        return Response(content=delivery.content or b"", media_type=delivery.media_type, headers=headers)
 
     @router.patch("/posts/{post_id}")
     async def patch_post(

@@ -3,10 +3,11 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from core.database import get_db
-from core.models import Job, JobStatus, ProcessingType, User
+from core.models import Job, JobStatus, ProcessingType
 from core.queue import enqueue_job, get_job_status
-from storage.s3 import upload_file, get_presigned_url, get_presigned_put, get_presigned_get
+from storage.s3 import upload_file, get_presigned_put, get_presigned_get
 from auth.dependencies import get_current_user, get_current_user_optional
+from auth.supabase_auth import SupabaseUser
 from typing import Optional
 import uuid
 import logging
@@ -39,7 +40,7 @@ def create_job(
     input_key: str,
     preset_name: Optional[str] = None,
     parameters: Optional[dict] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     # Create job record
@@ -77,7 +78,7 @@ def create_job(
 @router.get('/jobs/{job_id}')
 def get_job(
     job_id: int, 
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     job = db.query(Job).filter(Job.id == job_id, Job.user_id == str(current_user.id)).first()
@@ -135,7 +136,7 @@ def presigned_get(key: str):
 @router.delete('/jobs/{job_id}')
 def cancel_job(
     job_id: int, 
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     job = db.query(Job).filter(Job.id == job_id, Job.user_id == str(current_user.id)).first()
@@ -157,7 +158,7 @@ def list_jobs(
     limit: int = Query(10, ge=1, le=100),
     status: Optional[JobStatus] = None,
     processing_type: Optional[ProcessingType] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: SupabaseUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     query = db.query(Job).filter(Job.user_id == str(current_user.id))

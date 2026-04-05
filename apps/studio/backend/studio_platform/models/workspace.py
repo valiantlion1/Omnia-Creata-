@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,7 @@ class Project(BaseModel):
     identity_id: str
     title: str
     description: str = ""
+    surface: Literal["compose", "chat"] = "compose"
     cover_asset_id: Optional[str] = None
     last_generation_id: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)

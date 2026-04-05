@@ -52,8 +52,9 @@ def health():
     
     # Check database
     try:
+        from sqlalchemy import text
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         health_status["services"]["database"] = "healthy"
     except Exception as e:
         health_status["services"]["database"] = f"unhealthy: {str(e)}"
@@ -125,6 +126,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    from core.database import create_tables
+    create_tables()
     logging.info("OmniaPixels API starting up...")
     logging.info(f"Environment: {settings.ENV}")
     logging.info(f"Version: {settings.APP_VERSION}")

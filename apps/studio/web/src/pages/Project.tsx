@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
-import { studioApi } from '@/lib/studioApi'
+import { normalizeJobStatus, studioApi } from '@/lib/studioApi'
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
@@ -62,18 +62,26 @@ export default function ProjectPage() {
   }
 
   const { project, recent_generations: generations, recent_assets: assets } = projectQuery.data
+  const isChatSurface = project.surface === 'chat'
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-6">
       <PageIntro
-        eyebrow="Project"
+        eyebrow={isChatSurface ? 'Chat Session' : 'Project'}
         title={project.title}
-        description={project.description || 'A focused project for image production, history, and persistent media.'}
+        description={
+          project.description ||
+          (isChatSurface
+            ? 'This chat-backed project keeps visual outputs separated from Compose while preserving them in your Library.'
+            : 'A focused project for image production, history, and persistent media.')
+        }
         actions={
           <>
-            <Link to={`/create?projectId=${project.id}`} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-              Open Create
-            </Link>
+            {!isChatSurface ? (
+              <Link to={`/create?projectId=${project.id}`} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+                Open Create
+              </Link>
+            ) : null}
             <button
               onClick={() => shareMutation.mutate()}
               className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
@@ -93,7 +101,9 @@ export default function ProjectPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
-              <h2 className="mt-2 text-xl font-semibold text-white">The project surface is now fed by real stored assets.</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                {isChatSurface ? 'Chat visuals stay viewable without leaking back into Compose.' : 'The project surface is now fed by real stored assets.'}
+              </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
               Open library
@@ -113,7 +123,14 @@ export default function ProjectPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No assets in this project yet" description="The next completed render will land in this project automatically." />
+            <EmptyState
+              title="No assets in this project yet"
+              description={
+                isChatSurface
+                  ? 'The next visual result created from Chat will land here automatically.'
+                  : 'The next completed render will land in this project automatically.'
+              }
+            />
           )}
         </Panel>
 
@@ -121,7 +138,9 @@ export default function ProjectPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Generation history</div>
-              <h2 className="mt-2 text-xl font-semibold text-white">Every run keeps its prompt snapshot attached.</h2>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                {isChatSurface ? 'Every chat-triggered render keeps its prompt snapshot attached.' : 'Every run keeps its prompt snapshot attached.'}
+              </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
               View all
@@ -134,7 +153,7 @@ export default function ProjectPage() {
                 <div key={generation.job_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-white">{generation.model}</div>
-                    <StatusPill tone={generation.status === 'completed' ? 'success' : generation.status === 'retryable_failed' ? 'warning' : generation.status === 'failed' ? 'danger' : 'brand'}>
+                    <StatusPill tone={normalizeJobStatus(generation.status) === 'succeeded' ? 'success' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'warning' : ['failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(generation.status)) ? 'danger' : 'brand'}>
                       {generation.status}
                     </StatusPill>
                   </div>
@@ -148,7 +167,14 @@ export default function ProjectPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No generations yet" description="Open Create and the first project job will show up here as soon as it is queued." />
+            <EmptyState
+              title="No generations yet"
+              description={
+                isChatSurface
+                  ? 'A chat-driven visual generation will appear here as soon as it is queued.'
+                  : 'Open Create and the first project job will show up here as soon as it is queued.'
+              }
+            />
           )}
         </Panel>
       </div>

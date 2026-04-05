@@ -33,7 +33,7 @@ const tiers = [
     id: 'pro' as const,
     label: 'Pro',
     icon: Zap,
-    monthlyPrice: 15,
+    monthlyPrice: 18,
     annualPrice: 12,
     credits: 1200,
     badge: 'Most Popular',
@@ -75,14 +75,14 @@ const tiers = [
 ]
 
 const topUpOptions = [
-  { kind: 'top_up_small' as CheckoutKind, label: 'Top-up 200', credits: 200, price: 5 },
-  { kind: 'top_up_large' as CheckoutKind, label: 'Top-up 800', credits: 800, price: 15 },
+  { kind: 'top_up_small' as CheckoutKind, label: 'Top-up 200', credits: 200, price: 8 },
+  { kind: 'top_up_large' as CheckoutKind, label: 'Top-up 800', credits: 800, price: 24 },
 ]
 
 /* ─── comparison features ─── */
 const comparisonRows = [
   { label: 'Monthly credits', free: '60', pro: '1,200', creator: '5,000' },
-  { label: 'Max resolution', free: '1024px', pro: '2048px', creator: '4096px' },
+  { label: 'Max resolution', free: '1024px', pro: '1536px', creator: '4096px' },
   { label: 'Queue priority', free: 'Standard', pro: 'Priority', creator: 'Priority+' },
   { label: 'Models', free: 'Core', pro: 'All', creator: 'All + Early Access' },
   { label: 'Share links', free: '—', pro: '✓', creator: '✓' },
@@ -135,7 +135,7 @@ export default function BillingPage() {
       {/* ── Header ── */}
       <section className="text-center">
         <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Pricing</div>
-        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">
+        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] md:text-5xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
           {welcomeMode ? 'Welcome — choose your starting point.' : canLoadPrivate ? 'Pick the plan that matches the work.' : 'Simple, transparent pricing.'}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-400">
@@ -146,13 +146,15 @@ export default function BillingPage() {
         <div className="mt-8 inline-flex items-center gap-1 rounded-full bg-white/[0.04] p-1 ring-1 ring-white/[0.08]">
           <button
             onClick={() => setBilling('monthly')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'monthly' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'monthly' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'}`}
+            style={billing === 'monthly' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
           >
             Monthly
           </button>
           <button
             onClick={() => setBilling('annual')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'annual' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'annual' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'}`}
+            style={billing === 'annual' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
           >
             Annual <span className="ml-1 text-[10px] font-semibold text-emerald-400">Save 20%</span>
           </button>
@@ -179,11 +181,12 @@ export default function BillingPage() {
           return (
             <div
               key={tier.id}
-              className={`relative overflow-hidden rounded-[28px] border p-6 transition ${
+              className={`relative overflow-hidden rounded-[28px] border p-6 transition-all duration-300 ${
                 isPro
-                  ? 'border-cyan-500/30 bg-gradient-to-b from-cyan-950/20 via-[#0a1018] to-[#0a1018] shadow-[0_0_40px_rgba(6,182,212,0.08)]'
-                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
+                  ? 'border-[rgb(var() / )] shadow-[0_0_40px_rgb(var() / )]'
+                  : 'border-white/[0.08] bg-white/[0.02] hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]'
               }`}
+              style={isPro ? { background: `linear-gradient(180deg, rgb(var() / ) 0%, rgb(var() / ) 40%, rgb(var() / ) 100%)` } : undefined}
             >
               {tier.badge ? (
                 <div className="absolute right-4 top-4">
@@ -191,14 +194,14 @@ export default function BillingPage() {
                 </div>
               ) : null}
 
-              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? 'bg-gradient-to-br from-cyan-500/20 to-blue-600/20' : 'bg-white/[0.05]'}`}>
-                <tier.icon className={`h-5 w-5 ${isPro ? 'text-cyan-400' : 'text-white'}`} />
+              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? '' : 'bg-white/[0.05]'}`} style={isPro ? { background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' } : undefined}>
+                <tier.icon className={`h-5 w-5 ${isPro ? '' : 'text-white'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined} />
               </div>
 
               <div className="mt-4">
                 <div className="text-xl font-semibold text-white">{tier.label}</div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className={`text-3xl font-bold ${isPro ? 'text-cyan-400' : 'text-white'}`}>
+                  <span className={`text-3xl font-bold ${isPro ? '' : 'text-white'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined}>
                     {formatPrice(price)}
                   </span>
                   {price !== null && price > 0 ? (
@@ -211,7 +214,7 @@ export default function BillingPage() {
               <ul className="mt-6 space-y-3">
                 {tier.features.map((f) => (
                   <li key={f} className="flex items-start gap-3 text-sm text-zinc-300">
-                    <Check className={`mt-0.5 h-4 w-4 shrink-0 ${isPro ? 'text-cyan-400' : 'text-zinc-600'}`} />
+                    <Check className={`mt-0.5 h-4 w-4 shrink-0 ${isPro ? '' : 'text-zinc-600'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined} />
                     <span>{f}</span>
                   </li>
                 ))}
@@ -227,12 +230,13 @@ export default function BillingPage() {
                     <button
                       onClick={() => checkoutMutation.mutate('pro_monthly')}
                       disabled={checkoutMutation.isPending}
-                      className="w-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110 disabled:opacity-60"
+                      className="w-full rounded-full px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}
                     >
                       {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
                     </button>
                   ) : (
-                    <Link to="/signup" className="block w-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-center text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110">
+                    <Link to="/signup" className="block w-full rounded-full px-5 py-3 text-center text-sm font-semibold text-white transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}>
                       {ctaLabel}
                     </Link>
                   )
@@ -272,7 +276,7 @@ export default function BillingPage() {
       </section>
 
       {/* ── Feature Comparison Table ── */}
-      <section className="overflow-hidden rounded-[24px] border border-white/[0.06] bg-white/[0.02]">
+      <section className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] transition-all duration-300 hover:border-[rgb(var() / )]">
         <div className="border-b border-white/[0.06] px-6 py-4">
           <div className="text-lg font-semibold text-white">Feature comparison</div>
           <div className="mt-1 text-sm text-zinc-500">Everything included in each plan at a glance.</div>
@@ -283,7 +287,7 @@ export default function BillingPage() {
               <tr className="border-b border-white/[0.06] text-left">
                 <th className="px-6 py-3 font-medium text-zinc-400">Feature</th>
                 <th className="px-6 py-3 font-medium text-zinc-400">Free</th>
-                <th className="px-6 py-3 font-medium text-cyan-400">Pro</th>
+                <th className="px-6 py-3 font-medium" style={{ color: 'rgb(var(--primary-light))' }}>Pro</th>
                 <th className="px-6 py-3 font-medium text-zinc-400">Creator</th>
               </tr>
             </thead>
@@ -307,7 +311,7 @@ export default function BillingPage() {
         <div className="mt-1 text-sm text-zinc-500">Need more credits mid-cycle? Grab a one-time boost.</div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {topUpOptions.map((option) => (
-            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-5 py-4 transition-all duration-300 hover:border-[rgb(var() / )]">
               <div>
                 <div className="text-sm font-medium text-white">{option.label}</div>
                 <div className="mt-1 text-sm text-zinc-500">

@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
-import { studioApi, type Generation, type MediaAsset, type Project } from '@/lib/studioApi'
+import { normalizeJobStatus, studioApi, type Generation, type MediaAsset, type Project } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 type LibrarySection = 'images' | 'collections' | 'likes' | 'trash'
@@ -50,6 +50,7 @@ type AssetGroup = {
   createdAt: string
   projectId: string
   projectTitle: string
+  isChatOrigin: boolean
   items: MediaAsset[]
 }
 
@@ -93,6 +94,13 @@ function metadataNumber(metadata: Record<string, unknown>, key: string) {
 function variantOrder(asset: MediaAsset) {
   const raw = Number((asset.metadata as Record<string, unknown>).variation_index ?? 0)
   return Number.isFinite(raw) ? raw : 0
+}
+
+function isChatProject(project: Project | null | undefined) {
+  if (!project) return false
+  const normalizedTitle = project.title.trim().toLowerCase()
+  const normalizedDescription = project.description.trim().toLowerCase()
+  return project.surface === 'chat' || normalizedTitle.startsWith('chat -') || normalizedDescription === 'created from studio chat'
 }
 
 function ConfirmDialog({
@@ -252,6 +260,7 @@ function RenameDialog({
 
 function AssetLightbox({
   state,
+  isChatOrigin,
   busy,
   onClose,
   onSelect,
@@ -263,6 +272,7 @@ function AssetLightbox({
   onTrash,
 }: {
   state: PreviewState
+  isChatOrigin: boolean
   busy: boolean
   onClose: () => void
   onSelect: (index: number) => void
@@ -375,20 +385,24 @@ function AssetLightbox({
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-600">{state.group.projectTitle}</div>
           <div className="max-h-[15rem] overflow-auto pr-1 text-sm leading-7 text-zinc-300">{state.group.prompt}</div>
           <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={onReusePrompt}
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
-              disabled={busy}
-            >
-              Reuse prompt
-            </button>
-            <button
-              onClick={onReuseStyle}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={busy}
-            >
-              Reuse style
-            </button>
+            {!isChatOrigin ? (
+              <>
+                <button
+                  onClick={onReusePrompt}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                  disabled={busy}
+                >
+                  Reuse prompt
+                </button>
+                <button
+                  onClick={onReuseStyle}
+                  className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={busy}
+                >
+                  Reuse style
+                </button>
+              </>
+            ) : null}
             <button
               onClick={onMove}
               className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
@@ -419,12 +433,14 @@ function AssetLightbox({
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={onOpenProject}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
-            >
-              Open project
-            </button>
+            {!isChatOrigin ? (
+              <button
+                onClick={onOpenProject}
+                className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
+              >
+                Open project
+              </button>
+            ) : null}
             <button
               onClick={onClose}
               className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
@@ -468,7 +484,7 @@ function MovePostDialog({
 }) {
   if (!state) return null
 
-  const destinations = projects.filter((project) => project.id !== state.currentProjectId)
+  const destinations = projects.filter((project) => project.id !== state.currentProjectId && !isChatProject(project))
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
@@ -660,7 +676,7 @@ function EmptyInline({
 }
 
 function PendingPreview({ generation, view }: { generation: Generation; view: ViewMode }) {
-  const detail = generation.status === 'processing' ? 'Processing preview...' : 'Queued for render...'
+  const detail = normalizeJobStatus(generation.status) === 'running' ? 'Processing preview...' : 'Queued for render...'
 
   if (view === 'grid') {
     return (
@@ -840,6 +856,10 @@ export default function MediaLibraryPage() {
       const metadata = asset.metadata as Record<string, unknown>
       const groupId = String(metadata.generation_id ?? asset.id)
       const project = projectMap.get(asset.project_id)
+      const isChatOrigin = isChatProject(project)
+      if (isChatOrigin && metadataString(metadata, 'source') === 'upload' && !asset.prompt.trim()) {
+        continue
+      }
       const existing = groups.get(groupId)
 
       if (existing) {
@@ -854,7 +874,8 @@ export default function MediaLibraryPage() {
         model: String(metadata.model ?? 'Image'),
         createdAt: asset.created_at,
         projectId: asset.project_id,
-        projectTitle: project?.title ?? 'Project',
+        projectTitle: isChatOrigin ? 'Chat session' : project?.title ?? 'Project',
+        isChatOrigin,
         items: [asset],
       })
     }
@@ -868,9 +889,17 @@ export default function MediaLibraryPage() {
   const pendingGenerations = useMemo(
     () =>
       generations
-        .filter((generation) => generation.status === 'pending' || generation.status === 'processing')
+        .filter((generation) => {
+          const normalized = normalizeJobStatus(generation.status)
+          return normalized === 'queued' || normalized === 'running'
+        })
         .filter((generation) => matchesQuery(search, generation.title, generation.prompt_snapshot.prompt, generation.model)),
     [generations, search],
+  )
+
+  const composeProjects = useMemo(
+    () => projects.filter((project) => !isChatProject(project)),
+    [projects],
   )
 
   const filteredImageGroups = useMemo(
@@ -886,14 +915,14 @@ export default function MediaLibraryPage() {
 
   const filteredProjects = useMemo(
     () =>
-      projects.filter((project) => {
+      composeProjects.filter((project) => {
         const projectAssets = assetsByProject.get(project.id) ?? []
         if (!matchesQuery(search, project.title, project.description)) return false
         if (collectionFilter === 'with-work') return projectAssets.length > 0
         if (collectionFilter === 'empty') return projectAssets.length === 0
         return true
       }),
-    [assetsByProject, collectionFilter, projects, search],
+    [assetsByProject, collectionFilter, composeProjects, search],
   )
 
   const filteredTrash = useMemo(
@@ -1018,12 +1047,14 @@ export default function MediaLibraryPage() {
                           >
                             Open
                           </button>
-                          <button
-                            onClick={() => openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })}
-                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
-                          >
-                            Reuse prompt
-                          </button>
+                          {!group.isChatOrigin ? (
+                            <button
+                              onClick={() => openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })}
+                              className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
+                            >
+                              Reuse prompt
+                            </button>
+                          ) : null}
                           <button
                             onClick={() => setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })}
                             className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
@@ -1057,9 +1088,13 @@ export default function MediaLibraryPage() {
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Link to={`/projects/${group.projectId}`} className="pt-0.5 text-[13px] text-white transition hover:text-zinc-200">
-                          {group.projectTitle}
-                        </Link>
+                        {group.isChatOrigin ? (
+                          <div className="pt-0.5 text-[13px] text-zinc-400">{group.projectTitle}</div>
+                        ) : (
+                          <Link to={`/projects/${group.projectId}`} className="pt-0.5 text-[13px] text-white transition hover:text-zinc-200">
+                            {group.projectTitle}
+                          </Link>
+                        )}
                         <div className="relative" data-library-menu-root="true">
                           <button
                             onClick={() => setActionMenu((current) => (current === `post:${group.id}` ? null : `post:${group.id}`))}
@@ -1079,39 +1114,43 @@ export default function MediaLibraryPage() {
                               >
                                 Rename
                               </MenuAction>
-                              <MenuAction
-                                onClick={() => {
-                                  openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Reuse prompt
-                              </MenuAction>
-                              <MenuAction
-                                onClick={() => {
-                                  openComposeWith({ model: group.model, projectId: group.projectId })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Reuse style
-                              </MenuAction>
-                              <MenuAction
-                                onClick={() => {
-                                  openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId, tool: 'regenerate' })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Regenerate
-                              </MenuAction>
-                              <MenuAction
-                                onClick={() => {
-                                  openComposeWith({ prompt: `Refine: ${group.prompt.slice(0, 200)}`, model: group.model, projectId: group.projectId, tool: 'edit' })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Edit (img2img)
-                              </MenuAction>
-                              <MenuDivider />
+                              {!group.isChatOrigin ? (
+                                <>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Reuse prompt
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({ model: group.model, projectId: group.projectId })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Reuse style
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId, tool: 'regenerate' })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Regenerate
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({ prompt: `Refine: ${group.prompt.slice(0, 200)}`, model: group.model, projectId: group.projectId, tool: 'edit' })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Edit (img2img)
+                                  </MenuAction>
+                                  <MenuDivider />
+                                </>
+                              ) : null}
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={async () => {
@@ -1566,6 +1605,7 @@ export default function MediaLibraryPage() {
       />
       <AssetLightbox
         state={previewState}
+        isChatOrigin={previewState?.group.isChatOrigin ?? false}
         busy={menuBusy || movePostMutation.isPending}
         onClose={() => setPreviewState(null)}
         onSelect={(index) => setPreviewState((current) => (current ? { ...current, index } : current))}
@@ -1620,7 +1660,7 @@ export default function MediaLibraryPage() {
       />
       <MovePostDialog
         state={moveState}
-        projects={projects}
+        projects={composeProjects}
         busy={movePostMutation.isPending}
         onClose={() => setMoveState(null)}
         onMove={async (projectId) => {

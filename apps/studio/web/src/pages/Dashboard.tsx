@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Crown, Heart, Lock, Sparkles, X, Zap } from 'lucide-react'
 
-import { AppPage, ButtonChip, PageHeader, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, ButtonChip, StatusPill } from '@/components/StudioPrimitives'
 import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -126,7 +126,8 @@ function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () =
           <Link
             to="/subscription"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(6,182,212,0.25)] transition hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:brightness-110"
+            className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+            style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}
           >
             Compare plans <ArrowRight className="h-4 w-4" />
           </Link>
@@ -182,52 +183,62 @@ function PostCard({
               : 'aspect-[5/6]'
 
   return (
-    <article className="group mb-4 break-inside-avoid">
-      <div className="relative overflow-hidden rounded-[22px] bg-white/[0.03]">
+    <article className="group relative mb-6 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.3)] rounded-[26px]">
+      <div className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04]">
         <button type="button" onClick={() => onOpen(post)} className="block w-full text-left">
           {heroAsset ? (
             <img
               src={heroAsset.thumbnail_url ?? heroAsset.url}
               alt={heroAsset.title}
-              className={`w-full object-cover transition duration-500 ease-out group-hover:scale-[1.02] ${aspectClass}`}
+              className={`w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04] ${aspectClass}`}
+              loading="lazy"
             />
           ) : (
             <div className={`w-full bg-white/[0.03] ${aspectClass}`} />
           )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/72 via-black/10 to-transparent opacity-45 transition duration-300 group-hover:opacity-90" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 opacity-0 transition duration-300 group-hover:opacity-100">
-            <div className="max-w-[82%]">
-              <div className="line-clamp-1 text-sm font-semibold tracking-[-0.03em] text-white">{post.title}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-300">
-                <span className="font-medium text-white/95">@{post.owner_username}</span>
-                <span className="text-zinc-500">/</span>
+
+          {/* Vignette & Gradient overlay mapping */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 opacity-60 transition duration-500 group-hover:opacity-100" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 opacity-0 transition duration-500 translate-y-4 group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="line-clamp-2 text-sm font-semibold tracking-tight text-white/95 leading-relaxed drop-shadow-md">
+              {post.prompt ? post.prompt : post.title}
+            </div>
+            
+            <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
+                <span className="font-bold text-white/90 drop-shadow-sm">@{post.owner_username}</span>
+                <span className="opacity-50">·</span>
                 <span>{new Date(post.created_at).toLocaleDateString()}</span>
               </div>
-              </div>
             </div>
+          </div>
         </button>
 
-        <div className="absolute left-3 top-3 flex flex-wrap items-center gap-1.5 opacity-70 transition duration-300 group-hover:opacity-100">
-          {post.style_tags.slice(0, 1).map((tag) => (
-            <StatusPill key={tag} tone="neutral">
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5 opacity-0 -translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+          {post.style_tags.slice(0, 2).map((tag) => (
+            <StatusPill key={tag} tone="neutral" className="border-white/10 bg-black/40 backdrop-blur-md text-white/80">
               {tag}
             </StatusPill>
           ))}
-          {previewAssets.length > 1 ? <StatusPill tone="neutral">{previewAssets.length}</StatusPill> : null}
+          {previewAssets.length > 1 ? (
+            <StatusPill tone="neutral" className="border-white/10 bg-black/40 backdrop-blur-md">
+              {previewAssets.length} <Sparkles className="inline ml-0.5 h-2.5 w-2.5 opacity-60" />
+            </StatusPill>
+          ) : null}
         </div>
 
         <div className="absolute right-3 top-3 flex items-center gap-2">
           <button
             onClick={() => onLike(post)}
             className={locked
-              ? 'inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1.5 text-[11px] text-white backdrop-blur-md transition hover:bg-black/60'
-              : `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs backdrop-blur-md transition ${
+              ? 'inline-flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/60'
+              : `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium backdrop-blur-md ring-1 transition-all duration-300 ${
                   post.viewer_has_liked
-                    ? 'bg-white text-black'
-                    : 'bg-black/45 text-white hover:bg-black/60'
+                    ? 'bg-white text-black ring-white shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+                    : 'bg-black/40 text-white/90 ring-white/10 hover:bg-black/60 hover:ring-white/20'
                 }`}
           >
-            {locked ? <Lock className="h-3.5 w-3.5" /> : <Heart className={`h-3.5 w-3.5 ${post.viewer_has_liked ? 'fill-current' : ''}`} />}
+            {locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : <Heart className={`h-3.5 w-3.5 ${post.viewer_has_liked ? 'fill-current text-rose-500' : 'opacity-70'}`} />}
             <span>{post.like_count}</span>
           </button>
         </div>
@@ -412,6 +423,7 @@ export default function DashboardPage() {
   const location = useLocation()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
+  const { openLightbox } = useLightbox()
   const [sort, setSort] = useState<ExploreSort>('trending')
   const [selectedPost, setSelectedPost] = useState<PublicPost | null>(null)
   const [authPromptOpen, setAuthPromptOpen] = useState(false)
@@ -460,19 +472,6 @@ export default function DashboardPage() {
     )
   }, [posts, searchQuery])
 
-  const styleTags = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const post of posts) {
-      for (const tag of post.style_tags) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1)
-      }
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([tag]) => tag)
-  }, [posts])
-
   const handleLike = (post: PublicPost) => {
     if (!canUseAccount) {
       setStudioPostAuthRedirect('/explore')
@@ -483,55 +482,56 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppPage className="max-w-[1380px] gap-8 py-8">
-      <PageHeader
-        eyebrow="Explore"
-        title="See what people are creating."
-        description="Explore public images, discover new styles, and get inspired for your next creation."
-        actions={
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/[0.08] px-4 py-2 focus-within:border-white/20 transition backdrop-blur-md max-w-md">
-              <Sparkles className="h-4 w-4 text-zinc-500" />
+    <AppPage className="max-w-[1500px] gap-8 py-8">
+      <div className="relative isolate px-6 pt-10 pb-8 text-center sm:pt-16 sm:pb-12 rounded-[32px] overflow-hidden border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_4px_30px_rgba(0,0,0,0.4)] backdrop-blur-2xl">
+        <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
+          <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[rgb(var(--primary-light))] to-[rgb(var(--accent))] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }}></div>
+        </div>
+
+        <div className="mx-auto max-w-2xl">
+          <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500 mb-4">Discover & Inspire</div>
+          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl drop-shadow-sm">
+            Limitless <span style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)) 0%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Creation</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-zinc-400">
+            Explore breathtaking imagery generated by the OmniaCreata community. Find inspiration for your next masterpiece.
+          </p>
+
+          <div className="mt-8 flex flex-col items-center justify-center gap-6">
+            <div className="relative flex w-full max-w-xl items-center gap-3 rounded-full border border-white/[0.08] bg-black/40 px-5 py-4 backdrop-blur-xl transition-all focus-within:border-white/20 focus-within:bg-black/60 focus-within:shadow-[0_0_40px_rgb(var(--primary-light)/0.15)]">
+              <Sparkles className="h-5 w-5 text-zinc-400 shrink-0" />
               <input 
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by prompt, title, style or creator..."
-                className="bg-transparent border-none outline-none text-sm text-white placeholder:text-zinc-600 w-full min-w-[280px]"
+                className="bg-transparent border-none outline-none text-[15px] font-medium text-white placeholder:text-zinc-600 w-full"
               />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="shrink-0 p-1 rounded-full text-zinc-500 hover:text-white transition">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+
+            <div className="flex flex-wrap items-center justify-center gap-2">
               {sortOptions.map((option) => (
                 <button key={option.id} onClick={() => setSort(option.id)}>
-                  <ButtonChip active={sort === option.id}>{option.label}</ButtonChip>
+                  <ButtonChip active={sort === option.id} className="min-w-[80px] text-[13px] py-2 border-white/5 bg-white/5 hover:bg-white/10">
+                    {option.label}
+                  </ButtonChip>
                 </button>
               ))}
             </div>
           </div>
-        }
-        aside={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {styleTags.slice(0, 4).map((tag) => (
-              <StatusPill key={tag} tone="neutral">
-                {tag}
-              </StatusPill>
-            ))}
-            <Link
-              to={canUseAccount ? '/create' : '/signup'}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
-            >
-              {canUseAccount ? 'Open Compose' : 'Start free'}
-              <Sparkles className="h-4 w-4" />
-            </Link>
-          </div>
-        }
-      />
+        </div>
+      </div>
 
       <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
       <WelcomePricingOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
 
       {postsQuery.isLoading ? (
-        <div className="py-12 text-sm text-zinc-500">Loading community feed...</div>
+        <div className="py-12 flex items-center justify-center text-sm font-medium text-zinc-500">Loading community feed...</div>
       ) : filteredPosts.length ? (
         <section className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
           {filteredPosts.map((post: PublicPost, index: number) => (
@@ -540,45 +540,72 @@ export default function DashboardPage() {
         </section>
       ) : (
         <section>
-          <div className="rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-6 text-center">
-            <Sparkles className="mx-auto h-6 w-6 text-cyan-400" />
-            <div className="mt-3 text-lg font-semibold text-white">Community gallery is warming up</div>
-            <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-400">
+          <div className="rounded-[32px] border border-white/[0.08] p-10 text-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(11,12,16,0.6), rgba(11,12,16,0.9))', backdropFilter: 'blur(12px)' }}>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.05),transparent_60%)]" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] shadow-lg relative z-10 ring-1 ring-[rgb(var(--primary-light)/0.2)]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.1), rgb(var(--accent)/0.1))' }}>
+              <Sparkles className="h-8 w-8 drop-shadow-md" style={{ color: 'rgb(var(--primary-light))' }} />
+            </div>
+            <div className="mt-6 text-2xl font-bold tracking-tight text-white relative z-10">Community gallery is warming up</div>
+            <p className="mx-auto mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 relative z-10">
               Be the first to publish — or get inspired by these sample generations made with OmniaCreata.
             </p>
           </div>
-          <div className="mt-6 columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
+          <div className="mt-8 columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
             {[
-              { src: '/atmosphere/showcase-01-neon-cityscape.png', label: 'Neon Cityscape' },
-              { src: '/atmosphere/showcase-02-editorial-portrait.png', label: 'Editorial Portrait' },
-              { src: '/atmosphere/showcase-03-architecture.png', label: 'Architecture' },
-              { src: '/atmosphere/showcase-04-fantasy-dragon.png', label: 'Fantasy Art' },
-              { src: '/atmosphere/showcase-05-product-photo.png', label: 'Product Photo' },
-              { src: '/atmosphere/showcase-06-luxury-interior.png', label: 'Luxury Interior' },
-              { src: '/atmosphere/showcase-08-anime-warrior.png', label: 'Anime Art' },
-              { src: '/atmosphere/showcase-09-scifi-cityscape.png', label: 'Sci-Fi City' },
-              { src: '/atmosphere/showcase-10-food-photography.png', label: 'Food Photography' },
-              { src: '/atmosphere/showcase-11-nature-macro.png', label: 'Nature Macro' },
+              { src: '/atmosphere/showcase-01-neon-cityscape.png', label: 'Neon Cityscape', tag: 'Environments' },
+              { src: '/atmosphere/showcase-02-editorial-portrait.png', label: 'Editorial Portrait', tag: 'Photography' },
+              { src: '/atmosphere/showcase-03-architecture.png', label: 'Architecture', tag: 'Structures' },
+              { src: '/atmosphere/showcase-04-fantasy-dragon.png', label: 'Fantasy Art', tag: 'Creatures' },
+              { src: '/atmosphere/showcase-05-product-photo.png', label: 'Product Photo', tag: 'Commercial' },
+              { src: '/atmosphere/showcase-06-luxury-interior.png', label: 'Luxury Interior', tag: 'Architecture' },
+              { src: '/atmosphere/showcase-08-anime-warrior.png', label: 'Anime Art', tag: 'Characters' },
+              { src: '/atmosphere/showcase-09-scifi-cityscape.png', label: 'Sci-Fi City', tag: 'Futuristic' },
+              { src: '/atmosphere/showcase-10-food-photography.png', label: 'Food Photography', tag: 'Culinary' },
+              { src: '/atmosphere/showcase-11-nature-macro.png', label: 'Nature Macro', tag: 'Details' },
             ].map((img, i) => (
-              <div key={img.src} className="group mb-4 break-inside-avoid">
-                <div className="relative overflow-hidden rounded-[22px] border border-white/[0.06] bg-white/[0.03]">
+              <div key={img.src} className="group relative mb-6 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.3)] rounded-[26px]">
+                <button
+                  type="button"
+                  onClick={() => openLightbox(img.src, img.label, {
+                    title: img.label,
+                    authorName: 'OmniaCreata',
+                    authorUsername: 'studio',
+                    prompt: `A beautiful ${img.label.toLowerCase()} generated by OmniaCreata Studio.`,
+                  })}
+                  className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04] w-full text-left block cursor-zoom-in"
+                >
                   <img
                     src={img.src}
                     alt={img.label}
                     loading="lazy"
-                    className={`w-full object-cover transition duration-500 ease-out group-hover:scale-[1.03] ${
+                    className={`w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04] ${
                       i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-square' : 'aspect-[5/6]'
                     }`}
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
-                  <div className="absolute inset-x-0 bottom-0 p-3 opacity-0 transition duration-300 group-hover:opacity-100">
-                    <div className="text-sm font-semibold text-white">{img.label}</div>
-                    <div className="mt-0.5 text-[10px] text-zinc-400">Showcase · OmniaCreata</div>
+                  
+                  {/* Vignette & Gradient */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 opacity-60 transition duration-500 group-hover:opacity-100" />
+                  
+                  {/* Details Overlay */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 opacity-0 transition duration-500 translate-y-4 group-hover:translate-y-0 group-hover:opacity-100">
+                    <div className="line-clamp-2 text-sm font-semibold tracking-tight text-white/95 leading-relaxed drop-shadow-md">
+                      {img.label}
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
+                        <span className="font-bold text-white/90 drop-shadow-sm">Showcase</span>
+                        <span className="opacity-50">·</span>
+                        <span>OmniaCreata</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="pointer-events-none absolute left-3 top-3 opacity-60">
-                    <StatusPill tone="brand">Showcase</StatusPill>
+                  
+                  <div className="pointer-events-none absolute left-3 top-3 opacity-0 -translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+                    <StatusPill tone="brand" className="border-white/10 bg-black/40 backdrop-blur-md text-white/90 ring-1 ring-white/10 shadow-[0_0_15px_rgb(var(--primary-light)/0.3)]">
+                      {img.tag}
+                    </StatusPill>
                   </div>
-                </div>
+                </button>
               </div>
             ))}
           </div>

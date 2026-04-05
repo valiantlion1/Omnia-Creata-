@@ -26,6 +26,7 @@ import {
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
+import { APP_VERSION_LABEL } from '@/lib/appVersion'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -99,8 +100,12 @@ function Section({
   const currentRoute = `${pathname}${search}`
 
   return (
-    <div className={title ? 'mt-5' : ''}>
-      {title && !collapsed ? <div className="mb-1.5 px-3 text-[10px] uppercase tracking-[0.22em] text-zinc-600">{title}</div> : null}
+    <div className="mb-4">
+      {title && !collapsed ? (
+        <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</div>
+      ) : title ? (
+        <div className="mx-auto mb-2 h-px w-5 bg-white/[0.06]" />
+      ) : null}
       <div className="space-y-1">
         {items.map((item) => {
           const Icon = item.icon
@@ -111,9 +116,12 @@ function Section({
           const isExpanded = Boolean(expandedItems?.[item.to])
           const actionChildren = childItems.filter((child) => child.kind !== 'history')
           const historyChildren = childItems.filter((child) => child.kind === 'history')
-          const rowClasses = `flex min-w-0 items-center rounded-xl px-3 py-2.5 text-[13px] transition ${
+          const rowClasses = `relative flex min-w-0 items-center rounded-xl px-3 py-2.5 text-[13px] transition ${
             active ? 'bg-white/[0.08] text-white' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
           }`
+          const activeBar = active ? (
+            <div className="absolute left-0 top-[7px] bottom-[7px] w-[3px] rounded-r-full bg-gradient-to-b from-cyan-400 to-blue-500 shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
+          ) : null
           return (
             <div key={item.to}>
               <div className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''}`}>
@@ -124,6 +132,7 @@ function Section({
                     className={`${rowClasses} flex-1 gap-2.5 text-left`}
                     aria-expanded={isExpanded}
                   >
+                    {activeBar}
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate font-medium">{item.label}</span>
                   </button>
@@ -134,6 +143,7 @@ function Section({
                     title={collapsed ? item.label : undefined}
                     className={`${rowClasses} ${collapsed ? 'justify-center' : 'flex-1 gap-2.5'}`}
                   >
+                    {!collapsed && activeBar}
                     <Icon className="h-4 w-4 shrink-0" />
                     {!collapsed ? <span className="truncate font-medium">{item.label}</span> : null}
                   </Link>
@@ -261,15 +271,17 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
 
   const conversationsQuery = useQuery({
-    queryKey: ['conversations', 'sidebar'],
+    queryKey: ['conversations'],
     queryFn: () => studioApi.listConversations(),
     enabled: canLoadPrivate,
+    staleTime: 30_000,
   })
 
   const profileQuery = useQuery({
-    queryKey: ['profile', 'sidebar-me'],
+    queryKey: ['profile', 'me'],
     queryFn: () => studioApi.getMyProfile(),
     enabled: canLoadPrivate,
+    staleTime: 30_000,
   })
 
   const chatChildren = useMemo<NavChild[]>(() => {
@@ -389,7 +401,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           {!collapsed ? (
             <div className="min-w-0 overflow-hidden">
               <div className="whitespace-nowrap text-sm font-semibold tracking-tight text-white">Omnia Creata</div>
-              <div className="whitespace-nowrap text-xs text-zinc-500">Studio</div>
+              <div className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.16em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Studio</div>
             </div>
           ) : null}
         </Link>
@@ -416,8 +428,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Usage bar — always visible for logged-in users */}
         {!isGuestShell && !collapsed && usageSummary ? (
           <div className="mb-3 space-y-1.5 px-1">
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-              <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500" style={{ width: `${usagePercent}%` }} />
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
             </div>
             <div className="flex items-center justify-between text-[10px] text-zinc-600">
               <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>
@@ -433,7 +445,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             className={`min-w-0 flex-1 rounded-xl px-2 py-1.5 transition hover:bg-white/[0.04] ${collapsed ? 'flex h-10 w-10 items-center justify-center bg-white/[0.05] rounded-full' : 'flex items-center gap-2.5'}`}
             title={isGuestShell ? 'Create an account' : 'Open profile'}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-sm font-semibold text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-sm font-semibold text-white ring-1 ring-white/[0.08]">
               {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
             </div>
             {!collapsed ? (
@@ -471,7 +483,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Version */}
         {!collapsed && (
           <div className="mt-4 px-1 text-[10px] text-center font-medium text-zinc-600/50">
-            v0.5.1-alpha
+            {APP_VERSION_LABEL}
           </div>
         )}
       </div>
@@ -481,14 +493,22 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative flex h-screen overflow-hidden bg-[#0b0b0d] text-white">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-8%] top-[-14%] h-[26rem] w-[26rem] rounded-full bg-sky-300/[0.05] blur-[150px] animate-[oc-gradientShift_24s_ease-in-out_infinite]" />
-        <div className="absolute right-[-6%] top-[8%] h-[24rem] w-[24rem] rounded-full bg-cyan-300/[0.04] blur-[150px] animate-[oc-gradientShiftB_28s_ease-in-out_infinite]" />
-        <div className="absolute bottom-[-18%] left-[22%] h-[26rem] w-[26rem] rounded-full bg-indigo-300/[0.04] blur-[180px] animate-[oc-float_22s_ease-in-out_infinite]" />
+        <div className="absolute left-[-12%] top-[-10%] h-[32rem] w-[32rem] rounded-full bg-[rgb(var()/)] blur-[120px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" />
+        <div className="absolute right-[-8%] top-[5%] h-[28rem] w-[28rem] rounded-full bg-[rgb(var()/)] blur-[130px] animate-[oc-gradientShiftB_26s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-15%] left-[30%] h-[30rem] w-[30rem] rounded-full bg-[rgb(var()/)] blur-[150px] animate-[oc-float_24s_ease-in-out_infinite]" />
+        <div className="absolute top-[40%] right-[15%] h-[20rem] w-[20rem] rounded-full bg-[rgb(var()/)] blur-[100px] animate-[oc-pulse_18s_ease-in-out_infinite]" />
       </div>
       <aside
-        className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible bg-[#101114]/92 shadow-[inset_-1px_0_0_rgba(255,255,255,0.012)] backdrop-blur-xl transition-[width] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] lg:flex lg:flex-col ${
+        className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible transition-[width] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] lg:flex lg:flex-col ${
           desktopCollapsed ? 'w-[72px]' : 'w-[252px]'
         }`}
+        style={{
+          background: 'linear-gradient(180deg, rgba(14,14,22,0.92) 0%, rgba(10,10,16,0.96) 100%)',
+          backdropFilter: 'blur(24px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03), 4px 0 24px rgba(0,0,0,0.3)',
+        }}
       >
         {rail(desktopCollapsed)}
         {/* Edge toggle button — floats on sidebar border, visible on hover */}
@@ -518,7 +538,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         </header>
 
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(88,92,120,0.1),transparent_24%),#0b0b0d]">
+          <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgb(var(--primary-light)/0.06),transparent_24%),#0b0b0d]">
             <div className="flex min-h-full flex-col">
               <div className="flex-1">{children}</div>
               <LegalFooter className="mx-auto w-full max-w-[1520px] px-4 pb-6 md:px-5 xl:px-6" />
@@ -531,9 +551,10 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             const Icon = item.icon
             const active = isActive(location.pathname, item)
             return (
-              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] ${active ? 'text-white' : 'text-zinc-500'}`}>
+              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] transition-colors ${active ? 'text-white' : 'text-zinc-500'}`}>
                 <Icon className="h-4.5 w-4.5" />
                 {item.label}
+                {active ? <div className="h-[3px] w-[3px] rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]" /> : <div className="h-[3px]" />}
               </Link>
             )
           })}
@@ -579,7 +600,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               {!isGuestShell && usageSummary ? (
                 <div className="mb-3 space-y-1.5">
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-                    <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500" style={{ width: `${usagePercent}%` }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-zinc-600">
                     <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>

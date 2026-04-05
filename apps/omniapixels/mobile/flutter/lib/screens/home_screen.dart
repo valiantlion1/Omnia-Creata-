@@ -1,355 +1,132 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
-import '../services/api_service.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
+import 'gallery_screen.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final ApiService _apiService = ApiService();
-  List<dynamic> _models = [];
-  Map<String, dynamic> _presets = {};
-  bool _loading = true;
+  int _tab = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-    FirebaseAnalytics.instance.logScreenView(screenName: 'HomeScreen');
-  }
-
-  Future<void> _loadData() async {
-    try {
-      final models = await _apiService.getModels();
-      final presets = await _apiService.getPresets();
-      
-      setState(() {
-        _models = models;
-        _presets = presets;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _loading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load data: $e')),
-      );
-    }
-  }
+  final _tabs = const [
+    GalleryScreen(),
+    _ToolsTab(),
+    _ProfileTab(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('OmniaPixels'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.info_outline),
-            onPressed: () => _showInfoDialog(),
-          ),
+      body: _tabs[_tab],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        backgroundColor: const Color(0xFF0F0F14),
+        indicatorColor: const Color(0xFF6C3CE1).withOpacity(0.2),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.photo_library_outlined), selectedIcon: Icon(Icons.photo_library), label: 'Galeri'),
+          NavigationDestination(icon: Icon(Icons.auto_fix_high_outlined), selectedIcon: Icon(Icons.auto_fix_high), label: 'Araçlar'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildWelcomeCard(),
-                  SizedBox(height: 24),
-                  _buildQuickActions(),
-                  SizedBox(height: 24),
-                  _buildFeaturedModels(),
-                  SizedBox(height: 24),
-                  _buildPresets(),
-                ],
-              ),
-            ),
     );
   }
+}
 
-  Widget _buildWelcomeCard() {
-    return Card(
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: [Colors.deepPurple, Colors.purple.shade300],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Welcome to OmniaPixels',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'AI-powered image processing at your fingertips',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white.withOpacity(0.9),
-              ),
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => Navigator.pushNamed(context, '/upload'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.deepPurple,
-              ),
-              child: Text('Start Processing'),
-            ),
-          ],
-        ),
+class _ToolsTab extends StatelessWidget {
+  const _ToolsTab();
+
+  static const _tools = [
+    {'title': 'Upscale', 'subtitle': '2x / 4x AI büyütme', 'icon': Icons.zoom_in, 'type': 'super_resolution', 'color': Color(0xFF6C3CE1)},
+    {'title': 'Arkaplan Sil', 'subtitle': 'Tek tıkla temiz kesim', 'icon': Icons.auto_fix_high, 'type': 'background_removal', 'color': Color(0xFF2196F3)},
+    {'title': 'Geliştir', 'subtitle': 'Otomatik iyileştirme', 'icon': Icons.tune, 'type': 'enhance', 'color': Color(0xFF4CAF50)},
+    {'title': 'Akıllı Kırp', 'subtitle': 'AI destekli kırpma', 'icon': Icons.crop, 'type': 'crop', 'color': Color(0xFFFF9800)},
+    {'title': 'Stil Transferi', 'subtitle': 'Sanatsal dönüşüm', 'icon': Icons.palette, 'type': 'style_transfer', 'color': Color(0xFFE91E63)},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('AI Araçlar')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('Galerinden bir fotoğraf seç veya kameradan çek',
+              style: TextStyle(color: Colors.white54, fontSize: 13)),
+          const SizedBox(height: 16),
+          ..._tools.map((t) => _ToolCard(
+            title: t['title'] as String,
+            subtitle: t['subtitle'] as String,
+            icon: t['icon'] as IconData,
+            color: t['color'] as Color,
+            onTap: () => Navigator.pushNamed(context, '/gallery'),
+          )),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildQuickActions() {
-    final actions = [
-      {
-        'title': 'Remove Background',
-        'icon': Icons.auto_fix_high,
-        'color': Colors.blue,
-        'route': '/upload',
-        'type': 'background_removal'
-      },
-      {
-        'title': 'Enhance Image',
-        'icon': Icons.tune,
-        'color': Colors.green,
-        'route': '/upload',
-        'type': 'enhance'
-      },
-      {
-        'title': 'Super Resolution',
-        'icon': Icons.zoom_in,
-        'color': Colors.orange,
-        'route': '/upload',
-        'type': 'super_resolution'
-      },
-      {
-        'title': 'Smart Crop',
-        'icon': Icons.crop,
-        'color': Colors.purple,
-        'route': '/upload',
-        'type': 'crop'
-      },
-    ];
+class _ToolCard extends StatelessWidget {
+  final String title, subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Quick Actions',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+  const _ToolCard({required this.title, required this.subtitle, required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 48, height: 48,
+          decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color),
         ),
-        SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.2,
-          ),
-          itemCount: actions.length,
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return Card(
-              child: InkWell(
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  action['route'] as String,
-                  arguments: {'type': action['type']},
-                ),
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        action['icon'] as IconData,
-                        size: 32,
-                        color: action['color'] as Color,
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        action['title'] as String,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white38),
+      ),
+    );
+  }
+}
+
+class _ProfileTab extends StatelessWidget {
+  const _ProfileTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthService>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profil')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Center(
+            child: Column(children: [
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: const Color(0xFF6C3CE1).withOpacity(0.2),
+                child: const Icon(Icons.person, size: 40, color: Color(0xFF6C3CE1)),
               ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturedModels() {
-    if (_models.isEmpty) return SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Featured Models',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        SizedBox(height: 16),
-        Container(
-          height: 120,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _models.length,
-            itemBuilder: (context, index) {
-              final model = _models[index];
-              return Container(
-                width: 200,
-                margin: EdgeInsets.only(right: 12),
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          model['display_name'] ?? model['name'],
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          model['description'] ?? '',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Spacer(),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.star,
-                              size: 16,
-                              color: Colors.amber,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              model['category']?.replaceAll('_', ' ') ?? '',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+              const SizedBox(height: 12),
+              Text(auth.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            ]),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPresets() {
-    if (_presets.isEmpty) return SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Popular Presets',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        SizedBox(height: 16),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          itemCount: _presets.length,
-          itemBuilder: (context, index) {
-            final category = _presets.keys.elementAt(index);
-            final presets = _presets[category] as List;
-            
-            return ExpansionTile(
-              title: Text(
-                category.replaceAll('_', ' ').toUpperCase(),
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              children: presets.map<Widget>((preset) {
-                return ListTile(
-                  title: Text(preset['name']),
-                  subtitle: Text(preset['description']),
-                  trailing: Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    '/upload',
-                    arguments: {'preset': preset['name']},
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('About OmniaPixels'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Version: 1.0.0'),
-            SizedBox(height: 8),
-            Text('AI-powered image processing platform'),
-            SizedBox(height: 8),
-            Text('Features:'),
-            Text('• Background removal'),
-            Text('• Image enhancement'),
-            Text('• Super resolution'),
-            Text('• Smart cropping'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+          const SizedBox(height: 32),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.redAccent),
+            title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
+            onTap: () => auth.signOut(),
           ),
         ],
       ),

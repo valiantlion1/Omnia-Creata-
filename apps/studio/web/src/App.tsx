@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LightboxProvider } from '@/components/Lightbox'
@@ -7,9 +7,11 @@ import { PostHogProvider } from 'posthog-js/react'
 
 import StudioShell from '@/components/StudioShell'
 
-// Initialize PostHog globally
-if (typeof window !== 'undefined') {
-  posthog.init(import.meta.env.VITE_POSTHOG_KEY || 'phc_placeholder', {
+const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
+const shouldEnablePosthog = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
+
+if (shouldEnablePosthog) {
+  posthog.init(posthogKey, {
     api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com',
     loaded: (posthog_instance) => {
       if (import.meta.env.DEV) {
@@ -18,23 +20,32 @@ if (typeof window !== 'undefined') {
     },
   })
 }
-import AccountPage from '@/pages/Account'
-import BillingPage from '@/pages/Billing'
-import ChatPage from '@/pages/Chat'
-import CreatePage from '@/pages/Create'
-import DashboardPage from '@/pages/Dashboard'
-import DocumentationPage from '@/pages/Documentation'
-import ElementsPage from '@/pages/Elements'
-import HomePage from '@/pages/Home'
-import LoginPage from '@/pages/Login'
-import MediaLibraryPage from '@/pages/MediaLibrary'
-import ProjectPage from '@/pages/Project'
-import SettingsPage from '@/pages/Settings'
-import SharedPage from '@/pages/Shared'
-import SignupPage from '@/pages/Signup'
-import SplashPage from '@/pages/Splash'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
+
+const AccountPage = lazy(() => import('@/pages/Account'))
+const BillingPage = lazy(() => import('@/pages/Billing'))
+const ChatPage = lazy(() => import('@/pages/Chat'))
+const CreatePage = lazy(() => import('@/pages/Create'))
+const DashboardPage = lazy(() => import('@/pages/Dashboard'))
+const DocumentationPage = lazy(() => import('@/pages/Documentation'))
+const ElementsPage = lazy(() => import('@/pages/Elements'))
+const HomePage = lazy(() => import('@/pages/Home'))
+const LoginPage = lazy(() => import('@/pages/Login'))
+const MediaLibraryPage = lazy(() => import('@/pages/MediaLibrary'))
+const ProjectPage = lazy(() => import('@/pages/Project'))
+const SettingsPage = lazy(() => import('@/pages/Settings'))
+const SharedPage = lazy(() => import('@/pages/Shared'))
+const SignupPage = lazy(() => import('@/pages/Signup'))
+const SplashPage = lazy(() => import('@/pages/Splash'))
+
+function RouteFallback({ withShell = false }: { withShell?: boolean }) {
+  const classes = withShell
+    ? 'flex h-[calc(100vh-3.5rem)] items-center justify-center text-sm text-zinc-500'
+    : 'flex min-h-screen items-center justify-center bg-[rgb(var(--bg))] text-sm text-zinc-500'
+
+  return <div className={classes}>Opening Studio...</div>
+}
 
 function PublicRoutes() {
   return (
@@ -98,7 +109,10 @@ function ProtectedRoutes() {
   )
 }
 
+import { useStudioUiPrefs } from '@/lib/studioUi'
+
 function AppFrame() {
+  useStudioUiPrefs() // Initialize theme and preferences globally
   const location = useLocation()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const nextPath = `${location.pathname}${location.search}`
@@ -133,7 +147,13 @@ function AppFrame() {
   }, [auth?.guest, isAlwaysPublic, isAuthSyncing, isAuthenticated, isLoading, isPublicCapable, isPublicShellRoute, nextPath])
 
   if (isAlwaysPublic || (isPublicCapable && !shouldRenderWithShell)) {
-    return <div className="min-h-screen bg-[rgb(var(--bg))]">{<PublicRoutes />}</div>
+    return (
+      <div className="min-h-screen bg-[rgb(var(--bg))]">
+        <Suspense fallback={<RouteFallback />}>
+          <PublicRoutes />
+        </Suspense>
+      </div>
+    )
   }
 
   if (!isPublicCapable && !isPublicShellRoute && (isLoading || isAuthSyncing)) {
@@ -146,7 +166,9 @@ function AppFrame() {
 
   return (
     <StudioShell>
-      <ProtectedRoutes />
+      <Suspense fallback={<RouteFallback withShell />}>
+        <ProtectedRoutes />
+      </Suspense>
     </StudioShell>
   )
 }

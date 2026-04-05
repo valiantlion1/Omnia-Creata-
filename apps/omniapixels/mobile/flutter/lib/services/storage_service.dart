@@ -1,37 +1,14 @@
-import 'package:dio/dio.dart';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 class StorageService {
-  final Dio _dio = Dio();
-
-  Future<void> uploadFile(File file, String uploadUrl) async {
-    try {
-      final bytes = await file.readAsBytes();
-      
-      await _dio.put(
-        uploadUrl,
-        data: bytes,
-        options: Options(
-          headers: {
-            'Content-Type': 'image/jpeg', // TODO: Detect actual content type
-          },
-        ),
-      );
-    } catch (e) {
-      throw Exception('Failed to upload file: $e');
-    }
-  }
-
-  Future<File> downloadFile(String downloadUrl, String filename) async {
-    try {
-      final response = await _dio.download(
-        downloadUrl,
-        '/tmp/$filename', // TODO: Use proper temp directory
-      );
-      
-      return File('/tmp/$filename');
-    } catch (e) {
-      throw Exception('Failed to download file: $e');
-    }
+  Future<File> downloadFile(String url, String filename) async {
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, filename));
+    final res = await http.get(Uri.parse(url));
+    await file.writeAsBytes(res.bodyBytes);
+    return file;
   }
 }

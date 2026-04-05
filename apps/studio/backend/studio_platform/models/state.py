@@ -9,7 +9,7 @@ from .workspace import Project, StudioWorkspace
 from .generation import GenerationJob
 from .media import MediaAsset, PublicPost, ShareLink
 from .chat import ChatConversation, ChatMessage
-from .billing import CreditLedgerEntry
+from .billing import BillingWebhookReceipt, CreditLedgerEntry
 
 
 class StudioState(BaseModel):
@@ -23,3 +23,4 @@ class StudioState(BaseModel):
     posts: Dict[str, PublicPost] = Field(default_factory=dict)
     shares: Dict[str, ShareLink] = Field(default_factory=dict)
     credit_ledger: Dict[str, CreditLedgerEntry] = Field(default_factory=dict)
+    billing_webhook_receipts: Dict[str, BillingWebhookReceipt] = Field(default_factory=dict)

@@ -13,23 +13,30 @@ from security.rate_limit import build_rate_limiter
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
-from studio_platform.store import StudioStateStore
+from studio_platform.store import build_state_store
+from studio_platform.versioning import STUDIO_API_VERSION, load_version_info
 
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 MEDIA_DIR = DATA_DIR / "media"
-STATE_PATH = DATA_DIR / "studio-state.json"
+LEGACY_STATE_PATH = DATA_DIR / "studio-state.json"
+SQLITE_STATE_PATH = DATA_DIR / "studio-state.sqlite3"
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("omnia.studio")
 
 
-state_store = StudioStateStore(STATE_PATH)
+settings = get_settings()
+version_info = load_version_info()
+state_store = build_state_store(
+    settings,
+    default_json_path=LEGACY_STATE_PATH,
+    default_sqlite_path=SQLITE_STATE_PATH,
+)
 providers = ProviderRegistry()
 service = StudioService(state_store, providers, MEDIA_DIR)
-settings = get_settings()
 rate_limiter = build_rate_limiter(settings)
 
 
@@ -47,13 +54,14 @@ async def lifespan(app: FastAPI):
     app.state.rate_limiter = rate_limiter
     logger.info("OmniaCreata Studio backend ready")
     yield
+    await service.shutdown()
     logger.info("OmniaCreata Studio backend stopped")
 
 
 app = FastAPI(
     title="OmniaCreata Studio API",
     description="Creative production backend for OmniaCreata Studio.",
-    version="2.0.0",
+    version=STUDIO_API_VERSION,
     lifespan=lifespan,
     docs_url="/docs" if settings.enable_api_docs else None,
     redoc_url="/redoc" if settings.enable_api_docs else None,
@@ -92,7 +100,11 @@ async def security_headers_middleware(request: Request, call_next):
 async def root():
     return {
         "name": "OmniaCreata Studio API",
-        "version": "2.0.0",
+        "version": version_info.version,
+        "build": version_info.build,
+        "api_version": STUDIO_API_VERSION,
+        "channel": version_info.channel,
+        "status": version_info.status,
         "docs": "/docs" if settings.enable_api_docs else None,
         "health": "/v1/healthz",
         "app": "studio.omniacreata.com",
@@ -105,6 +117,11 @@ async def root():
             "billing": "/v1/billing/summary",
         },
     }
+
+
+@app.get("/v1/version")
+async def get_version():
+    return version_info.to_public_payload()
 
 
 @app.exception_handler(HTTPException)

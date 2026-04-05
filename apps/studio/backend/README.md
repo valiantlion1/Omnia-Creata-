@@ -4,7 +4,8 @@ AI Image Generation Platform Backend with Multi-Provider Support
 
 ## Features
 
-- **Multi-Provider Architecture**: ComfyUI, HuggingFace, Gemini, OpenRouter integration
+- **Multi-Provider Architecture**: HuggingFace, Gemini, OpenRouter, and managed/cloud provider integration
+- **Durable Metadata Store**: SQLite for local development and Postgres/Supabase for staging-production metadata
 - **Preset System**: Realistic, Anime, Ultra quality presets with keyword-based LoRA mapping
 - **Asset Management**: Local and cloud asset resolution with caching
 - **Batch Processing**: Efficient multi-image generation
@@ -18,7 +19,6 @@ AI Image Generation Platform Backend with Multi-Provider Support
 
 - Python 3.11+
 - Redis (for background tasks)
-- ComfyUI (optional, for local generation)
 
 ### Installation
 
@@ -95,9 +95,10 @@ HUGGINGFACE_TOKEN=your_hf_token
 OPENROUTER_API_KEY=your_openrouter_key
 OPENAI_API_KEY=your_openai_key
 
-# ComfyUI
-COMFYUI_BASE_URL=http://localhost:8188
-COMFYUI_ENABLED=true
+# State Store
+STATE_STORE_BACKEND=sqlite
+STATE_STORE_PATH=
+LEGACY_STATE_STORE_PATH=
 
 # Server
 HOST=0.0.0.0
@@ -161,7 +162,6 @@ backend/
 ├── providers/           # AI provider integrations
 │   ├── __init__.py
 │   ├── base.py          # Base provider class
-│   ├── comfyui.py       # ComfyUI integration
 │   ├── huggingface.py   # HuggingFace integration
 │   ├── gemini.py        # Google Gemini integration
 │   ├── openrouter.py    # OpenRouter integration
@@ -194,6 +194,18 @@ backend/
 ```bash
 pytest
 ```
+
+### Manual Live Provider Smoke Tests
+
+These tests are intentionally manual and never run in normal CI.
+
+```bash
+set ENABLE_LIVE_PROVIDER_SMOKE=true
+python scripts/provider_smoke.py --provider fal
+python scripts/provider_smoke.py --provider runware
+```
+
+Use `--provider all` to run the whole suite and `--skip-failure-probe` if you only want successful generation checks.
 
 ### Code Formatting
 
@@ -247,6 +259,14 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 - Configure cloud storage for generated images
 - Set up monitoring and logging
 
+### State Store
+
+- `STATE_STORE_BACKEND=sqlite` is the durable default for Studio metadata.
+- `STATE_STORE_PATH` overrides the SQLite database location if needed.
+- `LEGACY_STATE_STORE_PATH` can point at a previous JSON state file for one-time bootstrap on first startup.
+- `STATE_STORE_BACKEND=postgres` is the production/staging path and uses `DATABASE_URL`.
+- `STATE_STORE_BACKEND=json` still exists for fallback/dev debugging, but it is no longer the preferred runtime path.
+
 ### Security Considerations
 
 - Enable JWT authentication
@@ -260,10 +280,10 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ### Common Issues
 
-1. **ComfyUI Connection Failed**
-   - Ensure ComfyUI is running on correct port
-   - Check firewall settings
-   - Verify `COMFYUI_BASE_URL` in `.env`
+1. **Managed Provider Connection Failed**
+   - Verify the configured provider API keys in `.env`
+   - Check outbound network access from the backend host
+   - Confirm provider health from `/healthz/detail`
 
 2. **Provider Authentication Failed**
    - Verify API keys in `.env`

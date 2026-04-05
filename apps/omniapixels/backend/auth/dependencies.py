@@ -1,57 +1,50 @@
-"""
-Authentication Dependencies
-FastAPI dependencies for JWT authentication
-"""
-
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from core.database import get_db
-from core.models import User
-from auth.jwt_handler import JWTHandler
 from typing import Optional
+from auth.supabase_auth import SupabaseAuthClient, SupabaseAuthError, SupabaseUser
+from core.config import settings
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    Get current authenticated user from JWT token
-    """
-    token = credentials.credentials
-    
-    # Decode token
-    user_info = JWTHandler.get_user_from_token(token)
-    if not user_info:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
+_supabase_client: Optional[SupabaseAuthClient] = None
+
+
+def get_supabase_client() -> SupabaseAuthClient:
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = SupabaseAuthClient(
+            base_url=settings.SUPABASE_URL,
+            anon_key=settings.SUPABASE_ANON_KEY,
+            admin_emails=settings.ADMIN_EMAILS_LIST,
         )
-    
-    # Get user from database
-    user = db.query(User).filter(User.id == user_info["user_id"]).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-    
-    return user
+    return _supabase_client
 
-def get_current_user_optional(
+
+async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db)
-) -> Optional[User]:
-    """
-    Get current user if token provided, otherwise None
-    For optional authentication
-    """
+) -> SupabaseUser:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    try:
+        client = get_supabase_client()
+        return await client.get_user(credentials.credentials)
+    except SupabaseAuthError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[SupabaseUser]:
     if not credentials:
         return None
-        
     try:
-        return get_current_user(credentials, db)
-    except HTTPException:
+        client = get_supabase_client()
+        return await client.get_user(credentials.credentials)
+    except SupabaseAuthError:
         return None
+
+
+async def require_admin(user: SupabaseUser = Depends(get_current_user)) -> SupabaseUser:
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user

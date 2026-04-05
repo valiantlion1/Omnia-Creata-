@@ -32,7 +32,7 @@ export function PageHeader({
     <div className={clsx('grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-end', className)}>
       <div className="min-w-0">
         <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-600">{eyebrow}</div>
-        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] text-white md:text-4xl">{title}</h1>
+        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</h1>
         {description ? <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p> : null}
         {actions ? <div className="mt-5 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
       </div>
@@ -59,7 +59,7 @@ export function Surface({
   return (
     <section
       className={clsx(
-        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6',
+        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6 transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_24px_70px_rgba(0,0,0,0.25),0_0_0_1px_rgb(var() / )]',
         toneMap[tone],
         className,
       )}

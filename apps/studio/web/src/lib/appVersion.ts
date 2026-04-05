@@ -2,6 +2,7 @@ import versionData from '../../../version.json'
 
 type AppVersionPayload = {
   product: string
+  brand: string
   version: string
   channel: string
   build: string

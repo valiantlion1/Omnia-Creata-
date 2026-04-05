@@ -11,23 +11,18 @@ SerializePostFn = Callable[[PublicPost, Dict[str, MediaAsset], Dict[str, OmniaId
 def build_identity_export(
     *,
     identity: OmniaIdentity,
-    state: StudioState,
     identity_id: str,
+    assets: List[MediaAsset],
+    posts: List[PublicPost],
+    assets_by_id: Dict[str, MediaAsset],
+    identities_by_id: Dict[str, OmniaIdentity],
     serialize_asset: SerializeAssetFn,
     serialize_post: SerializePostFn,
 ) -> Dict[str, Any]:
-    assets_by_id = {asset.id: asset for asset in state.assets.values()}
-    identities_by_id = {item.id: item for item in state.identities.values()}
-
-    assets = [
-        serialize_asset(asset, identity_id)
-        for asset in state.assets.values()
-        if asset.identity_id == identity_id
-    ]
-    posts = [
+    serialized_assets = [serialize_asset(asset, identity_id) for asset in assets]
+    serialized_posts = [
         serialize_post(post, assets_by_id, identities_by_id, identity_id)
-        for post in state.posts.values()
-        if post.identity_id == identity_id
+        for post in posts
     ]
 
     return {
@@ -38,12 +33,12 @@ def build_identity_export(
             "display_name": identity.display_name,
             "created_at": identity.created_at.isoformat(),
         },
-        "assets": assets,
-        "posts": posts,
+        "assets": serialized_assets,
+        "posts": serialized_posts,
         "meta": {
             "export_date": utc_now().isoformat(),
-            "assets_count": len(assets),
-            "posts_count": len(posts),
+            "assets_count": len(serialized_assets),
+            "posts_count": len(serialized_posts),
         },
     }
 
@@ -87,6 +82,12 @@ def purge_identity_state(state: StudioState, identity_id: str, assets_to_delete:
     ledger_ids = [key for key, value in state.credit_ledger.items() if value.identity_id == identity_id]
     for ledger_id in ledger_ids:
         state.credit_ledger.pop(ledger_id, None)
+
+    webhook_receipt_ids = [
+        key for key, value in state.billing_webhook_receipts.items() if value.identity_id == identity_id
+    ]
+    for receipt_id in webhook_receipt_ids:
+        state.billing_webhook_receipts.pop(receipt_id, None)
 
     for post in state.posts.values():
         if identity_id in post.liked_by:

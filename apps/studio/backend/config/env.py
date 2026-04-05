@@ -1,6 +1,5 @@
 """Environment configuration with validation using Pydantic v2."""
 
-import os
 from typing import Optional, List
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -30,6 +29,8 @@ class Settings(BaseSettings):
     huggingface_token: Optional[str] = None
     openrouter_api_key: Optional[str] = None
     stability_api_key: Optional[str] = None
+    fal_api_key: Optional[str] = None
+    runware_api_key: Optional[str] = None
     
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -39,9 +40,6 @@ class Settings(BaseSettings):
     chat_primary_provider: str = "gemini"
     chat_fallback_provider: str = "openrouter"
     
-    # ComfyUI Configuration
-    comfyui_base_url: str = "http://127.0.0.1:8188"
-    comfyui_timeout: int = 30
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
     studio_root_admin_emails: str = ""
@@ -52,12 +50,16 @@ class Settings(BaseSettings):
     supabase_anon_key: Optional[str] = None
     supabase_service_role_key: Optional[str] = None
     supabase_storage_bucket: str = "studio-assets"
+    state_store_backend: str = "sqlite"
+    state_store_path: Optional[str] = None
+    legacy_state_store_path: Optional[str] = None
 
     # Asset Storage
     asset_storage_backend: str = "local"
     
     # Redis Configuration
     redis_url: Optional[str] = None
+    enable_live_provider_smoke: bool = False
     
     # Server Configuration
     port: int = 8000
@@ -77,7 +79,6 @@ class Settings(BaseSettings):
     jwt_expiration: str = "24h"
     enable_api_docs: Optional[bool] = None
     enable_demo_auth: Optional[bool] = None
-    enable_local_owner_login: Optional[bool] = None
     
     # Rate Limiting
     rate_limit_per_minute: int = 60
@@ -95,14 +96,11 @@ class Settings(BaseSettings):
     sentry_dsn: Optional[str] = None
     opentelemetry_endpoint: Optional[str] = None
     
-    # Model Storage
-    model_storage_path: str = "C:/AI/models"
-    max_model_size_gb: int = 10
-    
     # Generation Limits
     max_concurrent_generations: int = 3
     max_queue_size: int = 100
     default_timeout_seconds: int = 300
+    enable_pollinations: bool = True
     
     # Cost Tracking
     cost_per_generation_usd: float = 0.01
@@ -166,7 +164,7 @@ class Settings(BaseSettings):
             raise ValueError("Port must be between 1 and 65535")
         return v
     
-    @field_validator("comfyui_timeout", "default_timeout_seconds")
+    @field_validator("default_timeout_seconds")
     @classmethod
     def validate_timeout(cls, v):
         if v <= 0:
@@ -179,6 +177,14 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"local", "supabase"}:
             raise ValueError("ASSET_STORAGE_BACKEND must be either 'local' or 'supabase'")
+        return normalized
+
+    @field_validator("state_store_backend")
+    @classmethod
+    def validate_state_store_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"json", "sqlite", "postgres"}:
+            raise ValueError("STATE_STORE_BACKEND must be one of: json, sqlite, postgres")
         return normalized
 
     @field_validator("chat_primary_provider", "chat_fallback_provider")
@@ -196,8 +202,6 @@ class Settings(BaseSettings):
             self.enable_api_docs = default_non_prod
         if self.enable_demo_auth is None:
             self.enable_demo_auth = default_non_prod
-        if self.enable_local_owner_login is None:
-            self.enable_local_owner_login = default_non_prod
         if not self.jwt_secret:
             # Provide a stable development fallback
             if self.environment == Environment.DEVELOPMENT:
@@ -210,7 +214,7 @@ class Settings(BaseSettings):
     
     def validate_production_requirements(self):
         """Validate that required settings are present in production."""
-        if self.environment == Environment.PRODUCTION:
+        if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
             required_fields = [
                 ("database_url", self.database_url),
                 ("supabase_url", self.supabase_url),
@@ -226,6 +230,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"Missing required production settings: {', '.join(missing_fields)}"
                 )
+            if self.state_store_backend != "postgres":
+                raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
     
     model_config = {
         "env_file": ".env",

@@ -1,0 +1,336 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import io
+import json
+import zlib
+from dataclasses import dataclass
+from typing import Any, Optional
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps, PngImagePlugin
+
+
+PROVENANCE_MARKER = "oc-proof-v1"
+PROVENANCE_TEXT_PREFIX = "OMNIACREATA_PROOF:"
+MAX_EMBEDDED_PAYLOAD_BYTES = 4096
+EXIF_TAG_IMAGE_DESCRIPTION = 270
+EXIF_TAG_SOFTWARE = 305
+EXIF_TAG_USER_COMMENT = 37510
+
+
+class AssetProtectionError(ValueError):
+    """Raised when a generated asset cannot be protected or inspected."""
+
+
+@dataclass(slots=True)
+class ProtectedAssetPayload:
+    delivery_bytes: bytes
+    clean_bytes: bytes
+    mime_type: str
+    watermark_text: str
+    proof_signature: str
+
+
+class GeneratedAssetProtectionPipeline:
+    """Applies visible ownership marks plus hidden provenance to generated images."""
+
+    def __init__(self, *, secret: str, visible_opacity: float = 0.7) -> None:
+        self._secret = secret.encode("utf-8")
+        self._visible_opacity = max(0.1, min(visible_opacity, 1.0))
+
+    def protect(
+        self,
+        image_bytes: bytes,
+        *,
+        mime_type: str,
+        asset_id: str,
+        job_id: str,
+        user_id: str,
+        username: Optional[str],
+    ) -> ProtectedAssetPayload:
+        source_image = self._open_image(image_bytes)
+        output_format, output_mime = self._resolve_output_format(mime_type, source_image.format)
+        normalized = ImageOps.exif_transpose(source_image).convert("RGBA")
+
+        safe_username = self._normalize_username(username)
+        watermark_text = f"OMNIACREATA | @{safe_username}"
+        proof_payload = self._build_proof_payload(
+            asset_id=asset_id,
+            job_id=job_id,
+            user_id=user_id,
+            username=safe_username,
+        )
+        encoded_proof = self._encode_proof_payload(proof_payload)
+
+        clean_bytes = self._save_variant(
+            normalized.copy(),
+            output_format=output_format,
+            output_mime=output_mime,
+            encoded_proof=encoded_proof,
+            watermark_text=None,
+        )
+        delivery_bytes = self._save_variant(
+            self._apply_visible_watermark(normalized.copy(), watermark_text),
+            output_format=output_format,
+            output_mime=output_mime,
+            encoded_proof=encoded_proof,
+            watermark_text=watermark_text,
+        )
+
+        return ProtectedAssetPayload(
+            delivery_bytes=delivery_bytes,
+            clean_bytes=clean_bytes,
+            mime_type=output_mime,
+            watermark_text=watermark_text,
+            proof_signature=str(proof_payload["sig"]),
+        )
+
+    def inspect(self, image_bytes: bytes) -> Optional[dict[str, Any]]:
+        image = self._open_image(image_bytes)
+        encoded_payload = self._extract_metadata_payload(image) or self._extract_lsb_payload(image)
+        if not encoded_payload:
+            return None
+
+        payload = self._decode_proof_payload(encoded_payload)
+        expected_sig = self._sign_payload({key: value for key, value in payload.items() if key != "sig"})
+        payload["valid"] = hmac.compare_digest(str(payload.get("sig") or ""), expected_sig)
+        return payload
+
+    def _open_image(self, image_bytes: bytes) -> Image.Image:
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+            image.load()
+            return image
+        except Exception as exc:
+            raise AssetProtectionError("Could not open generated image for protection") from exc
+
+    def _resolve_output_format(self, mime_type: str, image_format: Optional[str]) -> tuple[str, str]:
+        normalized = (mime_type or "").split(";")[0].strip().lower()
+        if normalized == "image/jpeg":
+            return "JPEG", "image/jpeg"
+        if normalized == "image/webp":
+            return "WEBP", "image/webp"
+        if normalized == "image/png":
+            return "PNG", "image/png"
+        if image_format:
+            upper = image_format.upper()
+            if upper == "JPEG":
+                return "JPEG", "image/jpeg"
+            if upper == "WEBP":
+                return "WEBP", "image/webp"
+        return "PNG", "image/png"
+
+    def _normalize_username(self, username: Optional[str]) -> str:
+        cleaned = (username or "creator").strip().lstrip("@")
+        cleaned = "".join(char for char in cleaned if char.isalnum() or char in {"_", ".", "-"})
+        return (cleaned or "creator")[:32]
+
+    def _build_proof_payload(
+        self,
+        *,
+        asset_id: str,
+        job_id: str,
+        user_id: str,
+        username: str,
+    ) -> dict[str, Any]:
+        payload = {
+            "marker": PROVENANCE_MARKER,
+            "asset_id": asset_id,
+            "job_id": job_id,
+            "user_id": user_id,
+            "username": username,
+            "issuer": "Generated by OmniaCreata",
+        }
+        payload["sig"] = self._sign_payload(payload)
+        return payload
+
+    def _sign_payload(self, payload: dict[str, Any]) -> str:
+        serialized = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        return hmac.new(self._secret, serialized, hashlib.sha256).hexdigest()
+
+    def _encode_proof_payload(self, payload: dict[str, Any]) -> str:
+        raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        compressed = zlib.compress(raw, level=9)
+        return base64.urlsafe_b64encode(compressed).decode("ascii").rstrip("=")
+
+    def _decode_proof_payload(self, encoded_payload: str) -> dict[str, Any]:
+        padded = encoded_payload + "=" * (-len(encoded_payload) % 4)
+        try:
+            compressed = base64.urlsafe_b64decode(padded.encode("ascii"))
+            raw = zlib.decompress(compressed)
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:
+            raise AssetProtectionError("Could not decode embedded provenance payload") from exc
+        if payload.get("marker") != PROVENANCE_MARKER:
+            raise AssetProtectionError("Embedded provenance marker is invalid")
+        return payload
+
+    def _save_variant(
+        self,
+        image: Image.Image,
+        *,
+        output_format: str,
+        output_mime: str,
+        encoded_proof: str,
+        watermark_text: Optional[str],
+    ) -> bytes:
+        embedded = self._embed_lsb_payload(image, encoded_proof)
+        save_kwargs: dict[str, Any] = {}
+
+        if output_format == "PNG":
+            pnginfo = PngImagePlugin.PngInfo()
+            pnginfo.add_text("Software", "OmniaCreata Studio")
+            pnginfo.add_text("Comment", f"{PROVENANCE_TEXT_PREFIX}{encoded_proof}")
+            if watermark_text:
+                pnginfo.add_text("Watermark", watermark_text)
+            save_kwargs["pnginfo"] = pnginfo
+            image_to_save = embedded
+        else:
+            exif = embedded.getexif()
+            exif[EXIF_TAG_IMAGE_DESCRIPTION] = "Generated by OmniaCreata"
+            exif[EXIF_TAG_SOFTWARE] = "OmniaCreata Studio"
+            exif[EXIF_TAG_USER_COMMENT] = f"{PROVENANCE_TEXT_PREFIX}{encoded_proof}".encode("utf-8")
+            save_kwargs["exif"] = exif.tobytes()
+            if output_format == "JPEG":
+                save_kwargs["quality"] = 95
+                save_kwargs["subsampling"] = 0
+            if output_format == "WEBP":
+                save_kwargs["quality"] = 95
+                save_kwargs["method"] = 6
+            image_to_save = embedded.convert("RGB")
+
+        buffer = io.BytesIO()
+        image_to_save.save(buffer, format=output_format, **save_kwargs)
+        return buffer.getvalue()
+
+    def _apply_visible_watermark(self, image: Image.Image, watermark_text: str) -> Image.Image:
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        width, height = image.size
+
+        font_size = max(20, min(52, int(min(width, height) * 0.034)))
+        font = self._resolve_font(font_size)
+        margin = max(20, int(min(width, height) * 0.026))
+        text_padding_x = max(14, font_size // 2)
+        text_padding_y = max(10, font_size // 3)
+        text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+
+        box_left = max(margin, width - text_width - (text_padding_x * 2) - margin)
+        box_top = max(margin, height - text_height - (text_padding_y * 2) - margin)
+        box_right = min(width - margin, box_left + text_width + (text_padding_x * 2))
+        box_bottom = min(height - margin, box_top + text_height + (text_padding_y * 2))
+
+        draw.rounded_rectangle(
+            (box_left, box_top, box_right, box_bottom),
+            radius=max(16, font_size // 2),
+            fill=(7, 10, 18, 112),
+            outline=(255, 255, 255, 36),
+            width=1,
+        )
+        draw.text(
+            (box_left + text_padding_x, box_top + text_padding_y - 1),
+            watermark_text,
+            font=font,
+            fill=(255, 255, 255, int(255 * self._visible_opacity)),
+        )
+        return Image.alpha_composite(image, overlay)
+
+    def _resolve_font(self, font_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+        for candidate in (
+            "DejaVuSans.ttf",
+            "arial.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+        ):
+            try:
+                return ImageFont.truetype(candidate, font_size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _embed_lsb_payload(self, image: Image.Image, encoded_payload: str) -> Image.Image:
+        payload_bytes = encoded_payload.encode("utf-8")
+        if len(payload_bytes) > MAX_EMBEDDED_PAYLOAD_BYTES:
+            raise AssetProtectionError("Embedded provenance payload is too large")
+
+        packet = len(payload_bytes).to_bytes(4, "big") + payload_bytes
+        bits: list[int] = []
+        for byte in packet:
+            for shift in range(7, -1, -1):
+                bits.append((byte >> shift) & 1)
+
+        rgba = image.convert("RGBA")
+        pixels = list(rgba.getdata())
+        capacity = len(pixels) * 3
+        if len(bits) > capacity:
+            raise AssetProtectionError("Image is too small to embed provenance data")
+
+        encoded_pixels = []
+        bit_index = 0
+        for red, green, blue, alpha in pixels:
+            channels = [red, green, blue]
+            for channel_index in range(3):
+                if bit_index >= len(bits):
+                    break
+                channels[channel_index] = (channels[channel_index] & 0xFE) | bits[bit_index]
+                bit_index += 1
+            encoded_pixels.append((channels[0], channels[1], channels[2], alpha))
+
+        protected = Image.new("RGBA", rgba.size)
+        protected.putdata(encoded_pixels)
+        return protected
+
+    def _extract_metadata_payload(self, image: Image.Image) -> Optional[str]:
+        comment = image.info.get("Comment")
+        if isinstance(comment, bytes):
+            comment = comment.decode("utf-8", errors="ignore")
+        if isinstance(comment, str) and comment.startswith(PROVENANCE_TEXT_PREFIX):
+            return comment.removeprefix(PROVENANCE_TEXT_PREFIX)
+
+        try:
+            exif = image.getexif()
+        except Exception:
+            exif = None
+        if exif:
+            user_comment = exif.get(EXIF_TAG_USER_COMMENT)
+            if isinstance(user_comment, bytes):
+                user_comment = user_comment.decode("utf-8", errors="ignore")
+            if isinstance(user_comment, str) and user_comment.startswith(PROVENANCE_TEXT_PREFIX):
+                return user_comment.removeprefix(PROVENANCE_TEXT_PREFIX)
+        return None
+
+    def _extract_lsb_payload(self, image: Image.Image) -> Optional[str]:
+        rgba = image.convert("RGBA")
+        pixels = list(rgba.getdata())
+        channels: list[int] = []
+        for red, green, blue, _ in pixels:
+            channels.extend((red & 1, green & 1, blue & 1))
+
+        if len(channels) < 32:
+            return None
+
+        length = 0
+        for bit in channels[:32]:
+            length = (length << 1) | bit
+        if length <= 0 or length > MAX_EMBEDDED_PAYLOAD_BYTES:
+            return None
+
+        total_bits = 32 + (length * 8)
+        if total_bits > len(channels):
+            return None
+
+        payload_bytes = bytearray()
+        for start in range(32, total_bits, 8):
+            value = 0
+            for bit in channels[start:start + 8]:
+                value = (value << 1) | bit
+            payload_bytes.append(value)
+
+        try:
+            return payload_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            return None

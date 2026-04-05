@@ -4,23 +4,64 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .common import utc_now
 
 
 class JobStatus(str, Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
     RETRYABLE_FAILED = "retryable_failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+
+    # Legacy aliases kept during the transition to the durable lifecycle names.
+    PENDING = "queued"
+    PROCESSING = "running"
+    COMPLETED = "succeeded"
+
+    @classmethod
+    def coerce(cls, value: object) -> "JobStatus":
+        if isinstance(value, cls):
+            return value
+
+        normalized = str(value or "").strip().lower()
+        mapping = {
+            "pending": cls.QUEUED,
+            "queued": cls.QUEUED,
+            "processing": cls.RUNNING,
+            "running": cls.RUNNING,
+            "completed": cls.SUCCEEDED,
+            "succeeded": cls.SUCCEEDED,
+            "failed": cls.FAILED,
+            "retryable_failed": cls.RETRYABLE_FAILED,
+            "cancelled": cls.CANCELLED,
+            "timed_out": cls.TIMED_OUT,
+        }
+        if normalized not in mapping:
+            raise ValueError(f"Unsupported job status: {value}")
+        return mapping[normalized]
+
+    @classmethod
+    def terminal_statuses(cls) -> set["JobStatus"]:
+        return {
+            cls.SUCCEEDED,
+            cls.FAILED,
+            cls.RETRYABLE_FAILED,
+            cls.CANCELLED,
+            cls.TIMED_OUT,
+        }
 
 
 class PromptSnapshot(BaseModel):
     prompt: str
     negative_prompt: str = ""
     model: str
+    workflow: str = "text_to_image"
+    reference_asset_id: Optional[str] = None
     width: int
     height: int
     steps: int
@@ -45,8 +86,9 @@ class GenerationJob(BaseModel):
     project_id: str
     identity_id: str
     title: str = "Untitled set"
-    status: JobStatus = JobStatus.PENDING
+    status: JobStatus = JobStatus.QUEUED
     provider: str = "pending"
+    queue_priority: str = "standard"
     model: str
     prompt_snapshot: PromptSnapshot
     estimated_cost: float
@@ -54,6 +96,14 @@ class GenerationJob(BaseModel):
     output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)
     error: Optional[str] = None
+    attempt_count: int = 0
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    started_at: Optional[datetime] = None
+    last_heartbeat_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, value: object) -> JobStatus:
+        return JobStatus.coerce(value)

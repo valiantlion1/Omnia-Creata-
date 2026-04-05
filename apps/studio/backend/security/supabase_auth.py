@@ -98,13 +98,18 @@ class SupabaseAuthClient:
         if headers:
             request_headers.update(headers)
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-            response = await client.request(
-                method,
-                f"{self.base_url}{path}",
-                json=json,
-                headers=request_headers,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+                response = await client.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    json=json,
+                    headers=request_headers,
+                )
+        except httpx.TimeoutException as exc:
+            raise SupabaseAuthError("Supabase auth request timed out") from exc
+        except httpx.HTTPError as exc:
+            raise SupabaseAuthError("Supabase auth request failed") from exc
 
         payload = self._safe_json(response)
         if response.status_code >= 400:

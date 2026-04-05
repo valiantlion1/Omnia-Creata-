@@ -148,19 +148,19 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#07111a] text-white overflow-x-hidden">
       {/* ambient glows */}
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute left-[-8%] top-[-6%] h-[34rem] w-[34rem] rounded-full bg-cyan-400/[0.04] blur-[200px]" />
-        <div className="absolute right-[-6%] top-[22%] h-[26rem] w-[26rem] rounded-full bg-blue-400/[0.03] blur-[180px]" />
-        <div className="absolute bottom-[-4%] left-[28%] h-[22rem] w-[22rem] rounded-full bg-indigo-400/[0.03] blur-[160px]" />
+        <div className="absolute left-[-10%] top-[-8%] h-[36rem] w-[36rem] rounded-full blur-[160px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
+        <div className="absolute right-[-8%] top-[20%] h-[30rem] w-[30rem] rounded-full blur-[140px] animate-[oc-gradientShiftB_24s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
+        <div className="absolute bottom-[-6%] left-[25%] h-[28rem] w-[28rem] rounded-full blur-[150px] animate-[oc-float_22s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-[1360px] px-5 py-6 md:px-8">
         {/* ═══ NAVBAR ═══ */}
-        <header className="flex items-center justify-between gap-6 py-4">
+        <header className="sticky top-0 z-50 flex items-center justify-between gap-6 py-4" style={{ backdropFilter: 'blur(16px) saturate(1.4)', WebkitBackdropFilter: 'blur(16px) saturate(1.4)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
           <Link to="/landing" className="flex items-center gap-3">
             <img src="/omnia-crest.png" alt="OmniaCreata" className="h-9 w-9 object-contain" />
             <div>
               <div className="text-sm font-semibold tracking-[0.22em] text-zinc-100">OMNIACREATA</div>
-              <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Studio</div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.24em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Studio</div>
             </div>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-zinc-300 md:flex">
@@ -168,7 +168,7 @@ export default function HomePage() {
             <Link to="/subscription" className="transition hover:text-white">Pricing</Link>
             <Link to="/help" className="transition hover:text-white">Help</Link>
             {!isAuthenticated && <Link to="/login" className="transition hover:text-white">Log in</Link>}
-            <Link to={cta} className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90">{ctaLabel}</Link>
+            <Link to={cta} className="rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}>{ctaLabel}</Link>
           </nav>
         </header>
 
@@ -182,13 +182,13 @@ export default function HomePage() {
               </div>
               <h1 className="mt-6 text-[3.2rem] font-semibold leading-[1.05] tracking-[-0.05em] text-white md:text-[4.2rem]">
                 Create stunning<br />
-                <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-indigo-400 bg-clip-text text-transparent">AI images</span> in seconds.
+                <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>AI images</span> in seconds.
               </h1>
               <p className="mt-6 max-w-md text-base leading-7 text-zinc-300">
                 Write a prompt, choose a style, and generate. Save your favorites, organize them into collections, and share them with the world.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to={cta} className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-semibold text-black transition hover:shadow-[0_0_40px_rgba(255,255,255,0.12)] hover:opacity-90">
+                <Link to={cta} className="inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 4px 24px rgb(var() / )' }}>
                   {ctaLabel} <ArrowRight className="h-4 w-4" />
                 </Link>
                 {!isAuthenticated && (
@@ -239,7 +239,7 @@ export default function HomePage() {
                 <Sparkles className="h-4 w-4 text-cyan-400" />
                 Stunning AI Images
               </div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                 Every image here was generated with OmniaCreata.
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm text-zinc-500">
@@ -253,7 +253,7 @@ export default function HomePage() {
                 return (
                   <Reveal key={`${img.src}-${i}`} delay={i * 70}>
                     <div
-                      className="group relative overflow-hidden rounded-[20px] border border-white/[0.06] bg-white/[0.02] will-change-transform"
+                      className="group relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.02] will-change-transform transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgb(var() / )]"
                       style={{ transform: `translateY(${parallaxY}px)` }}
                     >
                       <img src={img.src} alt={img.label} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-700 ease-out group-hover:scale-[1.04]" />
@@ -278,7 +278,7 @@ export default function HomePage() {
           <RevealSlide direction="left">
             <div className="text-center">
               <div className="text-[11px] uppercase tracking-[0.28em] text-zinc-600">Real-World Use Cases</div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                 See what you can create with OmniaCreata.
               </h2>
             </div>
@@ -292,9 +292,10 @@ export default function HomePage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${
                     activeTab === tab.id
-                      ? 'bg-white text-black'
+                      ? 'text-white font-semibold'
                       : 'border border-white/[0.08] text-zinc-400 hover:bg-white/[0.04] hover:text-white'
                   }`}
+                  style={activeTab === tab.id ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 16px rgb(var() / )' } : undefined}
                 >
                   {tab.label}
                 </button>
@@ -303,7 +304,7 @@ export default function HomePage() {
           </Reveal>
 
           <RevealScale delay={100}>
-            <div className="mt-10 overflow-hidden rounded-[28px] border border-white/[0.06] bg-gradient-to-br from-[#0c1520] via-[#0a1018] to-[#0d1420]">
+            <div className="mt-10 overflow-hidden rounded-[28px] border border-white/[0.08] transition-all duration-300 hover:border-[rgb(var() / )]" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }}>
               <div className="grid gap-0 lg:grid-cols-2">
                 <RevealSlide direction="left" delay={200}>
                   <div className="flex flex-col justify-center p-8 md:p-12">
@@ -344,7 +345,7 @@ export default function HomePage() {
           <Reveal>
             <div className="text-center">
               <div className="text-[11px] uppercase tracking-[0.28em] text-zinc-600">How it works</div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                 Three simple steps to your perfect image.
               </h2>
             </div>
@@ -353,15 +354,15 @@ export default function HomePage() {
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {steps.map((step, i) => (
               <RevealScale key={step.title} delay={i * 180}>
-                <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-8 transition duration-300 hover:border-white/[0.12] hover:bg-white/[0.04]">
+                <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] p-8 transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25),0_0_0_1px_rgb(var() / )]">
                   {/* subtle gradient glow on hover */}
-                  <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-gradient-to-br from-cyan-500/[0.03] to-blue-500/[0.03] opacity-0 transition duration-500 group-hover:opacity-100" />
+                  <div className="pointer-events-none absolute inset-0 rounded-[24px] opacity-0 transition duration-500 group-hover:opacity-100" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }} />
                   <div className="relative">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-gradient-to-br from-cyan-500/10 to-blue-500/10 text-white transition group-hover:from-cyan-500/20 group-hover:to-blue-500/20">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[16px] text-white transition" style={{ background: `linear-gradient(135deg, rgb(var() / ), rgb(var() / ))` }}>
                         <step.icon className="h-5 w-5" />
                       </div>
-                      <div className="text-sm font-medium text-zinc-600">0{i + 1}</div>
+                      <div className="text-sm font-medium" style={{ color: 'rgb(var(--primary-light))' }}>0{i + 1}</div>
                     </div>
                     <h3 className="mt-6 text-xl font-semibold text-white">{step.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-zinc-400">{step.description}</p>
@@ -375,7 +376,7 @@ export default function HomePage() {
         {/* ═══ GRADIENT CTA BLOCK ═══ */}
         <RevealScale>
           <section className="py-10 md:py-16">
-            <div className="overflow-hidden rounded-[32px] bg-gradient-to-br from-cyan-600/90 via-blue-600/90 to-indigo-700/90 p-10 md:p-16">
+            <div className="overflow-hidden rounded-[32px] p-10 md:p-16" style={{ background: `linear-gradient(135deg, rgb(var(--gradient-from)), rgb(var(--gradient-via)), rgb(var(--gradient-to)))` }}>
               <div className="mx-auto max-w-2xl text-center">
                 <h2 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
                   Your next image is one prompt away.
@@ -384,7 +385,7 @@ export default function HomePage() {
                   Sign up for free and start generating in under a minute. No credit card required.
                 </p>
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  <Link to={cta} className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-semibold text-black transition hover:opacity-90">
+                  <Link to={cta} className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-[0.97] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                     {ctaLabel} <ArrowRight className="h-4 w-4" />
                   </Link>
                   {!isAuthenticated && (

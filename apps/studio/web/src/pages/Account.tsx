@@ -14,14 +14,16 @@ function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (next: Vie
     <div className="flex items-center gap-1 rounded-full bg-white/[0.03] p-1 ring-1 ring-white/8">
       <button
         onClick={() => onChange('grid')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${value === 'grid' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
+        style={value === 'grid' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
         title="Grid view"
       >
         <Grid2X2 className="h-3 w-3" />
       </button>
       <button
         onClick={() => onChange('list')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'list' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${value === 'list' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
+        style={value === 'list' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
         title="List view"
       >
         <List className="h-3 w-3" />
@@ -82,7 +84,7 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-1">
       {posts.map((post) => (
         <article key={post.id} className="group relative flex flex-col gap-3">
-          <div className="relative overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.06] shadow-xl shadow-black/40 transition-shadow duration-500 group-hover:shadow-black/60 group-hover:ring-white/[0.12]">
+          <div className="relative overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.08] shadow-xl shadow-black/40 transition-all duration-500 group-hover:shadow-black/60 group-hover:ring-[rgb(var() / )]">
             {post.cover_asset ? (
               <img 
                 src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} 
@@ -200,7 +202,7 @@ export default function AccountPage() {
     <div className="flex flex-col min-h-full pb-10">
       {/* Cinematic Banner Header */}
       <div className="relative h-[240px] md:h-[300px] w-full shrink-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-black to-amber-900/20" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgba(0,0,0,0.8) 50%, rgb(var() / ))' }} />
         <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay" />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
         
@@ -224,12 +226,12 @@ export default function AccountPage() {
         <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] -mt-20 relative z-10">
           
           {/* Glassmorphic Sidebar Card */}
-          <div className="flex flex-col space-y-6 rounded-[24px] bg-zinc-900/60 p-6 backdrop-blur-xl ring-1 ring-white/10 shadow-2xl h-max">
+          <div className="flex flex-col space-y-6 rounded-[24px] p-6 backdrop-blur-xl ring-1 ring-white/[0.1] shadow-2xl h-max" style={{ background: 'linear-gradient(180deg, rgb(var() / ) 0%, rgb(var() / ) 100%)' }}>
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-white/10 to-white/5 text-3xl font-bold text-white shadow-inner ring-4 ring-black/50 mb-4 relative">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold text-white shadow-inner ring-4 ring-black/50 mb-4 relative" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }}>
                 {(payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()}
                 {payload.profile.plan === 'pro' && (
-                  <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-black shadow-lg ring-4 ring-zinc-900">
+                  <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full shadow-lg ring-4 ring-zinc-900" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' }}>
                     <span className="text-[10px] font-black tracking-wider">PRO</span>
                   </div>
                 )}
@@ -280,8 +282,11 @@ export default function AccountPage() {
                 <div className="space-y-2">
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                     <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${usage.plan_label.toLowerCase() === 'pro' ? 'bg-gradient-to-r from-amber-600 to-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'bg-white'}`} 
-                      style={{ width: `${Math.max(2, 100 - usage.progress_percent)}%` }} 
+                      className={`h-full rounded-full transition-all duration-1000 ${usage.plan_label.toLowerCase() === 'pro' ? 'shadow-[0_0_10px_rgb(var() / )]' : 'bg-white'}`}
+                      style={{ 
+                        width: `${Math.max(2, 100 - usage.progress_percent)}%`,
+                        ...(usage.plan_label.toLowerCase() === 'pro' ? { background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' } : {})
+                      }} 
                     />
                   </div>
                   <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
@@ -298,13 +303,15 @@ export default function AccountPage() {
                 <div className="flex grid-cols-2 gap-2">
                   <button 
                     onClick={() => updateProfileMutation.mutate({ default_visibility: 'public' })}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${activeDefaultVisibility === 'public' ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'public' ? 'text-white ring-1 ring-[rgb(var() / )]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    style={activeDefaultVisibility === 'public' ? { background: 'rgb(var() / )' } : undefined}
                   >
                     Public
                   </button>
                   <button 
                     onClick={() => updateProfileMutation.mutate({ default_visibility: 'private' })}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${activeDefaultVisibility === 'private' ? 'bg-white/10 text-white ring-1 ring-white/20' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'private' ? 'text-white ring-1 ring-[rgb(var() / )]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    style={activeDefaultVisibility === 'private' ? { background: 'rgb(var() / )' } : undefined}
                   >
                     Private
                   </button>

@@ -14,6 +14,11 @@ class ChatRole(str, Enum):
     ASSISTANT = "assistant"
 
 
+class ChatFeedback(str, Enum):
+    LIKE = "like"
+    DISLIKE = "dislike"
+
+
 class ChatAttachment(BaseModel):
     kind: str = "image"
     url: str
@@ -65,7 +70,11 @@ class ChatMessage(BaseModel):
     identity_id: str
     role: ChatRole
     content: str
+    parent_message_id: Optional[str] = None
     attachments: List[ChatAttachment] = Field(default_factory=list)
     suggested_actions: List[ChatSuggestedAction] = Field(default_factory=list)
+    feedback: Optional[ChatFeedback] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    version: int = 1
     created_at: datetime = Field(default_factory=utc_now)
+    edited_at: Optional[datetime] = None

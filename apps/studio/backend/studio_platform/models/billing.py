@@ -35,6 +35,17 @@ class CreditLedgerEntry(BaseModel):
     checkout_kind: Optional[CheckoutKind] = None
 
 
+class BillingWebhookReceipt(BaseModel):
+    id: str
+    provider: str = "lemonsqueezy"
+    event_name: str
+    resource_type: str
+    resource_id: str
+    identity_id: Optional[str] = None
+    checkout_kind: Optional[CheckoutKind] = None
+    processed_at: datetime = Field(default_factory=utc_now)
+
+
 class ModelCatalogEntry(BaseModel):
     id: str
     label: str
@@ -58,6 +69,15 @@ class PlanCatalogEntry(BaseModel):
     label: str
     monthly_credits: int
     queue_priority: str
+    max_incomplete_generations: int = 0
+    generation_submit_window_seconds: int = 60
+    generation_submit_limit: int = 0
     max_resolution: str
+    can_access_chat: bool = False
+    premium_chat: bool = False
+    chat_modes: list[str] = Field(default_factory=list)
+    chat_message_limit: int = 0
+    max_chat_attachments: int = 0
+    clean_exports: bool = False
     share_links: bool
     can_generate: bool

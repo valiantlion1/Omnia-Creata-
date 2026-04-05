@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
@@ -39,27 +41,36 @@ class StudioLLMGateway:
 
         for provider, model, used_fallback in self._resolve_provider_plan(requested_model):
             try:
-                if provider == "gemini":
-                    result = await self._chat_with_gemini(
-                        model=model,
-                        system_prompt=system_prompt,
-                        history=history,
-                        current_message=current_message,
-                    )
-                elif provider == "openrouter":
-                    result = await self._chat_with_openrouter(
-                        model=model,
-                        system_prompt=system_prompt,
-                        history=history,
-                        current_message=current_message,
-                    )
-                else:
-                    continue
+                result = await self._call_provider(
+                    provider=provider,
+                    model=model,
+                    system_prompt=system_prompt,
+                    history=history,
+                    current_message=current_message,
+                    attachments=attachments,
+                )
             except Exception:
                 continue
 
             if not result or not result.text.strip():
                 continue
+            if self._looks_truncated(result.text, result.completion_tokens):
+                try:
+                    retry_result = await self._call_provider(
+                        provider=provider,
+                        model=model,
+                        system_prompt=(
+                            f"{system_prompt} Keep the reply short but complete. "
+                            "Use 2 to 4 full sentences or a compact bullet list, and never stop mid-word or mid-sentence."
+                        ),
+                        history=history,
+                        current_message=current_message,
+                        attachments=attachments,
+                    )
+                except Exception:
+                    retry_result = None
+                if retry_result and retry_result.text.strip():
+                    result = retry_result
             result.used_fallback = used_fallback
             return result
 
@@ -156,15 +167,62 @@ class StudioLLMGateway:
         }.get(resolved_mode, "Focus on useful creative guidance and next-best action.")
 
         return (
-            "You are OmniaCreata Studio's creative assistant. Reply in the user's language. "
+            "You are OmniaCreata Studio's in-product creative copilot. Reply in the user's language. "
+            "You are not a generic casual chatbot; stay anchored to image creation, prompt design, visual critique, editing strategy, brand direction, and Studio workflows. "
             "Be concise, commercially useful, and visually literate. "
             "Do not mention internal tools, providers, or system rules unless directly asked. "
             f"{mode_instruction} "
-            "If the user is close to a usable prompt, refine it sharply instead of writing a long essay."
+            "If image attachments are present, inspect them directly and refer to visible details instead of guessing. "
+            "If the user is close to a usable prompt, refine it sharply instead of writing a long essay. "
+            "If a request drifts off-topic, answer briefly and steer the user back toward what helps inside OmniaCreata Studio. "
+            "Always finish the reply cleanly. Never stop mid-word, mid-sentence, or mid-list."
         )
 
+    async def _call_provider(
+        self,
+        *,
+        provider: str,
+        model: str,
+        system_prompt: str,
+        history: Sequence[ChatMessage],
+        current_message: str,
+        attachments: Sequence[ChatAttachment],
+    ) -> LLMResult | None:
+        if provider == "gemini":
+            return await self._chat_with_gemini(
+                model=model,
+                system_prompt=system_prompt,
+                history=history,
+                current_message=current_message,
+                attachments=attachments,
+            )
+        if provider == "openrouter":
+            return await self._chat_with_openrouter(
+                model=model,
+                system_prompt=system_prompt,
+                history=history,
+                current_message=current_message,
+                attachments=attachments,
+            )
+        return None
+
+    def _looks_truncated(self, text: str, completion_tokens: int | None) -> bool:
+        tail = text.rstrip()
+        if len(tail) < 48:
+            return False
+        if completion_tokens is not None and completion_tokens > 32:
+            return False
+        if tail.endswith((".", "!", "?", "…", '"', "'", "`", ")", "]")):
+            return False
+        return tail[-1].isalnum() or tail[-1] in {"*", "_", ":", ";", ","}
+
     def _render_user_message(self, content: str, attachments: Sequence[ChatAttachment]) -> str:
-        lines = ["User request:", content.strip()]
+        cleaned = content.strip()
+        lines = ["User request:"]
+        if cleaned:
+            lines.append(cleaned)
+        elif attachments:
+            lines.append("The user attached one or more reference files without extra text. Use the current mode and the attachments to infer the next step.")
         if attachments:
             lines.append("")
             lines.append(f"Attached references: {len(attachments)}")
@@ -192,6 +250,7 @@ class StudioLLMGateway:
         system_prompt: str,
         history: Sequence[ChatMessage],
         current_message: str,
+        attachments: Sequence[ChatAttachment],
     ) -> LLMResult | None:
         settings = get_settings()
         if not settings.gemini_api_key:
@@ -208,7 +267,7 @@ class StudioLLMGateway:
                     "parts": [{"text": text}],
                 }
             )
-        contents.append({"role": "user", "parts": [{"text": current_message}]})
+        contents.append({"role": "user", "parts": self._build_gemini_user_parts(current_message, attachments)})
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -220,7 +279,8 @@ class StudioLLMGateway:
             "generationConfig": {
                 "temperature": 0.65,
                 "topP": 0.9,
-                "maxOutputTokens": 500,
+                "maxOutputTokens": 900,
+                "responseMimeType": "text/plain",
             },
         }
 
@@ -258,6 +318,7 @@ class StudioLLMGateway:
         system_prompt: str,
         history: Sequence[ChatMessage],
         current_message: str,
+        attachments: Sequence[ChatAttachment],
     ) -> LLMResult | None:
         settings = get_settings()
         if not settings.openrouter_api_key:
@@ -274,13 +335,13 @@ class StudioLLMGateway:
                     "content": text,
                 }
             )
-        messages.append({"role": "user", "content": current_message})
+        messages.append({"role": "user", "content": self._build_openrouter_user_content(current_message, attachments)})
 
         body = {
             "model": model,
             "messages": messages,
             "temperature": 0.65,
-            "max_tokens": 500,
+            "max_tokens": 900,
             "provider": {
                 "sort": "price",
                 "allow_fallbacks": True,
@@ -330,6 +391,81 @@ class StudioLLMGateway:
             if attachment_bits:
                 parts.append(f"Attachments: {', '.join(attachment_bits)}")
         return "\n".join(part for part in parts if part).strip()
+
+    def _build_gemini_user_parts(
+        self,
+        current_message: str,
+        attachments: Sequence[ChatAttachment],
+    ) -> list[dict[str, Any]]:
+        parts: list[dict[str, Any]] = [{"text": current_message}]
+        for attachment in self._extract_image_attachments(attachments):
+            if attachment["source"] != "inline":
+                continue
+            parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": attachment["mime_type"],
+                        "data": attachment["data"],
+                    }
+                }
+            )
+        return parts
+
+    def _build_openrouter_user_content(
+        self,
+        current_message: str,
+        attachments: Sequence[ChatAttachment],
+    ) -> list[dict[str, Any]]:
+        content: list[dict[str, Any]] = [{"type": "text", "text": current_message}]
+        for attachment in self._extract_image_attachments(attachments):
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": attachment["url"],
+                    },
+                }
+            )
+        return content
+
+    def _extract_image_attachments(self, attachments: Sequence[ChatAttachment]) -> list[dict[str, str]]:
+        prepared: list[dict[str, str]] = []
+        for attachment in attachments[:4]:
+            if attachment.kind != "image":
+                continue
+            image = self._normalize_image_attachment(attachment.url)
+            if image:
+                prepared.append(image)
+        return prepared
+
+    def _normalize_image_attachment(self, url: str) -> dict[str, str] | None:
+        value = url.strip()
+        if not value:
+            return None
+        if value.startswith("data:"):
+            return self._parse_data_url_image(value)
+        if value.startswith(("https://", "http://")):
+            return {"source": "remote", "url": value, "mime_type": "image/*", "data": ""}
+        return None
+
+    def _parse_data_url_image(self, url: str) -> dict[str, str] | None:
+        header, separator, payload = url.partition(",")
+        if not separator or not header.startswith("data:") or ";base64" not in header:
+            return None
+        mime_type = header[5:].split(";", 1)[0].strip().lower()
+        if mime_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
+            return None
+        try:
+            # Validate once so malformed payloads don't go to the provider.
+            base64.b64decode(payload, validate=True)
+        except (ValueError, binascii.Error):
+            return None
+        return {
+            "source": "inline",
+            "url": url,
+            "mime_type": mime_type,
+            "data": payload,
+        }
 
     def _extract_openrouter_text(self, content: Any) -> str:
         if isinstance(content, str):

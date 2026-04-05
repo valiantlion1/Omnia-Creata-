@@ -3,9 +3,20 @@ import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSessio
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 
 export type IdentityPlan = 'guest' | 'free' | 'pro'
-export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retryable_failed'
+export type JobStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'retryable_failed'
+  | 'cancelled'
+  | 'timed_out'
+  | 'pending'
+  | 'processing'
+  | 'completed'
 export type CheckoutKind = 'pro_monthly' | 'top_up_small' | 'top_up_large'
 export type Visibility = 'public' | 'private'
+export type ProjectSurface = 'compose' | 'chat'
 
 export type PlanInfo = {
   id: IdentityPlan
@@ -95,6 +106,7 @@ export type Project = {
   identity_id: string
   title: string
   description: string
+  surface: ProjectSurface
   cover_asset_id: string | null
   last_generation_id: string | null
   created_at: string
@@ -105,6 +117,8 @@ export type PromptSnapshot = {
   prompt: string
   negative_prompt: string
   model: string
+  workflow: string
+  reference_asset_id: string | null
   width: number
   height: number
   steps: number
@@ -136,8 +150,29 @@ export type Generation = {
   output_count: number
   outputs: GenerationOutput[]
   error: string | null
+  attempt_count?: number
   created_at: string
+  started_at?: string | null
+  last_heartbeat_at?: string | null
   completed_at: string | null
+}
+
+export function normalizeJobStatus(status: JobStatus): Exclude<JobStatus, 'pending' | 'processing' | 'completed'> {
+  switch (status) {
+    case 'pending':
+      return 'queued'
+    case 'processing':
+      return 'running'
+    case 'completed':
+      return 'succeeded'
+    default:
+      return status
+  }
+}
+
+export function isTerminalJobStatus(status: JobStatus) {
+  const normalized = normalizeJobStatus(status)
+  return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
 }
 
 export type MediaAsset = {
@@ -210,6 +245,8 @@ export type ChatSuggestedAction = {
   value: string | null
 }
 
+export type ChatFeedback = 'like' | 'dislike' | null
+
 export type ChatConversation = {
   id: string
   workspace_id: string
@@ -228,10 +265,14 @@ export type ChatMessage = {
   identity_id: string
   role: 'user' | 'assistant'
   content: string
+  parent_message_id?: string | null
   attachments: ChatAttachment[]
   suggested_actions: ChatSuggestedAction[]
+  feedback?: ChatFeedback
   metadata?: Record<string, unknown>
+  version?: number
   created_at: string
+  edited_at?: string | null
 }
 
 export type ModelCatalogEntry = {
@@ -340,7 +381,15 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       clearStudioAccessToken()
     }
     const payload = await response.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(payload.error ?? `Request failed with ${response.status}`)
+    const detailMessage = typeof payload.detail === 'string'
+      ? payload.detail
+      : Array.isArray(payload.detail)
+        ? payload.detail
+            .map((item: { msg?: unknown; message?: unknown }) => (typeof item?.msg === 'string' ? item.msg : typeof item?.message === 'string' ? item.message : ''))
+            .filter(Boolean)
+            .join(' · ')
+        : null
+    throw new Error(payload.error ?? detailMessage ?? `Request failed with ${response.status}`)
   }
 
   return response.json() as Promise<T>
@@ -373,7 +422,7 @@ export const studioApi = {
       }),
     }),
   listProjects: () => apiFetch<{ projects: Project[] }>('/projects'),
-  createProject: (payload: { title: string; description?: string }) =>
+  createProject: (payload: { title: string; description?: string; surface?: ProjectSurface }) =>
     apiFetch<Project>('/projects', { method: 'POST', body: JSON.stringify(payload) }),
   getProject: (projectId: string) => apiFetch<{ project: Project; recent_generations: Generation[]; recent_assets: MediaAsset[] }>(`/projects/${projectId}`),
   listConversations: () => apiFetch<{ conversations: ChatConversation[] }>('/conversations'),
@@ -388,12 +437,44 @@ export const studioApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  editConversationMessage: (
+    conversationId: string,
+    messageId: string,
+    payload: { content: string; model?: string; attachments?: ChatAttachment[] },
+  ) =>
+    apiFetch<{ conversation: ChatConversation; user_message: ChatMessage; assistant_message: ChatMessage }>(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      },
+    ),
+  regenerateConversationMessage: (conversationId: string, messageId: string) =>
+    apiFetch<{ conversation: ChatConversation; user_message: ChatMessage; assistant_message: ChatMessage }>(
+      `/conversations/${conversationId}/messages/${messageId}/regenerate`,
+      {
+        method: 'POST',
+      },
+    ),
+  revertConversationMessage: (conversationId: string, messageId: string) =>
+    apiFetch<{ conversation: ChatConversation; user_message: ChatMessage; assistant_message: ChatMessage }>(
+      `/conversations/${conversationId}/messages/${messageId}/revert`,
+      {
+        method: 'POST',
+      },
+    ),
+  setConversationMessageFeedback: (conversationId: string, messageId: string, feedback: ChatFeedback) =>
+    apiFetch<ChatMessage>(`/conversations/${conversationId}/messages/${messageId}/feedback`, {
+      method: 'PATCH',
+      body: JSON.stringify({ feedback }),
+    }),
   listGenerations: (projectId?: string) =>
     apiFetch<{ generations: Generation[] }>(projectId ? `/generations?project_id=${encodeURIComponent(projectId)}` : '/generations'),
   createGeneration: (payload: {
     project_id: string
     prompt: string
     negative_prompt: string
+    reference_asset_id?: string | null
     model: string
     width: number
     height: number
@@ -411,6 +492,8 @@ export const studioApi = {
     const suffix = params.toString() ? `?${params.toString()}` : ''
     return apiFetch<{ assets: MediaAsset[] }>(`/assets${suffix}`)
   },
+  importAsset: (payload: { project_id: string; data_url: string; title: string }) =>
+    apiFetch<MediaAsset>('/assets/import', { method: 'POST', body: JSON.stringify(payload) }),
   renameAsset: (assetId: string, payload: { title: string }) =>
     apiFetch<MediaAsset>(`/assets/${assetId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   trashAsset: (assetId: string) => apiFetch<MediaAsset>(`/assets/${assetId}`, { method: 'DELETE' }),
