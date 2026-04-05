@@ -40,6 +40,8 @@ def _build_generation_job() -> GenerationJob:
         model="flux-schnell",
         estimated_cost=0.0,
         credit_cost=6,
+        reserved_credit_cost=3,
+        credit_status="reserved",
         output_count=1,
         prompt_snapshot=PromptSnapshot(
             prompt="test prompt",
@@ -166,6 +168,10 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["routing_strategy"] == "free-first"
         assert payload["routing_reason"] == "free_standard_default"
         assert payload["prompt_profile"] == "generic"
+        assert payload["reserved_credit_cost"] == 3
+        assert payload["final_credit_cost"] is None
+        assert payload["credit_charge_policy"] == "none"
+        assert payload["credit_status"] == "reserved"
     finally:
         await service.shutdown()
 

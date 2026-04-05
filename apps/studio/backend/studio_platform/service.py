@@ -676,7 +676,9 @@ class StudioService:
 
             await self.store.mutate(timeout_mutation)
             for job_id in timed_out_job_ids:
-                job = tracked_job_map.get(job_id)
+                job = await self._get_generation_job_snapshot(job_id)
+                if job is None:
+                    job = tracked_job_map.get(job_id)
                 if job is not None:
                     self._log_generation_event(
                         "generation_maintenance_timeout",
@@ -704,7 +706,9 @@ class StudioService:
 
             await self.store.mutate(failed_mutation)
             for job_id in failed_job_ids:
-                job = tracked_job_map.get(job_id)
+                job = await self._get_generation_job_snapshot(job_id)
+                if job is None:
+                    job = tracked_job_map.get(job_id)
                 if job is not None:
                     self._log_generation_event(
                         "generation_retry_exhausted",
@@ -917,14 +921,15 @@ class StudioService:
 
         await self.store.mutate(mutation)
         for job in orphaned_jobs:
+            updated_job = await self._get_generation_job_snapshot(job.id)
             self._log_generation_event(
                 "generation_orphan_cleanup",
-                job=job,
+                job=updated_job or job,
                 status=JobStatus.TIMED_OUT,
-                provider=job.provider,
+                provider=(updated_job or job).provider,
                 error="Generation timed out during nightly orphan cleanup after exceeding the 24 hour safety window.",
                 error_code="orphaned_job_timeout",
-                started_at=job.started_at or job.created_at,
+                started_at=(updated_job or job).started_at or (updated_job or job).created_at,
                 finished_at=now,
                 level=logging.WARNING,
             )
@@ -1565,7 +1570,12 @@ class StudioService:
             raise PermissionError("Clean export is only available to the asset owner")
 
         identity = await self.get_identity(identity_id)
-        ensure_clean_export_allowed(identity=identity, plan_catalog=PLAN_CATALOG)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
+        ensure_clean_export_allowed(
+            identity=identity,
+            plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
+        )
         if not self._asset_variant_exists(asset, "clean"):
             raise FileNotFoundError("Clean export is not available for this asset")
 
@@ -1941,11 +1951,13 @@ class StudioService:
         identity = await self.get_identity(identity_id)
         attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
         resolved_mode = resolve_chat_mode(model or conversation.model)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
         ensure_chat_request_allowed(
             identity=identity,
             mode=resolved_mode,
             attachments=attachment_models,
             plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
         )
         sanitized_content = content.strip()
         if not sanitized_content and not attachment_models:
@@ -2010,11 +2022,13 @@ class StudioService:
         )
         identity = await self.get_identity(identity_id)
         resolved_mode = resolve_chat_mode(conversation.model)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
         ensure_chat_request_allowed(
             identity=identity,
             mode=resolved_mode,
             attachments=user_message.attachments,
             plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
         )
         history = self._messages_before_turn(messages, user_message.id)
         rebuilt_assistant = await self._build_assistant_message(
@@ -2115,11 +2129,13 @@ class StudioService:
         messages = await self.list_conversation_messages(identity_id, conversation_id)
         attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
         resolved_mode = resolve_chat_mode(model or conversation.model)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
         entitlements = ensure_chat_request_allowed(
             identity=identity,
             mode=resolved_mode,
             attachments=attachment_models,
             plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
         )
         user_turn_count = count_user_turns(messages)
         message_limit = entitlements.chat_message_limit
@@ -3008,61 +3024,60 @@ class StudioService:
                 raise KeyError("Identity not found")
 
             self._refresh_monthly_credits_locked(state, current_identity)
-            if self._has_unlimited_generation_access(current_identity):
+            unlimited_access = self._has_unlimited_generation_access(current_identity)
+            if unlimited_access:
                 self._apply_privileged_identity_overrides(current_identity)
 
-            queued_jobs = sum(1 for current_job in state.generations.values() if current_job.status == JobStatus.QUEUED)
-            queue_limit = min(self.settings.max_queue_size, 50)
-            if queued_jobs >= queue_limit:
-                raise GenerationCapacityError(
-                    "Generation queue is currently full. Please try again shortly.",
-                    queue_full=True,
-                    estimated_wait_seconds=self._estimate_queue_wait_seconds(queued_jobs),
-                )
-
-            incomplete_jobs = count_incomplete_generations(state)
-            if incomplete_jobs >= self.settings.max_queue_size:
-                raise GenerationCapacityError(
-                    "Generation queue is currently full. Please try again shortly.",
-                    queue_full=True,
-                    estimated_wait_seconds=self._estimate_queue_wait_seconds(incomplete_jobs),
-                )
-
-            if (
-                plan_config.max_incomplete_generations > 0
-                and count_incomplete_generations_for_identity(state, identity.id) >= plan_config.max_incomplete_generations
-            ):
-                raise ValueError(
-                    f"{plan_config.label} plan has reached its active generation limit. Please wait for current jobs to finish."
-                )
-
-            if plan_config.generation_submit_limit > 0:
-                window_start = utc_now() - timedelta(seconds=plan_config.generation_submit_window_seconds)
-                recent_requests = count_recent_generation_requests_for_identity(
-                    state=state,
-                    identity_id=identity.id,
-                    since=window_start,
-                )
-                if recent_requests >= plan_config.generation_submit_limit:
-                    raise ValueError(
-                        f"{plan_config.label} plan has reached its recent generation burst limit. Please wait a moment and try again."
+            if not unlimited_access:
+                queued_jobs = sum(1 for current_job in state.generations.values() if current_job.status == JobStatus.QUEUED)
+                queue_limit = min(self.settings.max_queue_size, 50)
+                if queued_jobs >= queue_limit:
+                    raise GenerationCapacityError(
+                        "Generation queue is currently full. Please try again shortly.",
+                        queue_full=True,
+                        estimated_wait_seconds=self._estimate_queue_wait_seconds(queued_jobs),
                     )
 
-            if has_duplicate_incomplete_generation(
-                state=state,
-                identity_id=identity.id,
-                project_id=project_id,
-                model_id=model_id,
-                prompt_snapshot=prompt_snapshot,
-            ):
-                raise ValueError("An identical generation is already queued or running for this project.")
+                incomplete_jobs = count_incomplete_generations(state)
+                if incomplete_jobs >= self.settings.max_queue_size:
+                    raise GenerationCapacityError(
+                        "Generation queue is currently full. Please try again shortly.",
+                        queue_full=True,
+                        estimated_wait_seconds=self._estimate_queue_wait_seconds(incomplete_jobs),
+                    )
 
-            billing_state = self._resolve_billing_state_locked(state, current_identity)
-            if (
-                not self._has_unlimited_generation_access(current_identity)
-                and billing_state.available_to_spend < job.reserved_credit_cost
-            ):
-                raise ValueError("Not enough credits to run this generation")
+                if (
+                    plan_config.max_incomplete_generations > 0
+                    and count_incomplete_generations_for_identity(state, identity.id) >= plan_config.max_incomplete_generations
+                ):
+                    raise ValueError(
+                        f"{plan_config.label} plan has reached its active generation limit. Please wait for current jobs to finish."
+                    )
+
+                if plan_config.generation_submit_limit > 0:
+                    window_start = utc_now() - timedelta(seconds=plan_config.generation_submit_window_seconds)
+                    recent_requests = count_recent_generation_requests_for_identity(
+                        state=state,
+                        identity_id=identity.id,
+                        since=window_start,
+                    )
+                    if recent_requests >= plan_config.generation_submit_limit:
+                        raise ValueError(
+                            f"{plan_config.label} plan has reached its recent generation burst limit. Please wait a moment and try again."
+                        )
+
+                if has_duplicate_incomplete_generation(
+                    state=state,
+                    identity_id=identity.id,
+                    project_id=project_id,
+                    model_id=model_id,
+                    prompt_snapshot=prompt_snapshot,
+                ):
+                    raise ValueError("An identical generation is already queued or running for this project.")
+
+                billing_state = self._resolve_billing_state_locked(state, current_identity)
+                if billing_state.available_to_spend < job.reserved_credit_cost:
+                    raise ValueError("Not enough credits to run this generation")
 
             state.identities[current_identity.id] = current_identity
             state.generations[job.id] = job
@@ -3073,7 +3088,12 @@ class StudioService:
 
     async def create_share(self, identity_id: str, project_id: Optional[str], asset_id: Optional[str]) -> ShareLink:
         identity = await self.get_identity(identity_id)
-        entitlements = resolve_entitlements(identity=identity, plan_catalog=PLAN_CATALOG)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
+        entitlements = resolve_entitlements(
+            identity=identity,
+            plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
+        )
         if not entitlements.can_share_links:
             raise PermissionError("Share links require Pro")
         if not project_id and not asset_id:
@@ -3409,7 +3429,7 @@ class StudioService:
             finished_at = utc_now()
             error_code = self._classify_generation_error_code(exc)
             error_message = self._normalize_generation_error_message(exc)
-            await self._update_job_status(
+            updated_job = await self._update_job_status(
                 job_id,
                 JobStatus.RETRYABLE_FAILED,
                 error=error_message,
@@ -3417,7 +3437,7 @@ class StudioService:
             )
             self._log_generation_event(
                 "generation_retryable_failure",
-                job=job,
+                job=updated_job or job,
                 status=JobStatus.RETRYABLE_FAILED,
                 provider=provider_label,
                 error=error_message,
@@ -3444,7 +3464,7 @@ class StudioService:
             finished_at = utc_now()
             error_code = self._classify_generation_error_code(exc)
             error_message = self._normalize_generation_error_message(exc)
-            await self._update_job_status(
+            updated_job = await self._update_job_status(
                 job_id,
                 JobStatus.FAILED,
                 error=error_message,
@@ -3452,7 +3472,7 @@ class StudioService:
             )
             self._log_generation_event(
                 "generation_failed",
-                job=job,
+                job=updated_job or job,
                 status=JobStatus.FAILED,
                 provider=provider_label,
                 error=error_message,
@@ -3473,7 +3493,9 @@ class StudioService:
         provider: Optional[str] = None,
         error: Optional[str] = None,
         error_code: Optional[str] = None,
-    ) -> None:
+    ) -> Optional[GenerationJob]:
+        holder: Dict[str, GenerationJob] = {}
+
         def mutation(state: StudioState) -> None:
             apply_generation_status_update(
                 state=state,
@@ -3484,8 +3506,15 @@ class StudioService:
                 error_code=error_code,
                 now=utc_now(),
             )
+            updated_job = state.generations.get(job_id)
+            if updated_job is not None:
+                holder["job"] = updated_job.model_copy(deep=True)
 
         await self.store.mutate(mutation)
+        return holder.get("job")
+
+    async def _get_generation_job_snapshot(self, job_id: str) -> Optional[GenerationJob]:
+        return await self.store.get_model("generations", job_id, GenerationJob)
 
     def _normalize_generation_error_message(self, exc: Exception) -> str:
         message = " ".join(str(exc).split())
