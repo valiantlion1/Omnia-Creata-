@@ -196,8 +196,18 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         client_host = request.client.host if request.client else "unknown"
         return f"{scope}:{identifier or client_host}"
 
-    async def _consume_rate_limit(request: Request, scope: str, limit: int, identifier: Optional[str] = None) -> None:
-        decision = await rate_limiter.check(_build_client_key(request, scope, identifier), limit=limit)
+    async def _consume_rate_limit(
+        request: Request,
+        scope: str,
+        limit: int,
+        identifier: Optional[str] = None,
+        window_seconds: int = 60,
+    ) -> None:
+        decision = await rate_limiter.check(
+            _build_client_key(request, scope, identifier),
+            limit=limit,
+            window_seconds=window_seconds,
+        )
         if decision.allowed:
             return
         raise HTTPException(
@@ -705,17 +715,18 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = _require_auth(current_user)
         await _consume_generation_rate_limits(request, auth_user)
-        
-        # Verify safety rules
+
         mod_result, flagged_term = await check_prompt_safety(payload.prompt)
-        if mod_result == ModerationResult.HARD_BLOCK:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Safety violation: Your prompt contains prohibited content and has been blocked."
+        if mod_result != ModerationResult.SAFE:
+            await service.record_generation_moderation_block(
+                auth_user.id,
+                mod_result,
+                flagged_term or mod_result.value,
             )
-        elif mod_result == ModerationResult.SOFT_BLOCK:
-            # In a real app we might write to an audit log table here.
-            pass
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Safety violation: Your prompt contains blocked content and has been rejected.",
+            )
             
         try:
             job = await service.create_generation(
@@ -848,7 +859,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return await service.empty_trash(auth_user.id)
 
     @router.get("/assets/{asset_id}/content")
-    async def get_asset_content(asset_id: str, token: str = Query(min_length=16)):
+    async def get_asset_content(
+        asset_id: str,
+        request: Request,
+        token: str = Query(min_length=16),
+    ):
+        await _consume_rate_limit(request, "assets:content:ip", limit=120)
         try:
             delivery = await service.resolve_asset_delivery(asset_id, token, "content")
         except KeyError:
@@ -862,7 +878,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
 
     @router.get("/assets/{asset_id}/thumbnail")
-    async def get_asset_thumbnail(asset_id: str, token: str = Query(min_length=16)):
+    async def get_asset_thumbnail(
+        asset_id: str,
+        request: Request,
+        token: str = Query(min_length=16),
+    ):
+        await _consume_rate_limit(request, "assets:thumbnail:ip", limit=120)
         try:
             delivery = await service.resolve_asset_delivery(asset_id, token, "thumbnail")
         except KeyError:
@@ -883,6 +904,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = _require_auth(current_user)
         await _consume_rate_limit(request, "assets:clean-export", limit=24, identifier=auth_user.id)
+        await _consume_rate_limit(request, "assets:clean-export:ip", limit=30)
         try:
             delivery = await service.resolve_clean_asset_export(asset_id, auth_user.id)
         except KeyError:
@@ -977,10 +999,21 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return {"post": post}
 
     @router.post("/shares", status_code=status.HTTP_201_CREATED)
-    async def post_shares(payload: ShareCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def post_shares(
+        payload: ShareCreateRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = _require_auth(current_user)
+        await _consume_rate_limit(
+            request,
+            "shares:create",
+            limit=12,
+            identifier=auth_user.id,
+            window_seconds=3600,
+        )
         try:
-            share = await service.create_share(auth_user.id, payload.project_id, payload.asset_id)
+            share, public_token = await service.create_share(auth_user.id, payload.project_id, payload.asset_id)
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         except ValueError as exc:
@@ -990,15 +1023,35 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
         return {
             "share_id": share.id,
-            "token": share.token,
-            "url": f"/shared/{share.token}",
+            "token": public_token,
+            "url": f"/shared/{public_token}",
+            "token_preview": share.token_preview,
+            "created_at": share.created_at.isoformat(),
+            "revoked_at": share.revoked_at.isoformat() if share.revoked_at else None,
         }
 
+    @router.get("/shares")
+    async def get_shares(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        return {"shares": await service.list_shares(auth_user.id)}
+
+    @router.delete("/shares/{share_id}")
+    async def delete_share(share_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        try:
+            share = await service.revoke_share(auth_user.id, share_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share not found")
+        return {"share": share}
+
     @router.get("/shares/public/{token}")
-    async def get_public_share(token: str):
+    async def get_public_share(token: str, request: Request):
+        await _consume_rate_limit(request, "shares:public:ip", limit=60)
         try:
             payload = await service.get_public_share(token)
-            return service.serialize_public_share_payload(payload, token)
+            return service.serialize_public_share_payload(payload)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share not found")
 

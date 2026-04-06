@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import io
+import hashlib
+import hmac
 import json
 import logging
 import math
@@ -106,6 +108,7 @@ from .models import (
     GenerationOutput,
     IdentityPlan,
     JobStatus,
+    ManualReviewState,
     MediaAsset,
     ModelCatalogEntry,
     OmniaIdentity,
@@ -134,15 +137,23 @@ from .providers import (
     ProviderTemporaryError,
 )
 from .repository import StudioPersistence, StudioRepository
-from .share_ops import build_public_share_payload, create_share_record
+from .share_ops import (
+    build_public_share_payload,
+    build_share_token_preview,
+    create_share_record,
+)
 from .services.asset_protection import GeneratedAssetProtectionPipeline
 from .services.generation_broker import GenerationBroker, build_generation_broker
 from .services.generation_runtime import GenerationRuntime, initial_generation_provider_label
 from .services.generation_dispatcher import GenerationDispatcher
+from security.moderation import ModerationResult
 
 logger = logging.getLogger(__name__)
 _GENERATION_TEXT_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _FOUNDER_EMAILS = frozenset({"founder@omniacreata.com", "help@omniacreata.com"})
+_MODERATION_RESET_WINDOW = timedelta(hours=24)
+_TEMP_BLOCK_AFTER_THREE_STRIKES = timedelta(minutes=15)
+_TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)
 
 
 class GenerationCapacityError(ValueError):
@@ -952,21 +963,7 @@ class StudioService:
         if auth_user is None:
             return {
                 "guest": True,
-                "identity": {
-                    "id": "guest",
-                    "email": "",
-                    "display_name": "Guest",
-                    "username": None,
-                "plan": IdentityPlan.GUEST.value,
-                "owner_mode": False,
-                "root_admin": False,
-                "local_access": False,
-                "accepted_terms": False,
-                    "accepted_privacy": False,
-                    "accepted_usage_policy": False,
-                    "marketing_opt_in": False,
-                    "workspace_id": None,
-                },
+                "identity": self._serialize_guest_identity_payload(),
                 "credits": {"remaining": 0, "monthly_remaining": 0, "extra_credits": 0},
                 "plan": PLAN_CATALOG[IdentityPlan.GUEST].model_dump(mode="json"),
                 "entitlements": resolve_guest_entitlements(plan_catalog=PLAN_CATALOG),
@@ -1153,6 +1150,171 @@ class StudioService:
     def _serialize_credit_snapshot(self, billing_state: BillingStateSnapshot) -> Dict[str, Any]:
         return billing_state.credits_dict()
 
+    def _serialize_identity_payload(self, identity: OmniaIdentity) -> Dict[str, Any]:
+        payload = identity.model_dump(
+            mode="json",
+            exclude={"flag_count", "last_flagged_at", "last_flagged_reason"},
+        )
+        payload["manual_review_state"] = identity.manual_review_state.value
+        return payload
+
+    def _serialize_guest_identity_payload(self) -> Dict[str, Any]:
+        return {
+            "id": "guest",
+            "email": "",
+            "display_name": "Guest",
+            "username": None,
+            "plan": IdentityPlan.GUEST.value,
+            "owner_mode": False,
+            "root_admin": False,
+            "local_access": False,
+            "accepted_terms": False,
+            "accepted_privacy": False,
+            "accepted_usage_policy": False,
+            "marketing_opt_in": False,
+            "workspace_id": None,
+            "temp_block_until": None,
+            "manual_review_state": ManualReviewState.NONE.value,
+        }
+
+    def _normalize_reason_code(self, value: str | None, *, fallback: str) -> str:
+        normalized = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
+        return (normalized or fallback)[:64]
+
+    def _normalize_moderation_reason(
+        self,
+        reason: str | None,
+        moderation_result: ModerationResult,
+    ) -> str:
+        return self._normalize_reason_code(reason, fallback=moderation_result.value)
+
+    def _log_security_event(
+        self,
+        event: str,
+        *,
+        level: int = logging.INFO,
+        **fields: Any,
+    ) -> None:
+        payload = {"event": event, **fields}
+        logger.log(level, "security_event %s", json.dumps(payload, ensure_ascii=True, sort_keys=True))
+
+    def _apply_identity_moderation_flag_locked(
+        self,
+        identity: OmniaIdentity,
+        *,
+        moderation_result: ModerationResult,
+        reason_code: str,
+    ) -> Dict[str, Any]:
+        now = utc_now()
+        strike_delta = 2 if moderation_result == ModerationResult.HARD_BLOCK else 1
+        if identity.last_flagged_at is None or (now - identity.last_flagged_at) > _MODERATION_RESET_WINDOW:
+            next_count = strike_delta
+        else:
+            next_count = max(identity.flag_count, 0) + strike_delta
+
+        identity.flag_count = next_count
+        identity.last_flagged_at = now
+        identity.last_flagged_reason = reason_code
+
+        temp_block_applied = False
+        manual_review_applied = False
+        block_until: datetime | None = None
+
+        if next_count >= 5:
+            block_until = now + _TEMP_BLOCK_AFTER_FIVE_STRIKES
+            manual_review_applied = identity.manual_review_state != ManualReviewState.REQUIRED
+            identity.manual_review_state = ManualReviewState.REQUIRED
+        elif next_count >= 3:
+            block_until = now + _TEMP_BLOCK_AFTER_THREE_STRIKES
+
+        if block_until is not None and (
+            identity.temp_block_until is None or identity.temp_block_until < block_until
+        ):
+            identity.temp_block_until = block_until
+            temp_block_applied = True
+
+        return {
+            "strike_delta": strike_delta,
+            "flag_count": next_count,
+            "reason_code": reason_code,
+            "temp_block_until": identity.temp_block_until,
+            "temp_block_applied": temp_block_applied,
+            "manual_review_applied": manual_review_applied,
+            "manual_review_state": identity.manual_review_state.value,
+        }
+
+    async def record_generation_moderation_block(
+        self,
+        identity_id: str,
+        moderation_result: ModerationResult,
+        reason: str | None,
+    ) -> None:
+        reason_code = self._normalize_moderation_reason(reason, moderation_result)
+        holder: Dict[str, Any] = {}
+
+        def mutation(state: StudioState) -> None:
+            identity = state.identities.get(identity_id)
+            if identity is None:
+                return
+            result = self._apply_identity_moderation_flag_locked(
+                identity,
+                moderation_result=moderation_result,
+                reason_code=reason_code,
+            )
+            state.identities[identity.id] = identity
+            holder.update(result)
+
+        await self.store.mutate(mutation)
+        self._log_security_event(
+            "generation_moderation_block",
+            level=logging.WARNING,
+            identity_id=identity_id,
+            moderation_result=moderation_result.value,
+            reason_code=reason_code,
+            strike_delta=holder.get("strike_delta", 0),
+            flag_count=holder.get("flag_count", 0),
+        )
+        if holder.get("temp_block_applied"):
+            self._log_security_event(
+                "identity_temp_blocked",
+                level=logging.WARNING,
+                identity_id=identity_id,
+                reason_code=reason_code,
+                temp_block_until=holder["temp_block_until"].isoformat() if holder.get("temp_block_until") else None,
+            )
+        if holder.get("manual_review_applied"):
+            self._log_security_event(
+                "identity_manual_review_required",
+                level=logging.WARNING,
+                identity_id=identity_id,
+                reason_code=reason_code,
+            )
+
+    def _assert_identity_action_allowed(
+        self,
+        identity: OmniaIdentity,
+        *,
+        action_code: str,
+        action_label: str,
+    ) -> None:
+        if identity.manual_review_state == ManualReviewState.REQUIRED:
+            self._log_security_event(
+                "identity_manual_review_required",
+                level=logging.WARNING,
+                identity_id=identity.id,
+                action=action_code,
+            )
+            raise PermissionError(f"Account is pending manual review before {action_label}.")
+        if identity.temp_block_until and identity.temp_block_until > utc_now():
+            self._log_security_event(
+                "identity_temp_blocked",
+                level=logging.WARNING,
+                identity_id=identity.id,
+                action=action_code,
+                temp_block_until=identity.temp_block_until.isoformat(),
+            )
+            raise PermissionError(f"Account is temporarily blocked from {action_label}.")
+
     def serialize_identity(
         self,
         identity: OmniaIdentity,
@@ -1166,7 +1328,7 @@ class StudioService:
         )
         return {
             "guest": False,
-            "identity": identity.model_dump(mode="json"),
+            "identity": self._serialize_identity_payload(identity),
             "credits": self._serialize_credit_snapshot(resolved_billing_state),
             "plan": PLAN_CATALOG[resolved_billing_state.effective_plan].model_dump(mode="json"),
             "entitlements": self.serialize_entitlements(identity, billing_state=resolved_billing_state),
@@ -1378,6 +1540,7 @@ class StudioService:
         asset: MediaAsset,
         *,
         identity_id: Optional[str] = None,
+        share_id: Optional[str] = None,
         share_token: Optional[str] = None,
         public_preview: bool = False,
     ) -> Dict[str, Any]:
@@ -1403,6 +1566,7 @@ class StudioService:
             asset.id,
             variant="content",
             identity_id=identity_id,
+            share_id=share_id,
             share_token=share_token,
             public_preview=public_preview,
         )
@@ -1410,6 +1574,7 @@ class StudioService:
             asset.id,
             variant="thumbnail",
             identity_id=identity_id,
+            share_id=share_id,
             share_token=share_token,
             public_preview=public_preview,
         ) if self._asset_variant_exists(asset, "thumbnail") else None
@@ -1420,6 +1585,7 @@ class StudioService:
         assets: List[MediaAsset],
         *,
         identity_id: Optional[str] = None,
+        share_id: Optional[str] = None,
         share_token: Optional[str] = None,
         public_preview: bool = False,
     ) -> List[Dict[str, Any]]:
@@ -1427,6 +1593,7 @@ class StudioService:
             self.serialize_asset(
                 asset,
                 identity_id=identity_id,
+                share_id=share_id,
                 share_token=share_token,
                 public_preview=public_preview,
             )
@@ -1451,19 +1618,44 @@ class StudioService:
             ],
         }
 
-    def serialize_public_share_payload(self, payload: Dict[str, Any], share_token: str) -> Dict[str, Any]:
-        serialized: Dict[str, Any] = {"share": payload["share"]}
+    def _generate_share_public_token(self) -> str:
+        return f"{uuid4().hex}{uuid4().hex}"
+
+    def _hash_share_public_token(self, raw_token: str) -> str:
+        return hmac.new(
+            self._asset_token_secret.encode("utf-8"),
+            raw_token.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def _serialize_share_record(self, share: ShareLink) -> Dict[str, Any]:
+        preview = share.token_preview
+        if not preview and share.token:
+            preview = build_share_token_preview(share.token)
+        return {
+            "id": share.id,
+            "project_id": share.project_id,
+            "asset_id": share.asset_id,
+            "token_preview": preview,
+            "created_at": share.created_at.isoformat(),
+            "expires_at": share.expires_at.isoformat() if share.expires_at else None,
+            "revoked_at": share.revoked_at.isoformat() if share.revoked_at else None,
+        }
+
+    def serialize_public_share_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        share = ShareLink.model_validate(payload["share"])
+        serialized: Dict[str, Any] = {"share": self._serialize_share_record(share)}
         if "project" in payload:
             serialized["project"] = payload["project"]
         if "assets" in payload:
             serialized["assets"] = self.serialize_assets(
                 [MediaAsset.model_validate(asset) for asset in payload["assets"]],
-                share_token=share_token,
+                share_id=share.id,
             )
         if "asset" in payload and payload["asset"] is not None:
             serialized["asset"] = self.serialize_asset(
                 MediaAsset.model_validate(payload["asset"]),
-                share_token=share_token,
+                share_id=share.id,
             )
         return serialized
 
@@ -1473,6 +1665,7 @@ class StudioService:
         *,
         variant: str,
         identity_id: Optional[str] = None,
+        share_id: Optional[str] = None,
         share_token: Optional[str] = None,
         public_preview: bool = False,
     ) -> str:
@@ -1480,6 +1673,7 @@ class StudioService:
             asset_id=asset_id,
             variant=variant,
             identity_id=identity_id,
+            share_id=share_id,
             share_token=share_token,
             public_preview=public_preview,
         )
@@ -1544,19 +1738,57 @@ class StudioService:
         }
 
     async def resolve_asset_delivery(self, asset_id: str, token: str, variant: str) -> ResolvedAssetDelivery:
-        claims = self._verify_asset_delivery_token(token, asset_id=asset_id, variant=variant)
+        try:
+            claims = self._verify_asset_delivery_token(token, asset_id=asset_id, variant=variant)
+        except PermissionError as exc:
+            self._log_security_event(
+                "asset_access_denied",
+                level=logging.WARNING,
+                asset_id=asset_id,
+                scope="token",
+                reason_code=self._normalize_reason_code(str(exc), fallback="invalid_asset_token"),
+            )
+            raise
         asset = await self.store.get_model("assets", asset_id, MediaAsset)
         if asset is None:
             raise KeyError("Asset not found")
         if asset.deleted_at is not None:
+            self._log_security_event(
+                "asset_access_denied",
+                level=logging.WARNING,
+                asset_id=asset.id,
+                scope="deleted_asset",
+                reason_code="asset_deleted",
+            )
             raise PermissionError("Asset is no longer available")
 
-        if claims.get("share_token"):
-            await self._assert_share_access(asset, str(claims["share_token"]))
-        elif claims.get("public_preview"):
-            await self._assert_public_asset_preview_access(asset.id)
-        elif claims.get("identity_id") != asset.identity_id:
-            raise PermissionError("Asset access denied")
+        try:
+            if claims.get("share_id"):
+                await self._assert_share_access_by_id(asset, str(claims["share_id"]))
+            elif claims.get("share_token"):
+                await self._assert_share_access_by_public_token(asset, str(claims["share_token"]))
+            elif claims.get("public_preview"):
+                await self._assert_public_asset_preview_access(asset.id)
+            elif claims.get("identity_id") != asset.identity_id:
+                raise PermissionError("Asset access denied")
+        except PermissionError as exc:
+            scope = "owner"
+            if claims.get("share_id"):
+                scope = "share"
+            elif claims.get("share_token"):
+                scope = "share_legacy"
+            elif claims.get("public_preview"):
+                scope = "public_preview"
+            self._log_security_event(
+                "asset_access_denied",
+                level=logging.WARNING,
+                asset_id=asset.id,
+                identity_id=claims.get("identity_id"),
+                share_id=claims.get("share_id"),
+                scope=scope,
+                reason_code=self._normalize_reason_code(str(exc), fallback="asset_access_denied"),
+            )
+            raise
 
         return await self._resolve_asset_variant_delivery(asset, variant)
 
@@ -1603,9 +1835,8 @@ class StudioService:
             local_path=path,
         )
 
-    async def _assert_share_access(self, asset: MediaAsset, share_token: str) -> None:
-        share = await self.store.get_share_by_token(share_token)
-        if share is None:
+    def _assert_share_record_matches_asset(self, asset: MediaAsset, share: ShareLink) -> None:
+        if share.revoked_at is not None:
             raise PermissionError("Share access denied")
         if share.expires_at and share.expires_at < utc_now():
             raise PermissionError("Share link expired")
@@ -1616,13 +1847,26 @@ class StudioService:
         if share.project_id and share.project_id != asset.project_id:
             raise PermissionError("Share access denied")
 
+    async def _assert_share_access_by_id(self, asset: MediaAsset, share_id: str) -> None:
+        share = await self.store.get_share(share_id)
+        if share is None:
+            raise PermissionError("Share access denied")
+        self._assert_share_record_matches_asset(asset, share)
+
+    async def _assert_share_access_by_public_token(self, asset: MediaAsset, share_token: str) -> None:
+        share = await self.store.get_share_by_public_token(share_token, secret=self._asset_token_secret)
+        if share is None:
+            raise PermissionError("Share access denied")
+        self._assert_share_record_matches_asset(asset, share)
+
     def _create_asset_delivery_token(
         self,
         *,
         asset_id: str,
         variant: str,
         identity_id: Optional[str],
-        share_token: Optional[str],
+        share_id: Optional[str] = None,
+        share_token: Optional[str] = None,
         public_preview: bool = False,
     ) -> str:
         expires_at = utc_now() + timedelta(seconds=self._asset_token_ttl_seconds)
@@ -1631,6 +1875,7 @@ class StudioService:
             "asset_id": asset_id,
             "variant": variant,
             "identity_id": identity_id,
+            "share_id": share_id,
             "share_token": share_token,
             "public_preview": public_preview,
             "exp": expires_at,
@@ -1650,7 +1895,12 @@ class StudioService:
             raise PermissionError("Asset token mismatch")
         if payload.get("variant") != variant:
             raise PermissionError("Asset variant mismatch")
-        if not payload.get("identity_id") and not payload.get("share_token") and not payload.get("public_preview"):
+        if (
+            not payload.get("identity_id")
+            and not payload.get("share_id")
+            and not payload.get("share_token")
+            and not payload.get("public_preview")
+        ):
             raise PermissionError("Asset token missing scope")
         return payload
 
@@ -2613,6 +2863,13 @@ class StudioService:
         visibility: Optional[Visibility] = None,
     ) -> PublicPost:
         post = await self._owned_post(identity_id, post_id)
+        if visibility == Visibility.PUBLIC and post.visibility != Visibility.PUBLIC:
+            identity = await self.get_identity(identity_id)
+            self._assert_identity_action_allowed(
+                identity,
+                action_code="public_post",
+                action_label="making posts public",
+            )
 
         def mutation(state: StudioState) -> None:
             current = state.posts[post.id]
@@ -2866,6 +3123,11 @@ class StudioService:
         output_count: int = 1,
     ) -> GenerationJob:
         identity = await self.get_identity(identity_id)
+        self._assert_identity_action_allowed(
+            identity,
+            action_code="generation",
+            action_label="creating generations",
+        )
         project = await self.require_owned_model("projects", project_id, Project, identity_id)
         reference_asset = None
         if reference_asset_id:
@@ -3086,8 +3348,13 @@ class StudioService:
         await self.store.mutate(mutation)
         return holder["job"]
 
-    async def create_share(self, identity_id: str, project_id: Optional[str], asset_id: Optional[str]) -> ShareLink:
+    async def create_share(self, identity_id: str, project_id: Optional[str], asset_id: Optional[str]) -> tuple[ShareLink, str]:
         identity = await self.get_identity(identity_id)
+        self._assert_identity_action_allowed(
+            identity,
+            action_code="share_create",
+            action_label="creating share links",
+        )
         billing_state = await self._resolve_billing_state_for_identity(identity)
         entitlements = resolve_entitlements(
             identity=identity,
@@ -3103,13 +3370,66 @@ class StudioService:
         if asset_id:
             await self.require_owned_model("assets", asset_id, MediaAsset, identity_id)
 
-        share = create_share_record(identity_id=identity_id, project_id=project_id, asset_id=asset_id)
+        public_token = self._generate_share_public_token()
+        share = create_share_record(
+            identity_id=identity_id,
+            project_id=project_id,
+            asset_id=asset_id,
+            token_hash=self._hash_share_public_token(public_token),
+            token_preview=build_share_token_preview(public_token),
+        )
         await self.store.save_model("shares", share)
-        return share
+        self._log_security_event(
+            "share_created",
+            identity_id=identity_id,
+            share_id=share.id,
+            project_id=project_id,
+            asset_id=asset_id,
+            token_preview=share.token_preview,
+        )
+        return share, public_token
+
+    async def list_shares(self, identity_id: str) -> List[Dict[str, Any]]:
+        await self.get_identity(identity_id)
+        shares = await self.store.list_shares_for_identity(identity_id)
+        shares.sort(key=lambda item: item.created_at, reverse=True)
+        return [self._serialize_share_record(share) for share in shares]
+
+    async def revoke_share(self, identity_id: str, share_id: str) -> Dict[str, Any]:
+        share = await self.store.get_share(share_id)
+        if share is None:
+            raise KeyError("Share not found")
+        if share.identity_id != identity_id:
+            raise PermissionError("Share access denied")
+
+        def mutation(state: StudioState) -> None:
+            current = state.shares.get(share_id)
+            if current is None:
+                raise KeyError("Share not found")
+            if current.revoked_at is None:
+                current.revoked_at = utc_now()
+                state.shares[current.id] = current
+
+        await self.store.mutate(mutation)
+        updated = await self.store.get_share(share_id)
+        if updated is None:
+            raise KeyError("Share not found")
+        self._log_security_event(
+            "share_revoked",
+            identity_id=identity_id,
+            share_id=share_id,
+            project_id=updated.project_id,
+            asset_id=updated.asset_id,
+        )
+        return self._serialize_share_record(updated)
 
     async def get_public_share(self, token: str) -> Dict[str, Any]:
-        share = await self.store.get_share_by_token(token)
+        share = await self.store.get_share_by_public_token(token, secret=self._asset_token_secret)
         if share is None:
+            raise KeyError("Share not found")
+        if share.revoked_at is not None:
+            raise KeyError("Share not found")
+        if share.expires_at and share.expires_at < utc_now():
             raise KeyError("Share not found")
 
         if share.project_id:
@@ -3189,9 +3509,33 @@ class StudioService:
             and not self._generation_maintenance_task.done()
         )
         shared_queue_configured = bool((self.settings.redis_url or "").strip())
+        security_summary: Dict[str, int] | None = None
+        if detail:
+            def query(state: StudioState) -> Dict[str, int]:
+                now = utc_now()
+                temp_blocked = sum(
+                    1
+                    for identity in state.identities.values()
+                    if identity.temp_block_until is not None and identity.temp_block_until > now
+                )
+                manual_review_required = sum(
+                    1
+                    for identity in state.identities.values()
+                    if identity.manual_review_state == ManualReviewState.REQUIRED
+                )
+                active_shares = sum(1 for share in state.shares.values() if share.revoked_at is None)
+                revoked_shares = sum(1 for share in state.shares.values() if share.revoked_at is not None)
+                return {
+                    "temp_blocked_identities": temp_blocked,
+                    "manual_review_required_identities": manual_review_required,
+                    "active_shares": active_shares,
+                    "revoked_shares": revoked_shares,
+                }
+
+            security_summary = await self.store.read(query)
         if self._generation_broker_degraded_reason is not None:
             overall_status = "degraded"
-        return {
+        payload = {
             "status": overall_status,
             "providers": provider_status,
             "counts": counts,
@@ -3213,6 +3557,9 @@ class StudioService:
             },
             "generation_routing": self.providers.routing_summary(),
         }
+        if security_summary is not None:
+            payload["security_summary"] = security_summary
+        return payload
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
         identity = await self.get_identity(identity_id)

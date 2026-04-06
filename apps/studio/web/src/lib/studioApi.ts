@@ -52,6 +52,8 @@ export type IdentityPayload = {
   bio?: string
   avatar_url?: string | null
   default_visibility?: Visibility
+  temp_block_until?: string | null
+  manual_review_state?: 'none' | 'required' | 'approved'
 }
 
 export type AuthMeResponse = {
@@ -380,7 +382,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    if (response.status === 401 && token && path === '/auth/me') {
       clearStudioAccessToken()
     }
     const payload = await response.json().catch(() => ({ error: 'Request failed' }))

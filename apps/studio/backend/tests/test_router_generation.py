@@ -374,3 +374,97 @@ async def test_generation_endpoint_bypasses_rate_limit_for_privileged_email(
         settings.studio_owner_emails = original_owner_emails
         settings.studio_root_admin_emails = original_root_admin_emails
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_rejects_hard_block_with_403_and_no_job_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def hard_block(_: str):
+        return router_module.ModerationResult.HARD_BLOCK, "violence"
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", hard_block)
+    create_generation_called = False
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        nonlocal create_generation_called
+        create_generation_called = True
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "violent prompt",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 403
+        assert create_generation_called is False
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_rejects_soft_block_with_403_and_no_job_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def soft_block(_: str):
+        return router_module.ModerationResult.SOFT_BLOCK, "sexy"
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", soft_block)
+    create_generation_called = False
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        nonlocal create_generation_called
+        create_generation_called = True
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "sexy prompt",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 403
+        assert create_generation_called is False
+    finally:
+        await service.shutdown()

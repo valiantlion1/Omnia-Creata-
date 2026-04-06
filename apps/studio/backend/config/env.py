@@ -1,9 +1,14 @@
 """Environment configuration with validation using Pydantic v2."""
 
+from pathlib import Path
 from typing import Optional, List
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 from enum import Enum
+
+# Always resolve .env relative to this file's parent (backend/), regardless of cwd
+_BACKEND_DIR = Path(__file__).parent.parent
+_ENV_FILE = str(_BACKEND_DIR / ".env")
 
 
 class Environment(str, Enum):
@@ -277,7 +282,7 @@ class Settings(BaseSettings):
                 raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
     
     model_config = {
-        "env_file": ".env",
+        "env_file": _ENV_FILE,
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "extra": "ignore",

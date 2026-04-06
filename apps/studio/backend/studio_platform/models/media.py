@@ -48,5 +48,8 @@ class ShareLink(BaseModel):
     identity_id: str
     project_id: Optional[str] = None
     asset_id: Optional[str] = None
+    token_hash: Optional[str] = None
+    token_preview: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     expires_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None

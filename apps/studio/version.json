@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.05.02",
+  "build": "2026.04.06.04",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-05",
-  "notes": "Backend durability pass: richer generation lifecycle statuses, provider smoke harness, Postgres production path, and queue hardening."
+  "releaseDate": "2026-04-06",
+  "notes": "Google OAuth callback hardening pass: browser auth now completes provider redirects deterministically, uses PKCE in the client, and keeps footer-visible build/version aligned with version.json."
 }

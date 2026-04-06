@@ -26,7 +26,7 @@ import {
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { APP_VERSION_LABEL } from '@/lib/appVersion'
+import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -483,7 +483,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Version */}
         {!collapsed && (
           <div className="mt-4 px-1 text-[10px] text-center font-medium text-zinc-600/50">
-            {APP_VERSION_LABEL}
+            {APP_VERSION_LABEL} · build {APP_BUILD_LABEL}
           </div>
         )}
       </div>

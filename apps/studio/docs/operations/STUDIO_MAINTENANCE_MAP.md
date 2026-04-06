@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-05
+Last updated: 2026-04-06
 
 ## Current baseline
 
@@ -12,6 +12,16 @@ Last updated: 2026-04-05
 
 ## Recent stabilization wins
 
+- Studio now has a dedicated `apps/studio/AGENTS.md`, so future AI agents and collaborators can pick up the product identity, sprint context, auth regression checklist, and version/build discipline faster.
+- Google OAuth callback completion is now explicit in the frontend auth layer, so returning from the provider no longer depends on a silent implicit session parse to escape `/login`.
+- Supabase browser auth now uses PKCE for provider sign-in, which makes Google callback exchange more deterministic and easier to reason about during local debugging.
+- Frontend auth now keeps the last known-good identity snapshot during transient auth refresh failures, which reduces false logouts while the local backend reloads or briefly hiccups.
+- Studio token cleanup is now scoped to confirmed `/auth/me` auth failure instead of any generic `401`, so unrelated request issues are less likely to dump the user back to `/login`.
+- The in-app Studio shell footer now mirrors the public footer by showing both semantic version and concrete build number, which makes build verification easier after each change.
+- Identity records now carry moderation strike state, temp blocks, and manual review flags so unsafe generation prompts no longer fail silently and can escalate into durable backend enforcement.
+- Share links now store hashed public tokens plus revocation metadata, while authenticated share list/revoke routes exist for safer owner-side control without changing the visible UI.
+- Asset delivery tokens now support explicit share-id scope and re-check live share/public authorization on access, which closes stale-link gaps after revoke or deletion.
+- Security-focused route protections now cover share creation, public share lookup, asset delivery, and clean export IP limits, and owner health detail now reports moderation/share counts for operations visibility.
 - Billing logic started moving out of `service.py` into `backend/studio_platform/billing_ops.py`.
 - LemonSqueezy webhook flow now restores `subscription_status` more consistently.
 - Chat multimodal payload prep is now wired in `backend/studio_platform/llm.py`, so image attachments can reach Gemini/OpenRouter as real image inputs.

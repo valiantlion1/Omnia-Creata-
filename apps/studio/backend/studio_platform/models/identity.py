@@ -27,6 +27,12 @@ class SubscriptionStatus(str, Enum):
     CANCELED = "canceled"
 
 
+class ManualReviewState(str, Enum):
+    NONE = "none"
+    REQUIRED = "required"
+    APPROVED = "approved"
+
+
 class OmniaIdentity(BaseModel):
     id: str = Field(default_factory=lambda: __import__("uuid").uuid4().__str__())
     email: str
@@ -49,6 +55,11 @@ class OmniaIdentity(BaseModel):
     monthly_credits_remaining: int = 60
     monthly_credit_allowance: int = 60
     extra_credits: int = 0
+    flag_count: int = 0
+    last_flagged_at: Optional[datetime] = None
+    last_flagged_reason: Optional[str] = None
+    temp_block_until: Optional[datetime] = None
+    manual_review_state: ManualReviewState = ManualReviewState.NONE
     last_credit_refresh_at: datetime = Field(default_factory=utc_now)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

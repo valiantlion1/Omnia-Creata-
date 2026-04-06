@@ -305,6 +305,13 @@ _jwt_manager: Optional[JWTManager] = None
 _supabase_auth_client: Optional[SupabaseAuthClient] = None
 
 
+def _build_supabase_auth_client_from_settings() -> Optional[SupabaseAuthClient]:
+    settings = get_settings()
+    if settings.supabase_url and settings.supabase_anon_key:
+        return SupabaseAuthClient(settings.supabase_url, settings.supabase_anon_key)
+    return None
+
+
 def get_jwt_manager() -> JWTManager:
     """Get global JWT manager instance"""
     global _jwt_manager
@@ -321,17 +328,16 @@ def setup_auth(config: Optional[AuthConfig] = None) -> JWTManager:
         config = create_auth_config_from_env()
     
     _jwt_manager = JWTManager(config)
-    settings = get_settings()
-    if settings.supabase_url and settings.supabase_anon_key:
-        _supabase_auth_client = SupabaseAuthClient(settings.supabase_url, settings.supabase_anon_key)
-    else:
-        _supabase_auth_client = None
+    _supabase_auth_client = _build_supabase_auth_client_from_settings()
     logger.info("Authentication system initialized")
     
     return _jwt_manager
 
 
 def get_supabase_auth_client() -> Optional[SupabaseAuthClient]:
+    global _supabase_auth_client
+    if _supabase_auth_client is None:
+        _supabase_auth_client = _build_supabase_auth_client_from_settings()
     return _supabase_auth_client
 
 
