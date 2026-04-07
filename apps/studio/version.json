@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.08.01",
+  "build": "2026.04.08.07",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-08",
-  "notes": "Sprint 8 staging verification now trusts the explicit owner launch gate, so protected deploy checks can distinguish true launch blockers from provider-only warnings while still refusing stale or mismatched verified-build truth."
+  "notes": "Sprint 8 staging backend and worker builds now use a real cryptography pin that exists on Linux, so Docker bring-up no longer dies on an impossible dependency version."
 }

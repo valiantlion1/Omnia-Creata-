@@ -1,0 +1,164 @@
+name: Organizer Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create a GitHub Release after build"
+        required: true
+        default: false
+        type: boolean
+      tag_name:
+        description: "Tag name for release creation, for example organizer-v1.0.0-alpha1"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark the GitHub Release as prerelease"
+        required: true
+        default: true
+        type: boolean
+  push:
+    tags:
+      - "organizer-v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: organizer-android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-organizer-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/organizer/mobile/android
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Read Organizer version manifest
+        id: version
+        working-directory: .
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path("apps/organizer/version.json").read_text(encoding="utf-8"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"display_name={manifest['displayName']}\n")
+              fh.write(f"version={manifest['version']}\n")
+              fh.write(f"track={manifest['track']}\n")
+          PY
+
+      - name: Build alpha APK
+        run: ./gradlew :app:assembleAlpha
+
+      - name: Build release bundle
+        run: ./gradlew :app:bundleRelease
+
+      - name: Collect build outputs
+        id: outputs
+        working-directory: .
+        run: |
+          set -euo pipefail
+          apk_path="$(find apps/organizer/mobile/android/app/build/outputs/apk -name '*.apk' | sort | tail -n 1)"
+          aab_path="$(find apps/organizer/mobile/android/app/build/outputs/bundle -name '*.aab' | sort | tail -n 1)"
+          if [[ -z "${apk_path}" ]]; then
+            echo "APK output not found" >&2
+            exit 1
+          fi
+          if [[ -z "${aab_path}" ]]; then
+            echo "AAB output not found" >&2
+            exit 1
+          fi
+          {
+            echo "apk_path=${apk_path}"
+            echo "aab_path=${aab_path}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: organizer-alpha-apk-${{ steps.version.outputs.version }}
+          path: ${{ steps.outputs.outputs.apk_path }}
+          if-no-files-found: error
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: organizer-release-aab-${{ steps.version.outputs.version }}
+          path: ${{ steps.outputs.outputs.aab_path }}
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/organizer-v') || inputs.create_release == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/organizer-v') && github.ref_name || inputs.tag_name }}
+          IS_PRERELEASE: ${{ startsWith(github.ref, 'refs/tags/organizer-v') && contains(github.ref_name, '-') || inputs.prerelease }}
+          VERSION_NAME: ${{ steps.version.outputs.version }}
+          DISPLAY_NAME: ${{ steps.version.outputs.display_name }}
+          APK_PATH: ${{ steps.outputs.outputs.apk_path }}
+          AAB_PATH: ${{ steps.outputs.outputs.aab_path }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAG_NAME}" ]]; then
+            echo "tag_name is required when create_release is true" >&2
+            exit 1
+          fi
+
+          release_notes_file="$(mktemp)"
+          cat > "${release_notes_file}" <<EOF
+          ${DISPLAY_NAME} ${VERSION_NAME}
+
+          Automated Organizer mobile release.
+
+          Included assets:
+          - alpha APK for direct device install
+          - release AAB for Play Store handoff
+
+          Source:
+          - commit: ${GITHUB_SHA}
+          - workflow: ${GITHUB_WORKFLOW}
+          EOF
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" "${APK_PATH}" "${AAB_PATH}" --clobber
+          else
+            release_args=(
+              release create "${TAG_NAME}"
+              "${APK_PATH}"
+              "${AAB_PATH}"
+              --target "${GITHUB_SHA}"
+              --title "${DISPLAY_NAME} ${VERSION_NAME}"
+              --notes-file "${release_notes_file}"
+            )
+
+            if [[ "${IS_PRERELEASE}" == "true" ]]; then
+              release_args+=(--prerelease)
+            fi
+
+            gh "${release_args[@]}"
+          fi

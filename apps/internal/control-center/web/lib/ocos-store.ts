@@ -1,349 +1,78 @@
 import {
   type ActionDispatchRequest,
   type ActionRunResult,
-  type ArtifactBlob,
   type CheckRunPayload,
-  type CheckStatus,
   type CodexEscalationBundle,
   type IncidentSnapshot,
-  type JsonValue,
   type NotificationPlan,
+  type OcosReport,
+  type OrgSummaryView,
+  type ProjectSummaryView,
+  type ProjectView,
   type ServiceEventPayload,
+  type ServiceView,
   actionRunResultSchema,
   buildIncidentFingerprint,
   codexEscalationBundleSchema,
   incidentSnapshotSchema,
-  incidentThresholds,
   notificationPlanSchema,
   shouldEscalateToCodex,
-  studioServiceDefinition
+  studioProjectDefinition,
+  incidentThresholds
 } from "@ocos/contracts";
 
+import {
+  activeIncidentStates,
+  buildNotificationPlan,
+  buildProjectSummary,
+  getDemoState,
+  incidentsBySeverityFromIncidents,
+  isDemoMode,
+  loadDerivedBundle,
+  reportScopeKey,
+  serviceTotalsFromServices
+} from "@/lib/ocos-bundle";
+import { buildAndPersistProjectReport, buildDemoReports, ensureOverviewReports } from "@/lib/ocos-reporting";
 import { isoNow, minutesBetween } from "@/lib/crypto";
 import { dispatchStudioWorkflow } from "@/lib/github";
-import { getSupabaseAdmin } from "@/lib/supabase";
 import { runStudioPublicProbe } from "@/lib/studio-probe";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
-type ServiceEnvironmentView = {
-  id: string;
-  slug: "staging" | "production";
-  name: string;
-  baseUrl: string;
-  cadenceMinutes: number;
-  currentStatus: CheckStatus;
-  lastCheckAt?: string;
-  lastBuild?: string;
-};
+export type SummaryView = OrgSummaryView;
+export type { ServiceView };
 
-export type ServiceView = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  environments: ServiceEnvironmentView[];
-};
+async function loadProjectAwareBundle() {
+  const bundle = await loadDerivedBundle();
 
-export type SummaryView = {
-  generatedAt: string;
-  demoMode: boolean;
-  serviceTotals: {
-    total: number;
-    healthy: number;
-    degraded: number;
-    failed: number;
-  };
-  incidentsBySeverity: Record<"P1" | "P2" | "P3", number>;
-  activeIncidents: IncidentSnapshot[];
-  services: ServiceView[];
-  actionRuns: ActionRunResult[];
-  codexEscalations: Array<{
-    id: string;
-    incidentId: string;
-    serviceSlug: string;
-    environmentSlug: "staging" | "production";
-    status: string;
-    recommendedNextPath: string;
-    createdAt: string;
-  }>;
-};
+  if (!isDemoMode()) {
+    return bundle;
+  }
 
-type DemoState = {
-  services: ServiceView[];
-  incidents: IncidentSnapshot[];
-  actionRuns: ActionRunResult[];
-  codexEscalations: SummaryView["codexEscalations"];
-};
-
-declare global {
-  var __OCOS_DEMO_STATE__: DemoState | undefined;
-}
-
-function createDemoState(): DemoState {
-  const now = isoNow();
-  const openTime = new Date(Date.now() - 8 * 60000).toISOString();
-  const actionTime = new Date(Date.now() - 6 * 60000).toISOString();
-
+  const demoReports = buildDemoReports();
   return {
-    services: [
-      {
-        id: "svc-studio",
-        slug: "studio",
-        name: "OmniaCreata Studio",
-        description: "Studio-first monitored surface for OCOS v0.",
-        environments: [
-          {
-            id: "env-studio-prod",
-            slug: "production",
-            name: "Production",
-            baseUrl: studioServiceDefinition.environments.production.baseUrl,
-            cadenceMinutes: 5,
-            currentStatus: "degraded",
-            lastCheckAt: now,
-            lastBuild: "2026.04.07.31"
-          },
-          {
-            id: "env-studio-staging",
-            slug: "staging",
-            name: "Staging",
-            baseUrl: studioServiceDefinition.environments.staging.baseUrl,
-            cadenceMinutes: 15,
-            currentStatus: "healthy",
-            lastCheckAt: now,
-            lastBuild: "2026.04.07.31"
-          }
-        ]
-      }
-    ],
-    incidents: [
-      incidentSnapshotSchema.parse({
-        id: "inc-demo-1",
-        serviceSlug: "studio",
-        serviceName: "OmniaCreata Studio",
-        environmentSlug: "production",
-        environmentName: "Production",
-        title: "Studio production degraded health",
-        summary: "Public probes show the Studio shell up, but health is degraded.",
-        fingerprint: "studio:production:public_probe",
-        severity: "P2",
-        state: "open",
-        latestCheckStatus: "degraded",
-        latestRunType: "public_probe",
-        latestVersionBuild: "2026.04.07.31",
-        latestArtifacts: [
-          {
-            kind: "report",
-            label: "deployment-verify-latest.json",
-            href: "/api/incidents/inc-demo-1",
-            metadata: {
-              source: "demo"
-            }
-          }
-        ],
-        autoRemediationAttempted: true,
-        recommendedNextPath: "Review provider smoke drift, then rerun staging verify.",
-        openedAt: openTime,
-        updatedAt: now,
-        lastSeenAt: now,
-        openDurationMinutes: minutesBetween(openTime, now)
-      })
-    ],
-    actionRuns: [
-      actionRunResultSchema.parse({
-        id: "act-demo-1",
-        incidentId: "inc-demo-1",
-        serviceSlug: "studio",
-        environmentSlug: "production",
-        recipe: "recheck_public_health",
-        status: "failed",
-        summary: "Immediate public recheck still returned degraded Studio health.",
-        artifacts: [],
-        responsePayload: {
-          status: "degraded"
-        },
-        createdAt: actionTime,
-        completedAt: now
-      })
-    ],
-    codexEscalations: [
-      {
-        id: "esc-demo-1",
-        incidentId: "inc-demo-1",
-        serviceSlug: "studio",
-        environmentSlug: "production",
-        status: "queued",
-        recommendedNextPath: "Investigate provider auth drift before another rollout.",
-        createdAt: now
-      }
-    ]
+    ...bundle,
+    reports: demoReports,
+    projects: bundle.projects.map((project) => ({
+      ...project,
+      latestReportAt: demoReports
+        .filter((report) => report.projectSlug === project.slug)
+        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]?.updatedAt
+    }))
   };
 }
 
-function getDemoState(): DemoState {
-  if (!globalThis.__OCOS_DEMO_STATE__) {
-    globalThis.__OCOS_DEMO_STATE__ = createDemoState();
-  }
-  return globalThis.__OCOS_DEMO_STATE__;
+export async function listProjects(): Promise<ProjectView[]> {
+  return (await loadProjectAwareBundle()).projects;
 }
 
-function isDemoMode(): boolean {
-  return getSupabaseAdmin() === null;
+export async function listServices(projectSlug?: string): Promise<ServiceView[]> {
+  const services = (await loadProjectAwareBundle()).services;
+  return projectSlug ? services.filter((service) => service.projectSlug === projectSlug) : services;
 }
 
-function buildNotificationPlan(input: {
-  severity: "P1" | "P2" | "P3";
-  action: "opened" | "resolved" | "updated";
-  incident: IncidentSnapshot;
-}): NotificationPlan {
-  const immediate =
-    input.severity === "P1" ||
-    (input.severity === "P2" && input.action === "opened");
-
-  return notificationPlanSchema.parse({
-    shouldNotify: input.action !== "updated",
-    channel: immediate ? "telegram" : "digest",
-    severity: input.severity,
-    title: `${input.incident.serviceName} ${input.incident.environmentName} ${input.action}`,
-    body: `${input.incident.summary} (${input.incident.severity}/${input.incident.state})`,
-    deepLink: `/incidents/${input.incident.id}`
-  });
-}
-
-function activeIncidentStates(snapshot: IncidentSnapshot): boolean {
-  return snapshot.state !== "resolved";
-}
-
-function mapIncidentRow(
-  row: Record<string, unknown>,
-  service: ServiceView | undefined,
-  environment: ServiceEnvironmentView | undefined,
-  artifacts: ArtifactBlob[] = [],
-  latestCheck?: Record<string, unknown>
-): IncidentSnapshot {
-  const openedAt = String(row.opened_at ?? isoNow());
-  const updatedAt = String(row.updated_at ?? openedAt);
-
-  return incidentSnapshotSchema.parse({
-    id: String(row.id),
-    serviceSlug: service?.slug ?? "unknown",
-    serviceName: service?.name ?? "Unknown service",
-    environmentSlug: environment?.slug ?? "production",
-    environmentName: environment?.name ?? "Unknown environment",
-    title: String(row.title ?? "Untitled incident"),
-    summary: String(row.summary ?? "No summary recorded."),
-    fingerprint: String(row.fingerprint ?? ""),
-    severity: row.severity,
-    state: row.state,
-    latestCheckStatus: latestCheck?.status as CheckStatus | undefined,
-    latestRunType: latestCheck?.run_type ? String(latestCheck.run_type) : undefined,
-    latestVersionBuild: latestCheck?.version_build ? String(latestCheck.version_build) : undefined,
-    latestArtifacts: artifacts,
-    autoRemediationAttempted: Boolean(row.auto_remediation_attempted),
-    recommendedNextPath: row.recommended_next_path ? String(row.recommended_next_path) : undefined,
-    openedAt,
-    updatedAt,
-    lastSeenAt: row.last_seen_at ? String(row.last_seen_at) : undefined,
-    acknowledgedAt: row.acknowledged_at ? String(row.acknowledged_at) : undefined,
-    resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
-    silencedUntil: row.silenced_until ? String(row.silenced_until) : undefined,
-    openDurationMinutes: minutesBetween(openedAt, updatedAt)
-  });
-}
-
-export async function listServices(): Promise<ServiceView[]> {
-  if (isDemoMode()) {
-    return getDemoState().services;
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return getDemoState().services;
-  }
-
-  const [{ data: services }, { data: environments }, { data: checkRuns }, { data: incidents }] =
-    await Promise.all([
-      supabase.from("services").select("*").order("name"),
-      supabase.from("service_environments").select("*").order("name"),
-      supabase.from("check_runs").select("*").order("recorded_at", { ascending: false }).limit(50),
-      supabase
-        .from("incidents")
-        .select("*")
-        .in("state", ["open", "acknowledged", "auto_remediating", "escalated", "silenced"])
-    ]);
-
-  const recentChecks = checkRuns ?? [];
-  const activeIncidents = incidents ?? [];
-
-  return (services ?? []).map((service) => {
-    const envRows = (environments ?? []).filter((row) => row.service_id === service.id);
-    return {
-      id: service.id,
-      slug: service.slug,
-      name: service.name,
-      description: service.description ?? "",
-      environments: envRows.map((env) => {
-        const latestCheck = recentChecks.find((row) => row.service_environment_id === env.id);
-        const activeIncident = activeIncidents.find((row) => row.service_environment_id === env.id);
-        return {
-          id: env.id,
-          slug: env.slug,
-          name: env.name,
-          baseUrl: env.base_url,
-          cadenceMinutes: env.cadence_minutes,
-          currentStatus: (activeIncident
-            ? activeIncident.severity === "P1"
-              ? "failed"
-              : "degraded"
-            : latestCheck?.status ?? "healthy") as CheckStatus,
-          lastCheckAt: latestCheck?.recorded_at ?? undefined,
-          lastBuild: latestCheck?.version_build ?? undefined
-        };
-      })
-    };
-  });
-}
-
-export async function listIncidents(): Promise<IncidentSnapshot[]> {
-  if (isDemoMode()) {
-    return getDemoState().incidents;
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return getDemoState().incidents;
-  }
-
-  const [services, incidents, artifacts] = await Promise.all([
-    listServices(),
-    supabase.from("incidents").select("*").order("last_seen_at", { ascending: false }),
-    supabase.from("artifact_blobs").select("*").order("created_at", { ascending: false }).limit(100)
-  ]);
-  const { data: checkRuns } = await supabase.from("check_runs").select("*").order("recorded_at", { ascending: false }).limit(100);
-
-  const serviceLookup = new Map(services.map((service) => [service.id, service]));
-  const envLookup = new Map(
-    services.flatMap((service) => service.environments.map((env) => [env.id, env] as const))
-  );
-  const artifactRows = artifacts.data ?? [];
-  const checkRunLookup = new Map((checkRuns ?? []).map((row) => [row.id, row]));
-
-  return (incidents.data ?? []).map((row) =>
-    mapIncidentRow(
-      row,
-      serviceLookup.get(String(row.service_id)),
-      envLookup.get(String(row.service_environment_id)),
-      artifactRows
-        .filter((artifact) => artifact.incident_id === row.id)
-        .map((artifact) => ({
-          id: artifact.id,
-          kind: artifact.kind,
-          label: artifact.label,
-          href: artifact.href,
-          sha256: artifact.sha256 ?? undefined,
-          metadata: (artifact.metadata ?? {}) as Record<string, JsonValue>
-        })),
-      checkRunLookup.get(String(row.latest_check_run_id))
-    )
-  );
+export async function listIncidents(projectSlug?: string): Promise<IncidentSnapshot[]> {
+  const incidents = (await loadProjectAwareBundle()).incidents;
+  return projectSlug ? incidents.filter((incident) => incident.projectSlug === projectSlug) : incidents;
 }
 
 export async function getIncident(incidentId: string): Promise<IncidentSnapshot | null> {
@@ -351,113 +80,90 @@ export async function getIncident(incidentId: string): Promise<IncidentSnapshot 
   return incidents.find((incident) => incident.id === incidentId) ?? null;
 }
 
-export async function listActionRuns(): Promise<ActionRunResult[]> {
-  if (isDemoMode()) {
-    return getDemoState().actionRuns;
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return getDemoState().actionRuns;
-  }
-
-  const { data } = await supabase.from("action_runs").select("*").order("created_at", { ascending: false }).limit(50);
-  return (data ?? []).map((row) =>
-    actionRunResultSchema.parse({
-      id: row.id,
-      incidentId: row.incident_id ?? undefined,
-      serviceSlug: "studio",
-      environmentSlug: row.request_payload?.environmentSlug ?? "production",
-      recipe: row.recipe,
-      status: row.status,
-      summary: row.summary,
-      artifacts: [],
-      responsePayload: row.response_payload ?? {},
-      createdAt: row.created_at,
-      completedAt: row.completed_at ?? undefined
-    })
-  );
+export async function listActionRuns(projectSlug?: string): Promise<ActionRunResult[]> {
+  const actionRuns = (await loadProjectAwareBundle()).actionRuns;
+  return projectSlug ? actionRuns.filter((actionRun) => actionRun.projectSlug === projectSlug) : actionRuns;
 }
 
-export async function listCodexEscalations(): Promise<SummaryView["codexEscalations"]> {
-  if (isDemoMode()) {
-    return getDemoState().codexEscalations;
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return getDemoState().codexEscalations;
-  }
-
-  const { data } = await supabase
-    .from("codex_escalations")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    incidentId: row.incident_id,
-    serviceSlug: "studio",
-    environmentSlug: "production",
-    status: row.status,
-    recommendedNextPath: row.recommended_next_path,
-    createdAt: row.created_at
-  }));
+export async function listCodexEscalations(projectSlug?: string) {
+  const codexEscalations = (await loadProjectAwareBundle()).codexEscalations;
+  return projectSlug
+    ? codexEscalations.filter((codexEscalation) => codexEscalation.projectSlug === projectSlug)
+    : codexEscalations;
 }
 
-export async function getSummary(): Promise<SummaryView> {
-  const [services, incidents, actionRuns, codexEscalations] = await Promise.all([
-    listServices(),
-    listIncidents(),
-    listActionRuns(),
-    listCodexEscalations()
-  ]);
+export async function listReports(input: {
+  projectSlug?: string;
+  scopeLevel?: "project" | "service" | "incident";
+  reportType?: "overview" | "daily" | "weekly" | "incident_snapshot";
+  limit?: number;
+} = {}): Promise<OcosReport[]> {
+  const reports = (await loadProjectAwareBundle()).reports;
+  return reports
+    .filter((report) => (input.projectSlug ? report.projectSlug === input.projectSlug : true))
+    .filter((report) => (input.scopeLevel ? report.scopeLevel === input.scopeLevel : true))
+    .filter((report) => (input.reportType ? report.reportType === input.reportType : true))
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, input.limit ?? 50);
+}
 
-  const activeIncidents = incidents.filter(activeIncidentStates);
-  const allEnvironments = services.flatMap((service) => service.environments);
+export async function upsertProjectOverviewReport(projectSlug: string): Promise<OcosReport | null> {
+  return buildAndPersistProjectReport(projectSlug, "overview");
+}
+
+export async function upsertProjectPeriodicReport(projectSlug: string, reportType: "daily" | "weekly"): Promise<OcosReport | null> {
+  return buildAndPersistProjectReport(projectSlug, reportType);
+}
+
+export async function getProject(projectSlug: string): Promise<ProjectSummaryView | null> {
+  await upsertProjectOverviewReport(projectSlug);
+  await upsertProjectPeriodicReport(projectSlug, "daily");
+
+  return buildProjectSummary(await loadProjectAwareBundle(), projectSlug);
+}
+
+export async function getSummary(): Promise<OrgSummaryView> {
+  await ensureOverviewReports();
+  const bundle = await loadProjectAwareBundle();
+  const activeIncidents = bundle.incidents.filter(activeIncidentStates);
 
   return {
-    generatedAt: isoNow(),
+    generatedAt: bundle.generatedAt,
     demoMode: isDemoMode(),
-    serviceTotals: {
-      total: allEnvironments.length,
-      healthy: allEnvironments.filter((env) => env.currentStatus === "healthy").length,
-      degraded: allEnvironments.filter((env) => env.currentStatus === "degraded").length,
-      failed: allEnvironments.filter((env) => env.currentStatus === "failed").length
+    organizationTotals: {
+      projects: bundle.projects.length,
+      services: bundle.services.length,
+      environments: bundle.services.flatMap((service) => service.environments).length
     },
-    incidentsBySeverity: {
-      P1: activeIncidents.filter((incident) => incident.severity === "P1").length,
-      P2: activeIncidents.filter((incident) => incident.severity === "P2").length,
-      P3: activeIncidents.filter((incident) => incident.severity === "P3").length
-    },
+    serviceTotals: serviceTotalsFromServices(bundle.services),
+    incidentsBySeverity: incidentsBySeverityFromIncidents(bundle.incidents),
+    projects: bundle.projects,
     activeIncidents,
-    services,
-    actionRuns,
-    codexEscalations
+    actionRuns: bundle.actionRuns.slice(0, 8),
+    codexEscalations: bundle.codexEscalations.slice(0, 8),
+    latestReports: bundle.reports
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+      .slice(0, 8)
+      .map((report) => ({
+        id: report.id,
+        projectSlug: report.projectSlug,
+        projectName: report.projectName,
+        scopeLevel: report.scopeLevel,
+        scopeKey: report.scopeKey,
+        reportType: report.reportType,
+        status: report.status,
+        headline: report.headline,
+        periodStart: report.periodStart,
+        periodEnd: report.periodEnd,
+        updatedAt: report.updatedAt
+      }))
   };
 }
 
-async function insertIncidentArtifacts(incidentId: string, artifacts: ArtifactBlob[]): Promise<void> {
-  if (!artifacts.length) {
-    return;
+async function refreshProjectOverview(projectSlug: string): Promise<void> {
+  if (!isDemoMode()) {
+    await buildAndPersistProjectReport(projectSlug, "overview");
   }
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return;
-  }
-
-  await supabase.from("artifact_blobs").insert(
-    artifacts.map((artifact) => ({
-      incident_id: incidentId,
-      kind: artifact.kind,
-      label: artifact.label,
-      href: artifact.href,
-      sha256: artifact.sha256,
-      metadata: artifact.metadata ?? {}
-    }))
-  );
 }
 
 function severityFromCheck(payload: CheckRunPayload): "P1" | "P2" | "P3" {
@@ -583,6 +289,7 @@ export async function acknowledgeIncident(incidentId: string): Promise<IncidentS
     })
     .eq("id", incidentId);
 
+  await refreshProjectOverview(incident.projectSlug);
   return getIncident(incidentId);
 }
 
@@ -619,6 +326,7 @@ export async function silenceIncident(incidentId: string, minutes = 30): Promise
     })
     .eq("id", incidentId);
 
+  await refreshProjectOverview(incident.projectSlug);
   return getIncident(incidentId);
 }
 
@@ -655,14 +363,13 @@ export async function recordCheckResult(payload: CheckRunPayload): Promise<{
         active ??
         incidentSnapshotSchema.parse({
           id: crypto.randomUUID(),
+          projectSlug: service?.projectSlug ?? studioProjectDefinition.slug,
+          projectName: service?.projectName ?? studioProjectDefinition.name,
           serviceSlug: payload.serviceSlug,
           serviceName: service?.name ?? payload.serviceSlug,
           environmentSlug: payload.environmentSlug,
           environmentName: environment?.name ?? payload.environmentSlug,
-          title:
-            payload.environmentSlug === "production"
-              ? "Studio production health incident"
-              : "Studio staging health incident",
+          title: payload.environmentSlug === "production" ? "Studio production public probe failure" : "Studio staging public probe failure",
           summary: payload.summary,
           fingerprint,
           severity: severityFromCheck(payload),
@@ -764,6 +471,7 @@ export async function recordCheckResult(payload: CheckRunPayload): Promise<{
       })
       .eq("id", activeIncident.id);
 
+    await refreshProjectOverview(activeIncident.projectSlug);
     const resolved = await getIncident(activeIncident.id);
     return {
       incident: resolved,
@@ -794,7 +502,7 @@ export async function recordCheckResult(payload: CheckRunPayload): Promise<{
         })
         .eq("id", activeIncident.id);
 
-      await insertIncidentArtifacts(activeIncident.id, payload.artifacts ?? []);
+      await refreshProjectOverview(activeIncident.projectSlug);
       const updated = await getIncident(activeIncident.id);
       return {
         incident: updated,
@@ -807,21 +515,15 @@ export async function recordCheckResult(payload: CheckRunPayload): Promise<{
       };
     }
 
-    const severity = severityFromCheck(payload);
-    const title =
-      payload.environmentSlug === "production"
-        ? "Studio production public probe failure"
-        : "Studio staging public probe failure";
-
     const { data: insertedIncident } = await supabase
       .from("incidents")
       .insert({
         service_id: service.id,
         service_environment_id: environment.id,
         fingerprint,
-        title,
+        title: payload.environmentSlug === "production" ? "Studio production public probe failure" : "Studio staging public probe failure",
         summary: payload.summary,
-        severity,
+        severity: severityFromCheck(payload),
         state: "open",
         source: payload.source,
         latest_check_run_id: checkRunRow?.id ?? null,
@@ -837,10 +539,7 @@ export async function recordCheckResult(payload: CheckRunPayload): Promise<{
       .select("*")
       .single();
 
-    if (insertedIncident) {
-      await insertIncidentArtifacts(insertedIncident.id, payload.artifacts ?? []);
-    }
-
+    await refreshProjectOverview(service.projectSlug);
     const snapshot = insertedIncident ? await getIncident(insertedIncident.id) : null;
     return {
       incident: snapshot,
@@ -870,38 +569,75 @@ export async function recordServiceEvent(payload: ServiceEventPayload): Promise<
 }> {
   const fingerprint =
     payload.fingerprint ?? buildIncidentFingerprint(payload.serviceSlug, payload.environmentSlug, payload.eventType);
-  const { service, environment } = await resolveServiceContext(payload.serviceSlug, payload.environmentSlug);
   const occurredAt = payload.occurredAt ?? isoNow();
-  const severity = severityFromEvent(payload);
+  const { service, environment } = await resolveServiceContext(payload.serviceSlug, payload.environmentSlug);
 
   if (isDemoMode()) {
     const demo = getDemoState();
-    const incident = incidentSnapshotSchema.parse({
-      id: crypto.randomUUID(),
-      serviceSlug: payload.serviceSlug,
-      serviceName: service?.name ?? payload.serviceSlug,
-      environmentSlug: payload.environmentSlug,
-      environmentName: environment?.name ?? payload.environmentSlug,
-      title: payload.title ?? `${payload.eventType} reported by ${payload.serviceSlug}`,
-      summary: payload.summary,
-      fingerprint,
-      severity,
-      state: payload.status === "healthy" ? "resolved" : "open",
-      latestArtifacts: payload.artifacts ?? [],
-      autoRemediationAttempted: false,
-      recommendedNextPath: payload.recommendedNextPath,
-      openedAt: occurredAt,
-      updatedAt: occurredAt,
-      lastSeenAt: occurredAt,
-      resolvedAt: payload.status === "healthy" ? occurredAt : undefined,
-      openDurationMinutes: 0
-    });
-    demo.incidents.unshift(incident);
+    const active = demo.incidents.find((incident) => incident.fingerprint === fingerprint && incident.state !== "resolved");
+
+    if (payload.status === "healthy" && active) {
+      active.state = "resolved";
+      active.resolvedAt = occurredAt;
+      active.updatedAt = occurredAt;
+      active.lastSeenAt = occurredAt;
+      return {
+        incident: active,
+        notification: buildNotificationPlan({
+          severity: active.severity,
+          action: "resolved",
+          incident: active
+        })
+      };
+    }
+
+    const incident =
+      active ??
+      incidentSnapshotSchema.parse({
+        id: crypto.randomUUID(),
+        projectSlug: service?.projectSlug ?? studioProjectDefinition.slug,
+        projectName: service?.projectName ?? studioProjectDefinition.name,
+        serviceSlug: payload.serviceSlug,
+        serviceName: service?.name ?? payload.serviceSlug,
+        environmentSlug: payload.environmentSlug,
+        environmentName: environment?.name ?? payload.environmentSlug,
+        title: payload.title ?? `${payload.serviceSlug} ${payload.eventType}`,
+        summary: payload.summary,
+        fingerprint,
+        severity: severityFromEvent(payload),
+        state: "open",
+        latestCheckStatus: payload.status,
+        latestRunType: payload.eventType,
+        latestArtifacts: payload.artifacts ?? [],
+        autoRemediationAttempted: false,
+        recommendedNextPath:
+          payload.recommendedNextPath ??
+          "Review the latest report block, then choose a bounded action or escalate to Codex.",
+        openedAt: occurredAt,
+        updatedAt: occurredAt,
+        lastSeenAt: occurredAt,
+        openDurationMinutes: 0
+      });
+
+    incident.summary = payload.summary;
+    incident.title = payload.title ?? incident.title;
+    incident.severity = severityFromEvent(payload);
+    incident.state = incident.state === "resolved" ? "open" : incident.state;
+    incident.latestCheckStatus = payload.status;
+    incident.latestRunType = payload.eventType;
+    incident.latestArtifacts = payload.artifacts ?? [];
+    incident.recommendedNextPath = payload.recommendedNextPath ?? incident.recommendedNextPath;
+    incident.updatedAt = occurredAt;
+    incident.lastSeenAt = occurredAt;
+    if (!active) {
+      demo.incidents.unshift(incident);
+    }
+
     return {
       incident,
       notification: buildNotificationPlan({
-        severity,
-        action: payload.status === "healthy" ? "resolved" : "opened",
+        severity: incident.severity,
+        action: active ? "updated" : "opened",
         incident
       })
     };
@@ -918,17 +654,25 @@ export async function recordServiceEvent(payload: ServiceEventPayload): Promise<
   }
 
   const activeIncident = await findActiveIncident(fingerprint);
+
   if (payload.status === "healthy" && activeIncident) {
     await supabase
       .from("incidents")
       .update({
         state: "resolved",
         resolved_at: occurredAt,
-        updated_at: occurredAt,
-        last_seen_at: occurredAt
+        last_seen_at: occurredAt,
+        updated_at: occurredAt
       })
       .eq("id", activeIncident.id);
 
+    await supabase.from("incident_events").insert({
+      incident_id: activeIncident.id,
+      event_type: payload.eventType,
+      payload
+    });
+
+    await refreshProjectOverview(activeIncident.projectSlug);
     const resolved = await getIncident(activeIncident.id);
     return {
       incident: resolved,
@@ -940,368 +684,562 @@ export async function recordServiceEvent(payload: ServiceEventPayload): Promise<
     };
   }
 
+  let incidentId = activeIncident?.id;
+  let notificationAction: "opened" | "updated" = activeIncident ? "updated" : "opened";
+
   if (activeIncident) {
     await supabase
       .from("incidents")
       .update({
+        title: payload.title ?? activeIncident.title,
         summary: payload.summary,
-        updated_at: occurredAt,
+        severity: severityFromEvent(payload),
+        recommended_next_path:
+          payload.recommendedNextPath ??
+          activeIncident.recommendedNextPath ??
+          "Review the latest report block, then choose a bounded action or escalate to Codex.",
         last_seen_at: occurredAt,
-        recommended_next_path: payload.recommendedNextPath ?? activeIncident.recommendedNextPath ?? null
+        updated_at: occurredAt
       })
       .eq("id", activeIncident.id);
-    await insertIncidentArtifacts(activeIncident.id, payload.artifacts ?? []);
-    const updated = await getIncident(activeIncident.id);
+  } else {
+    const { data: insertedIncident } = await supabase
+      .from("incidents")
+      .insert({
+        service_id: service.id,
+        service_environment_id: environment.id,
+        fingerprint,
+        title: payload.title ?? `${service.name} ${payload.eventType}`,
+        summary: payload.summary,
+        severity: severityFromEvent(payload),
+        state: "open",
+        source: payload.source,
+        recommended_next_path:
+          payload.recommendedNextPath ??
+          "Review the latest report block, then choose a bounded action or escalate to Codex.",
+        opened_at: occurredAt,
+        last_seen_at: occurredAt,
+        updated_at: occurredAt,
+        metadata: payload.metadata ?? {}
+      })
+      .select("id")
+      .single();
+
+    incidentId = insertedIncident?.id ? String(insertedIncident.id) : undefined;
+  }
+
+  if (!incidentId) {
     return {
-      incident: updated,
-      notification: buildNotificationPlan({
-        severity: activeIncident.severity,
-        action: "updated",
-        incident: updated ?? activeIncident
+      incident: null,
+      notification: notificationPlanSchema.parse({
+        shouldNotify: false
       })
     };
   }
 
-  const { data: inserted } = await supabase
-    .from("incidents")
-    .insert({
-      service_id: service.id,
-      service_environment_id: environment.id,
-      fingerprint,
-      title: payload.title ?? `${payload.eventType} reported by ${payload.serviceSlug}`,
-      summary: payload.summary,
-      severity,
-      state: "open",
-      source: payload.source,
-      recommended_next_path: payload.recommendedNextPath ?? null,
-      opened_at: occurredAt,
-      last_seen_at: occurredAt,
-      updated_at: occurredAt
-    })
-    .select("*")
-    .single();
+  await supabase.from("incident_events").insert({
+    incident_id: incidentId,
+    event_type: payload.eventType,
+    payload
+  });
 
-  if (inserted) {
-    await insertIncidentArtifacts(inserted.id, payload.artifacts ?? []);
+  if ((payload.artifacts ?? []).length > 0) {
+    await supabase.from("artifact_blobs").insert(
+      payload.artifacts.map((artifact) => ({
+        incident_id: incidentId,
+        kind: artifact.kind,
+        label: artifact.label,
+        href: artifact.href,
+        sha256: artifact.sha256 ?? null,
+        metadata: artifact.metadata ?? {}
+      }))
+    );
   }
 
-  const snapshot = inserted ? await getIncident(inserted.id) : null;
+  await refreshProjectOverview(service.projectSlug);
+  const snapshot = await getIncident(incidentId);
   return {
     incident: snapshot,
     notification:
       snapshot
         ? buildNotificationPlan({
             severity: snapshot.severity,
-            action: "opened",
+            action: notificationAction,
             incident: snapshot
           })
         : notificationPlanSchema.parse({ shouldNotify: false })
   };
 }
 
-async function persistActionRun(
-  action: ActionRunResult,
-  request: ActionDispatchRequest
-): Promise<ActionRunResult> {
+async function persistActionRun(input: {
+  request: ActionDispatchRequest;
+  status: ActionRunResult["status"];
+  summary: string;
+  responsePayload?: Record<string, unknown>;
+  artifacts?: ActionRunResult["artifacts"];
+  completedAt?: string;
+  incident?: IncidentSnapshot | null;
+}): Promise<ActionRunResult> {
+  const createdAt = isoNow();
+  const completedAt =
+    input.completedAt ?? (input.status === "queued" || input.status === "running" ? undefined : createdAt);
+
   if (isDemoMode()) {
     const demo = getDemoState();
-    const existing = demo.actionRuns.find((run) => run.id === action.id);
-    if (existing) {
-      Object.assign(existing, action);
-    } else {
-      demo.actionRuns.unshift(action);
-    }
-    const incident = request.incidentId
-      ? demo.incidents.find((candidate) => candidate.id === request.incidentId)
-      : undefined;
-    if (incident) {
-      incident.autoRemediationAttempted = true;
-      if (action.recipe === "create_codex_escalation") {
-        incident.state = "escalated";
-      } else if (incident.state !== "resolved") {
-        incident.state = "auto_remediating";
+    const targetIncident =
+      input.incident ?? (input.request.incidentId ? demo.incidents.find((item) => item.id === input.request.incidentId) ?? null : null);
+    const actionRun = actionRunResultSchema.parse({
+      id: crypto.randomUUID(),
+      incidentId: input.request.incidentId,
+      projectSlug: targetIncident?.projectSlug ?? studioProjectDefinition.slug,
+      projectName: targetIncident?.projectName ?? studioProjectDefinition.name,
+      serviceSlug: input.request.serviceSlug,
+      environmentSlug: input.request.environmentSlug,
+      recipe: input.request.recipe,
+      status: input.status,
+      summary: input.summary,
+      artifacts: input.artifacts ?? [],
+      responsePayload: (input.responsePayload ?? {}) as Record<string, never>,
+      createdAt,
+      completedAt
+    });
+
+    demo.actionRuns.unshift(actionRun);
+
+    if (targetIncident) {
+      targetIncident.autoRemediationAttempted ||= input.request.recipe !== "create_codex_escalation";
+      targetIncident.updatedAt = createdAt;
+      if (input.request.recipe === "create_codex_escalation") {
+        targetIncident.state = "escalated";
+      } else if (input.status === "queued" || input.status === "running") {
+        targetIncident.state = "auto_remediating";
       }
-      incident.updatedAt = isoNow();
     }
-    return action;
+
+    return actionRun;
   }
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return action;
+  const { service, environment } = await resolveServiceContext(
+    input.request.serviceSlug,
+    input.request.environmentSlug
+  );
+
+  if (!supabase || !service || !environment) {
+    return actionRunResultSchema.parse({
+      id: crypto.randomUUID(),
+      incidentId: input.request.incidentId,
+      projectSlug: studioProjectDefinition.slug,
+      projectName: studioProjectDefinition.name,
+      serviceSlug: input.request.serviceSlug,
+      environmentSlug: input.request.environmentSlug,
+      recipe: input.request.recipe,
+      status: input.status,
+      summary: input.summary,
+      artifacts: input.artifacts ?? [],
+      responsePayload: (input.responsePayload ?? {}) as Record<string, never>,
+      createdAt,
+      completedAt
+    });
   }
 
-  const services = await listServices();
-  const service = services.find((candidate) => candidate.slug === request.serviceSlug);
-  const environment = service?.environments.find((candidate) => candidate.slug === request.environmentSlug);
+  const { data: actionRow } = await supabase
+    .from("action_runs")
+    .insert({
+      incident_id: input.request.incidentId ?? null,
+      service_id: service.id,
+      service_environment_id: environment.id,
+      recipe: input.request.recipe,
+      status: input.status,
+      requested_by: input.request.requestedBy,
+      summary: input.summary,
+      request_payload: input.request.metadata ?? {},
+      response_payload: input.responsePayload ?? {},
+      completed_at: completedAt ?? null
+    })
+    .select("*")
+    .single();
 
-  if (!service || !environment) {
-    return action;
+  if (actionRow && (input.artifacts ?? []).length > 0) {
+    await supabase.from("artifact_blobs").insert(
+      (input.artifacts ?? []).map((artifact) => ({
+        incident_id: input.request.incidentId ?? null,
+        action_run_id: actionRow.id,
+        kind: artifact.kind,
+        label: artifact.label,
+        href: artifact.href,
+        sha256: artifact.sha256 ?? null,
+        metadata: artifact.metadata ?? {}
+      }))
+    );
   }
 
-  await supabase.from("action_runs").insert({
-    id: action.id,
-    incident_id: request.incidentId ?? null,
-    service_id: service.id,
-    service_environment_id: environment.id,
-    recipe: request.recipe,
-    status: action.status,
-    requested_by: request.requestedBy,
-    summary: action.summary,
-    request_payload: request,
-    response_payload: action.responsePayload,
-    created_at: action.createdAt,
-    completed_at: action.completedAt ?? null
+  if (input.request.incidentId && actionRow) {
+    const nextState =
+      input.request.recipe === "create_codex_escalation"
+        ? "escalated"
+        : input.status === "queued" || input.status === "running"
+          ? "auto_remediating"
+          : undefined;
+
+    await supabase
+      .from("incidents")
+      .update({
+        latest_action_run_id: actionRow.id,
+        auto_remediation_attempted:
+          input.request.recipe === "create_codex_escalation" ? undefined : true,
+        state: nextState,
+        updated_at: createdAt
+      })
+      .eq("id", input.request.incidentId);
+  }
+
+  await refreshProjectOverview(service.projectSlug);
+  return actionRunResultSchema.parse({
+    id: String(actionRow?.id ?? crypto.randomUUID()),
+    incidentId: input.request.incidentId,
+    projectSlug: service.projectSlug,
+    projectName: service.projectName,
+    serviceSlug: input.request.serviceSlug,
+    environmentSlug: input.request.environmentSlug,
+    recipe: input.request.recipe,
+    status: input.status,
+    summary: input.summary,
+    artifacts: input.artifacts ?? [],
+    responsePayload: (input.responsePayload ?? {}) as Record<string, never>,
+    createdAt: String(actionRow?.created_at ?? createdAt),
+    completedAt: actionRow?.completed_at ? String(actionRow.completed_at) : completedAt
   });
-
-  if (request.incidentId) {
-    const updatePayload: Record<string, unknown> = {
-      auto_remediation_attempted: true,
-      latest_action_run_id: action.id,
-      updated_at: isoNow()
-    };
-    if (request.recipe === "create_codex_escalation") {
-      updatePayload.state = "escalated";
-    }
-    await supabase.from("incidents").update(updatePayload).eq("id", request.incidentId);
-  }
-
-  return action;
 }
 
-export async function createCodexEscalation(
-  incidentId: string,
-  requestedBy = "operator"
-): Promise<{ bundle: CodexEscalationBundle; actionRun: ActionRunResult | null }> {
+export async function createCodexEscalation(incidentId: string): Promise<{
+  bundle: CodexEscalationBundle;
+  actionRun: ActionRunResult;
+}> {
   const incident = await getIncident(incidentId);
   if (!incident) {
     throw new Error("Incident not found.");
   }
 
+  if (isDemoMode()) {
+    const demo = getDemoState();
+    const latestActionRun =
+      demo.actionRuns.find((item) => item.incidentId === incidentId) ?? null;
+    const bundle = codexEscalationBundleSchema.parse({
+      incidentId,
+      projectSlug: incident.projectSlug,
+      projectName: incident.projectName,
+      serviceSlug: incident.serviceSlug,
+      environmentSlug: incident.environmentSlug,
+      fingerprint: incident.fingerprint,
+      severity: incident.severity,
+      state: incident.state,
+      latestPublicCheck: {
+        status: incident.latestCheckStatus,
+        runType: incident.latestRunType,
+        versionBuild: incident.latestVersionBuild
+      },
+      latestVerifyResult: latestActionRun
+        ? {
+            recipe: latestActionRun.recipe,
+            status: latestActionRun.status,
+            summary: latestActionRun.summary
+          }
+        : {},
+      currentBuild: incident.latestVersionBuild,
+      artifactLinks: incident.latestArtifacts,
+      recommendedNextPath:
+        incident.recommendedNextPath ?? "Inspect the project cockpit and continue with Codex triage.",
+      generatedAt: isoNow()
+    });
+
+    const escalationId = crypto.randomUUID();
+    demo.codexEscalations.unshift({
+      id: escalationId,
+      incidentId,
+      projectSlug: incident.projectSlug,
+      projectName: incident.projectName,
+      serviceSlug: incident.serviceSlug,
+      environmentSlug: incident.environmentSlug,
+      status: "queued",
+      recommendedNextPath: bundle.recommendedNextPath,
+      createdAt: bundle.generatedAt
+    });
+
+    const actionRun = await persistActionRun({
+      request: {
+        incidentId,
+        serviceSlug: incident.serviceSlug,
+        environmentSlug: incident.environmentSlug,
+        recipe: "create_codex_escalation",
+        requestedBy: "system",
+        reason: `Codex escalation for ${incident.title}`,
+        metadata: {}
+      },
+      status: "succeeded",
+      summary: "Codex escalation bundle created.",
+      responsePayload: {
+        escalationId
+      },
+      artifacts: [
+        {
+          kind: "bundle",
+          label: "Codex escalation bundle",
+          href: `/projects/${incident.projectSlug}/operations?incident=${incidentId}`,
+          metadata: {
+            escalationId
+          }
+        }
+      ],
+      incident
+    });
+
+    return { bundle, actionRun };
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error("Supabase admin client is not configured.");
+  }
+
+  const [latestPublicCheckResponse, latestVerifyResponse] = await Promise.all([
+    supabase
+      .from("check_runs")
+      .select("*")
+      .eq("service_id", (await resolveServiceContext(incident.serviceSlug, incident.environmentSlug)).service?.id ?? "")
+      .eq("service_environment_id", (await resolveServiceContext(incident.serviceSlug, incident.environmentSlug)).environment?.id ?? "")
+      .in("run_type", ["public_probe", "manual_recheck"])
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("check_runs")
+      .select("*")
+      .eq("service_id", (await resolveServiceContext(incident.serviceSlug, incident.environmentSlug)).service?.id ?? "")
+      .eq("service_environment_id", (await resolveServiceContext(incident.serviceSlug, incident.environmentSlug)).environment?.id ?? "")
+      .in("run_type", ["deployment_verify", "incident_bundle"])
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  const latestPublicCheck = latestPublicCheckResponse.data
+    ? {
+        status: latestPublicCheckResponse.data.status,
+        summary: latestPublicCheckResponse.data.summary,
+        runType: latestPublicCheckResponse.data.run_type,
+        versionBuild: latestPublicCheckResponse.data.version_build,
+        checkedPaths: latestPublicCheckResponse.data.checked_paths,
+        recordedAt: latestPublicCheckResponse.data.recorded_at
+      }
+    : {};
+
+  const latestVerifyResult = latestVerifyResponse.data
+    ? {
+        status: latestVerifyResponse.data.status,
+        summary: latestVerifyResponse.data.summary,
+        runType: latestVerifyResponse.data.run_type,
+        versionBuild: latestVerifyResponse.data.version_build,
+        checkedPaths: latestVerifyResponse.data.checked_paths,
+        recordedAt: latestVerifyResponse.data.recorded_at
+      }
+    : {};
+
   const bundle = codexEscalationBundleSchema.parse({
     incidentId,
+    projectSlug: incident.projectSlug,
+    projectName: incident.projectName,
     serviceSlug: incident.serviceSlug,
     environmentSlug: incident.environmentSlug,
     fingerprint: incident.fingerprint,
     severity: incident.severity,
     state: incident.state,
-    latestPublicCheck: {
-      status: incident.latestCheckStatus,
-      runType: incident.latestRunType
-    },
-    latestVerifyResult: {
-      summary: incident.summary
-    },
+    latestPublicCheck,
+    latestVerifyResult,
     currentBuild: incident.latestVersionBuild,
     artifactLinks: incident.latestArtifacts,
     recommendedNextPath:
-      incident.recommendedNextPath ??
-      "Review incident bundle, then open a Codex thread with the escalation payload.",
+      incident.recommendedNextPath ?? "Inspect the project cockpit and continue with Codex triage.",
     generatedAt: isoNow()
   });
 
-  const actionRun = actionRunResultSchema.parse({
-    id: crypto.randomUUID(),
-    incidentId,
-    serviceSlug: incident.serviceSlug,
-    environmentSlug: incident.environmentSlug,
-    recipe: "create_codex_escalation",
-    status: "succeeded",
-    summary: "Codex escalation bundle generated and stored.",
-    artifacts: bundle.artifactLinks,
-    responsePayload: bundle,
-    createdAt: isoNow(),
-    completedAt: isoNow()
-  });
+  const { data: escalationRow } = await supabase
+    .from("codex_escalations")
+    .insert({
+      incident_id: incidentId,
+      status: "queued",
+      bundle,
+      recommended_next_path: bundle.recommendedNextPath
+    })
+    .select("*")
+    .single();
 
-  if (isDemoMode()) {
-    const demo = getDemoState();
-    demo.codexEscalations.unshift({
-      id: crypto.randomUUID(),
-      incidentId,
-      serviceSlug: incident.serviceSlug,
-      environmentSlug: incident.environmentSlug,
-      status: "open",
-      recommendedNextPath: bundle.recommendedNextPath,
-      createdAt: bundle.generatedAt
-    });
-    await persistActionRun(actionRun, {
+  const actionRun = await persistActionRun({
+    request: {
       incidentId,
       serviceSlug: incident.serviceSlug,
       environmentSlug: incident.environmentSlug,
       recipe: "create_codex_escalation",
-      requestedBy,
-      reason: "Operator escalation",
+      requestedBy: "system",
+      reason: `Codex escalation for ${incident.title}`,
       metadata: {}
-    });
-    return { bundle, actionRun };
-  }
-
-  const supabase = getSupabaseAdmin();
-  if (supabase) {
-    await supabase.from("codex_escalations").insert({
-      incident_id: incidentId,
-      status: "open",
-      bundle,
-      recommended_next_path: bundle.recommendedNextPath,
-      created_at: bundle.generatedAt
-    });
-  }
-
-  await persistActionRun(actionRun, {
-    incidentId,
-    serviceSlug: incident.serviceSlug,
-    environmentSlug: incident.environmentSlug,
-    recipe: "create_codex_escalation",
-    requestedBy,
-    reason: "Operator escalation",
-    metadata: {}
+    },
+    status: "succeeded",
+    summary: "Codex escalation bundle created.",
+    responsePayload: {
+      escalationId: escalationRow?.id
+    },
+    artifacts: [
+      {
+        kind: "bundle",
+        label: "Codex escalation bundle",
+        href: `/projects/${incident.projectSlug}/operations?incident=${incidentId}`,
+        metadata: {
+          escalationId: escalationRow?.id
+        }
+      }
+    ],
+    incident
   });
 
-  return { bundle, actionRun };
+  await supabase
+    .from("incidents")
+    .update({
+      state: "escalated",
+      recommended_next_path: bundle.recommendedNextPath,
+      updated_at: bundle.generatedAt
+    })
+    .eq("id", incidentId);
+
+  await refreshProjectOverview(incident.projectSlug);
+  return {
+    bundle,
+    actionRun
+  };
 }
 
-export async function runAction(request: ActionDispatchRequest): Promise<{
+export async function runAction(input: ActionDispatchRequest): Promise<{
   actionRun: ActionRunResult;
   incident: IncidentSnapshot | null;
   escalationBundle?: CodexEscalationBundle;
 }> {
-  if (request.recipe === "create_codex_escalation" && request.incidentId) {
-    const escalation = await createCodexEscalation(request.incidentId, request.requestedBy);
+  const incident = input.incidentId ? await getIncident(input.incidentId) : null;
+
+  if (input.recipe === "create_codex_escalation") {
+    const escalation = await createCodexEscalation(input.incidentId ?? "");
     return {
-      actionRun: escalation.actionRun ?? actionRunResultSchema.parse({
-        id: crypto.randomUUID(),
-        incidentId: request.incidentId,
-        serviceSlug: request.serviceSlug,
-        environmentSlug: request.environmentSlug,
-        recipe: "create_codex_escalation",
-        status: "failed",
-        summary: "Codex escalation could not be recorded.",
-        artifacts: [],
-        responsePayload: {},
-        createdAt: isoNow(),
-        completedAt: isoNow()
-      }),
-      incident: await getIncident(request.incidentId),
+      actionRun: escalation.actionRun,
+      incident: await getIncident(input.incidentId ?? ""),
       escalationBundle: escalation.bundle
     };
   }
 
-  if (request.recipe === "recheck_public_health") {
-    const existingIncident = request.incidentId ? await getIncident(request.incidentId) : null;
-    const probe = await runStudioPublicProbe(request.environmentSlug);
-    const ingest = await recordCheckResult({
+  if (input.recipe === "recheck_public_health") {
+    const probe = await runStudioPublicProbe(input.environmentSlug);
+    const checkResult = await recordCheckResult({
       ...probe,
+      runType: "manual_recheck",
       source: "manual",
-      runType: "public_probe",
-      fingerprint:
-        existingIncident?.fingerprint ??
-        buildIncidentFingerprint(request.serviceSlug, request.environmentSlug, "public_probe")
+      fingerprint: incident?.fingerprint ?? probe.fingerprint
     });
 
-    const actionRun = actionRunResultSchema.parse({
-      id: crypto.randomUUID(),
-      incidentId: request.incidentId,
-      serviceSlug: request.serviceSlug,
-      environmentSlug: request.environmentSlug,
-      recipe: request.recipe,
-      status: probe.status === "healthy" ? "succeeded" : "failed",
+    const actionRun = await persistActionRun({
+      request: input,
+      status:
+        probe.status === "healthy" || checkResult.incident?.state === "resolved" ? "succeeded" : "failed",
       summary:
-        probe.status === "healthy"
-          ? "Public recheck returned healthy Studio signals."
-          : "Public recheck still found failing or degraded Studio signals.",
-      artifacts: probe.artifacts ?? [],
-      responsePayload: probe,
-      createdAt: isoNow(),
-      completedAt: isoNow()
+        probe.status === "healthy" || checkResult.incident?.state === "resolved"
+          ? `Manual recheck cleared ${input.serviceSlug}/${input.environmentSlug}.`
+          : `Manual recheck still reports ${probe.status} for ${input.serviceSlug}/${input.environmentSlug}.`,
+      responsePayload: {
+        probeStatus: probe.status,
+        summary: probe.summary
+      },
+      artifacts: probe.artifacts,
+      incident: checkResult.incident ?? incident
     });
-    await persistActionRun(actionRun, request);
+
     return {
       actionRun,
-      incident: ingest.incident
+      incident: input.incidentId ? await getIncident(input.incidentId) : checkResult.incident
     };
   }
 
-  if (request.recipe === "trigger_staging_verify" || request.recipe === "collect_incident_bundle") {
-    const dispatch = await dispatchStudioWorkflow({
-      recipe: request.recipe,
-      incidentId: request.incidentId,
-      serviceSlug: request.serviceSlug,
-      environmentSlug: request.environmentSlug
-    });
-
-    const actionRun = actionRunResultSchema.parse({
-      id: crypto.randomUUID(),
-      incidentId: request.incidentId,
-      serviceSlug: request.serviceSlug,
-      environmentSlug: request.environmentSlug,
-      recipe: request.recipe,
-      status: dispatch.queued ? "succeeded" : "failed",
-      summary: dispatch.summary,
-      artifacts: dispatch.runUrl
-        ? [
-            {
-              kind: "workflow-artifact",
-              label: "GitHub workflow",
-              href: dispatch.runUrl
-            }
-          ]
-        : [],
-      responsePayload: dispatch,
-      createdAt: isoNow(),
-      completedAt: isoNow()
-    });
-    await persistActionRun(actionRun, request);
-    return {
-      actionRun,
-      incident: request.incidentId ? await getIncident(request.incidentId) : null
-    };
-  }
-
-  const fallback = actionRunResultSchema.parse({
-    id: crypto.randomUUID(),
-    incidentId: request.incidentId,
-    serviceSlug: request.serviceSlug,
-    environmentSlug: request.environmentSlug,
-    recipe: request.recipe,
-    status: "failed",
-    summary: `Unsupported action recipe: ${request.recipe}`,
-    artifacts: [],
-    responsePayload: {},
-    createdAt: isoNow(),
-    completedAt: isoNow()
+  const workflow = await dispatchStudioWorkflow({
+    recipe: input.recipe,
+    incidentId: input.incidentId,
+    serviceSlug: input.serviceSlug,
+    environmentSlug: input.environmentSlug
   });
-  await persistActionRun(fallback, request);
+
+  const actionRun = await persistActionRun({
+    request: input,
+    status: workflow.queued ? "queued" : "failed",
+    summary: workflow.summary,
+    responsePayload: workflow.runUrl
+      ? {
+          runUrl: workflow.runUrl
+        }
+      : {},
+    artifacts: workflow.runUrl
+      ? [
+          {
+            kind: "workflow-artifact",
+            label: "GitHub workflow run",
+            href: workflow.runUrl,
+            metadata: {
+              recipe: input.recipe
+            }
+          }
+        ]
+      : [],
+    incident
+  });
+
   return {
-    actionRun: fallback,
-    incident: request.incidentId ? await getIncident(request.incidentId) : null
+    actionRun,
+    incident: input.incidentId ? await getIncident(input.incidentId) : incident
   };
 }
 
 export async function evaluateEscalationNeed(incidentId: string): Promise<{
   shouldEscalate: boolean;
-  incident: IncidentSnapshot | null;
+  reason: string;
 }> {
   const incident = await getIncident(incidentId);
   if (!incident) {
     return {
       shouldEscalate: false,
-      incident: null
+      reason: "Incident not found."
     };
   }
 
-  const actions = await listActionRuns();
-  const related = actions.filter((action) => action.incidentId === incidentId);
-  const lastRemediation = related.find((action) => action.recipe !== "create_codex_escalation");
-  const followUpFailed = lastRemediation?.status === "failed";
+  if (incident.state === "escalated") {
+    return {
+      shouldEscalate: false,
+      reason: "Incident is already escalated."
+    };
+  }
+
+  const actionRuns = (await listActionRuns(incident.projectSlug))
+    .filter((actionRun) => actionRun.incidentId === incidentId && actionRun.recipe !== "create_codex_escalation")
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  const latestAction = actionRuns[0];
+  const actionAttemptFailed = latestAction?.status === "failed";
+  const followUpVerifyFailed =
+    incident.latestCheckStatus !== undefined && incident.latestCheckStatus !== "healthy";
+  const openDurationMinutes = incident.openDurationMinutes ?? minutesBetween(incident.openedAt, isoNow());
+  const shouldEscalate = shouldEscalateToCodex({
+    severity: incident.severity,
+    actionAttemptFailed: Boolean(actionAttemptFailed),
+    followUpVerifyFailed,
+    openDurationMinutes
+  });
 
   return {
-    shouldEscalate: shouldEscalateToCodex({
-      severity: incident.severity,
-      actionAttemptFailed: Boolean(lastRemediation),
-      followUpVerifyFailed: followUpFailed,
-      openDurationMinutes: minutesBetween(incident.openedAt)
-    }),
-    incident
+    shouldEscalate,
+    reason: shouldEscalate
+      ? "The incident stayed unhealthy after bounded remediation and meets Codex escalation policy."
+      : "The incident has not met the Codex escalation threshold yet."
   };
 }

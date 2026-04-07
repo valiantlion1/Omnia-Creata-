@@ -12,6 +12,7 @@ COPY web/package*.json ./
 RUN npm ci
 
 COPY web/ ./
+COPY version.json /workspace/version.json
 
 RUN npm run build
 

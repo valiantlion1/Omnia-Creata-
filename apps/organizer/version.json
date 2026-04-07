@@ -1,0 +1,12 @@
+{
+  "product": "OmniaOrganizer",
+  "displayName": "Omnia Organizer",
+  "packageName": "com.omnia.organizer",
+  "platform": "android",
+  "version": "1.0.0-alpha1",
+  "versionCode": 10000,
+  "track": "internal",
+  "releaseChannel": "alpha",
+  "mvpPhase": "phase-0-reset",
+  "updatedAt": "2026-04-08"
+}

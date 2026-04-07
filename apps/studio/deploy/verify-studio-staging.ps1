@@ -14,6 +14,7 @@ $studioRoot = Split-Path -Parent $deployDir
 $backendDir = Join-Path $studioRoot "backend"
 $versionFile = Join-Path $studioRoot "version.json"
 $expectedBuild = $null
+$expectedVersion = $null
 
 function Get-EnvMap {
   param([string]$PathValue)
@@ -30,16 +31,84 @@ function Get-EnvMap {
   return $values
 }
 
+function Resolve-AbsolutePath {
+  param([string]$PathValue)
+
+  if ([string]::IsNullOrWhiteSpace($PathValue)) {
+    return $null
+  }
+
+  return [System.IO.Path]::GetFullPath($PathValue)
+}
+
 if (Test-Path $versionFile) {
   try {
-    $expectedBuild = (Get-Content $versionFile -Raw | ConvertFrom-Json).build
+    $versionManifest = Get-Content $versionFile -Raw | ConvertFrom-Json
+    $expectedBuild = $versionManifest.build
+    $expectedVersion = $versionManifest.version
   } catch {
     $expectedBuild = $null
+    $expectedVersion = $null
   }
+}
+
+if ($env:STUDIO_RUNTIME_ROOT) {
+  $runtimeRoot = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
+} elseif ($env:LOCALAPPDATA) {
+  $runtimeRoot = Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio"
+} else {
+  $runtimeRoot = Join-Path $HOME ".omnia_creata\studio"
+}
+
+$reportDir = Join-Path $runtimeRoot "reports"
+$blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
+New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+
+function Write-StagingVerifyBlockerReport {
+  param(
+    [string]$Summary,
+    [string]$Detail,
+    [string]$BaseUrl = ""
+  )
+
+  $payload = [ordered]@{
+    recorded_at = (Get-Date).ToUniversalTime().ToString("o")
+    version = $expectedVersion
+    build = $expectedBuild
+    label = $Label
+    base_url = $BaseUrl
+    status = "blocked"
+    summary = $Summary
+    blocking_count = 1
+    warning_count = 0
+    expected_build = $expectedBuild
+    actual_build = $null
+    health_status = $null
+    owner_health_checked = (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken))
+    closure_ready = $false
+    closure_summary = "Protected staging verification cannot proceed until this verification blocker is cleared."
+    closure_gaps = @($Detail)
+    checks = @(
+      [ordered]@{
+        key = "staging_verification"
+        status = "blocked"
+        summary = $Summary
+        detail = $Detail
+      }
+    )
+  }
+
+  $json = $payload | ConvertTo-Json -Depth 8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($blockerReportPath, $json, $utf8NoBom)
 }
 
 $resolvedEnvFile = [System.IO.Path]::GetFullPath((Join-Path $deployDir $EnvFile))
 if (-not (Test-Path $resolvedEnvFile)) {
+  Write-StagingVerifyBlockerReport `
+    -Summary "Protected staging verify env file is missing." `
+    -Detail "Create $resolvedEnvFile before running verify-studio-staging.ps1." `
+    -BaseUrl $BaseUrl
   throw "Missing staging env file: $resolvedEnvFile"
 }
 

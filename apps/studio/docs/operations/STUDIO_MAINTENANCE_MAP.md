@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 ## Current baseline
 
@@ -12,6 +12,13 @@ Last updated: 2026-04-07
 
 ## Recent stabilization wins
 
+- Sprint 8 staging startup now finds Docker Desktop from the standard Windows install path even when the current shell PATH is stale, which removes a common false blocker right after Docker installation.
+- Sprint 8 staging startup now also prepends the resolved Docker Desktop bin directory to PATH before compose runs, which fixes fresh-install failures where `docker.exe` existed but `docker-credential-desktop.exe` was still invisible to the stale shell.
+- Sprint 8 staging web builds now copy the root `version.json` manifest into the container build, which fixes Dockerized web failures where the footer/version import worked locally but broke inside the staging image.
+- Sprint 8 staging backend/worker builds no longer pin a non-existent `cryptography==41.0.8`; the requirements file now uses a real Linux-installable version, which removes a fake Docker blocker caused by an impossible dependency pin.
+- The repo now ignores `apps/studio/deploy/.env.staging`, which makes local protected-staging secret bootstrap safer during Sprint 8 work.
+- Protected staging verify now overwrites the external deployment report with a blocked truth when env, connectivity, or owner-detail fetches fail, so Sprint 8 cannot accidentally read a stale older pass/warning report as the latest operator proof.
+- Protected staging bring-up now leaves an external blocked deployment report behind when Docker is missing or staging setup fails before verify, so Sprint 8 environment blockers do not disappear into terminal output.
 - Protected staging verification now reads the owner-facing `launch_gate` directly when it is available, so Sprint 8 closure logic follows one explicit truth surface instead of re-deriving protected-launch safety from lower-level readiness checks.
 - Owner health detail now exposes an explicit `launch_gate`, so operators can tell from one payload whether Studio is safe for protected launch, why it is blocked, which warnings are still only advisory, and which build was last truly verified.
 - Legacy `demo` placeholder outputs are now hidden from truthful library/share/post-preview surfaces, so colorful fallback mocks no longer survive as normal user work after older provider experiments.

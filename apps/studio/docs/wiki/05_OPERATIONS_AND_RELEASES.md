@@ -44,7 +44,10 @@ Important local expectations:
 - when a deployment verification report exists under the runtime root, owner health detail should surface that too so launch-readiness reflects deploy truth as well as startup truth
 - owner health detail should also expose one explicit `launch_gate` answer, so operators can tell from a single object whether protected launch is currently safe, why it is blocked, which warnings remain, and what the last verified build was
 - when protected staging verification runs with owner detail, it should prefer that explicit `launch_gate` object over re-deriving closure truth from lower-level readiness checks
+- if protected staging bring-up cannot even start because Docker is missing, the staging env file is missing, preflight fails, or compose fails, the operator path should still leave an external blocked report behind instead of hiding the blocker in terminal scrollback only
+- if protected staging verify itself cannot start cleanly or loses connectivity before it can finish, that verify failure should also overwrite the external deployment report with a blocked truth instead of leaving the last good report behind
 - stable local startup should not accept a stale backend boot build after a version bump; if the first readiness pass still sees the old build, it should force one clean backend restart
+- protected staging startup on Windows should not depend on a freshly restarted shell to find Docker; the operator script should also recognize the standard Docker Desktop install path and prepend it to the process PATH when Docker credential helpers would otherwise be invisible
 
 ## Deployment Discipline
 

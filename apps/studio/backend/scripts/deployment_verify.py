@@ -13,6 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from config.env import get_settings
 from studio_platform.services.deployment_verification import (
+    build_blocked_deployment_verification_report,
     build_deployment_verification_report,
     deployment_verification_exit_code,
     format_deployment_verification_lines,
@@ -42,9 +43,42 @@ def main() -> int:
         api_prefix = "/" + api_prefix
     api_prefix = api_prefix.rstrip("/")
 
-    version_payload = _fetch_json(f"{base_url}{api_prefix}/v1/version", timeout=args.timeout)
-    health_payload = _fetch_json(f"{base_url}{api_prefix}/v1/healthz", timeout=args.timeout)
-    login_page_html = _fetch_text(f"{base_url}/login", timeout=args.timeout)
+    owner_health_checked = bool(args.owner_bearer_token)
+    settings = get_settings()
+
+    def persist_blocked_report(summary: str, detail: str, *, check_key: str = "staging_environment") -> dict[str, object]:
+        report = build_blocked_deployment_verification_report(
+            expected_build=args.expected_build,
+            summary=summary,
+            detail=detail,
+            check_key=check_key,
+            owner_health_checked=owner_health_checked,
+        )
+        return persist_deployment_verification_report(
+            settings,
+            label=args.label,
+            base_url=base_url,
+            report=report,
+        )
+
+    try:
+        version_payload = _fetch_json(f"{base_url}{api_prefix}/v1/version", timeout=args.timeout)
+        health_payload = _fetch_json(f"{base_url}{api_prefix}/v1/healthz", timeout=args.timeout)
+        login_page_html = _fetch_text(f"{base_url}/login", timeout=args.timeout)
+    except SystemExit as exc:
+        persisted = persist_blocked_report(
+            "Protected staging verification could not reach the deployment cleanly.",
+            str(exc),
+            check_key="deployment_connectivity",
+        )
+        if args.json:
+            print(json.dumps(persisted, indent=2, ensure_ascii=True))
+        else:
+            for line in format_deployment_verification_lines(persisted):
+                print(line)
+            print(f"Report path: {persisted['path']}")
+        return 1
+
     owner_health_checked = bool(args.owner_bearer_token)
     settings = get_settings()
     version_dict = version_payload or {}
@@ -77,11 +111,25 @@ def main() -> int:
             base_url=base_url,
             report=provisional_report,
         )
-        health_detail_payload = _fetch_json(
-            f"{base_url}{api_prefix}/v1/healthz/detail",
-            timeout=args.timeout,
-            bearer_token=args.owner_bearer_token,
-        )
+        try:
+            health_detail_payload = _fetch_json(
+                f"{base_url}{api_prefix}/v1/healthz/detail",
+                timeout=args.timeout,
+                bearer_token=args.owner_bearer_token,
+            )
+        except SystemExit as exc:
+            persisted = persist_blocked_report(
+                "Owner health detail could not be fetched from protected staging.",
+                str(exc),
+                check_key="owner_health_detail",
+            )
+            if args.json:
+                print(json.dumps(persisted, indent=2, ensure_ascii=True))
+            else:
+                for line in format_deployment_verification_lines(persisted):
+                    print(line)
+                print(f"Report path: {persisted['path']}")
+            return 1
 
     report = build_deployment_verification_report(
         base_url=base_url,
@@ -102,11 +150,25 @@ def main() -> int:
         report=report,
     )
     if owner_health_checked:
-        health_detail_payload = _fetch_json(
-            f"{base_url}{api_prefix}/v1/healthz/detail",
-            timeout=args.timeout,
-            bearer_token=args.owner_bearer_token,
-        )
+        try:
+            health_detail_payload = _fetch_json(
+                f"{base_url}{api_prefix}/v1/healthz/detail",
+                timeout=args.timeout,
+                bearer_token=args.owner_bearer_token,
+            )
+        except SystemExit as exc:
+            persisted = persist_blocked_report(
+                "Owner health detail refresh failed after deployment verification was written.",
+                str(exc),
+                check_key="owner_health_detail",
+            )
+            if args.json:
+                print(json.dumps(persisted, indent=2, ensure_ascii=True))
+            else:
+                for line in format_deployment_verification_lines(persisted):
+                    print(line)
+                print(f"Report path: {persisted['path']}")
+            return 1
         report = build_deployment_verification_report(
             base_url=base_url,
             expected_build=args.expected_build,

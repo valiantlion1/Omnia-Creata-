@@ -45,6 +45,37 @@ def persist_deployment_verification_report(
     return payload
 
 
+def build_blocked_deployment_verification_report(
+    *,
+    expected_build: str | None,
+    summary: str,
+    detail: str,
+    check_key: str = "staging_environment",
+    owner_health_checked: bool = False,
+) -> dict[str, Any]:
+    return {
+        "status": "blocked",
+        "summary": summary,
+        "blocking_count": 1,
+        "warning_count": 0,
+        "expected_build": expected_build,
+        "actual_build": None,
+        "health_status": None,
+        "checks": [
+            {
+                "key": check_key,
+                "status": "blocked",
+                "summary": summary,
+                "detail": detail,
+            }
+        ],
+        "owner_health_checked": owner_health_checked,
+        "closure_ready": False,
+        "closure_summary": "Protected staging verification cannot close Sprint 8 until this blocker is cleared.",
+        "closure_gaps": [detail],
+    }
+
+
 def load_deployment_verification_report(
     settings: Settings,
     *,

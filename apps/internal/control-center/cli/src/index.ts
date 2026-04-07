@@ -77,6 +77,29 @@ async function main() {
       printJson(data);
       return;
     }
+    case "projects": {
+      const data = await apiRequest("/api/projects");
+      printJson(data);
+      return;
+    }
+    case "project": {
+      const projectSlug = rest[0];
+      if (!projectSlug) {
+        throw new Error("Usage: ocos project <slug>");
+      }
+      const data = await apiRequest(`/api/projects/${projectSlug}`);
+      printJson(data);
+      return;
+    }
+    case "reports": {
+      const projectSlug = rest[0];
+      if (!projectSlug) {
+        throw new Error("Usage: ocos reports <project-slug>");
+      }
+      const data = await apiRequest(`/api/projects/${projectSlug}/reports`);
+      printJson(data);
+      return;
+    }
     case "incident": {
       const incidentId = rest[0];
       if (!incidentId) {
@@ -168,6 +191,9 @@ async function main() {
       console.log("OCOS CLI");
       console.log("Usage:");
       console.log("  ocos status");
+      console.log("  ocos projects");
+      console.log("  ocos project <slug>");
+      console.log("  ocos reports <project-slug>");
       console.log("  ocos incidents");
       console.log("  ocos incident <id>");
       console.log("  ocos ack <id>");

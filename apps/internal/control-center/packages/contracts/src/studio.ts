@@ -6,6 +6,12 @@ export const ocosHostnames = {
   hooks: "https://hooks-ops.omniacreata.com"
 } as const;
 
+export const studioProjectDefinition = {
+  slug: "studio",
+  name: "OmniaCreata Studio",
+  description: "Studio-first project cockpit for OCOS foundation."
+} as const;
+
 export const studioServiceDefinition = {
   slug: "studio",
   name: "OmniaCreata Studio",

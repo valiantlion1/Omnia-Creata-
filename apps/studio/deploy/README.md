@@ -34,7 +34,8 @@ Do not treat it as the final production platform contract yet.
 ## Quick start
 
 Prerequisite:
-- Docker Desktop or another compatible `docker` CLI must be installed and available on `PATH`
+- Docker Desktop or another compatible `docker` CLI must be installed
+- `start-studio-staging.ps1` now also checks the standard Docker Desktop install path on Windows and prepends that directory to the current process `PATH`, so a fresh Docker install does not look missing just because the shell or Docker credential helper path is stale
 
 1. Copy `.env.staging.example` to `.env.staging`
 2. Fill in the real secrets
@@ -104,6 +105,8 @@ That verify step persists an external deployment verification report under the S
 If the verify step is run from the same runtime root that Studio is using, owner health detail can also surface that latest deployment verification report back through the launch-readiness view.
 That same owner detail now also exposes a single `launch_gate` object for operators, so protected-launch safety, blockers, warnings, and last verified build can be read without manually interpreting every readiness check.
 Protected staging verification prefers that explicit launch gate when it exists, so the closure decision matches the same truth surface humans read from owner health detail.
+If staging bring-up cannot even start because Docker is missing, the env file is missing, preflight fails, or compose fails, `start-studio-staging.ps1` now writes an external blocked report to `reports/protected-staging-verify-latest.json` so Sprint 8 keeps an honest environment blocker trail outside the repo too.
+If `verify-studio-staging.ps1` cannot even begin cleanly because its env file is missing, or if `deployment_verify.py` cannot reach the deployed stack or owner health detail, that same external report is now overwritten with an explicit blocked verification record instead of leaving the failure only in terminal output.
 
 Sprint 8 closure expectation:
 - a passing local verify report is not enough on its own

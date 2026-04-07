@@ -1,15 +1,27 @@
 # OmniaOrganizer
 
-OmniaOrganizer is an Omnia Creata productivity product currently centered around its Android implementation and supporting product planning material.
+OmniaOrganizer is the Omnia Creata mobile file manager product.
+
+Current product truth:
+- mobile-only
+- Android-first
+- local-first
+- file-manager core
+
+## Start here
+- Wiki: [docs/wiki/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/wiki/README.md)
+- Planning pack: [docs/NEW PLANS/OmniaOrganizer_Codex_Paketi/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/NEW%20PLANS/OmniaOrganizer_Codex_Paketi/README.md)
+- Version manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
 
 ## Product layout
 
 ```text
 mobile/android/        Android application root
-docs/master-plan/      Product planning and roadmap material
+docs/wiki/             Fast-start product and delivery wiki
+docs/operations/       Release and maintenance records
+docs/NEW PLANS/        Full planning pack
 ```
 
 ## Notes
-
-- Local IDE caches, build dumps, and machine-specific files have been moved out of the canonical product root.
-- The product can grow additional `web`, `backend`, or `packages` surfaces later without changing its root path.
+- The product can grow later, but Phase 1 is Android-first only.
+- Do not treat old task/capture assumptions as valid product direction.

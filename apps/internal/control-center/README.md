@@ -12,6 +12,7 @@ ships three coordinated surfaces:
 - `packages/contracts/`: shared Zod contracts and monitoring defaults
 - `supabase/`: schema and migrations for incident state
 - `docs/`: architecture, policy, and runbook format
+- `docs/wiki/`: repo-native memory for product intent, dashboards, reporting, and roadmap
 
 ## Product rules
 
@@ -34,3 +35,7 @@ ships three coordinated surfaces:
 - `ops.omniacreata.com`: production operator UI
 - `staging-ops.omniacreata.com`: staging operator UI
 - `hooks-ops.omniacreata.com`: signed machine ingress only
+
+## Wiki
+
+- [OCOS Wiki](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/README.md)

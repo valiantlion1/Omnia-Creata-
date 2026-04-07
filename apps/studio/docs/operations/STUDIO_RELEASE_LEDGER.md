@@ -18,6 +18,72 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.08.07`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 protected staging got past Docker discovery and web-build truth, then hit a real dependency pin bug: backend and worker images were asking pip for `cryptography==41.0.8`, which does not exist for Linux and made Docker bring-up fail on an impossible package version
+- What:
+  `apps/studio/backend/requirements.txt` now pins `cryptography==44.0.3`, which is both real and already aligned with the local backend environment
+  agent memory now explicitly treats container-facing dependency pins as deployment truth, not local-machine assumptions
+  this removes one more fake Docker blocker from the Sprint 8 protected staging path
+
+### `0.5.1-alpha` / build `2026.04.08.06`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 protected staging got past Docker discovery and then hit a real container-shape bug: the web image could not build because Studio imports the root `version.json`, but the Docker build context inside the web stage was only copying `web/`
+- What:
+  the Studio web Dockerfile now copies the root `version.json` manifest into `/workspace/version.json` before running the Vite build
+  this keeps Dockerized web builds aligned with the same footer/build truth that already works locally
+  agent memory now explicitly treats root manifest availability as part of the staging web build contract
+
+### `0.5.1-alpha` / build `2026.04.08.05`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 staging startup could now find Docker itself, but compose still failed on fresh Windows installs because `docker-credential-desktop.exe` lived next to Docker and the stale shell PATH still hid it
+- What:
+  `start-studio-staging.ps1` now prepends the resolved Docker Desktop bin directory to the current process PATH before running compose
+  this lets the same bounded staging script find both `docker.exe` and `docker-credential-desktop.exe` without forcing the operator to restart their shell
+  docs and agent memory now treat stale Docker helper PATH as an operator friction case that Sprint 8 should absorb automatically
+
+### `0.5.1-alpha` / build `2026.04.08.04`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 protected staging still had avoidable operator friction on Windows: Docker could be installed and running, but the startup script would still report it as missing if the current shell had a stale PATH; staging secrets also still risked being created as a normal tracked file
+- What:
+  `start-studio-staging.ps1` now falls back to the standard Docker Desktop install paths on Windows before declaring Docker missing
+  the repo now ignores `apps/studio/deploy/.env.staging`, which makes local staging secret bootstrap safer during Sprint 8 work
+  deploy/docs/agent memory now document that fresh Docker installs should work without forcing the operator to restart their shell first
+
+### `0.5.1-alpha` / build `2026.04.08.03`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had one stale-truth hole: if protected staging verify failed before it could finish, operators could be left looking at an older deployment report instead of the latest blocked reality
+- What:
+  `deployment_verify.py` now persists a blocked protected-staging report when the deployed stack cannot be reached cleanly or owner health detail cannot be fetched
+  `verify-studio-staging.ps1` now also writes a blocked report when its staging env file is missing before Python verify can even start
+  deploy/docs/agent memory now explicitly treat verify-time connectivity and owner-detail failures as durable operator blockers, not terminal-only noise
+
+### `0.5.1-alpha` / build `2026.04.08.02`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had one operator-truth blind spot: if protected staging could not even start because Docker was missing or the staging setup failed before verify, that blocker lived only in terminal output and disappeared from the durable report chain
+- What:
+  `start-studio-staging.ps1` now writes an external blocked `protected-staging-verify-latest.json` report when Docker is missing, the env file is missing, preflight fails, or compose bring-up fails
+  this keeps Sprint 8 environment blockers visible through the same outside-repo report discipline as local verify and protected staging verify
+  deploy/docs/agent memory now explicitly treat those early staging failures as operator-visible environment blockers, not hidden code-state mysteries
+
 ### `0.5.1-alpha` / build `2026.04.08.01`
 - Date: `2026-04-08`
 - Codename: `Foundation`

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from config.env import get_settings
 from studio_platform.services.deployment_verification import (
+    build_blocked_deployment_verification_report,
     build_deployment_verification_report,
     deployment_verification_exit_code,
     deployment_verification_report_path,
@@ -39,6 +40,26 @@ def test_deployment_verification_blocks_on_build_mismatch() -> None:
     assert report["closure_ready"] is False
     build_check = next(check for check in report["checks"] if check["key"] == "version_build")
     assert build_check["status"] == "blocked"
+
+
+def test_blocked_deployment_verification_report_is_not_closure_ready() -> None:
+    report = build_blocked_deployment_verification_report(
+        expected_build="2026.04.08.02",
+        summary="Protected staging verification could not reach the deployment cleanly.",
+        detail="Network failure while requesting https://staging.example.com/api/v1/version: timeout",
+        check_key="deployment_connectivity",
+        owner_health_checked=True,
+    )
+
+    assert report["status"] == "blocked"
+    assert report["closure_ready"] is False
+    assert report["owner_health_checked"] is True
+    assert report["closure_gaps"] == [
+        "Network failure while requesting https://staging.example.com/api/v1/version: timeout"
+    ]
+    blocked_check = report["checks"][0]
+    assert blocked_check["key"] == "deployment_connectivity"
+    assert blocked_check["status"] == "blocked"
 
 
 def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:

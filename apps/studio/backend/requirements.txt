@@ -42,7 +42,7 @@ psycopg2-binary==2.9.9
 # diffusers==0.24.0  # Diffusion models
 
 # Security
-cryptography==41.0.8
+cryptography==44.0.3
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 
