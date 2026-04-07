@@ -42,6 +42,9 @@ Important local expectations:
 - local verification should persist its latest result under the external runtime root so owner health detail can show the last proven startup state
 - owner health detail should expose both the latest startup verification report and a snapshot of external runtime log files
 - when a deployment verification report exists under the runtime root, owner health detail should surface that too so launch-readiness reflects deploy truth as well as startup truth
+- owner health detail should also expose one explicit `launch_gate` answer, so operators can tell from a single object whether protected launch is currently safe, why it is blocked, which warnings remain, and what the last verified build was
+- when protected staging verification runs with owner detail, it should prefer that explicit `launch_gate` object over re-deriving closure truth from lower-level readiness checks
+- stable local startup should not accept a stale backend boot build after a version bump; if the first readiness pass still sees the old build, it should force one clean backend restart
 
 ## Deployment Discipline
 
@@ -63,6 +66,7 @@ Protected staging now also has operator scripts:
 - `powershell -ExecutionPolicy Bypass -File apps/studio/deploy/verify-studio-staging.ps1`
 
 If you pass an owner bearer token to the verify script, it will also inspect `/v1/healthz/detail` and include launch-readiness truth in the deployment verification report.
+With an owner bearer token present, staging verify now enforces the Sprint 8 closure gate by default; if `closure_ready` is still false, the verify command should fail instead of quietly passing with warnings.
 
 Sprint 8 closure rule:
 - `local verify` passing is necessary but not sufficient

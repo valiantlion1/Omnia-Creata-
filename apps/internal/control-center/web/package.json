@@ -1,0 +1,29 @@
+{
+  "name": "@ocos/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocos/contracts": "0.1.0",
+    "@supabase/supabase-js": "^2.50.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.511.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.8",
+    "@types/node": "^22.15.16",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3"
+  }
+}

@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.07.33",
+  "build": "2026.04.08.01",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-07",
-  "notes": "Blocked or failed chat image runs now render an honest blurred placeholder instead of looking like a finished result, while previous bug-sweep honesty fixes remain in place for runtime build truth, provider attribution, and external operator reports."
+  "releaseDate": "2026-04-08",
+  "notes": "Sprint 8 staging verification now trusts the explicit owner launch gate, so protected deploy checks can distinguish true launch blockers from provider-only warnings while still refusing stale or mismatched verified-build truth."
 }

@@ -2,7 +2,8 @@ param(
   [string]$EnvFile = ".env.staging",
   [switch]$SkipBuild,
   [switch]$NoVerify,
-  [string]$OwnerBearerToken
+  [string]$OwnerBearerToken,
+  [switch]$RequireClosureReady
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,6 +63,9 @@ if (-not $NoVerify) {
   )
   if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
     $verifyArgs += @("-OwnerBearerToken", $OwnerBearerToken)
+  }
+  if ($RequireClosureReady.IsPresent) {
+    $verifyArgs += "-RequireClosureReady"
   }
   & powershell @verifyArgs
   if ($LASTEXITCODE -ne 0) {

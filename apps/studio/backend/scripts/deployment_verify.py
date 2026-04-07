@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from config.env import get_settings
 from studio_platform.services.deployment_verification import (
     build_deployment_verification_report,
+    deployment_verification_exit_code,
     format_deployment_verification_lines,
     persist_deployment_verification_report,
 )
@@ -26,6 +27,11 @@ def main() -> int:
     parser.add_argument("--expected-build", default=None, help="Expected Studio build from version.json.")
     parser.add_argument("--label", default="protected-staging", help="Short label for the persisted verification report.")
     parser.add_argument("--owner-bearer-token", default=None, help="Optional owner bearer token for /healthz/detail.")
+    parser.add_argument(
+        "--require-closure-ready",
+        action="store_true",
+        help="Exit non-zero unless the resulting deployment report says closure_ready=true.",
+    )
     parser.add_argument("--json", action="store_true", help="Print the persisted report as JSON.")
     parser.add_argument("--timeout", type=int, default=10, help="Request timeout in seconds.")
     args = parser.parse_args()
@@ -127,7 +133,10 @@ def main() -> int:
             print(line)
         print(f"Report path: {persisted['path']}")
 
-    return 1 if persisted["status"] == "blocked" else 0
+    return deployment_verification_exit_code(
+        persisted,
+        require_closure_ready=args.require_closure_ready,
+    )
 
 
 def _fetch_json(url: str, *, timeout: int, bearer_token: str | None = None) -> dict[str, object] | None:

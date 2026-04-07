@@ -114,6 +114,21 @@ function Invoke-LoggedProcess {
   }
 }
 
+function Start-BackendProcess {
+  param([switch]$UseHotReload)
+
+  Write-Host "Starting Studio backend on http://127.0.0.1:8000 ..." -ForegroundColor Yellow
+  $backendArgs = @("-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000")
+  if ($UseHotReload) {
+    $backendArgs += "--reload"
+  }
+  Start-Process -FilePath "python" `
+    -ArgumentList $backendArgs `
+    -WorkingDirectory $backendDir `
+    -RedirectStandardOutput $backendOut `
+    -RedirectStandardError $backendErr | Out-Null
+}
+
 function Test-CurrentBackendBuild {
   param([string]$ExpectedBuild)
   if (-not $ExpectedBuild) {
@@ -205,16 +220,7 @@ if (Test-PortOpen -Port 8000) {
 }
 
 if ($restartBackend -or -not (Test-PortOpen -Port 8000)) {
-  Write-Host "Starting Studio backend on http://127.0.0.1:8000 ..." -ForegroundColor Yellow
-  $backendArgs = @("-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000")
-  if ($HotReload) {
-    $backendArgs += "--reload"
-  }
-  Start-Process -FilePath "python" `
-    -ArgumentList $backendArgs `
-    -WorkingDirectory $backendDir `
-    -RedirectStandardOutput $backendOut `
-    -RedirectStandardError $backendErr | Out-Null
+  Start-BackendProcess -UseHotReload:$HotReload
 } else {
   Write-Host "Studio backend already running on port 8000." -ForegroundColor Green
 }
@@ -254,6 +260,15 @@ if ($HotReload) {
 }
 
 $backendStatus = Wait-BackendReady -ExpectedBuild $expectedBuild
+$backendRecovered = $false
+if ($expectedBuild -and $backendStatus.Build -ne $expectedBuild) {
+  Write-Warning "Studio backend still reports build $($backendStatus.Build). Forcing one clean restart to recover the expected build $expectedBuild."
+  Stop-ListeningProcesses -Port 8000
+  Start-Sleep -Seconds 2
+  Start-BackendProcess -UseHotReload:$HotReload
+  $backendStatus = Wait-BackendReady -ExpectedBuild $expectedBuild
+  $backendRecovered = $true
+}
 $frontendReady = Wait-FrontendReady
 
 if (-not $backendStatus.Ready) {
@@ -273,6 +288,9 @@ Write-Host "Backend mode: $(if ($HotReload) { 'hot-reload dev' } else { 'stable 
 Write-Host "Frontend mode: $(if ($HotReload) { 'hot-reload dev' } else { 'stable preview' })" -ForegroundColor Green
 Write-Host "Backend build: $($backendStatus.Build)" -ForegroundColor Green
 Write-Host "Backend health: $($backendStatus.Health)" -ForegroundColor Green
+if ($backendRecovered) {
+  Write-Host "Backend recovery: forced clean restart succeeded" -ForegroundColor Green
+}
 Write-Host ""
 & (Join-Path $PSScriptRoot "verify-studio-local.ps1") `
   -BackendMode $(if ($HotReload) { 'hot-reload dev' } else { 'stable always-on' }) `

@@ -1,0 +1,9 @@
+name = "ocos-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-07"
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["*/5 * * * *", "*/15 * * * *"]

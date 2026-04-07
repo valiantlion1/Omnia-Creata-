@@ -505,6 +505,127 @@ async def test_get_public_share_returns_project_payload(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_list_assets_hides_demo_placeholder_outputs(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    demo_asset = MediaAsset(
+        id="asset-demo",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Fake render",
+        prompt="demo render",
+        url="stored",
+        metadata={"provider": "demo"},
+    )
+    real_asset = MediaAsset(
+        id="asset-real",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Real render",
+        prompt="cinematic portrait",
+        url="stored",
+        metadata={"provider": "pollinations"},
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(demo_asset.id, demo_asset),
+            state.assets.__setitem__(real_asset.id, real_asset),
+        )
+    )
+
+    assets = await service.list_assets(identity.id)
+
+    assert [asset.id for asset in assets] == [real_asset.id]
+
+
+@pytest.mark.asyncio
+async def test_get_public_share_hides_demo_placeholder_assets(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    demo_asset = MediaAsset(
+        id="asset-demo",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Fake render",
+        prompt="demo render",
+        url="stored",
+        metadata={"provider": "demo"},
+    )
+    real_asset = MediaAsset(
+        id="asset-real",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Real render",
+        prompt="cinematic portrait",
+        url="stored",
+        metadata={"provider": "pollinations"},
+    )
+    project_share = ShareLink(id="share-project", token="shareproject123456", identity_id=identity.id, project_id=project.id)
+    asset_share = ShareLink(id="share-asset", token="shareasset123456", identity_id=identity.id, asset_id=demo_asset.id)
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(demo_asset.id, demo_asset),
+            state.assets.__setitem__(real_asset.id, real_asset),
+            state.shares.__setitem__(project_share.id, project_share),
+            state.shares.__setitem__(asset_share.id, asset_share),
+        )
+    )
+
+    project_payload = await service.get_public_share(project_share.token)
+
+    assert [item["id"] for item in project_payload["assets"]] == [real_asset.id]
+
+    with pytest.raises(KeyError):
+        await service.get_public_share(asset_share.token)
+
+
+@pytest.mark.asyncio
 async def test_lemonsqueezy_subscription_webhook_activates_pro_plan(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")

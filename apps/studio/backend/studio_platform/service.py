@@ -1499,7 +1499,7 @@ class StudioService:
             for asset_id in asset_ids
             if asset_id in assets_by_id
             and assets_by_id[asset_id].deleted_at is None
-            and self._asset_has_renderable_variant(assets_by_id[asset_id])
+            and self._is_truthful_surface_asset(assets_by_id[asset_id])
         ]
         return self.serialize_assets(
             visible_assets[:4],
@@ -1529,7 +1529,7 @@ class StudioService:
                 identity_id=viewer_identity_id,
                 public_preview=public_preview,
             )
-            if cover_asset and cover_asset.deleted_at is None and self._asset_has_renderable_variant(cover_asset)
+            if cover_asset and cover_asset.deleted_at is None and self._is_truthful_surface_asset(cover_asset)
             else None,
             "preview_assets": self._post_preview_assets(
                 assets_by_id,
@@ -1964,6 +1964,13 @@ class StudioService:
             return True
         path = self._resolve_asset_variant_path(asset, variant)
         return path is not None and path.exists()
+
+    def _is_demo_placeholder_asset(self, asset: MediaAsset) -> bool:
+        provider = str(asset.metadata.get("provider") or "").strip().lower()
+        return provider == "demo"
+
+    def _is_truthful_surface_asset(self, asset: MediaAsset) -> bool:
+        return not self._is_demo_placeholder_asset(asset) and self._asset_has_renderable_variant(asset)
 
     def _asset_has_renderable_variant(self, asset: MediaAsset) -> bool:
         return self._asset_variant_exists(asset, "thumbnail") or self._asset_variant_exists(asset, "content")
@@ -2644,7 +2651,9 @@ class StudioService:
         filtered = [
             asset
             for asset in assets
-            if asset.identity_id == identity_id and (include_deleted or asset.deleted_at is None)
+            if asset.identity_id == identity_id
+            and not self._is_demo_placeholder_asset(asset)
+            and (include_deleted or asset.deleted_at is None)
         ]
         if project_id:
             filtered = [asset for asset in filtered if asset.project_id == project_id]
@@ -2740,7 +2749,7 @@ class StudioService:
                 for asset_id in post.asset_ids
                 if asset_id in assets_by_id
                 and assets_by_id[asset_id].deleted_at is None
-                and self._asset_has_renderable_variant(assets_by_id[asset_id])
+                and self._is_truthful_surface_asset(assets_by_id[asset_id])
             ]
             if not preview_assets:
                 continue
@@ -2823,7 +2832,7 @@ class StudioService:
             if not any(
                 asset_id in assets_by_id
                 and assets_by_id[asset_id].deleted_at is None
-                and self._asset_has_renderable_variant(assets_by_id[asset_id])
+                and self._is_truthful_surface_asset(assets_by_id[asset_id])
                 for asset_id in post.asset_ids
             ):
                 continue
@@ -2842,6 +2851,12 @@ class StudioService:
                     generations_by_id=generations_by_id,
                 )
                 and self._is_publicly_showcase_ready_post(post)
+                and any(
+                    asset_id in assets_by_id
+                    and assets_by_id[asset_id].deleted_at is None
+                    and self._is_truthful_surface_asset(assets_by_id[asset_id])
+                    for asset_id in post.asset_ids
+                )
             ]
         )
 
@@ -3521,6 +3536,8 @@ class StudioService:
             return build_public_share_payload(share=share, project=project, assets=assets)
         elif share.asset_id:
             asset = await self.store.get_asset(share.asset_id)
+            if asset is None or self._is_demo_placeholder_asset(asset):
+                raise KeyError("Share not found")
             return build_public_share_payload(share=share, asset=asset)
         return build_public_share_payload(share=share)
 
@@ -3678,6 +3695,9 @@ class StudioService:
             payload["runtime_logs"] = runtime_logs
         if launch_readiness is not None:
             payload["launch_readiness"] = launch_readiness
+            launch_gate = launch_readiness.get("launch_gate")
+            if isinstance(launch_gate, dict):
+                payload["launch_gate"] = launch_gate
         return payload
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:

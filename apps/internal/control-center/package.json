@@ -1,0 +1,19 @@
+{
+  "name": "@ocos/workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "npm@10.9.3",
+  "workspaces": [
+    "web",
+    "worker",
+    "cli",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @ocos/contracts && npm run build --workspace @ocos/web && npm run build --workspace @ocos/worker && npm run build --workspace @ocos/cli",
+    "typecheck": "npm run build --workspace @ocos/contracts && npm run typecheck --workspace @ocos/web && npm run typecheck --workspace @ocos/worker && npm run typecheck --workspace @ocos/cli",
+    "dev:web": "npm run dev --workspace @ocos/web",
+    "dev:worker": "npm run dev --workspace @ocos/worker",
+    "dev:cli": "npm run dev --workspace @ocos/cli"
+  }
+}

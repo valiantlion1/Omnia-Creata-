@@ -91,9 +91,19 @@ If you want the verify step to inspect owner-only launch readiness, pass an owne
 powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -OwnerBearerToken "<owner-token>"
 ```
 
+When an owner bearer token is present, the verify script now enforces the Sprint 8 closure gate by default. That means a staging run only counts as closure-ready when the resulting report says `closure_ready=true`.
+
+If you want to enforce that gate explicitly from startup too, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-studio-staging.ps1 -OwnerBearerToken "<owner-token>" -RequireClosureReady
+```
+
 That verify step persists an external deployment verification report under the Studio runtime root, following the same non-repo operator-artifact discipline as local startup verification and runtime logs.
 
 If the verify step is run from the same runtime root that Studio is using, owner health detail can also surface that latest deployment verification report back through the launch-readiness view.
+That same owner detail now also exposes a single `launch_gate` object for operators, so protected-launch safety, blockers, warnings, and last verified build can be read without manually interpreting every readiness check.
+Protected staging verification prefers that explicit launch gate when it exists, so the closure decision matches the same truth surface humans read from owner health detail.
 
 Sprint 8 closure expectation:
 - a passing local verify report is not enough on its own

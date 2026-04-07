@@ -1,0 +1,214 @@
+name: OCOS Studio Bounded Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      action_recipe:
+        description: Bounded Studio action to run
+        required: true
+        type: choice
+        options:
+          - trigger_staging_verify
+          - collect_incident_bundle
+      incident_id:
+        description: OCOS incident id
+        required: false
+        type: string
+      service_slug:
+        description: Target service slug
+        required: true
+        default: studio
+        type: string
+      environment_slug:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      hooks_base_url:
+        description: Optional hooks base URL override
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run-bounded-action:
+    runs-on: windows-latest
+    env:
+      OCOS_WEBHOOK_SIGNING_SECRET: ${{ secrets.OCOS_WEBHOOK_SIGNING_SECRET }}
+      OCOS_HOOKS_BASE_URL: ${{ secrets.OCOS_HOOKS_BASE_URL }}
+      STUDIO_HEALTH_DETAIL_TOKEN: ${{ secrets.STUDIO_HEALTH_DETAIL_TOKEN }}
+      STUDIO_STAGING_PUBLIC_BASE_URL: ${{ vars.STUDIO_STAGING_PUBLIC_BASE_URL }}
+      STUDIO_PRODUCTION_PUBLIC_BASE_URL: ${{ vars.STUDIO_PRODUCTION_PUBLIC_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare Studio staging env file
+        shell: pwsh
+        run: |
+          $targetBaseUrl = if ("${{ inputs.environment_slug }}" -eq "production") {
+            if ($env:STUDIO_PRODUCTION_PUBLIC_BASE_URL) { $env:STUDIO_PRODUCTION_PUBLIC_BASE_URL } else { "https://studio.omniacreata.com" }
+          } else {
+            if ($env:STUDIO_STAGING_PUBLIC_BASE_URL) { $env:STUDIO_STAGING_PUBLIC_BASE_URL } else { "https://staging-studio.omniacreata.com" }
+          }
+          "PUBLIC_WEB_BASE_URL=$targetBaseUrl" | Set-Content -Path "apps/studio/deploy/.env.staging" -Encoding utf8
+          "STUDIO_PUBLIC_BASE_URL=$targetBaseUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run bounded staging verify
+        if: ${{ inputs.action_recipe == 'trigger_staging_verify' }}
+        shell: pwsh
+        run: |
+          $args = @(
+            "apps/studio/backend/scripts/deployment_verify.py",
+            "--base-url", $env:STUDIO_PUBLIC_BASE_URL,
+            "--label", "github-actions",
+            "--json"
+          )
+          if ($env:STUDIO_HEALTH_DETAIL_TOKEN) {
+            $args += @("--owner-bearer-token", $env:STUDIO_HEALTH_DETAIL_TOKEN, "--require-closure-ready")
+          }
+
+          $output = & python @args 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Out-File -FilePath "verify-output.json" -Encoding utf8
+
+          try {
+            $report = Get-Content "verify-output.json" -Raw | ConvertFrom-Json
+          } catch {
+            $report = $null
+          }
+
+          $status = if ($exitCode -eq 0) { "healthy" } else { "failed" }
+          $summary = if ($report -and $report.summary) { $report.summary } else { "GitHub staging verification finished without a parsed JSON summary." }
+          $build = if ($report -and $report.build) { $report.build } else { $null }
+
+          $payload = [ordered]@{
+            serviceSlug = "studio"
+            environmentSlug = "${{ inputs.environment_slug }}"
+            runType = "deployment_verify"
+            source = "github-actions"
+            status = $status
+            summary = $summary
+            versionBuild = $build
+            artifacts = @(
+              @{
+                kind = "workflow-artifact"
+                label = "GitHub Actions run"
+                href = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            )
+            metadata = @{
+              action_recipe = "${{ inputs.action_recipe }}"
+              incident_id = "${{ inputs.incident_id }}"
+              workflow_run_id = "${{ github.run_id }}"
+            }
+          }
+
+          $payload | ConvertTo-Json -Depth 8 | Out-File -FilePath "result-payload.json" -Encoding utf8
+
+      - name: Capture incident bundle
+        if: ${{ inputs.action_recipe == 'collect_incident_bundle' }}
+        shell: pwsh
+        run: |
+          $output = & python apps/studio/backend/scripts/deployment_preflight.py --env-file apps/studio/deploy/.env.staging --json 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Out-File -FilePath "preflight-output.json" -Encoding utf8
+
+          try {
+            $report = Get-Content "preflight-output.json" -Raw | ConvertFrom-Json
+          } catch {
+            $report = $null
+          }
+
+          $severity = if ("${{ inputs.environment_slug }}" -eq "production") { "P2" } else { "P3" }
+          $summary = if ($report -and $report.summary) {
+            "Incident bundle captured. Preflight status: $($report.status)."
+          } else {
+            "Incident bundle captured without a parsed preflight payload."
+          }
+
+          $payload = [ordered]@{
+            serviceSlug = "studio"
+            environmentSlug = "${{ inputs.environment_slug }}"
+            eventType = "incident_bundle"
+            source = "github-actions"
+            severity = $severity
+            summary = $summary
+            title = "Studio incident bundle captured"
+            artifacts = @(
+              @{
+                kind = "workflow-artifact"
+                label = "GitHub Actions run"
+                href = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            )
+            metadata = @{
+              action_recipe = "${{ inputs.action_recipe }}"
+              incident_id = "${{ inputs.incident_id }}"
+              workflow_run_id = "${{ github.run_id }}"
+              preflight_status = if ($report -and $report.status) { $report.status } else { "unknown" }
+              preflight_exit_code = $exitCode
+            }
+          }
+
+          $payload | ConvertTo-Json -Depth 8 | Out-File -FilePath "result-payload.json" -Encoding utf8
+
+      - name: Upload action artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocos-studio-bounded-action
+          path: |
+            result-payload.json
+            verify-output.json
+            preflight-output.json
+            apps/studio/version.json
+          if-no-files-found: ignore
+
+      - name: Send signed callback to OCOS hooks
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "result-payload.json")) {
+            throw "Missing result-payload.json"
+          }
+
+          $hooksBaseUrl = if ("${{ inputs.hooks_base_url }}") { "${{ inputs.hooks_base_url }}" } elseif ($env:OCOS_HOOKS_BASE_URL) { $env:OCOS_HOOKS_BASE_URL } else { "" }
+          if (-not $hooksBaseUrl) {
+            throw "Missing hooks base URL."
+          }
+          if (-not $env:OCOS_WEBHOOK_SIGNING_SECRET) {
+            throw "Missing OCOS webhook signing secret."
+          }
+
+          $payload = Get-Content "result-payload.json" -Raw
+          $timestamp = (Get-Date).ToUniversalTime().ToString("o")
+          $deliveryId = "${{ github.run_id }}-${{ github.job }}-${{ inputs.action_recipe }}"
+          $raw = "$timestamp.$deliveryId.$payload"
+
+          $secretBytes = [System.Text.Encoding]::UTF8.GetBytes($env:OCOS_WEBHOOK_SIGNING_SECRET)
+          $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+          $hmac = [System.Security.Cryptography.HMACSHA256]::new($secretBytes)
+          $signature = ($hmac.ComputeHash($payloadBytes) | ForEach-Object { $_.ToString("x2") }) -join ""
+
+          $targetPath = if ("${{ inputs.action_recipe }}" -eq "trigger_staging_verify") { "/check-result" } else { "/service-event" }
+          Invoke-RestMethod `
+            -Method Post `
+            -Uri ($hooksBaseUrl.TrimEnd("/") + $targetPath) `
+            -Headers @{
+              "X-OCOS-Timestamp" = $timestamp
+              "X-OCOS-Delivery-Id" = $deliveryId
+              "X-OCOS-Signature" = "sha256=$signature"
+            } `
+            -ContentType "application/json" `
+            -Body $payload

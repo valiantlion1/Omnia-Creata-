@@ -1,0 +1,7 @@
+OCOS_API_BASE_URL=http://localhost:3000
+OCOS_INTERNAL_API_TOKEN=change-me
+OCOS_WEBHOOK_SIGNING_SECRET=change-me
+OCOS_TELEGRAM_BOT_TOKEN=
+OCOS_TELEGRAM_CHAT_ID=
+OCOS_STUDIO_PROD_BASE_URL=https://studio.omniacreata.com
+OCOS_STUDIO_STAGING_BASE_URL=https://staging-studio.omniacreata.com

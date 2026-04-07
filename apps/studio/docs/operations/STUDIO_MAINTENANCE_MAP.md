@@ -12,6 +12,11 @@ Last updated: 2026-04-07
 
 ## Recent stabilization wins
 
+- Protected staging verification now reads the owner-facing `launch_gate` directly when it is available, so Sprint 8 closure logic follows one explicit truth surface instead of re-deriving protected-launch safety from lower-level readiness checks.
+- Owner health detail now exposes an explicit `launch_gate`, so operators can tell from one payload whether Studio is safe for protected launch, why it is blocked, which warnings are still only advisory, and which build was last truly verified.
+- Legacy `demo` placeholder outputs are now hidden from truthful library/share/post-preview surfaces, so colorful fallback mocks no longer survive as normal user work after older provider experiments.
+- Stable local startup now self-recovers stale backend boots after a build bump; if the first readiness pass still sees the previous `bootBuild`, Studio forces one clean backend restart instead of leaving local verify to fail on a mismatched process.
+- Sprint 8 protected staging verification now has a real closure gate: owner-token runs can fail unless the resulting deployment report says `closure_ready=true`, which makes staging proof less fuzzy for operators.
 - Failed in-chat image runs now show an honest blurred blocked card instead of collapsing into a bare text error, which makes it clearer that Studio did not get a real image back and is refusing to fake a finished result.
 - Broad bug sweep truth is stronger now: failed generations keep the last real provider attempt instead of the originally planned lane, so retryable image failures no longer mislabel where they actually died.
 - External operator reports now load correctly even when written with UTF-8 BOM, which fixes a false-negative health bug where startup verification could exist on disk but still look missing from owner health detail.

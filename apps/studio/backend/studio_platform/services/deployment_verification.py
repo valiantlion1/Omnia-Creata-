@@ -11,6 +11,12 @@ from config.env import Settings
 from ..versioning import load_version_info
 
 _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
+    "provider_smoke",
+    "provider_health_snapshot",
+    "chat_provider_lane",
+    "image_provider_lane",
+}
 
 
 def deployment_verification_report_path(settings: Settings, *, label: str) -> Path:
@@ -159,23 +165,109 @@ def build_deployment_verification_report(
         )
 
     closure_gaps: list[str] = []
+    launch_gate = None
+    if isinstance(health_detail_payload, dict):
+        launch_gate = health_detail_payload.get("launch_gate")
+    if isinstance(launch_gate, dict):
+        launch_gate_status = str(launch_gate.get("status") or "").strip().lower()
+        launch_gate_summary = str(launch_gate.get("summary") or "").strip()
+        launch_gate_ready = launch_gate.get("ready_for_protected_launch") is True
+        launch_gate_blocking_reasons = _coerce_string_list(launch_gate.get("blocking_reasons"))
+        launch_gate_warning_reasons = _coerce_string_list(launch_gate.get("warning_reasons"))
+        launch_gate_blocking_keys = set(_coerce_string_list(launch_gate.get("blocking_keys")))
+        launch_gate_warning_keys = set(_coerce_string_list(launch_gate.get("warning_keys")))
+        disallowed_launch_gate_warning_keys = sorted(
+            key for key in launch_gate_warning_keys if key not in _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS
+        )
+        launch_gate_last_verified_build = str(launch_gate.get("last_verified_build") or "").strip()
+
+        if launch_gate_ready and launch_gate_warning_reasons:
+            add_check(
+                "launch_gate",
+                "warning",
+                "Owner launch gate says protected launch is safe, but advisory warnings still remain.",
+                launch_gate_summary or "ready with advisory warnings",
+            )
+        elif launch_gate_ready:
+            add_check(
+                "launch_gate",
+                "pass",
+                "Owner health detail reports protected launch is currently safe.",
+                launch_gate_summary or "ready",
+            )
+        elif launch_gate_status == "blocked" or launch_gate_blocking_reasons or launch_gate_blocking_keys:
+            add_check(
+                "launch_gate",
+                "blocked",
+                "Owner launch gate still reports blocking issues.",
+                launch_gate_summary or "blocked",
+            )
+            if launch_gate_blocking_reasons:
+                closure_gaps.extend(launch_gate_blocking_reasons)
+            elif launch_gate_blocking_keys:
+                closure_gaps.append(
+                    "launch gate still blocks on: " + ", ".join(sorted(launch_gate_blocking_keys))
+                )
+            else:
+                closure_gaps.append("owner launch gate still reports blocking issues")
+        else:
+            add_check(
+                "launch_gate",
+                "warning",
+                "Owner launch gate still reports warnings.",
+                launch_gate_summary or "needs attention",
+            )
+            if disallowed_launch_gate_warning_keys:
+                closure_gaps.append(
+                    "launch gate still has non-Sprint-9 warnings: "
+                    + ", ".join(disallowed_launch_gate_warning_keys)
+                )
+
+        if launch_gate_last_verified_build:
+            if expected_report_build and launch_gate_last_verified_build != expected_report_build:
+                add_check(
+                    "launch_gate_build",
+                    "warning",
+                    "Owner launch gate is reporting a different last verified build.",
+                    f"expected={expected_report_build}, launch_gate={launch_gate_last_verified_build}",
+                )
+                closure_gaps.append(
+                    "owner launch gate last_verified_build does not match the expected staging build"
+                )
+            else:
+                add_check(
+                    "launch_gate_build",
+                    "pass",
+                    "Owner launch gate reports the expected verified build.",
+                    f"build={launch_gate_last_verified_build}",
+                )
+        else:
+            add_check(
+                "launch_gate_build",
+                "warning",
+                "Owner launch gate did not report a last verified build.",
+                "Launch operators should be able to see which build was last proven.",
+            )
+            closure_gaps.append("owner launch gate did not expose last_verified_build")
+    elif owner_health_checked:
+        add_check(
+            "launch_gate",
+            "warning",
+            "Owner health detail did not expose the explicit launch gate.",
+            "Expected /v1/healthz/detail to include launch_gate.",
+        )
+        closure_gaps.append("owner health detail did not expose launch_gate")
+
     launch_readiness = None
     if isinstance(health_detail_payload, dict):
         launch_readiness = health_detail_payload.get("launch_readiness")
-    if isinstance(launch_readiness, dict):
+    if isinstance(launch_readiness, dict) and not isinstance(launch_gate, dict):
         launch_status = str(launch_readiness.get("status") or "").strip().lower()
         summary = str(launch_readiness.get("summary") or "").strip()
         launch_checks = launch_readiness.get("checks")
         launch_blocked_keys = _collect_check_keys(launch_checks, status="blocked")
         launch_warning_keys = _collect_check_keys(launch_checks, status="warning")
-        allowed_launch_warning_keys = {
-            "provider_smoke",
-            "provider_health_snapshot",
-            "chat_provider_lane",
-            "image_provider_lane",
-            "deployment_verification",
-        }
-        disallowed_launch_warning_keys = sorted(launch_warning_keys - allowed_launch_warning_keys)
+        disallowed_launch_warning_keys = sorted(launch_warning_keys - _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS)
         if launch_status == "ready":
             add_check(
                 "launch_readiness",
@@ -207,7 +299,7 @@ def build_deployment_verification_report(
                 if not launch_blocked_keys
                 else "launch readiness still blocks on: " + ", ".join(sorted(launch_blocked_keys))
             )
-    elif owner_health_checked:
+    elif owner_health_checked and not isinstance(launch_gate, dict):
         add_check(
             "launch_readiness",
             "blocked",
@@ -215,7 +307,7 @@ def build_deployment_verification_report(
             "Expected /v1/healthz/detail to include launch_readiness.",
         )
         closure_gaps.append("owner health detail did not expose launch_readiness")
-    else:
+    elif not owner_health_checked:
         add_check(
             "launch_readiness",
             "warning",
@@ -391,6 +483,18 @@ def format_deployment_verification_lines(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+def deployment_verification_exit_code(
+    report: dict[str, Any],
+    *,
+    require_closure_ready: bool = False,
+) -> int:
+    if str(report.get("status") or "").strip().lower() == "blocked":
+        return 1
+    if require_closure_ready and report.get("closure_ready") is not True:
+        return 2
+    return 0
+
+
 def _collect_check_keys(checks: Any, *, status: str) -> set[str]:
     keys: set[str] = set()
     if not isinstance(checks, list):
@@ -404,6 +508,17 @@ def _collect_check_keys(checks: Any, *, status: str) -> set[str]:
         if key:
             keys.add(key)
     return keys
+
+
+def _coerce_string_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    for raw_value in values:
+        value = str(raw_value or "").strip()
+        if value and value not in result:
+            result.append(value)
+    return result
 
 
 def _extract_title(html: str | None) -> str:

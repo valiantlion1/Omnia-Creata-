@@ -18,6 +18,61 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.08.01`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 now had two partially overlapping launch-truth layers: staging verification could still reconstruct closure logic from raw readiness checks even though owner health detail already exposed an explicit launch gate
+- What:
+  protected staging verification now prefers the owner-visible `launch_gate` contract when it is present, which keeps deploy closure decisions aligned with the single operator truth surface
+  launch gate payloads now expose machine-readable `blocking_keys` and `warning_keys`, so staging verification can tell the difference between real launch blockers and provider-only advisory warnings without fragile string parsing
+  staging verification also now refuses stale `last_verified_build` truth from the launch gate, which makes owner-detail closure checks stricter about proving the current deployed build
+
+### `0.5.1-alpha` / build `2026.04.07.37`
+- Date: `2026-04-07`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 operator truth had become rich but still too interpretive: owner health detail exposed many separate readiness pieces, yet it did not answer the one product-critical question cleanly enough for a human operator or product owner, namely whether Studio is actually safe for a protected launch right now
+- What:
+  owner health detail now includes an explicit `launch_gate` model with `ready_for_protected_launch`, `blocking_reasons`, `warning_reasons`, and `last_verified_build`, so the protected-launch answer is visible without manually reading every readiness check
+  protected-launch readiness now distinguishes provider-only warnings from true launch-shaped warnings; missing deployment proof, local-only environment, broken auth, missing durable state, or missing runtime truth still keep the gate closed
+  the health detail payload now surfaces that same launch gate at top level, which makes future operator reports and launch audits easier to read from one place
+
+### `0.5.1-alpha` / build `2026.04.07.36`
+- Date: `2026-04-07`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 launch-truth cleanup still had one ugly lie left: historical `demo` image outputs were surviving in library and share surfaces as if they were real finished renders
+- What:
+  backend truthful asset filtering now hides stored `provider=demo` outputs from library, share, and post-preview style surfaces instead of presenting those colorful fallback mocks like real user work
+  direct asset-share payloads for demo placeholder outputs now fail closed rather than re-exposing fake renders through old public links
+  repo memory now explicitly treats legacy demo placeholder assets as invalid on truthful surfaces
+
+### `0.5.1-alpha` / build `2026.04.07.35`
+- Date: `2026-04-07`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had a nasty local operator bug: after a build bump, stable startup could leave an old backend process serving the previous `bootBuild`, which made local verify fail even though the manifest and frontend had already moved on
+- What:
+  `start-studio-local.ps1` now does one forced clean backend restart if the first readiness pass still reports the wrong build, which makes the stable local loop more self-healing after version bumps
+  this keeps local operator truth tighter: manifest build, backend `bootBuild`, verify report, and visible footer are less likely to drift apart after a restart
+  previous Sprint 8 closure-gate enforcement for protected staging remains in place
+
+### `0.5.1-alpha` / build `2026.04.07.34`
+- Date: `2026-04-07`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had one operator ambiguity left: protected staging verify could inspect owner health detail, but a closure-grade run was not yet forcing `closure_ready=true` as a real pass/fail gate
+- What:
+  deployment verification now has an explicit closure-aware exit path, so owner-token staging checks can fail unless the resulting report truly says `closure_ready=true`
+  the staging verify wrapper now auto-enforces that closure gate when an owner bearer token is supplied, while still allowing advisory-only runs without owner detail
+  Sprint 8 docs and repo memory now describe closure enforcement more clearly, so operators can distinguish a useful staging smoke run from a real sprint-closing verification
+
 ### `0.5.1-alpha` / build `2026.04.07.33`
 - Date: `2026-04-07`
 - Codename: `Foundation`

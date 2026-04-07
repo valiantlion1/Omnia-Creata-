@@ -3,7 +3,8 @@ param(
   [string]$BaseUrl,
   [string]$ApiPrefix = "/api",
   [string]$Label = "protected-staging",
-  [string]$OwnerBearerToken
+  [string]$OwnerBearerToken,
+  [switch]$RequireClosureReady
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +75,13 @@ if ([string]::IsNullOrWhiteSpace($OwnerBearerToken) -and -not [string]::IsNullOr
 if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
   $args += @("--owner-bearer-token", $OwnerBearerToken)
 }
+$effectiveRequireClosureReady = $RequireClosureReady.IsPresent
+if (-not $effectiveRequireClosureReady -and -not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
+  $effectiveRequireClosureReady = $true
+}
+if ($effectiveRequireClosureReady) {
+  $args += "--require-closure-ready"
+}
 
 Write-Host ""
 Write-Host "Studio protected staging verification" -ForegroundColor Cyan
@@ -87,6 +95,7 @@ if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
 } else {
   Write-Host "Owner detail:   skipped (no bearer token)"
 }
+Write-Host "Closure gate:   $(if ($effectiveRequireClosureReady) { 'enforced' } else { 'advisory only' })"
 Write-Host ""
 
 & python @args

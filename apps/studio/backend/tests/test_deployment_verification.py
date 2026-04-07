@@ -5,6 +5,7 @@ from pathlib import Path
 from config.env import get_settings
 from studio_platform.services.deployment_verification import (
     build_deployment_verification_report,
+    deployment_verification_exit_code,
     deployment_verification_report_path,
     load_deployment_verification_report,
     persist_deployment_verification_report,
@@ -47,6 +48,16 @@ def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:
         version_payload={"build": "2026.04.07.26"},
         health_payload={"status": "healthy"},
         health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Safe for protected launch.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": [],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.07.26",
+            },
             "launch_readiness": {"status": "ready", "summary": "No blockers"},
             "startup_verification": {"status": "pass"},
             "deployment_verification": {
@@ -67,6 +78,48 @@ def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:
     assert report["blocking_count"] == 0
     assert report["warning_count"] == 0
     assert report["closure_ready"] is True
+    gate_check = next(check for check in report["checks"] if check["key"] == "launch_gate")
+    assert gate_check["status"] == "pass"
+
+
+def test_deployment_verification_uses_launch_gate_for_closure_truth() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.08.01",
+        version_payload={"build": "2026.04.08.01"},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "blocked",
+                "summary": "Protected launch is still blocked.",
+                "ready_for_protected_launch": False,
+                "blocking_keys": ["deployment_environment"],
+                "warning_keys": [],
+                "blocking_reasons": ["deployment_environment: Studio is still running in local development mode."],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.08.01",
+            },
+            "launch_readiness": {"status": "ready", "summary": "legacy ready"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": "2026.04.08.01",
+            },
+            "runtime_logs": {"outside_repo": True},
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build="2026.04.08.01",
+    )
+
+    assert report["status"] == "blocked"
+    assert report["closure_ready"] is False
+    assert any("deployment_environment" in gap for gap in report["closure_gaps"])
+    gate_check = next(check for check in report["checks"] if check["key"] == "launch_gate")
+    assert gate_check["status"] == "blocked"
 
 
 def test_persisted_deployment_verification_report_lives_under_runtime_root(tmp_path: Path) -> None:
@@ -145,6 +198,19 @@ def test_deployment_verification_closure_allows_provider_only_launch_warnings() 
         version_payload={"build": "2026.04.07.26"},
         health_payload={"status": "degraded"},
         health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Only provider-class warnings remain.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": ["provider_smoke", "image_provider_lane"],
+                "blocking_reasons": [],
+                "warning_reasons": [
+                    "provider_smoke: Provider smoke has not been run recently.",
+                    "image_provider_lane: No managed image lane is configured.",
+                ],
+                "last_verified_build": "2026.04.07.26",
+            },
             "launch_readiness": {
                 "status": "needs_attention",
                 "summary": "Premium provider warnings remain.",
@@ -183,6 +249,46 @@ def test_deployment_verification_closure_allows_provider_only_launch_warnings() 
     assert report["closure_gaps"] == []
 
 
+def test_deployment_verification_requires_launch_gate_build_to_match_expected_build() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.08.01",
+        version_payload={"build": "2026.04.08.01"},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Safe for protected launch.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": [],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.07.99",
+            },
+            "launch_readiness": {"status": "ready", "summary": "No blockers"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": "2026.04.08.01",
+            },
+            "runtime_logs": {"outside_repo": True},
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build="2026.04.08.01",
+    )
+
+    assert report["status"] == "warning"
+    assert report["closure_ready"] is False
+    build_check = next(check for check in report["checks"] if check["key"] == "launch_gate_build")
+    assert build_check["status"] == "warning"
+    assert any("last_verified_build" in gap for gap in report["closure_gaps"])
+
+
 def test_deployment_verification_closure_requires_deployment_report_visibility() -> None:
     report = build_deployment_verification_report(
         base_url="https://staging-studio.omniacreata.com",
@@ -207,3 +313,23 @@ def test_deployment_verification_closure_requires_deployment_report_visibility()
         check for check in report["checks"] if check["key"] == "deployment_verification_visibility"
     )
     assert visibility_check["status"] == "warning"
+
+
+def test_deployment_verification_exit_code_requires_closure_ready_when_requested() -> None:
+    report = {
+        "status": "warning",
+        "closure_ready": False,
+    }
+
+    assert deployment_verification_exit_code(report, require_closure_ready=False) == 0
+    assert deployment_verification_exit_code(report, require_closure_ready=True) == 2
+
+
+def test_deployment_verification_exit_code_blocks_on_blocked_status() -> None:
+    report = {
+        "status": "blocked",
+        "closure_ready": True,
+    }
+
+    assert deployment_verification_exit_code(report, require_closure_ready=False) == 1
+    assert deployment_verification_exit_code(report, require_closure_ready=True) == 1

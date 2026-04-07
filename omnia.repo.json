@@ -83,8 +83,13 @@
     {
       "id": "control-center",
       "path": "apps/internal/control-center",
-      "status": "planned-core",
+      "status": "active",
       "surfaces": [
+        "web",
+        "worker",
+        "cli",
+        "packages",
+        "supabase",
         "docs"
       ]
     }

@@ -9,6 +9,13 @@ from config.env import Environment, Settings
 
 from ..versioning import load_version_info
 
+_ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
+    "provider_smoke",
+    "provider_health_snapshot",
+    "chat_provider_lane",
+    "image_provider_lane",
+}
+
 
 def provider_smoke_report_path(settings: Settings) -> Path:
     return (settings.runtime_root_path / "reports" / "provider-smoke-latest.json").resolve()
@@ -376,12 +383,20 @@ def build_launch_readiness_report(
         status = "ready"
         summary = "No launch-readiness blockers or warnings are currently detected."
 
+    launch_gate = _build_launch_gate(
+        checks=checks,
+        startup_verification_report=startup_verification_report,
+        deployment_verification_report=deployment_verification_report,
+        provider_smoke_report=provider_smoke_report,
+    )
+
     return {
         "status": status,
         "summary": summary,
         "blocking_count": blocking,
         "warning_count": warnings,
         "checks": checks,
+        "launch_gate": launch_gate,
     }
 
 
@@ -663,6 +678,54 @@ def _build_chat_provider_check(*, settings: Settings, chat_routing: dict[str, An
     }
 
 
+def _build_launch_gate(
+    *,
+    checks: list[dict[str, str]],
+    startup_verification_report: dict[str, Any] | None,
+    deployment_verification_report: dict[str, Any] | None,
+    provider_smoke_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    blocking_checks = [
+        check
+        for check in checks
+        if str(check.get("status") or "").strip().lower() == "blocked"
+    ]
+    blocking_reasons = [_format_launch_gate_reason(check) for check in blocking_checks]
+    warning_checks = [
+        check
+        for check in checks
+        if str(check.get("status") or "").strip().lower() == "warning"
+    ]
+    warning_reasons = [_format_launch_gate_reason(check) for check in warning_checks]
+    blocking_keys = _collect_launch_gate_keys(blocking_checks)
+    warning_keys = _collect_launch_gate_keys(warning_checks)
+    disallowed_warning_keys = sorted(key for key in warning_keys if key not in _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS)
+    ready_for_protected_launch = not blocking_reasons and not disallowed_warning_keys
+    if ready_for_protected_launch:
+        status = "ready"
+        summary = "Studio has no launch-shaped blockers for a protected external rollout."
+    elif blocking_reasons:
+        status = "blocked"
+        summary = "Studio still has hard blockers before it is safe for a protected launch."
+    else:
+        status = "needs_attention"
+        summary = "Studio has no hard blockers, but some non-launch-safe warnings still need to be cleared."
+    return {
+        "status": status,
+        "summary": summary,
+        "ready_for_protected_launch": ready_for_protected_launch,
+        "blocking_keys": blocking_keys,
+        "warning_keys": warning_keys,
+        "blocking_reasons": blocking_reasons,
+        "warning_reasons": warning_reasons,
+        "last_verified_build": _resolve_last_verified_build(
+            startup_verification_report=startup_verification_report,
+            deployment_verification_report=deployment_verification_report,
+            provider_smoke_report=provider_smoke_report,
+        ),
+    }
+
+
 def _parse_iso8601(value: str) -> datetime | None:
     if not value:
         return None
@@ -698,6 +761,66 @@ def _format_chat_provider_state(provider_name: str, payload: dict[str, Any]) -> 
     if reason:
         return f"{provider_name}:{status} ({reason})"
     return f"{provider_name}:{status}"
+
+
+def _format_launch_gate_reason(check: dict[str, str]) -> str:
+    key = str(check.get("key") or "").strip()
+    summary = str(check.get("summary") or "").strip()
+    detail = str(check.get("detail") or "").strip()
+    if key and summary:
+        return f"{key}: {summary}"
+    if summary:
+        return summary
+    if detail:
+        return detail
+    return key or "unknown readiness issue"
+
+
+def _collect_launch_gate_keys(checks: list[dict[str, str]]) -> list[str]:
+    keys: list[str] = []
+    for check in checks:
+        key = str(check.get("key") or "").strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _resolve_last_verified_build(
+    *,
+    startup_verification_report: dict[str, Any] | None,
+    deployment_verification_report: dict[str, Any] | None,
+    provider_smoke_report: dict[str, Any] | None,
+) -> str | None:
+    deployment_build = _read_report_build(
+        deployment_verification_report,
+        keys=("actual_build", "build"),
+    )
+    if deployment_build:
+        return deployment_build
+    startup_build = _read_report_build(
+        startup_verification_report,
+        keys=("backend_build", "expected_build", "build"),
+    )
+    if startup_build:
+        return startup_build
+    smoke_build = _read_report_build(provider_smoke_report, keys=("build",))
+    if smoke_build:
+        return smoke_build
+    return None
+
+
+def _read_report_build(
+    report: dict[str, Any] | None,
+    *,
+    keys: tuple[str, ...],
+) -> str | None:
+    if not isinstance(report, dict):
+        return None
+    for key in keys:
+        value = str(report.get(key) or "").strip()
+        if value:
+            return value
+    return None
 
 
 def _classify_provider_snapshot(provider: dict[str, Any]) -> str:
