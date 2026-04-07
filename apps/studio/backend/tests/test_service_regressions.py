@@ -34,7 +34,7 @@ from studio_platform.service import StudioService
 from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
 from studio_platform.services.generation_runtime import ExecutedGenerationBatch
-from studio_platform.store import StudioStateStore
+from studio_platform.store import SqliteStudioStateStore, StudioStateStore
 
 
 @pytest.mark.asyncio
@@ -1213,6 +1213,11 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
             completion_tokens=20,
             estimated_cost_usd=0.001,
             used_fallback=False,
+            requested_quality_tier="premium",
+            selected_quality_tier="premium",
+            degraded=False,
+            routing_strategy="premium-studio",
+            routing_reason="premium_chat_default",
         )
 
     service.llm_gateway.generate_chat_reply = fake_generate_chat_reply  # type: ignore[method-assign]
@@ -1227,6 +1232,17 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
 
     user_message = ChatMessage.model_validate(first_turn["user_message"])
     assistant_message = ChatMessage.model_validate(first_turn["assistant_message"])
+    assert assistant_message.metadata["premium_chat"] is True
+    assert assistant_message.metadata["requested_quality_tier"] == "premium"
+    assert assistant_message.metadata["selected_quality_tier"] == "premium"
+    assert assistant_message.metadata["routing_strategy"] == "premium-studio"
+    assert assistant_message.metadata["generation_bridge"]["workflow"] == "text_to_image"
+    assert assistant_message.metadata["generation_bridge"]["prompt"]
+    assert assistant_message.metadata["generation_bridge"]["blueprint"]["model"] == "realvis-xl"
+    assert assistant_message.metadata["generation_bridge"]["blueprint"]["output_count"] == 1
+    first_action = assistant_message.suggested_actions[0]
+    assert first_action.payload["generation_bridge"]["workflow"] == "text_to_image"
+    assert first_action.payload["generation_bridge"]["blueprint"]["model"] == "realvis-xl"
 
     feedback_message = await service.set_chat_message_feedback(
         identity.id,
@@ -1275,6 +1291,200 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
     assert reverted_user.version == 1
     assert reverted_assistant.content.startswith("reply-1:")
     assert reverted_assistant.version == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_fallback_metadata_marks_provider_degradation(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    identity = OmniaIdentity(
+        email="fallback-chat@example.com",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Fallback Chat")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    async def fake_generate_chat_reply(**_: object) -> None:
+        return None
+
+    service.llm_gateway.generate_chat_reply = fake_generate_chat_reply  # type: ignore[method-assign]
+
+    conversation = await service.create_conversation(identity.id, title="Fallback", model="think")
+    turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "naber haci",
+        model="think",
+    )
+
+    assistant_message = ChatMessage.model_validate(turn["assistant_message"])
+    assert assistant_message.metadata["provider"] == "heuristic"
+    assert assistant_message.metadata["provider_status"] == "degraded"
+    assert assistant_message.metadata["fallback_reason"] == "all_provider_candidates_failed"
+    assert assistant_message.metadata["routing_reason"] == "provider_unavailable_or_empty"
+    assert "Buradayim" in assistant_message.content or "Iyiyim" in assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_follow_up_refinement_carries_prior_generation_bridge_when_fallbacking(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    identity = OmniaIdentity(
+        email="followup-chat@example.com",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Follow Up Chat")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    async def fake_generate_chat_reply(**_: object) -> None:
+        return None
+
+    service.llm_gateway.generate_chat_reply = fake_generate_chat_reply  # type: ignore[method-assign]
+
+    conversation = await service.create_conversation(identity.id, title="Follow Up", model="think")
+    first_turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "Luxury perfume bottle packshot on a glossy black pedestal, softbox rim light, campaign photography",
+        model="think",
+    )
+    first_assistant = ChatMessage.model_validate(first_turn["assistant_message"])
+    assert first_assistant.metadata["generation_bridge"]["workflow"] == "text_to_image"
+
+    second_turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "bunu daha sinematik yap",
+        model="think",
+    )
+
+    assistant_message = ChatMessage.model_validate(second_turn["assistant_message"])
+    assert assistant_message.metadata["provider"] == "heuristic"
+    assert assistant_message.metadata["follow_up_refinement"] is True
+    assert assistant_message.metadata["has_prior_generation_bridge"] is True
+    assert assistant_message.metadata["prior_workflow"] == "text_to_image"
+    assert "carry the previous" in assistant_message.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_chat_generation_fallback_response_uses_profile_specific_direction(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    identity = OmniaIdentity(
+        email="product-chat@example.com",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Product Chat")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    async def fake_generate_chat_reply(**_: object) -> None:
+        return None
+
+    service.llm_gateway.generate_chat_reply = fake_generate_chat_reply  # type: ignore[method-assign]
+
+    conversation = await service.create_conversation(identity.id, title="Product Chat", model="think")
+    turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "Luxury perfume bottle packshot on a glossy black pedestal, softbox rim light, campaign photography",
+        model="think",
+    )
+
+    assistant_message = ChatMessage.model_validate(turn["assistant_message"])
+    assert assistant_message.metadata["provider"] == "heuristic"
+    assert assistant_message.metadata["prompt_profile"] == "product_commercial"
+    assert "product-commercial direction" in assistant_message.content
+    assert "4:5" in assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_follow_up_edit_fallback_preserves_prior_blueprint_fields(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    identity = OmniaIdentity(
+        email="followup-edit@example.com",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Follow Up Edit")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    async def fake_generate_chat_reply(**_: object) -> None:
+        return None
+
+    service.llm_gateway.generate_chat_reply = fake_generate_chat_reply  # type: ignore[method-assign]
+
+    conversation = await service.create_conversation(identity.id, title="Follow Up Edit", model="think")
+    first_turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "Remove the background and retouch the face",
+        model="edit",
+        attachments=[
+            {
+                "kind": "image",
+                "url": "data:image/png;base64,aGVsbG8=",
+                "label": "portrait.png",
+            }
+        ],
+    )
+    first_assistant = ChatMessage.model_validate(first_turn["assistant_message"])
+    assert first_assistant.metadata["generation_bridge"]["workflow"] == "edit"
+
+    second_turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "bunu biraz daha soft yap",
+        model="think",
+    )
+
+    assistant_message = ChatMessage.model_validate(second_turn["assistant_message"])
+    blueprint = assistant_message.metadata["generation_bridge"]["blueprint"]
+
+    assert assistant_message.metadata["provider"] == "heuristic"
+    assert assistant_message.metadata["follow_up_refinement"] is True
+    assert assistant_message.metadata["prior_workflow"] == "edit"
+    assert blueprint["workflow"] == "edit"
+    assert blueprint["reference_mode"] == "required"
+    assert blueprint["model"] == first_assistant.metadata["generation_bridge"]["blueprint"]["model"]
+    assert blueprint["aspect_ratio"] == first_assistant.metadata["generation_bridge"]["blueprint"]["aspect_ratio"]
+    assert blueprint["width"] == first_assistant.metadata["generation_bridge"]["blueprint"]["width"]
+    assert blueprint["height"] == first_assistant.metadata["generation_bridge"]["blueprint"]["height"]
 
 
 @pytest.mark.asyncio
@@ -1707,6 +1917,28 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         assert health["generation_routing"]["plan_defaults"]["free"] == "free-first"
         assert health["generation_routing"]["plan_defaults"]["pro"] == "balanced"
         assert health["generation_routing"]["demo_policy"] == "degraded_only_last_resort"
+        assert health["chat_routing"]["plan_defaults"]["free"] == "standard"
+        assert health["chat_routing"]["plan_defaults"]["pro"] == "premium"
+        assert health["chat_routing"]["multimodal_policy"] == "gemini_first_when_images_present"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_health_detail_exposes_data_authority_for_sqlite_store(tmp_path: Path):
+    store = SqliteStudioStateStore(tmp_path / "runtime" / "studio-state.sqlite3")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+
+    try:
+        await service.initialize()
+
+        health = await service.health(detail=True)
+
+        assert health["data_authority"]["backend"] == "sqlite"
+        assert health["data_authority"]["authority_mode"] == "durable_local"
+        assert health["data_authority"]["durable"] is True
+        assert health["data_authority"]["schema_version"] == "2"
+        assert health["data_authority"]["path"].endswith("studio-state.sqlite3")
     finally:
         await service.shutdown()
 
@@ -3293,7 +3525,7 @@ async def test_create_generation_rejects_when_no_configured_provider_supports_wo
     )
 
     try:
-        with pytest.raises(ValueError, match="No generation provider is currently configured"):
+        with pytest.raises(ValueError, match="No real image provider is available for this workflow right now"):
             await service.create_generation(
                 identity_id=identity.id,
                 project_id=project.id,

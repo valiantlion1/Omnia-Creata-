@@ -580,6 +580,52 @@ async def test_retryable_failure_keeps_existing_reservation(
 
 
 @pytest.mark.asyncio
+async def test_retryable_failure_updates_job_provider_to_last_actual_attempt(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(name="pollinations", rollout_tier="standard", billable=False),
+        _FakeProvider(name="huggingface", rollout_tier="standard", billable=False),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=43,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        async def temporary_fail(_: GenerationJob) -> ExecutedGenerationBatch:
+            exc = ProviderTemporaryError("huggingface expired token")
+            setattr(exc, "provider_name", "huggingface")
+            raise exc
+
+        service.generation_runtime.execute_job = temporary_fail  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        snapshot = await store.snapshot()
+        retryable = snapshot.generations[job.id]
+
+        assert retryable.status == JobStatus.RETRYABLE_FAILED
+        assert retryable.provider == "huggingface"
+        assert retryable.error == "huggingface expired token"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_active_reservation_blocks_over_admission(
     tmp_path: Path,
     _web_runtime_mode: None,

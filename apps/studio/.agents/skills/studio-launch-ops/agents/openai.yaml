@@ -1,0 +1,7 @@
+interface:
+  display_name: "Studio Launch Ops"
+  short_description: "Studio deployment and release operator flow"
+  default_prompt: "Use $studio-launch-ops to audit Studio launch readiness, staging health, or release bookkeeping."
+
+policy:
+  allow_implicit_invocation: true

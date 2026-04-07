@@ -114,6 +114,20 @@ function getProprietaryModelName(id: string, originalLabel: string): string {
     .join(' ')
 }
 
+function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
+  if (!value) return fallback
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function parseBoundedFloat(value: string | null, fallback: number, min: number, max: number) {
+  if (!value) return fallback
+  const parsed = Number.parseFloat(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
 /* ─── Main page ────────────────────────────────────── */
 
 export default function CreatePage() {
@@ -127,8 +141,13 @@ export default function CreatePage() {
   const canUseLocalModels = Boolean(auth?.identity.owner_mode && auth?.identity.local_access)
 
   const [prompt, setPrompt] = useState('')
+  const [negativePrompt, setNegativePrompt] = useState('')
   const [selectedModelId, setSelectedModelId] = useState('')
   const [aspectRatio, setAspectRatio] = useState<keyof typeof aspectPresets>('1:1')
+  const [steps, setSteps] = useState(28)
+  const [cfgScale, setCfgScale] = useState(6.5)
+  const [outputCount, setOutputCount] = useState(1)
+  const [referenceAssetId, setReferenceAssetId] = useState<string | null>(null)
   const [submittingCount, setSubmittingCount] = useState(0)
   const [createError, setCreateError] = useState<string | null>(null)
   const [improveState, setImproveState] = useState<'idle' | 'working' | 'done' | 'fallback'>('idle')
@@ -165,6 +184,10 @@ export default function CreatePage() {
   )
   const runtimeCredits = auth?.credits.remaining ?? 0
   const activeAspect = aspectPresets[aspectRatio]
+  const prefillSource = searchParams.get('source')
+  const prefillReferenceMode = searchParams.get('reference_mode')
+  const requiresChatReference = prefillSource === 'chat' && prefillReferenceMode === 'required'
+  const missingRequiredReference = requiresChatReference && !referenceAssetId
 
   /* ─── Effects ─────────────────────────────────── */
 
@@ -185,9 +208,20 @@ export default function CreatePage() {
     const nextModel = searchParams.get('model')
     const nextAspect = searchParams.get('aspect_ratio') as keyof typeof aspectPresets | null
     if (nextPrompt) setPrompt(nextPrompt)
+    setNegativePrompt(searchParams.get('negative_prompt') ?? '')
     if (nextModel) setSelectedModelId(nextModel)
     if (nextAspect && nextAspect in aspectPresets) setAspectRatio(nextAspect)
+    setReferenceAssetId(searchParams.get('reference_asset_id'))
+    setSteps(parseBoundedInt(searchParams.get('steps'), 28, 1, 50))
+    setCfgScale(parseBoundedFloat(searchParams.get('cfg_scale'), 6.5, 1, 20))
+    setOutputCount(parseBoundedInt(searchParams.get('output_count'), 1, 1, 4))
   }, [searchParams])
+
+  useEffect(() => {
+    if (!missingRequiredReference && createError?.includes('reference image')) {
+      setCreateError(null)
+    }
+  }, [createError, missingRequiredReference])
 
   useEffect(() => {
     if (!searchParams.has('tool')) return
@@ -322,6 +356,10 @@ export default function CreatePage() {
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || !selectedModel) return
+    if (missingRequiredReference) {
+      setCreateError('This chat handoff needs its reference image. Go back to Chat and reopen Create from the image-guided turn.')
+      return
+    }
     setCreateError(null)
     setSubmittingCount((value) => value + 1)
     try {
@@ -329,15 +367,16 @@ export default function CreatePage() {
       const generation = await studioApi.createGeneration({
         project_id: projectId,
         prompt,
-        negative_prompt: '',
+        negative_prompt: negativePrompt,
+        reference_asset_id: referenceAssetId,
         model: selectedModel.id,
         width: activeAspect.width,
         height: activeAspect.height,
-        steps: 28,
-        cfg_scale: 6.5,
+        steps,
+        cfg_scale: cfgScale,
         seed: Math.floor(Math.random() * 1_000_000_000),
         aspect_ratio: aspectRatio,
-        output_count: 1,
+        output_count: outputCount,
       })
       setGenerationToasts((current) => [mapGenerationToToast(generation, projectId), ...current.filter((job) => job.id !== generation.job_id)])
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -348,7 +387,7 @@ export default function CreatePage() {
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
-  }, [activeAspect.height, activeAspect.width, aspectRatio, ensureProjectId, prompt, queryClient, selectedModel])
+  }, [activeAspect.height, activeAspect.width, aspectRatio, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, queryClient, referenceAssetId, selectedModel, steps])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -400,6 +439,23 @@ export default function CreatePage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Compose</h1>
             <p className="mt-1 text-sm text-zinc-500">Describe your vision and generate.</p>
+            {prefillSource === 'chat' ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-[rgb(var(--primary-light))]">
+                  Prefilled from chat direction
+                </p>
+                {prefillReferenceMode === 'required' ? (
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                    Reference-guided handoff{referenceAssetId ? ' attached' : ' pending'}
+                  </p>
+                ) : null}
+                {missingRequiredReference ? (
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-300">
+                    Return to chat to keep the source image attached
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
@@ -533,7 +589,7 @@ export default function CreatePage() {
               </div>
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim() || !selectedModel || submittingCount > 0}
+                disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference}
                 className="group relative inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-[16px] px-8 text-[13px] font-bold tracking-widest uppercase text-white transition-all overflow-hidden disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-0"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }}
               >

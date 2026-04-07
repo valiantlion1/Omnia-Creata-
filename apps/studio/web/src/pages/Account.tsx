@@ -84,7 +84,7 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pt-1">
       {posts.map((post) => (
         <article key={post.id} className="group relative flex flex-col gap-3">
-          <div className="relative overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.08] shadow-xl shadow-black/40 transition-all duration-500 group-hover:shadow-black/60 group-hover:ring-[rgb(var() / )]">
+          <div className="relative overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.08] shadow-xl shadow-black/40 transition-all duration-500 group-hover:shadow-black/60 group-hover:ring-[rgba(124,58,237,0.18)]">
             {post.cover_asset ? (
               <img 
                 src={post.cover_asset.thumbnail_url ?? post.cover_asset.url} 
@@ -202,8 +202,8 @@ export default function AccountPage() {
     <div className="flex flex-col min-h-full pb-10">
       {/* Cinematic Banner Header */}
       <div className="relative h-[240px] md:h-[300px] w-full shrink-0 overflow-hidden">
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgba(0,0,0,0.8) 50%, rgb(var() / ))' }} />
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(0,0,0,0.8) 50%, rgba(124,58,237,0.18))' }} />
+        <div className="absolute inset-0 opacity-[0.05] mix-blend-overlay [background-image:radial-gradient(circle_at_center,rgba(255,255,255,0.18)_0,transparent_72%)]" />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
         
         {/* Banner Actions */}
@@ -226,9 +226,9 @@ export default function AccountPage() {
         <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] -mt-20 relative z-10">
           
           {/* Glassmorphic Sidebar Card */}
-          <div className="flex flex-col space-y-6 rounded-[24px] p-6 backdrop-blur-xl ring-1 ring-white/[0.1] shadow-2xl h-max" style={{ background: 'linear-gradient(180deg, rgb(var() / ) 0%, rgb(var() / ) 100%)' }}>
+          <div className="flex flex-col space-y-6 rounded-[24px] p-6 backdrop-blur-xl ring-1 ring-white/[0.1] shadow-2xl h-max" style={{ background: 'linear-gradient(180deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.18) 100%)' }}>
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold text-white shadow-inner ring-4 ring-black/50 mb-4 relative" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }}>
+              <div className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold text-white shadow-inner ring-4 ring-black/50 mb-4 relative" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' }}>
                 {(payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()}
                 {payload.profile.plan === 'pro' && (
                   <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full shadow-lg ring-4 ring-zinc-900" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' }}>
@@ -282,7 +282,7 @@ export default function AccountPage() {
                 <div className="space-y-2">
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                     <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${usage.plan_label.toLowerCase() === 'pro' ? 'shadow-[0_0_10px_rgb(var() / )]' : 'bg-white'}`}
+                      className={`h-full rounded-full transition-all duration-1000 ${usage.plan_label.toLowerCase() === 'pro' ? 'shadow-[0_0_10px_rgba(124,58,237,0.18)]' : 'bg-white'}`}
                       style={{ 
                         width: `${Math.max(2, 100 - usage.progress_percent)}%`,
                         ...(usage.plan_label.toLowerCase() === 'pro' ? { background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' } : {})
@@ -303,15 +303,15 @@ export default function AccountPage() {
                 <div className="flex grid-cols-2 gap-2">
                   <button 
                     onClick={() => updateProfileMutation.mutate({ default_visibility: 'public' })}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'public' ? 'text-white ring-1 ring-[rgb(var() / )]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
-                    style={activeDefaultVisibility === 'public' ? { background: 'rgb(var() / )' } : undefined}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'public' ? 'text-white ring-1 ring-[rgba(124,58,237,0.18)]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    style={activeDefaultVisibility === 'public' ? { background: 'rgba(124,58,237,0.18)' } : undefined}
                   >
                     Public
                   </button>
                   <button 
                     onClick={() => updateProfileMutation.mutate({ default_visibility: 'private' })}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'private' ? 'text-white ring-1 ring-[rgb(var() / )]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
-                    style={activeDefaultVisibility === 'private' ? { background: 'rgb(var() / )' } : undefined}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${activeDefaultVisibility === 'private' ? 'text-white ring-1 ring-[rgba(124,58,237,0.18)]' : 'bg-black/30 text-zinc-400 hover:bg-white/5'}`}
+                    style={activeDefaultVisibility === 'private' ? { background: 'rgba(124,58,237,0.18)' } : undefined}
                   >
                     Private
                   </button>

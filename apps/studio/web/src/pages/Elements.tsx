@@ -32,8 +32,8 @@ export default function ElementsPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="flex min-h-[360px] flex-col justify-between rounded-[28px] border border-dashed border-white/[0.12] p-5 transition-all duration-300 hover:border-[rgb(var() / )]" style={{ background: 'rgb(var() / )' }}>
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl text-zinc-400 ring-1 ring-white/[0.08]" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }}>
+        <div className="flex min-h-[360px] flex-col justify-between rounded-[28px] border border-dashed border-white/[0.12] p-5 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]" style={{ background: 'rgba(124,58,237,0.18)' }}>
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl text-zinc-400 ring-1 ring-white/[0.08]" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' }}>
             <Plus className="h-7 w-7" />
           </div>
           <div>
@@ -42,7 +42,7 @@ export default function ElementsPage() {
         </div>
 
         {styleCards.map((card) => (
-          <div key={card.id} className="overflow-hidden rounded-[28px] border border-white/[0.08] transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]" style={{ background: 'rgb(var() / )' }}>
+          <div key={card.id} className="overflow-hidden rounded-[28px] border border-white/[0.08] transition-all duration-300 hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]" style={{ background: 'rgba(124,58,237,0.18)' }}>
             <img src={card.image} alt={card.title} className="aspect-[4/5] w-full object-cover" />
             <div className="space-y-1 p-4">
               <div className="text-sm text-zinc-500">Omnia</div>

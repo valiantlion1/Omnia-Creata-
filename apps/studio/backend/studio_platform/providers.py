@@ -1119,12 +1119,13 @@ class ProviderRegistry:
     def __init__(self) -> None:
         settings = get_settings()
         self._configured_strategy = (settings.generation_provider_strategy or "free-first").strip().lower()
+        self._enable_demo_generation_fallback = bool(settings.enable_demo_generation_fallback)
         providers_by_name: dict[str, StudioImageProvider | None] = {
             "fal": FalProvider(settings.fal_api_key),
             "runware": RunwareProvider(settings.runware_api_key),
             "huggingface": HuggingFaceImageProvider(settings.huggingface_token) if settings.huggingface_token else None,
             "pollinations": PollinationsProvider(enabled=True) if settings.enable_pollinations else None,
-            "demo": DemoImageProvider(),
+            "demo": DemoImageProvider() if self._enable_demo_generation_fallback else None,
         }
         self._providers_by_name: dict[str, StudioImageProvider] = {
             name: provider for name, provider in providers_by_name.items() if provider is not None
@@ -1162,13 +1163,18 @@ class ProviderRegistry:
         return provider.billable if provider is not None else None
 
     def routing_summary(self) -> dict[str, object]:
+        demo_provider_enabled = self.get_provider("demo") is not None
         return {
             "default_strategy": self._configured_strategy,
             "plan_defaults": {
                 "free": "free-first",
                 "pro": "balanced",
             },
-            "demo_policy": "degraded_only_last_resort",
+            "demo_policy": (
+                "degraded_only_last_resort"
+                if demo_provider_enabled
+                else "disabled_by_default_explicit_only"
+            ),
         }
 
     def plan_generation_route(
@@ -1420,7 +1426,18 @@ class ProviderRegistry:
         payload: list[dict[str, object]] = []
         for priority, provider in enumerate(self.providers, start=1):
             snapshot = await provider.health_snapshot(probe=probe, priority=priority)
-            snapshot.update(self._provider_health_metrics(provider.name))
+            metrics = self._provider_health_metrics(provider.name)
+            snapshot.update(metrics)
+            reported_status = str(snapshot.get("status") or "").strip().lower()
+            effective_status, effective_detail = self._derive_effective_provider_health(
+                reported_status=reported_status,
+                detail=str(snapshot.get("detail") or "").strip(),
+                metrics=metrics,
+            )
+            if effective_status != reported_status and reported_status:
+                snapshot["reported_status"] = reported_status
+            snapshot["status"] = effective_status
+            snapshot["detail"] = effective_detail
             payload.append(snapshot)
         return payload
 
@@ -1439,6 +1456,7 @@ class ProviderRegistry:
         provider_candidates: Sequence[str] | None = None,
     ) -> ProviderResult:
         last_error: Optional[Exception] = None
+        last_provider_name: str | None = None
         supported_providers = self._iter_supported_providers(
             workflow=workflow,
             reference_image=reference_image,
@@ -1454,6 +1472,7 @@ class ProviderRegistry:
                 continue
 
             try:
+                last_provider_name = provider.name
                 started_at = time.monotonic()
                 result = await provider.generate(
                     prompt=prompt,
@@ -1470,19 +1489,36 @@ class ProviderRegistry:
                 latency_ms = (time.monotonic() - started_at) * 1000
                 self._record_provider_success(provider.name, latency_ms)
                 return result
-            except ProviderFatalError:
+            except ProviderFatalError as exc:
                 latency_ms = (time.monotonic() - started_at) * 1000
-                self._record_provider_nonretryable_failure(provider.name, latency_ms)
-                raise
+                tagged_error = self._tag_provider_error(exc, provider.name)
+                self._record_provider_nonretryable_failure(provider.name, latency_ms, tagged_error)
+                raise tagged_error
             except Exception as exc:
                 latency_ms = (time.monotonic() - started_at) * 1000
-                self._record_provider_failure(provider.name, latency_ms, exc)
-                last_error = exc
+                tagged_error = self._tag_provider_error(exc, provider.name)
+                self._record_provider_failure(provider.name, latency_ms, tagged_error)
+                last_error = tagged_error
                 continue
 
         if last_error:
-            raise ProviderTemporaryError(str(last_error)) from last_error
+            if isinstance(last_error, ProviderTemporaryError):
+                raise last_error
+            wrapped_error = ProviderTemporaryError(str(last_error))
+            self._tag_provider_error(
+                wrapped_error,
+                getattr(last_error, "provider_name", None) or last_provider_name,
+            )
+            raise wrapped_error from last_error
         raise ProviderTemporaryError("No providers available")
+
+    def _tag_provider_error(self, exc: Exception, provider_name: str | None) -> Exception:
+        if provider_name:
+            try:
+                setattr(exc, "provider_name", provider_name)
+            except Exception:
+                pass
+        return exc
 
     def _allow_provider_attempt(self, provider_name: str) -> bool:
         state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
@@ -1536,11 +1572,19 @@ class ProviderRegistry:
         )
         self._prune_provider_observations(state, now=now)
 
-    def _record_provider_nonretryable_failure(self, provider_name: str, latency_ms: float) -> None:
+    def _record_provider_nonretryable_failure(
+        self,
+        provider_name: str,
+        latency_ms: float,
+        error: Exception,
+    ) -> None:
         state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
         now = time.monotonic()
+        state.consecutive_failures += 1
+        state.last_error = str(error)
         state.half_open = False
         state.half_open_in_flight = False
+        state.opened_until_monotonic = now + self._CIRCUIT_OPEN_SECONDS
         state.observations.append(
             ProviderObservation(
                 timestamp_monotonic=now,
@@ -1581,6 +1625,78 @@ class ProviderRegistry:
             "success_rate_last_5m": round(success_count / total, 4) if total else None,
             "avg_latency_ms_last_5m": avg_latency_ms,
         }
+
+    def _derive_effective_provider_health(
+        self,
+        *,
+        reported_status: str,
+        detail: str,
+        metrics: dict[str, object],
+    ) -> tuple[str, str]:
+        if reported_status in {"disabled", "not_configured", "unavailable"}:
+            return reported_status or "unknown", detail
+
+        circuit_breaker = metrics.get("circuit_breaker")
+        circuit_state = ""
+        consecutive_failures = 0
+        last_error = ""
+        retry_after_seconds = 0
+        if isinstance(circuit_breaker, dict):
+            circuit_state = str(circuit_breaker.get("state") or "").strip().lower()
+            consecutive_failures = int(circuit_breaker.get("consecutive_failures") or 0)
+            last_error = str(circuit_breaker.get("last_error") or "").strip()
+            retry_after_seconds = int(circuit_breaker.get("retry_after_seconds") or 0)
+
+        success_rate = metrics.get("success_rate_last_5m")
+        if circuit_state == "open":
+            return "error", self._compose_health_detail(
+                detail,
+                f"recent provider failures opened the circuit for ~{retry_after_seconds or 0}s",
+                last_error,
+            )
+
+        if isinstance(success_rate, (int, float)) and success_rate <= 0.0:
+            return "error", self._compose_health_detail(
+                detail,
+                "recent live attempts all failed",
+                last_error,
+            )
+
+        if reported_status in {"error", "degraded"}:
+            return reported_status, self._compose_health_detail(
+                detail,
+                "provider reported degraded runtime health",
+                last_error,
+            )
+
+        if circuit_state == "half_open":
+            return "degraded", self._compose_health_detail(
+                detail,
+                "provider circuit is probing recovery",
+                last_error,
+            )
+
+        if consecutive_failures > 0:
+            return "degraded", self._compose_health_detail(
+                detail,
+                f"recent failure streak={consecutive_failures}",
+                last_error,
+            )
+
+        if isinstance(success_rate, (int, float)) and success_rate < 1.0:
+            return "degraded", self._compose_health_detail(
+                detail,
+                f"success rate last 5m={success_rate}",
+                last_error,
+            )
+
+        return reported_status or "unknown", detail
+
+    def _compose_health_detail(self, base_detail: str, headline: str, last_error: str) -> str:
+        parts = [part for part in (base_detail, headline) if part]
+        if last_error:
+            parts.append(f"last_error={last_error}")
+        return " | ".join(parts) if parts else "runtime health unavailable"
 
     def _prune_provider_observations(self, state: ProviderCircuitState, *, now: float) -> None:
         cutoff = now - self._OBSERVATION_WINDOW_SECONDS

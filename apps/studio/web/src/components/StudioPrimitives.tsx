@@ -59,7 +59,7 @@ export function Surface({
   return (
     <section
       className={clsx(
-        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6 transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_24px_70px_rgba(0,0,0,0.25),0_0_0_1px_rgb(var() / )]',
+        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_24px_70px_rgba(0,0,0,0.25),0_0_0_1px_rgba(124,58,237,0.18)]',
         toneMap[tone],
         className,
       )}

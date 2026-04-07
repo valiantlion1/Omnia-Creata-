@@ -48,6 +48,9 @@ from .billing_ops import (
 )
 from .chat_ops import (
     build_attachment_only_request,
+    build_chat_continuity_summary,
+    build_chat_context,
+    build_chat_generation_bridge,
     build_chat_metadata,
     build_chat_reply,
     build_chat_suggested_actions,
@@ -145,6 +148,13 @@ from .share_ops import (
 from .services.asset_protection import GeneratedAssetProtectionPipeline
 from .services.generation_broker import GenerationBroker, build_generation_broker
 from .services.generation_runtime import GenerationRuntime, initial_generation_provider_label
+from .services.deployment_verification import load_deployment_verification_report
+from .services.launch_readiness import (
+    build_launch_readiness_report,
+    build_runtime_log_snapshot,
+    load_provider_smoke_report,
+    load_startup_verification_report,
+)
 from .services.generation_dispatcher import GenerationDispatcher
 from security.moderation import ModerationResult
 
@@ -2202,7 +2212,7 @@ class StudioService:
         attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
         resolved_mode = resolve_chat_mode(model or conversation.model)
         billing_state = await self._resolve_billing_state_for_identity(identity)
-        ensure_chat_request_allowed(
+        entitlements = ensure_chat_request_allowed(
             identity=identity,
             mode=resolved_mode,
             attachments=attachment_models,
@@ -2222,6 +2232,7 @@ class StudioService:
             attachments=attachment_models,
             requested_model=model,
             parent_message_id=user_message.id,
+            premium_chat=entitlements.premium_chat,
         )
 
         def mutation(state: StudioState) -> None:
@@ -2273,7 +2284,7 @@ class StudioService:
         identity = await self.get_identity(identity_id)
         resolved_mode = resolve_chat_mode(conversation.model)
         billing_state = await self._resolve_billing_state_for_identity(identity)
-        ensure_chat_request_allowed(
+        entitlements = ensure_chat_request_allowed(
             identity=identity,
             mode=resolved_mode,
             attachments=user_message.attachments,
@@ -2289,6 +2300,7 @@ class StudioService:
             attachments=user_message.attachments,
             requested_model=conversation.model,
             parent_message_id=user_message.id,
+            premium_chat=entitlements.premium_chat,
         )
 
         def mutation(state: StudioState) -> None:
@@ -2410,6 +2422,7 @@ class StudioService:
             attachments=attachment_models,
             requested_model=model,
             parent_message_id=user_message.id,
+            premium_chat=entitlements.premium_chat,
         )
 
         def mutation(state: StudioState) -> None:
@@ -2443,13 +2456,32 @@ class StudioService:
         attachments: List[ChatAttachment],
         requested_model: str | None,
         parent_message_id: str,
+        premium_chat: bool,
     ) -> ChatMessage:
         resolved_mode = resolve_chat_mode(requested_model or conversation.model)
         llm_input_content = content.strip() or build_attachment_only_request(attachments, mode=resolved_mode)
+        context = build_chat_context(
+            history=history,
+            content=llm_input_content,
+            attachments=attachments,
+        )
         intent = detect_chat_intent(
             content=llm_input_content,
             attachments=attachments,
             mode=resolved_mode,
+            context=context,
+        )
+        generation_bridge = build_chat_generation_bridge(
+            intent=intent,
+            content=llm_input_content,
+            attachments=attachments,
+            premium_chat=premium_chat,
+            context=context,
+        )
+        continuity_summary = build_chat_continuity_summary(
+            intent=intent,
+            context=context,
+            generation_bridge=generation_bridge,
         )
         llm_reply = await self.llm_gateway.generate_chat_reply(
             requested_model=requested_model or conversation.model,
@@ -2457,6 +2489,13 @@ class StudioService:
             history=history,
             content=llm_input_content,
             attachments=attachments,
+            premium_chat=premium_chat,
+            intent_kind=intent.kind,
+            prompt_profile=intent.prompt_profile,
+            detail_score=intent.detail_score,
+            premium_intent=intent.premium_intent,
+            recommended_workflow=intent.recommended_workflow,
+            continuity_summary=continuity_summary,
         )
         if llm_reply:
             response_body = llm_reply.text
@@ -2464,6 +2503,8 @@ class StudioService:
                 content=llm_input_content,
                 attachments=attachments,
                 mode=resolved_mode,
+                premium_chat=premium_chat,
+                context=context,
             )
             metadata = {
                 "provider": llm_reply.provider,
@@ -2473,13 +2514,43 @@ class StudioService:
                 "completion_tokens": llm_reply.completion_tokens,
                 "estimated_cost_usd": llm_reply.estimated_cost_usd,
                 "used_fallback": llm_reply.used_fallback,
-                **build_chat_metadata(intent),
+                "premium_chat": premium_chat,
+                "requested_quality_tier": llm_reply.requested_quality_tier,
+                "selected_quality_tier": llm_reply.selected_quality_tier,
+                "degraded": llm_reply.degraded,
+                "routing_strategy": llm_reply.routing_strategy,
+                "routing_reason": llm_reply.routing_reason,
+                "generation_bridge": generation_bridge,
+                **build_chat_metadata(intent, context=context),
             }
         else:
             response_body, suggested_actions = build_chat_reply(
                 intent=intent,
                 content=llm_input_content,
                 attachments=attachments,
+                provider_unavailable=True,
+                premium_chat=premium_chat,
+                context=context,
+            )
+            suggested_actions = build_chat_suggested_actions(
+                content=llm_input_content,
+                attachments=attachments,
+                mode=resolved_mode,
+                premium_chat=premium_chat,
+                context=context,
+            )
+            logger.warning(
+                "chat_heuristic_fallback %s",
+                {
+                    "event": "chat_heuristic_fallback",
+                    "conversation_id": conversation.id,
+                    "identity_id": identity.id,
+                    "mode": resolved_mode,
+                    "intent_kind": intent.kind,
+                    "prompt_profile": intent.prompt_profile,
+                    "premium_chat": premium_chat,
+                    "routing_reason": "provider_unavailable_or_empty",
+                },
             )
             metadata = {
                 "provider": "heuristic",
@@ -2487,7 +2558,16 @@ class StudioService:
                 "mode": resolved_mode,
                 "estimated_cost_usd": 0.0,
                 "used_fallback": True,
-                **build_chat_metadata(intent),
+                "premium_chat": premium_chat,
+                "requested_quality_tier": "premium" if premium_chat else "standard",
+                "selected_quality_tier": "degraded",
+                "degraded": True,
+                "routing_strategy": "heuristic-fallback",
+                "routing_reason": "provider_unavailable_or_empty",
+                "provider_status": "degraded",
+                "fallback_reason": "all_provider_candidates_failed",
+                "generation_bridge": generation_bridge,
+                **build_chat_metadata(intent, context=context),
             }
         return ChatMessage(
             conversation_id=conversation.id,
@@ -3198,7 +3278,10 @@ class StudioService:
             aspect_ratio=aspect_ratio,
         )
         if not routing_decision.provider_candidates:
-            raise ValueError("No generation provider is currently configured for this workflow")
+            raise ValueError(
+                "No real image provider is available for this workflow right now. "
+                "Studio will not replace it with a fake demo render."
+            )
         reserved_credit_cost = (
             0
             if self._has_unlimited_generation_access(identity)
@@ -3499,6 +3582,7 @@ class StudioService:
 
     async def health(self, detail: bool = False) -> Dict[str, Any]:
         counts = await self.store.get_counts_summary()
+        data_authority = await self.store.describe_persistence()
         provider_status = await self.providers.health_snapshot(probe=detail)
         degraded_states = {"degraded", "unavailable", "error"}
         overall_status = "degraded" if any(provider.get("status") in degraded_states for provider in provider_status) else "healthy"
@@ -3510,6 +3594,11 @@ class StudioService:
         )
         shared_queue_configured = bool((self.settings.redis_url or "").strip())
         security_summary: Dict[str, int] | None = None
+        provider_smoke_report: Dict[str, Any] | None = None
+        startup_verification_report: Dict[str, Any] | None = None
+        deployment_verification_report: Dict[str, Any] | None = None
+        runtime_logs: Dict[str, Any] | None = None
+        launch_readiness: Dict[str, Any] | None = None
         if detail:
             def query(state: StudioState) -> Dict[str, int]:
                 now = utc_now()
@@ -3533,32 +3622,62 @@ class StudioService:
                 }
 
             security_summary = await self.store.read(query)
+            provider_smoke_report = load_provider_smoke_report(self.settings)
+            startup_verification_report = load_startup_verification_report(self.settings)
+            deployment_verification_report = load_deployment_verification_report(self.settings)
+            runtime_logs = build_runtime_log_snapshot(self.settings)
         if self._generation_broker_degraded_reason is not None:
             overall_status = "degraded"
+        generation_broker_payload = {
+            "enabled": self.generation_broker is not None,
+            "configured": shared_queue_configured,
+            "degraded": self._generation_broker_degraded_reason is not None,
+            "detail": self._generation_broker_degraded_reason
+            or ("shared_queue_active" if self.generation_broker is not None else "local_queue_only"),
+            "kind": self.generation_broker.__class__.__name__ if self.generation_broker is not None else None,
+            "queued_by_priority": broker_metrics,
+            "claimed": claimed_count,
+        }
+        if detail:
+            launch_readiness = build_launch_readiness_report(
+                settings=self.settings,
+                provider_status=provider_status,
+                data_authority=data_authority,
+                generation_runtime_mode=self._generation_runtime_mode,
+                generation_broker=generation_broker_payload,
+                chat_routing=self.llm_gateway.routing_summary(),
+                provider_smoke_report=provider_smoke_report,
+                startup_verification_report=startup_verification_report,
+                deployment_verification_report=deployment_verification_report,
+                runtime_logs=runtime_logs,
+            )
         payload = {
             "status": overall_status,
             "providers": provider_status,
             "counts": counts,
             "generation_runtime_mode": self._generation_runtime_mode,
             "generation_queue": self.generation_dispatcher.metrics(),
-            "generation_broker": {
-                "enabled": self.generation_broker is not None,
-                "configured": shared_queue_configured,
-                "degraded": self._generation_broker_degraded_reason is not None,
-                "detail": self._generation_broker_degraded_reason
-                or ("shared_queue_active" if self.generation_broker is not None else "local_queue_only"),
-                "kind": self.generation_broker.__class__.__name__ if self.generation_broker is not None else None,
-                "queued_by_priority": broker_metrics,
-                "claimed": claimed_count,
-            },
+            "generation_broker": generation_broker_payload,
             "generation_worker": {
                 "id": self._worker_id,
                 "processing_active": worker_processing_active,
             },
             "generation_routing": self.providers.routing_summary(),
+            "chat_routing": self.llm_gateway.routing_summary(),
+            "data_authority": data_authority,
         }
         if security_summary is not None:
             payload["security_summary"] = security_summary
+        if provider_smoke_report is not None:
+            payload["provider_smoke"] = provider_smoke_report
+        if startup_verification_report is not None:
+            payload["startup_verification"] = startup_verification_report
+        if deployment_verification_report is not None:
+            payload["deployment_verification"] = deployment_verification_report
+        if runtime_logs is not None:
+            payload["runtime_logs"] = runtime_logs
+        if launch_readiness is not None:
+            payload["launch_readiness"] = launch_readiness
         return payload
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
@@ -3776,9 +3895,11 @@ class StudioService:
             finished_at = utc_now()
             error_code = self._classify_generation_error_code(exc)
             error_message = self._normalize_generation_error_message(exc)
+            failure_provider = getattr(exc, "provider_name", None) or provider_label
             updated_job = await self._update_job_status(
                 job_id,
                 JobStatus.RETRYABLE_FAILED,
+                provider=failure_provider,
                 error=error_message,
                 error_code=error_code,
             )
@@ -3786,7 +3907,7 @@ class StudioService:
                 "generation_retryable_failure",
                 job=updated_job or job,
                 status=JobStatus.RETRYABLE_FAILED,
-                provider=provider_label,
+                provider=failure_provider,
                 error=error_message,
                 error_code=error_code,
                 started_at=started_at,
@@ -3811,9 +3932,11 @@ class StudioService:
             finished_at = utc_now()
             error_code = self._classify_generation_error_code(exc)
             error_message = self._normalize_generation_error_message(exc)
+            failure_provider = getattr(exc, "provider_name", None) or provider_label
             updated_job = await self._update_job_status(
                 job_id,
                 JobStatus.FAILED,
+                provider=failure_provider,
                 error=error_message,
                 error_code=error_code,
             )
@@ -3821,7 +3944,7 @@ class StudioService:
                 "generation_failed",
                 job=updated_job or job,
                 status=JobStatus.FAILED,
-                provider=provider_label,
+                provider=failure_provider,
                 error=error_message,
                 error_code=error_code,
                 started_at=started_at,

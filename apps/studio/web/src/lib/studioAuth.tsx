@@ -1,6 +1,7 @@
 import React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { logAuthTrace } from '@/lib/authTrace'
 import { studioApi, type AuthMeResponse, type IdentityPlan } from '@/lib/studioApi'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import {
@@ -38,8 +39,11 @@ type StudioAuthContextValue = {
 
 const StudioAuthContext = React.createContext<StudioAuthContextValue | null>(null)
 const AUTH_SNAPSHOT_KEY = 'oc-studio-auth-snapshot'
-const AUTH_ME_RETRY_DELAYS_MS = [0, 150, 400]
-const OAUTH_SESSION_RETRY_DELAYS_MS = [0, 150, 400, 1000]
+const AUTH_ME_RETRY_DELAYS_MS = [0, 150, 400, 1000]
+const OAUTH_SESSION_RETRY_DELAYS_MS = [0, 150, 400, 1000, 2000]
+const OAUTH_AUTH_SYNC_RETRY_DELAYS_MS = [250, 750, 1500]
+let oauthCompletionKeyInFlight: string | null = null
+let oauthCompletionPromiseInFlight: Promise<void> | null = null
 
 function readAuthSnapshot() {
   if (typeof window === 'undefined') return undefined
@@ -70,6 +74,11 @@ async function syncBrowserSession(accessToken: string, refreshToken?: string) {
     access_token: accessToken,
     refresh_token: refreshToken,
   })
+}
+
+function isRecoverableSessionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /invalid or expired session|invalid token|token has expired/i.test(message)
 }
 
 async function wait(delayMs: number) {
@@ -129,11 +138,58 @@ function clearOAuthCallbackUrl() {
   window.history.replaceState({}, document.title, nextUrl)
 }
 
+function getOAuthCallbackKey() {
+  if (typeof window === 'undefined') return 'server'
+  const currentUrl = new URL(window.location.href)
+  return `${currentUrl.pathname}?${currentUrl.searchParams.toString()}#${currentUrl.hash.replace(/^#/, '')}`
+}
+
+function getOAuthRedirectUrl() {
+  const localOriginPattern = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i
+
+  if (typeof window !== 'undefined' && localOriginPattern.test(window.location.origin)) {
+    return `${window.location.origin.replace(/\/$/, '')}/login?oauth=1`
+  }
+
+  const configuredBaseUrl = import.meta.env.VITE_AUTH_REDIRECT_BASE_URL?.trim()
+  if (configuredBaseUrl) {
+    return `${configuredBaseUrl.replace(/\/$/, '')}/login?oauth=1`
+  }
+
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:5173/login?oauth=1'
+  }
+
+  return `${window.location.origin}/login?oauth=1`
+}
+
+function isOAuthCallbackUrl() {
+  if (typeof window === 'undefined') return false
+  const currentUrl = new URL(window.location.href)
+  const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''))
+  return (
+    currentUrl.searchParams.get('oauth') === '1' ||
+    currentUrl.searchParams.has('code') ||
+    currentUrl.searchParams.has('error') ||
+    hashParams.has('access_token') ||
+    hashParams.has('refresh_token') ||
+    hashParams.has('error')
+  )
+}
+
 export function StudioAuthProvider({ children }: React.PropsWithChildren) {
   const queryClient = useQueryClient()
   const [token, setToken] = React.useState(() => getStudioAccessToken())
   const [snapshot, setSnapshot] = React.useState<AuthMeResponse | undefined>(() => readAuthSnapshot())
   const [bootstrapped, setBootstrapped] = React.useState(false)
+
+  const clearPersistedAuthState = React.useCallback(() => {
+    clearStudioAccessToken()
+    setToken(null)
+    setSnapshot(undefined)
+    writeAuthSnapshot(null)
+    queryClient.removeQueries({ queryKey: ['studio-auth'] })
+  }, [queryClient])
 
   const persistAuthenticatedState = React.useCallback(
     async (accessToken: string, authPayload: AuthMeResponse) => {
@@ -149,20 +205,14 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
 
   const loadAuthPayloadForToken = React.useCallback(
     async (accessToken: string) => {
-      setStudioAccessToken(accessToken)
-      setToken(accessToken)
-
       let lastError: unknown = null
       for (const delayMs of AUTH_ME_RETRY_DELAYS_MS) {
         if (delayMs) {
           await wait(delayMs)
         }
         try {
-          const authPayload = await studioApi.getMe()
-          setSnapshot(authPayload)
-          writeAuthSnapshot(authPayload)
-          queryClient.setQueryData(['studio-auth', accessToken], authPayload)
-          await queryClient.invalidateQueries()
+          const authPayload = await studioApi.getMeWithToken(accessToken)
+          await persistAuthenticatedState(accessToken, authPayload)
           return authPayload
         } catch (error) {
           lastError = error
@@ -173,7 +223,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
         ? lastError
         : new Error('Studio could not finish sign-in right now. Please try again.')
     },
-    [queryClient],
+    [persistAuthenticatedState],
   )
 
   React.useEffect(() => {
@@ -184,9 +234,10 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
       .then(({ data }) => {
         if (!mounted) return
         const sessionToken = data.session?.access_token ?? null
-        if (sessionToken && sessionToken !== getStudioAccessToken()) {
+        if (sessionToken && sessionToken !== getStudioAccessToken() && !isOAuthCallbackUrl()) {
           setStudioAccessToken(sessionToken)
           setToken(sessionToken)
+          logAuthTrace('bootstrap_session_synced', { hasSessionToken: true })
         }
         setBootstrapped(true)
       })
@@ -197,13 +248,19 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
     const { data: listener } = supabaseBrowser.auth.onAuthStateChange((event, session) => {
       const nextToken = session?.access_token ?? null
       if (nextToken) {
+        if (isOAuthCallbackUrl()) {
+          logAuthTrace('oauth_auth_state_buffered', { event, hasAccessToken: true })
+          return
+        }
         setStudioAccessToken(nextToken)
         setToken(nextToken)
-      } else if (event === 'SIGNED_OUT' || !getStudioAccessToken()) {
+        logAuthTrace('auth_state_token_synced', { event })
+      } else if (event === 'SIGNED_OUT' || (!getStudioAccessToken() && !isOAuthCallbackUrl())) {
         clearStudioAccessToken()
         setToken(null)
         setSnapshot(undefined)
         writeAuthSnapshot(null)
+        logAuthTrace('auth_state_cleared', { event })
       }
     })
 
@@ -220,7 +277,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
   const authQuery = useQuery({
     queryKey: ['studio-auth', token],
     queryFn: () => studioApi.getMe(),
-    enabled: bootstrapped && Boolean(token),
+    enabled: bootstrapped && Boolean(token) && !isOAuthCallbackUrl(),
     placeholderData: snapshot,
   })
 
@@ -228,17 +285,21 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
 
   React.useEffect(() => {
     if (!bootstrapped || !token || !authQuery.error) return
-    const message = authQuery.error instanceof Error ? authQuery.error.message : ''
-    if (!/invalid or expired session|authentication required|token has expired|invalid token/i.test(message)) {
+    if (isOAuthCallbackUrl()) {
+      logAuthTrace('auth_query_error_ignored_during_oauth_callback', {
+        message: authQuery.error instanceof Error ? authQuery.error.message : String(authQuery.error),
+      })
+      return
+    }
+    if (!isRecoverableSessionError(authQuery.error) && !(authQuery.error instanceof Error && /authentication required/i.test(authQuery.error.message))) {
       return
     }
 
-    clearStudioAccessToken()
-    setToken(null)
-    setSnapshot(undefined)
-    writeAuthSnapshot(null)
-    queryClient.removeQueries({ queryKey: ['studio-auth'] })
-  }, [authQuery.error, bootstrapped, queryClient, token])
+    logAuthTrace('auth_query_error_clearing_state', {
+      message: authQuery.error instanceof Error ? authQuery.error.message : String(authQuery.error),
+    })
+    clearPersistedAuthState()
+  }, [authQuery.error, bootstrapped, clearPersistedAuthState, token])
 
   React.useEffect(() => {
     if (!authQuery.data) return
@@ -282,76 +343,177 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
   )
 
   const signInWithProvider = React.useCallback(async (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath = '/studio') => {
+    try {
+      await supabaseBrowser.auth.signOut()
+    } catch {
+      // Best-effort cleanup only; stale local auth should not block provider sign-in.
+    }
+    clearPersistedAuthState()
     setStudioPostAuthRedirect(nextPath)
-    const redirectTo = `${window.location.origin}/login?oauth=1`
+    const redirectTo = getOAuthRedirectUrl()
+    logAuthTrace('oauth_sign_in_started', { provider, redirectTo, nextPath })
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider,
       options: { redirectTo },
     })
     if (error) throw error
-  }, [])
+  }, [clearPersistedAuthState])
 
   const completeOAuthSignIn = React.useCallback(async () => {
-    const callbackError = readOAuthCallbackError()
-    if (callbackError) {
-      clearOAuthCallbackUrl()
-      throw new Error(callbackError)
+    const callbackKey = getOAuthCallbackKey()
+    if (oauthCompletionPromiseInFlight && oauthCompletionKeyInFlight === callbackKey) {
+      return oauthCompletionPromiseInFlight
     }
 
-    const currentUrl = typeof window === 'undefined' ? null : new URL(window.location.href)
-    const authCode = currentUrl?.searchParams.get('code')
-    let session = null
-
-    const initialSessionResult = await supabaseBrowser.auth.getSession()
-    if (initialSessionResult.error) {
-      clearOAuthCallbackUrl()
-      throw initialSessionResult.error
-    }
-    session = initialSessionResult.data.session
-
-    if (!session?.access_token && authCode) {
-      const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(authCode)
-      if (error) {
+    oauthCompletionKeyInFlight = callbackKey
+    oauthCompletionPromiseInFlight = (async () => {
+      logAuthTrace('oauth_callback_started', { callbackKey })
+      const callbackError = readOAuthCallbackError()
+      if (callbackError) {
+        logAuthTrace('oauth_callback_provider_error', { callbackError })
         clearOAuthCallbackUrl()
-        throw error
+        throw new Error(callbackError)
       }
-      session = data.session
-    }
 
-    if (!session?.access_token) {
-      for (const delayMs of OAUTH_SESSION_RETRY_DELAYS_MS) {
-        if (delayMs) {
-          await wait(delayMs)
-        }
-        const { data, error } = await supabaseBrowser.auth.getSession()
+      const currentUrl = typeof window === 'undefined' ? null : new URL(window.location.href)
+      const authCode = currentUrl?.searchParams.get('code')
+      const hashParams = new URLSearchParams(currentUrl?.hash.replace(/^#/, '') ?? '')
+      const hashAccessToken = hashParams.get('access_token')
+      const hashRefreshToken = hashParams.get('refresh_token')
+      let session = null
+
+      if (hashAccessToken && hashRefreshToken) {
+        logAuthTrace('oauth_callback_setting_hash_session', { hasHashAccessToken: true, hasHashRefreshToken: true })
+        const { data, error } = await supabaseBrowser.auth.setSession({
+          access_token: hashAccessToken,
+          refresh_token: hashRefreshToken,
+        })
         if (error) {
           clearOAuthCallbackUrl()
           throw error
         }
-        if (data.session?.access_token) {
-          session = data.session
-          break
+        session = data.session
+      }
+
+      if (!session?.access_token && authCode) {
+        logAuthTrace('oauth_callback_exchanging_code', { hasCode: true })
+        const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(authCode)
+        if (error) {
+          clearOAuthCallbackUrl()
+          throw error
+        }
+        session = data.session
+      }
+
+      if (!session?.access_token) {
+        for (const delayMs of OAUTH_SESSION_RETRY_DELAYS_MS) {
+          if (delayMs) {
+            await wait(delayMs)
+          }
+          const { data, error } = await supabaseBrowser.auth.getSession()
+          if (error) {
+            clearOAuthCallbackUrl()
+            throw error
+          }
+          if (data.session?.access_token) {
+            session = data.session
+            logAuthTrace('oauth_callback_session_detected', { delayMs })
+            break
+          }
         }
       }
-    }
 
-    if (!session?.access_token) {
+      if (!session?.access_token) {
+        logAuthTrace('oauth_callback_session_missing')
+        clearOAuthCallbackUrl()
+        throw new Error('Google sign-in could not be completed. Please try again.')
+      }
+
+      const { error: userError } = await supabaseBrowser.auth.getUser(session.access_token)
+      if (userError) {
+        logAuthTrace('oauth_callback_supabase_user_rejected', { message: userError.message })
+        clearOAuthCallbackUrl()
+        throw userError
+      }
+
+      let authSyncError: unknown = null
+      try {
+        await loadAuthPayloadForToken(session.access_token)
+        logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'initial_session' })
+      } catch (error) {
+        authSyncError = error
+      }
+
+      if (authSyncError && isRecoverableSessionError(authSyncError)) {
+        logAuthTrace('oauth_callback_backend_auth_retrying', {
+          message: authSyncError instanceof Error ? authSyncError.message : String(authSyncError),
+        })
+
+        for (const delayMs of OAUTH_AUTH_SYNC_RETRY_DELAYS_MS) {
+          await wait(delayMs)
+          const { data, error } = await supabaseBrowser.auth.getSession()
+          if (error) {
+            authSyncError = error
+            break
+          }
+          if (!data.session?.access_token) {
+            continue
+          }
+
+          try {
+            await loadAuthPayloadForToken(data.session.access_token)
+            authSyncError = null
+            logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'session_retry', delayMs })
+            break
+          } catch (retryError) {
+            authSyncError = retryError
+            if (!isRecoverableSessionError(retryError)) {
+              break
+            }
+          }
+        }
+
+        if (authSyncError && session.refresh_token) {
+          const { data, error: refreshError } = await supabaseBrowser.auth.refreshSession()
+          if (!refreshError && data.session?.access_token) {
+            try {
+              await loadAuthPayloadForToken(data.session.access_token)
+              authSyncError = null
+              logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'refresh_session' })
+            } catch (refreshLoadError) {
+              authSyncError = refreshLoadError
+            }
+          } else if (refreshError) {
+            logAuthTrace('oauth_callback_refresh_failed', { message: refreshError.message })
+          }
+        }
+      }
+
+      if (authSyncError) {
+        clearOAuthCallbackUrl()
+        throw authSyncError instanceof Error
+          ? authSyncError
+          : new Error('Google sign-in could not be completed. Please try again.')
+      }
       clearOAuthCallbackUrl()
-      throw new Error('Google sign-in could not be completed. Please try again.')
-    }
+      logAuthTrace('oauth_callback_completed')
+    })()
 
-    await loadAuthPayloadForToken(session.access_token)
-    clearOAuthCallbackUrl()
+    try {
+      await oauthCompletionPromiseInFlight
+    } finally {
+      if (oauthCompletionKeyInFlight === callbackKey) {
+        oauthCompletionKeyInFlight = null
+        oauthCompletionPromiseInFlight = null
+      }
+    }
   }, [loadAuthPayloadForToken])
 
   const signOut = React.useCallback(async () => {
     await supabaseBrowser.auth.signOut()
-    clearStudioAccessToken()
-    setToken(null)
-    setSnapshot(undefined)
-    writeAuthSnapshot(null)
+    clearPersistedAuthState()
     await queryClient.invalidateQueries()
-  }, [queryClient])
+  }, [clearPersistedAuthState, queryClient])
 
   const value = React.useMemo<StudioAuthContextValue>(
     () => ({

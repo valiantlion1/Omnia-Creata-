@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -36,11 +35,23 @@ class StudioVersionInfo(BaseModel):
         }
 
 
+def build_runtime_version_payload(
+    *,
+    boot_build: str | None = None,
+    booted_at: str | None = None,
+) -> dict[str, str]:
+    payload = load_version_info().to_public_payload()
+    if boot_build:
+        payload["bootBuild"] = boot_build
+    if booted_at:
+        payload["bootedAt"] = booted_at
+    return payload
+
+
 def _default_version_path() -> Path:
     return Path(__file__).resolve().parents[2] / "version.json"
 
 
-@lru_cache(maxsize=4)
 def load_version_info(path: str | None = None) -> StudioVersionInfo:
     version_path = Path(path) if path else _default_version_path()
     payload = json.loads(version_path.read_text(encoding="utf-8"))

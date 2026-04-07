@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from studio_platform.versioning import STUDIO_API_VERSION, StudioVersionInfo, load_version_info
+from studio_platform.versioning import (
+    STUDIO_API_VERSION,
+    StudioVersionInfo,
+    build_runtime_version_payload,
+    load_version_info,
+)
 
 
 def _read_manifest() -> dict[str, str]:
@@ -23,3 +28,14 @@ def test_version_payload_exposes_api_version() -> None:
     payload = load_version_info().to_public_payload()
     assert payload["apiVersion"] == STUDIO_API_VERSION
     assert payload["build"] == manifest["build"]
+
+
+def test_runtime_version_payload_can_expose_boot_metadata() -> None:
+    payload = build_runtime_version_payload(
+        boot_build="2026.04.07.31",
+        booted_at="2026-04-07T17:00:00+00:00",
+    )
+
+    assert payload["apiVersion"] == STUDIO_API_VERSION
+    assert payload["bootBuild"] == "2026.04.07.31"
+    assert payload["bootedAt"] == "2026-04-07T17:00:00+00:00"

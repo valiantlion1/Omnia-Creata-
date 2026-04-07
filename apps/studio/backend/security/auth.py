@@ -401,9 +401,10 @@ async def get_current_user(
         
         return user
     
-    except HTTPException:
+    except HTTPException as exc:
         supabase_client = get_supabase_auth_client()
         if supabase_client is None:
+            logger.warning("auth_token_rejected_without_supabase_fallback", extra={"path": str(request.url.path)})
             return None
         try:
             payload = await supabase_client.get_user(token)
@@ -440,7 +441,17 @@ async def get_current_user(
                 is_verified=bool(payload.get("email_confirmed_at") or payload.get("confirmed_at")),
                 metadata=metadata,
             )
-        except SupabaseAuthError:
+        except SupabaseAuthError as supabase_exc:
+            token_preview = f"{token[:12]}..." if token else "missing"
+            logger.warning(
+                "auth_supabase_token_rejected",
+                extra={
+                    "path": str(request.url.path),
+                    "jwt_rejection": exc.detail,
+                    "supabase_rejection": str(supabase_exc),
+                    "token_preview": token_preview,
+                },
+            )
             return None
 
 

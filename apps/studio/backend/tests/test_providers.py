@@ -99,6 +99,39 @@ class _FlakyProvider(StudioImageProvider):
         )
 
 
+class _FatalProbeProvider(StudioImageProvider):
+    def __init__(self, *, name: str = "fatal-probe") -> None:
+        self.name = name
+        self.rollout_tier = "standard"
+        self.capabilities = ProviderCapabilities(workflows=("text_to_image",))
+
+    async def is_available(self) -> bool:
+        return True
+
+    async def health(self, probe: bool = True) -> dict[str, object]:
+        return {"name": self.name, "status": "healthy", "detail": "configured"}
+
+    async def generate(self, **kwargs) -> ProviderResult:
+        raise ProviderFatalError("provider returned 401 expired token")
+
+
+class _AlwaysTemporaryProvider(StudioImageProvider):
+    def __init__(self, *, name: str, detail: str = "temporary failure") -> None:
+        self.name = name
+        self.rollout_tier = "standard"
+        self.capabilities = ProviderCapabilities(workflows=("text_to_image",))
+        self.detail = detail
+
+    async def is_available(self) -> bool:
+        return True
+
+    async def health(self, probe: bool = True) -> dict[str, object]:
+        return {"name": self.name, "status": "healthy", "detail": "configured"}
+
+    async def generate(self, **kwargs) -> ProviderResult:
+        raise provider_module.ProviderTemporaryError(self.detail)
+
+
 def test_preview_generation_provider_prefers_first_supported_provider() -> None:
     registry = _registry_with(
         _FakeProvider(
@@ -149,16 +182,67 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
     original_pollinations = settings.enable_pollinations
     original_fal = settings.fal_api_key
     original_runware = settings.runware_api_key
+    original_demo = settings.enable_demo_generation_fallback
     try:
         settings.generation_provider_strategy = "free-first"
         settings.huggingface_token = "hf-token"
         settings.enable_pollinations = True
         settings.fal_api_key = None
         settings.runware_api_key = None
+        settings.enable_demo_generation_fallback = False
         registry = ProviderRegistry()
         assert [provider.name for provider in registry.providers[:3]] == ["pollinations", "huggingface", "fal"]
     finally:
         settings.generation_provider_strategy = original_strategy
+        settings.huggingface_token = original_hf
+        settings.enable_pollinations = original_pollinations
+        settings.fal_api_key = original_fal
+        settings.runware_api_key = original_runware
+        settings.enable_demo_generation_fallback = original_demo
+
+
+def test_provider_registry_disables_demo_fallback_by_default() -> None:
+    settings = provider_module.get_settings()
+    original_demo = settings.enable_demo_generation_fallback
+    original_hf = settings.huggingface_token
+    original_pollinations = settings.enable_pollinations
+    original_fal = settings.fal_api_key
+    original_runware = settings.runware_api_key
+    try:
+        settings.enable_demo_generation_fallback = False
+        settings.huggingface_token = None
+        settings.enable_pollinations = False
+        settings.fal_api_key = None
+        settings.runware_api_key = None
+        registry = ProviderRegistry()
+        assert all(provider.name != "demo" for provider in registry.providers)
+        assert registry.routing_summary()["demo_policy"] == "disabled_by_default_explicit_only"
+    finally:
+        settings.enable_demo_generation_fallback = original_demo
+        settings.huggingface_token = original_hf
+        settings.enable_pollinations = original_pollinations
+        settings.fal_api_key = original_fal
+        settings.runware_api_key = original_runware
+
+
+def test_provider_registry_can_explicitly_enable_demo_fallback() -> None:
+    settings = provider_module.get_settings()
+    original_demo = settings.enable_demo_generation_fallback
+    original_hf = settings.huggingface_token
+    original_pollinations = settings.enable_pollinations
+    original_fal = settings.fal_api_key
+    original_runware = settings.runware_api_key
+    try:
+        settings.enable_demo_generation_fallback = True
+        settings.huggingface_token = None
+        settings.enable_pollinations = False
+        settings.fal_api_key = None
+        settings.runware_api_key = None
+        registry = ProviderRegistry()
+        assert any(provider.name == "demo" for provider in registry.providers)
+        assert registry.routing_summary()["demo_policy"] == "degraded_only_last_resort"
+    finally:
+        settings.enable_demo_generation_fallback = original_demo
         settings.huggingface_token = original_hf
         settings.enable_pollinations = original_pollinations
         settings.fal_api_key = original_fal
@@ -457,6 +541,72 @@ async def test_health_snapshot_includes_capabilities_and_priority() -> None:
     assert snapshot[0]["capabilities"]["supports_async_queue"] is True
     assert snapshot[1]["name"] == "demo"
     assert snapshot[1]["priority"] == 2
+
+
+@pytest.mark.asyncio
+async def test_health_snapshot_marks_recent_failure_as_unhealthy_runtime_truth() -> None:
+    flaky = _FlakyProvider(fail_times=1)
+    fallback = _FakeProvider(
+        name="fallback",
+        rollout_tier="fallback",
+        capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+    )
+    registry = _registry_with(flaky, fallback)
+
+    result = await registry.generate(
+        prompt="portrait",
+        negative_prompt="",
+        width=512,
+        height=512,
+        seed=1,
+        model_id="flux-schnell",
+    )
+    snapshot = await registry.health_snapshot(probe=False)
+    flaky_health = next(item for item in snapshot if item["name"] == "flaky")
+
+    assert result.provider == "fallback"
+    assert flaky_health["reported_status"] == "healthy"
+    assert flaky_health["status"] == "error"
+    assert flaky_health["circuit_breaker"]["last_error"] == "transient failure"
+
+
+@pytest.mark.asyncio
+async def test_health_snapshot_marks_nonretryable_failure_as_error() -> None:
+    provider = _FatalProbeProvider()
+    registry = _registry_with(provider)
+
+    registry._record_provider_nonretryable_failure(
+        provider.name,
+        latency_ms=120.0,
+        error=ProviderFatalError("provider returned 401 expired token"),
+    )
+    snapshot = await registry.health_snapshot(probe=False)
+    provider_health = next(item for item in snapshot if item["name"] == provider.name)
+
+    assert provider_health["reported_status"] == "healthy"
+    assert provider_health["status"] == "error"
+    assert "401 expired token" in provider_health["detail"]
+
+
+@pytest.mark.asyncio
+async def test_generate_preserves_last_attempted_provider_on_retryable_failure() -> None:
+    registry = _registry_with(
+        _AlwaysTemporaryProvider(name="pollinations", detail="pollinations temporary"),
+        _AlwaysTemporaryProvider(name="huggingface", detail="huggingface expired token"),
+    )
+
+    with pytest.raises(provider_module.ProviderTemporaryError) as exc_info:
+        await registry.generate(
+            prompt="editorial portrait",
+            negative_prompt="",
+            width=512,
+            height=512,
+            seed=5,
+            model_id="flux-schnell",
+        )
+
+    assert str(exc_info.value) == "huggingface expired token"
+    assert getattr(exc_info.value, "provider_name", None) == "huggingface"
 
 
 @pytest.mark.asyncio

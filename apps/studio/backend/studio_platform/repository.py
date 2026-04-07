@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol, Type, TypeVar
+from typing import Any, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -44,6 +44,7 @@ class StudioPersistence(Protocol):
     async def get_model(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None: ...
     async def list_models(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]: ...
     async def mutate(self, callback): ...
+    async def describe(self) -> dict[str, Any]: ...
 
 
 class StudioRepository:
@@ -82,6 +83,9 @@ class StudioRepository:
 
     async def mutate(self, callback):
         return await self._persistence.mutate(callback)
+
+    async def describe_persistence(self) -> dict[str, Any]:
+        return await self._persistence.describe()
 
     async def get_identity(self, identity_id: str) -> OmniaIdentity | None:
         return await self.get_model("identities", identity_id, OmniaIdentity)

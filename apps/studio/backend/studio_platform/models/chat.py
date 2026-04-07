@@ -50,6 +50,7 @@ class ChatSuggestedAction(BaseModel):
     label: str
     action: str
     value: Optional[str] = None
+    payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatConversation(BaseModel):

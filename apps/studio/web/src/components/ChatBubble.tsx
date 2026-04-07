@@ -1,7 +1,106 @@
 import { useState, useEffect } from 'react'
 import { ThumbsUp, ThumbsDown, RefreshCw, Copy, Edit2, Check, Loader2 } from 'lucide-react'
 import { useLightbox } from '@/components/Lightbox'
-import { type ChatMessage, type ChatFeedback } from '@/lib/studioApi'
+import { type ChatMessage, type ChatFeedback, type ChatSuggestedAction } from '@/lib/studioApi'
+
+type AssistantPlanChipTone = 'neutral' | 'accent' | 'warning'
+
+type AssistantPlanChip = {
+  key: string
+  label: string
+  tone: AssistantPlanChipTone
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function formatWorkflowLabel(workflow: string) {
+  if (workflow === 'text_to_image') return 'Create plan'
+  if (workflow === 'image_to_image') return 'Image-to-image'
+  if (workflow === 'edit') return 'Edit plan'
+  return workflow
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function formatModelLabel(model: string) {
+  return model
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function resolveAssistantPlanChips(message: ChatMessage): AssistantPlanChip[] {
+  if (message.role === 'user') return []
+
+  const metadata = isRecord(message.metadata) ? message.metadata : null
+  const bridge = isRecord(metadata?.generation_bridge) ? metadata.generation_bridge : null
+  const blueprint = bridge && isRecord(bridge.blueprint) ? bridge.blueprint : null
+  const chips: AssistantPlanChip[] = []
+  const seen = new Set<string>()
+
+  const pushChip = (key: string, label: string | null, tone: AssistantPlanChipTone = 'neutral') => {
+    if (!label || seen.has(key)) return
+    seen.add(key)
+    chips.push({ key, label, tone })
+  }
+
+  const degraded = metadata?.degraded === true || asString(metadata?.provider) === 'heuristic'
+  if (degraded) {
+    pushChip('degraded', 'Guidance mode', 'warning')
+  } else if (asString(metadata?.selected_quality_tier) === 'premium') {
+    pushChip('quality', 'Premium lane', 'accent')
+  }
+
+  if (metadata?.follow_up_refinement === true) {
+    pushChip('follow-up', 'Refinement', 'accent')
+  }
+
+  const workflow = asString(blueprint?.workflow) || asString(bridge?.workflow)
+  if (workflow) {
+    pushChip('workflow', formatWorkflowLabel(workflow), workflow === 'edit' ? 'accent' : 'neutral')
+  }
+
+  if (asString(blueprint?.reference_mode) === 'required') {
+    pushChip('reference', 'Reference locked', 'warning')
+  }
+
+  const model = asString(blueprint?.model)
+  if (model) {
+    pushChip('model', formatModelLabel(model))
+  }
+
+  const aspectRatio = asString(blueprint?.aspect_ratio)
+  if (aspectRatio) {
+    pushChip('aspect', aspectRatio)
+  }
+
+  if (message.suggested_actions.some((action) => action.action === 'open_create')) {
+    pushChip('handoff', 'Create-ready', 'accent')
+  } else if (message.suggested_actions.some((action) => action.action === 'plan_edit')) {
+    pushChip('handoff', 'Edit-ready', 'accent')
+  }
+
+  return chips.slice(0, 6)
+}
+
+function resolveChipClassName(tone: AssistantPlanChipTone) {
+  if (tone === 'accent') {
+    return 'border-[rgb(var(--primary-light)/0.22)] bg-[rgb(var(--primary-light)/0.08)] text-[rgb(var(--primary-light))]'
+  }
+  if (tone === 'warning') {
+    return 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+  }
+  return 'border-white/[0.08] bg-[#111216] text-zinc-300'
+}
 
 /* ─── Streaming Text Reveal ─────────────────────────── */
 
@@ -58,12 +157,13 @@ interface ChatBubbleProps {
   onEdit?: (messageId: string, newContent: string) => Promise<void>
   onRegenerate?: (messageId: string) => Promise<void>
   onFeedback?: (messageId: string, feedback: ChatFeedback) => Promise<void>
-  onSuggestionClick?: (value: string) => void
+  onSuggestionClick?: (action: ChatSuggestedAction, message: ChatMessage) => void
 }
 
 export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenerate, onFeedback, onSuggestionClick }: ChatBubbleProps) {
   const isUser = message.role === 'user'
   const { openLightbox } = useLightbox()
+  const assistantPlanChips = resolveAssistantPlanChips(message)
 
   // Interaction State
   const [isEditing, setIsEditing] = useState(false)
@@ -227,13 +327,26 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
           </div>
         ) : null}
 
+        {!isUser && assistantPlanChips.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assistantPlanChips.map((chip) => (
+              <span
+                key={chip.key}
+                className={`rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.02em] ${resolveChipClassName(chip.tone)}`}
+              >
+                {chip.label}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Suggested Actions (Only on latest assistant message) */}
         {!isUser && isLatest && message.suggested_actions?.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
             {message.suggested_actions.slice(0, 4).map((action) => (
               <button
                 key={action.id}
-                onClick={() => onSuggestionClick?.(action.value || action.label)}
+                onClick={() => onSuggestionClick?.(action, message)}
                 className="rounded-full border border-white/[0.08] bg-[#111216] px-4 py-2 text-[12px] font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-[rgb(var(--primary-light)/0.3)] shadow-sm"
               >
                 {action.label}

@@ -1,13 +1,21 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, MessageCircle, Paperclip, Send, X } from 'lucide-react'
+import { ImageOff, Loader2, MessageCircle, Paperclip, Send, X } from 'lucide-react'
 
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
 import { AppPage } from '@/components/StudioPrimitives'
 import { ChatBubble } from '@/components/ChatBubble'
-import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
+import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatSuggestedAction, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
+import {
+  parseChatSuggestedActionPayload,
+  resolveComposeModeFromSuggestion,
+  resolveCreatePrefillFromSuggestion,
+  resolveSuggestedActionAttachments,
+  resolveSuggestedActionReferenceAssetId,
+  resolveSuggestedDraft,
+} from '@/lib/chatActionBridge'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 /* ─── Constants ────────────────────────────────────── */
@@ -35,6 +43,10 @@ type ChatVisualMessage = {
   title: string
   prompt: string
   mode: ComposeMode
+  model: string | null
+  aspectRatio: string | null
+  workflow: string | null
+  referenceAssetId: string | null
   status: JobStatus
   outputs: GenerationOutput[]
   error: string | null
@@ -130,6 +142,17 @@ function toPendingAttachment(file: File): PendingAttachment {
   }
 }
 
+function toPendingAttachmentFromChat(attachment: ChatAttachment): PendingAttachment {
+  return {
+    id: crypto.randomUUID(),
+    kind: attachment.kind,
+    asset_id: attachment.asset_id,
+    label: attachment.label,
+    previewUrl: attachment.url,
+    file: null,
+  }
+}
+
 async function toChatAttachmentPayload(attachment: PendingAttachment): Promise<ChatAttachment> {
   return {
     kind: attachment.kind,
@@ -152,6 +175,162 @@ function readStoredJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+function normalizeStoredChatVisualMessage(value: ChatVisualMessage): ChatVisualMessage {
+  return {
+    ...value,
+    model: typeof value.model === 'string' && value.model.trim() ? value.model : null,
+    aspectRatio: typeof value.aspectRatio === 'string' && value.aspectRatio.trim() ? value.aspectRatio : null,
+    workflow: typeof value.workflow === 'string' && value.workflow.trim() ? value.workflow : null,
+    referenceAssetId: typeof value.referenceAssetId === 'string' && value.referenceAssetId.trim() ? value.referenceAssetId : null,
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+type ChatVisualExecutionPlan = {
+  workflow?: string
+  prompt: string
+  negativePrompt: string
+  referenceAssetId: string | null
+  referenceMode: string
+  model: string
+  width: number
+  height: number
+  steps: number
+  cfgScale: number
+  aspectRatio: string
+  outputCount: number
+}
+
+function resolveAssistantGenerationBridge(message: ChatMessage | null | undefined) {
+  if (!isRecord(message?.metadata)) return null
+  const generationBridge = message.metadata.generation_bridge
+  if (!isRecord(generationBridge)) return null
+  return generationBridge
+}
+
+function resolveVisualExecutionPlan(
+  message: ChatMessage | null | undefined,
+  fallbackPrompt: string,
+): ChatVisualExecutionPlan | null {
+  const bridge = resolveAssistantGenerationBridge(message)
+  if (!bridge) return null
+
+  const blueprint = isRecord(bridge.blueprint) ? bridge.blueprint : null
+  const prompt =
+    asString(blueprint?.prompt) ||
+    asString(bridge.prompt) ||
+    fallbackPrompt
+
+  if (!prompt) return null
+
+  return {
+    workflow: asString(blueprint?.workflow) || asString(bridge.workflow) || undefined,
+    prompt,
+    negativePrompt: asString(blueprint?.negative_prompt) || asString(bridge.negative_prompt) || '',
+    referenceAssetId: asString(blueprint?.reference_asset_id) || asString(bridge.reference_asset_id),
+    referenceMode: asString(blueprint?.reference_mode) || 'none',
+    model: asString(blueprint?.model) || 'flux-schnell',
+    width: asNumber(blueprint?.width) || 1024,
+    height: asNumber(blueprint?.height) || 1024,
+    steps: asNumber(blueprint?.steps) || 24,
+    cfgScale: asNumber(blueprint?.cfg_scale) || 6,
+    aspectRatio: asString(blueprint?.aspect_ratio) || '1:1',
+    outputCount: asNumber(blueprint?.output_count) || 1,
+  }
+}
+
+function resolveLatestConversationVisualReferenceAssetId(
+  visualMessages: ChatVisualMessage[],
+  conversationId: string,
+) {
+  const latestSuccessfulVisual = [...visualMessages]
+    .filter((visual) => visual.conversationId === conversationId && normalizeJobStatus(visual.status) === 'succeeded')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
+
+  if (!latestSuccessfulVisual) return null
+  return latestSuccessfulVisual.outputs.find((output) => output.asset_id)?.asset_id ?? null
+}
+
+function formatChatVisualModelName(model: string | null, mode: ComposeMode) {
+  if (!model) return mode === 'Vision' ? 'Flux Schnell' : 'Omnia'
+  return model
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function summarizeGenerationFailure(error: string | null) {
+  if (!error) return 'Studio could not finish this run, so no final image was returned.'
+
+  const lower = error.toLowerCase()
+  if (lower.includes('no real image provider')) {
+    return 'No real image provider is available for this workflow right now.'
+  }
+  if (lower.includes('401') || lower.includes('expired') || lower.includes('token')) {
+    return 'The image provider rejected this run before a final image could be returned.'
+  }
+  if (lower.includes('429') || lower.includes('rate limit')) {
+    return 'The image provider is rate-limited right now, so this run could not finish.'
+  }
+  if (lower.includes('timed out') || lower.includes('timeout')) {
+    return 'This run took too long and timed out before a final image was ready.'
+  }
+  if (lower.includes('cancel')) {
+    return 'This run was cancelled before a final image was returned.'
+  }
+  return error
+}
+
+function resolveGenerationFailureLabel(status: JobStatus) {
+  switch (normalizeJobStatus(status)) {
+    case 'retryable_failed':
+      return 'Retry needed'
+    case 'timed_out':
+      return 'Timed out'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return 'Generation blocked'
+  }
+}
+
+function shouldStartAssistantVisualGeneration(
+  message: ChatMessage | null | undefined,
+  requestedMode: ComposeMode,
+  clientSuggestedVisualRun: boolean,
+) {
+  const metadata = isRecord(message?.metadata) ? message.metadata : null
+  const workflowIntent = asString(metadata?.workflow_intent)
+  const canGenerateImage = metadata?.can_generate_image === true
+  const hasGenerationBridge = resolveAssistantGenerationBridge(message) !== null
+
+  if (workflowIntent === 'analyze_image' || workflowIntent === 'prompt_help' || workflowIntent === 'casual_chat' || workflowIntent === 'presence_check') {
+    return false
+  }
+  if (hasGenerationBridge && canGenerateImage) {
+    return true
+  }
+  if (requestedMode === 'Edit' && canGenerateImage) {
+    return true
+  }
+  if (canGenerateImage === false) {
+    return false
+  }
+  return clientSuggestedVisualRun
 }
 
 function buildChatVisualPrompt(mode: ComposeMode, content: string, attachments: Array<Pick<ChatAttachment, 'kind' | 'label'>>) {
@@ -311,6 +490,74 @@ function GenerationPending({ title }: { title: string }) {
   )
 }
 
+function GenerationBlocked({
+  title,
+  status,
+  error,
+  model,
+  aspectRatio,
+  mode,
+}: {
+  title: string
+  status: JobStatus
+  error: string | null
+  model: string | null
+  aspectRatio: string | null
+  mode: ComposeMode
+}) {
+  const statusLabel = resolveGenerationFailureLabel(status)
+  const summary = summarizeGenerationFailure(error)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="rounded-full border border-rose-400/25 bg-rose-400/12 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200">
+          {statusLabel}
+        </div>
+        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+          No final image
+        </div>
+      </div>
+
+      <div className="relative overflow-hidden rounded-[26px] border border-white/[0.06] bg-[#111216] shadow-[0_8px_30px_rgba(0,0,0,0.42)]">
+        <div className="aspect-[4/5] w-full max-w-[360px] bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_80%_10%,rgba(244,63,94,0.18),transparent_32%),radial-gradient(circle_at_50%_80%,rgba(139,92,246,0.18),transparent_40%),linear-gradient(135deg,#111216,#1a1c23)] blur-[1px]" />
+        <div className="absolute inset-0 bg-black/35 backdrop-blur-xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,63,94,0.18),transparent_45%,rgba(255,255,255,0.04))]" />
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-black/35 text-rose-100 shadow-[0_0_40px_rgba(244,63,94,0.2)]">
+            <ImageOff className="h-6 w-6" />
+          </div>
+          <div className="mt-4 text-lg font-semibold text-white">
+            Studio did not get a real image back
+          </div>
+          <p className="mt-2 max-w-[18rem] text-sm leading-relaxed text-zinc-200">
+            {summary}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pl-1">
+        <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-medium text-zinc-200">
+          {title}
+        </div>
+        <div className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-xs text-zinc-400">
+          {formatChatVisualModelName(model, mode)}
+        </div>
+        {aspectRatio ? (
+          <div className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-xs text-zinc-400">
+            {aspectRatio}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-zinc-300">
+        Studio is showing a blocked placeholder instead of pretending this run succeeded.
+      </div>
+    </div>
+  )
+}
+
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
@@ -408,7 +655,7 @@ export default function ChatPage() {
   }, [requestedNewConversation, searchParams])
 
   useEffect(() => {
-    setVisualMessages(readStoredJson<ChatVisualMessage[]>(CHAT_VISUAL_STORAGE_KEY, []))
+    setVisualMessages(readStoredJson<ChatVisualMessage[]>(CHAT_VISUAL_STORAGE_KEY, []).map(normalizeStoredChatVisualMessage))
     setConversationProjects(readStoredJson<Record<string, string>>(CHAT_PROJECT_STORAGE_KEY, {}))
   }, [])
 
@@ -603,6 +850,49 @@ export default function ChatPage() {
     return 'Edit mode is ready for image changes'
   }, [composeMode, pendingAttachments])
 
+  const focusComposer = useCallback(() => {
+    window.requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [])
+
+  const handleSuggestionAction = useCallback((action: ChatSuggestedAction, message: ChatMessage) => {
+    const nextDraft = resolveSuggestedDraft(action)
+    const nextComposeMode = resolveComposeModeFromSuggestion(action)
+    const payload = parseChatSuggestedActionPayload(action)
+
+    if (action.action === 'open_create') {
+      const prefill = resolveCreatePrefillFromSuggestion(action)
+      const params = new URLSearchParams()
+      if (prefill?.prompt) params.set('prompt', prefill.prompt)
+      if (prefill?.model) params.set('model', prefill.model)
+      if (prefill?.aspectRatio) params.set('aspect_ratio', prefill.aspectRatio)
+      if (prefill?.steps) params.set('steps', String(prefill.steps))
+      if (prefill?.cfgScale) params.set('cfg_scale', String(prefill.cfgScale))
+      if (prefill?.outputCount) params.set('output_count', String(prefill.outputCount))
+      if (prefill?.workflow) params.set('workflow', prefill.workflow)
+      if (prefill?.negativePrompt) params.set('negative_prompt', prefill.negativePrompt)
+      if (prefill?.referenceMode) params.set('reference_mode', prefill.referenceMode)
+      const referenceAssetId = prefill?.referenceAssetId || resolveSuggestedActionReferenceAssetId(messages, message, action)
+      if (referenceAssetId) params.set('reference_asset_id', referenceAssetId)
+      params.set('source', 'chat')
+      navigate(`/create?${params.toString()}`)
+      return
+    }
+
+    const restoredAttachments =
+      nextComposeMode === 'Edit' || payload?.generation_bridge?.workflow === 'image_to_image' || payload?.intent === 'analyze_image'
+        ? resolveSuggestedActionAttachments(messages, message, action).map(toPendingAttachmentFromChat)
+        : []
+
+    if (restoredAttachments.length) {
+      setPendingAttachments(restoredAttachments)
+    }
+    if (nextComposeMode) {
+      setComposeMode(nextComposeMode)
+    }
+    setDraft(nextDraft)
+    focusComposer()
+  }, [focusComposer, messages, navigate])
+
   useEffect(() => {
     if (!canLoadPrivate) return
     if (!pendingVisuals.length) return
@@ -622,7 +912,19 @@ export default function ChatPage() {
             const snap = snapshotMap.get(v.id)
             if (!snap) return v
             if (!isTerminalStatus(v.status) && isTerminalStatus(snap.status)) invalidate = true
-            return { ...v, title: snap.title, status: snap.status, outputs: snap.outputs, error: snap.error, updatedAt: new Date().toISOString() }
+            return {
+              ...v,
+              title: snap.title,
+              prompt: snap.prompt_snapshot.prompt || v.prompt,
+              model: snap.model || v.model,
+              aspectRatio: snap.prompt_snapshot.aspect_ratio || v.aspectRatio,
+              workflow: snap.prompt_snapshot.workflow || v.workflow,
+              referenceAssetId: snap.prompt_snapshot.reference_asset_id || v.referenceAssetId,
+              status: snap.status,
+              outputs: snap.outputs,
+              error: snap.error,
+              updatedAt: new Date().toISOString(),
+            }
           }),
         )
       })
@@ -705,12 +1007,31 @@ export default function ChatPage() {
   void prepareChatAttachments
 
   const startVisualGeneration = useCallback(
-    async (conversation: ChatConversation, content: string, attachments: ChatAttachment[], mode: ComposeMode) => {
-      const prompt = buildChatVisualPrompt(mode, content, attachments)
-      if (!prompt) return
+    async (
+      conversation: ChatConversation,
+      content: string,
+      attachments: ChatAttachment[],
+      mode: ComposeMode,
+      assistantMessage?: ChatMessage | null,
+    ) => {
+      const fallbackPrompt = buildChatVisualPrompt(mode, content, attachments)
+      const executionPlan = resolveVisualExecutionPlan(assistantMessage, fallbackPrompt) ?? {
+        prompt: fallbackPrompt,
+        negativePrompt: '',
+        referenceAssetId: null,
+        referenceMode: 'none',
+        model: 'flux-schnell',
+        width: 1024,
+        height: 1024,
+        steps: 24,
+        cfgScale: 6,
+        aspectRatio: '1:1',
+        outputCount: 1,
+      }
+      if (!executionPlan.prompt) return
       const projectId = await ensureConversationProjectId(conversation)
       const referenceAttachment = attachments.find((attachment) => attachment.kind === 'image')
-      let referenceAssetId = referenceAttachment?.asset_id ?? null
+      let referenceAssetId = executionPlan.referenceAssetId || referenceAttachment?.asset_id || null
 
       if (!referenceAssetId && referenceAttachment?.url.startsWith('data:image/')) {
         const importedAsset = await studioApi.importAsset({
@@ -720,23 +1041,38 @@ export default function ChatPage() {
         })
         referenceAssetId = importedAsset.id
       }
+      if (!referenceAssetId && (executionPlan.referenceMode === 'required' || executionPlan.workflow === 'edit' || executionPlan.workflow === 'image_to_image')) {
+        referenceAssetId = resolveLatestConversationVisualReferenceAssetId(visualMessages, conversation.id)
+      }
+      if (executionPlan.referenceMode === 'required' && !referenceAssetId) {
+        throw new Error('This visual direction still needs its source reference image.')
+      }
 
       const generation = await studioApi.createGeneration({
-        project_id: projectId, prompt, negative_prompt: '', model: 'flux-schnell',
+        project_id: projectId, prompt: executionPlan.prompt, negative_prompt: executionPlan.negativePrompt, model: executionPlan.model,
         reference_asset_id: referenceAssetId,
-        width: 1024, height: 1024, steps: 24, cfg_scale: 6,
+        width: executionPlan.width, height: executionPlan.height, steps: executionPlan.steps, cfg_scale: executionPlan.cfgScale,
         seed: Math.floor(Math.random() * 1_000_000_000),
-        aspect_ratio: '1:1', output_count: 1,
+        aspect_ratio: executionPlan.aspectRatio, output_count: executionPlan.outputCount,
       })
       setVisualMessages((c) => [{
         id: `visual-${generation.job_id}`, conversationId: conversation.id, projectId, jobId: generation.job_id,
-        title: generation.title, prompt, mode, status: generation.status, outputs: [], error: null,
+        title: generation.title,
+        prompt: executionPlan.prompt,
+        mode,
+        model: generation.model || executionPlan.model,
+        aspectRatio: generation.prompt_snapshot.aspect_ratio || executionPlan.aspectRatio,
+        workflow: generation.prompt_snapshot.workflow || executionPlan.workflow || null,
+        referenceAssetId: generation.prompt_snapshot.reference_asset_id || referenceAssetId,
+        status: generation.status,
+        outputs: [],
+        error: null,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }, ...c])
       await queryClient.invalidateQueries({ queryKey: ['assets'] })
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
     },
-    [ensureConversationProjectId, queryClient],
+    [ensureConversationProjectId, queryClient, visualMessages],
   )
 
   const handleSend = useCallback(async () => {
@@ -746,7 +1082,7 @@ export default function ChatPage() {
     const attachments = await Promise.all(pendingAttachments.map((attachment) => toChatAttachmentPayload(attachment)))
     const effectiveMode = resolveComposeModeForMessageSafely(composeMode, content, pendingAttachments)
     const visualPrompt = buildChatVisualPrompt(effectiveMode, content, pendingAttachments)
-    const shouldGenerateVisual = shouldStartVisualGenerationSafely(effectiveMode, content, pendingAttachments)
+    const clientSuggestedVisualRun = shouldStartVisualGenerationSafely(effectiveMode, content, pendingAttachments)
     if (effectiveMode !== composeMode) {
       setComposeMode(effectiveMode)
     }
@@ -805,14 +1141,29 @@ export default function ChatPage() {
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
       void queryClient.invalidateQueries({ queryKey: ['conversation', result.conversation.id] })
 
+      const shouldGenerateVisual = shouldStartAssistantVisualGeneration(
+        result.assistant_message,
+        effectiveMode,
+        clientSuggestedVisualRun,
+      )
       if (shouldGenerateVisual) {
-        try { await startVisualGeneration(result.conversation, content, attachments, effectiveMode) }
-        catch {
+        const assistantExecutionPlan = resolveVisualExecutionPlan(result.assistant_message, visualPrompt)
+        const assistantVisualPrompt = assistantExecutionPlan?.prompt || visualPrompt
+        try { await startVisualGeneration(result.conversation, content, attachments, effectiveMode, result.assistant_message) }
+        catch (error) {
           setVisualMessages((c) => [{
             id: `visual-${crypto.randomUUID()}`, conversationId: result.conversation.id,
             projectId: conversationProjects[result.conversation.id] ?? null, jobId: null,
-            title: titleFromDraft(visualPrompt), prompt: visualPrompt, mode: effectiveMode,
-            status: 'failed', outputs: [], error: 'Unable to start image generation.',
+            title: titleFromDraft(assistantVisualPrompt),
+            prompt: assistantVisualPrompt,
+            mode: effectiveMode,
+            model: assistantExecutionPlan?.model || null,
+            aspectRatio: assistantExecutionPlan?.aspectRatio || null,
+            workflow: assistantExecutionPlan?.workflow || null,
+            referenceAssetId: assistantExecutionPlan?.referenceAssetId || null,
+            status: 'failed',
+            outputs: [],
+            error: error instanceof Error ? error.message : 'Unable to start image generation.',
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
           }, ...c])
         }
@@ -879,7 +1230,7 @@ export default function ChatPage() {
                       onEdit={handleEditMessage}
                       onRegenerate={handleRegenerateMessage}
                       onFeedback={handleMessageFeedback}
-                      onSuggestionClick={(val) => setDraft(val)}
+                      onSuggestionClick={handleSuggestionAction}
                     />
                   )
                 }
@@ -901,8 +1252,8 @@ export default function ChatPage() {
                                 prompt: visual.prompt,
                                 authorName: 'You',
                                 authorUsername: auth?.identity.username || 'creator',
-                                model: visual.mode === 'Vision' ? 'FLUX.1 Schnell' : 'Omnia',
-                                aspectRatio: '1:1'
+                                model: formatChatVisualModelName(visual.model, visual.mode),
+                                aspectRatio: visual.aspectRatio || '1:1'
                               })}
                             />
                           ))}
@@ -913,11 +1264,14 @@ export default function ChatPage() {
                           </div>
                         </div>
               ) : ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(visual.status)) ? (
-                        <div className="space-y-2">
-                          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-                            {visual.error || 'Image generation failed.'}
-                          </div>
-                        </div>
+                        <GenerationBlocked
+                          title={visual.title}
+                          status={visual.status}
+                          error={visual.error}
+                          model={visual.model}
+                          aspectRatio={visual.aspectRatio}
+                          mode={visual.mode}
+                        />
                       ) : (
                         <GenerationPending title={visual.title} />
                       )}

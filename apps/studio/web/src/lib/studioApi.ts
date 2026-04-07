@@ -243,11 +243,43 @@ export type ChatAttachment = {
   label: string
 }
 
+export type ChatGenerationBlueprint = {
+  workflow: string
+  prompt: string
+  negative_prompt: string
+  reference_asset_id?: string | null
+  model: string
+  width: number
+  height: number
+  steps: number
+  cfg_scale: number
+  aspect_ratio: string
+  output_count: number
+  reference_mode: string
+}
+
+export type ChatGenerationBridge = {
+  workflow: string
+  prompt: string
+  negative_prompt: string
+  reference_asset_id?: string | null
+  blueprint: ChatGenerationBlueprint
+}
+
+export type ChatSuggestedActionPayload = {
+  intent?: string
+  mode?: string
+  prompt_profile?: string
+  target_surface?: string
+  generation_bridge?: ChatGenerationBridge
+}
+
 export type ChatSuggestedAction = {
   id: string
   label: string
   action: string
   value: string | null
+  payload?: ChatSuggestedActionPayload
 }
 
 export type ChatFeedback = 'like' | 'dislike' | null
@@ -366,7 +398,10 @@ export type BillingSummary = {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getStudioAccessToken()
+  return apiFetchWithToken<T>(path, getStudioAccessToken(), init)
+}
+
+async function apiFetchWithToken<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
@@ -402,6 +437,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const studioApi = {
   getMe: () => apiFetch<AuthMeResponse>('/auth/me'),
+  getMeWithToken: (accessToken: string) => apiFetchWithToken<AuthMeResponse>('/auth/me', accessToken),
   signUp: (payload: SignupPayload) =>
     apiFetch<DemoLoginResponse>('/auth/signup', {
       method: 'POST',

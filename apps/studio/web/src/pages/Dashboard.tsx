@@ -127,7 +127,7 @@ function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () =
             to="/subscription"
             onClick={onClose}
             className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}
+            style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
           >
             Compare plans <ArrowRight className="h-4 w-4" />
           </Link>

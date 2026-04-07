@@ -13,6 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from config.env import get_settings
 from studio_platform.providers import ProviderRegistry
+from studio_platform.services.launch_readiness import persist_provider_smoke_report
 from studio_platform.services.provider_smoke import (
     ensure_live_provider_smoke_enabled,
     run_provider_smoke_suite,
@@ -48,8 +49,16 @@ async def main() -> int:
         selected_provider=args.provider,
         include_failure_probe=not args.skip_failure_probe,
     )
+    report = persist_provider_smoke_report(
+        settings,
+        selected_provider=args.provider,
+        include_failure_probe=not args.skip_failure_probe,
+        results=results,
+    )
     payload = {
         "provider": args.provider,
+        "report_path": report["path"],
+        "summary": report["summary"],
         "results": [result.to_dict() for result in results],
     }
     print(json.dumps(payload, indent=2, ensure_ascii=True))

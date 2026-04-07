@@ -183,10 +183,10 @@ export default function BillingPage() {
               key={tier.id}
               className={`relative overflow-hidden rounded-[28px] border p-6 transition-all duration-300 ${
                 isPro
-                  ? 'border-[rgb(var() / )] shadow-[0_0_40px_rgb(var() / )]'
-                  : 'border-white/[0.08] bg-white/[0.02] hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]'
+                  ? 'border-[rgba(124,58,237,0.18)] shadow-[0_0_40px_rgba(124,58,237,0.18)]'
+                  : 'border-white/[0.08] bg-white/[0.02] hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]'
               }`}
-              style={isPro ? { background: `linear-gradient(180deg, rgb(var() / ) 0%, rgb(var() / ) 40%, rgb(var() / ) 100%)` } : undefined}
+              style={isPro ? { background: `linear-gradient(180deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.18) 40%, rgba(124,58,237,0.18) 100%)` } : undefined}
             >
               {tier.badge ? (
                 <div className="absolute right-4 top-4">
@@ -194,7 +194,7 @@ export default function BillingPage() {
                 </div>
               ) : null}
 
-              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? '' : 'bg-white/[0.05]'}`} style={isPro ? { background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' } : undefined}>
+              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? '' : 'bg-white/[0.05]'}`} style={isPro ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' } : undefined}>
                 <tier.icon className={`h-5 w-5 ${isPro ? '' : 'text-white'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined} />
               </div>
 
@@ -231,12 +231,12 @@ export default function BillingPage() {
                       onClick={() => checkoutMutation.mutate('pro_monthly')}
                       disabled={checkoutMutation.isPending}
                       className="w-full rounded-full px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}
+                      style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
                     >
                       {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
                     </button>
                   ) : (
-                    <Link to="/signup" className="block w-full rounded-full px-5 py-3 text-center text-sm font-semibold text-white transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}>
+                    <Link to="/signup" className="block w-full rounded-full px-5 py-3 text-center text-sm font-semibold text-white transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}>
                       {ctaLabel}
                     </Link>
                   )
@@ -276,7 +276,7 @@ export default function BillingPage() {
       </section>
 
       {/* ── Feature Comparison Table ── */}
-      <section className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] transition-all duration-300 hover:border-[rgb(var() / )]">
+      <section className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]">
         <div className="border-b border-white/[0.06] px-6 py-4">
           <div className="text-lg font-semibold text-white">Feature comparison</div>
           <div className="mt-1 text-sm text-zinc-500">Everything included in each plan at a glance.</div>
@@ -311,7 +311,7 @@ export default function BillingPage() {
         <div className="mt-1 text-sm text-zinc-500">Need more credits mid-cycle? Grab a one-time boost.</div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {topUpOptions.map((option) => (
-            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-5 py-4 transition-all duration-300 hover:border-[rgb(var() / )]">
+            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-5 py-4 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]">
               <div>
                 <div className="text-sm font-medium text-white">{option.label}</div>
                 <div className="mt-1 text-sm text-zinc-500">

@@ -1,0 +1,96 @@
+name: omnia-studio-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-studio}
+      POSTGRES_USER: ${POSTGRES_USER:-studio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-studio-change-me}
+    volumes:
+      - studio_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.staging
+    environment:
+      PORT: 8000
+      HOST: 0.0.0.0
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      STATE_STORE_BACKEND: ${STATE_STORE_BACKEND:-postgres}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://studio:studio-change-me@postgres:5432/studio}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STUDIO_RUNTIME_ROOT: /runtime
+      GENERATION_RUNTIME_MODE: ${GENERATION_RUNTIME_MODE_WEB:-web}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - studio_runtime:/runtime
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/healthz').status == 200 else 1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.staging
+    command: ["python", "scripts/generation_worker.py"]
+    environment:
+      PORT: 8000
+      HOST: 0.0.0.0
+      ENVIRONMENT: ${ENVIRONMENT:-staging}
+      STATE_STORE_BACKEND: ${STATE_STORE_BACKEND:-postgres}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://studio:studio-change-me@postgres:5432/studio}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STUDIO_RUNTIME_ROOT: /runtime
+      GENERATION_RUNTIME_MODE: ${GENERATION_RUNTIME_MODE_WORKER:-worker}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - studio_runtime:/runtime
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_AUTH_REDIRECT_BASE_URL: ${PUBLIC_WEB_BASE_URL:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  studio_postgres:
+  studio_runtime:

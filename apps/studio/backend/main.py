@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,30 +11,33 @@ from fastapi.responses import JSONResponse
 from config.env import Environment, get_settings
 from security.auth import AuthConfig, setup_auth
 from security.rate_limit import build_rate_limiter
+from runtime_logging import configure_runtime_logging
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
 from studio_platform.store import build_state_store
-from studio_platform.versioning import STUDIO_API_VERSION, load_version_info
+from studio_platform.versioning import STUDIO_API_VERSION, build_runtime_version_payload, load_version_info
 
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-MEDIA_DIR = DATA_DIR / "media"
-LEGACY_STATE_PATH = DATA_DIR / "studio-state.json"
-SQLITE_STATE_PATH = DATA_DIR / "studio-state.sqlite3"
-
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("omnia.studio")
-
-
 settings = get_settings()
-version_info = load_version_info()
+LEGACY_DATA_DIR = BASE_DIR / "data"
+RUNTIME_DATA_DIR = settings.runtime_root_path / "data"
+MEDIA_DIR = LEGACY_DATA_DIR / "media"
+LEGACY_STATE_PATH = LEGACY_DATA_DIR / "studio-state.json"
+LEGACY_SQLITE_STATE_PATH = LEGACY_DATA_DIR / "studio-state.sqlite3"
+SQLITE_STATE_PATH = RUNTIME_DATA_DIR / "studio-state.sqlite3"
+
+
+configure_runtime_logging(settings)
+logger = logging.getLogger("omnia.studio")
+boot_version_info = load_version_info()
+process_booted_at = datetime.now(timezone.utc).isoformat()
 state_store = build_state_store(
     settings,
     default_json_path=LEGACY_STATE_PATH,
     default_sqlite_path=SQLITE_STATE_PATH,
+    default_legacy_sqlite_path=LEGACY_SQLITE_STATE_PATH,
 )
 providers = ProviderRegistry()
 service = StudioService(state_store, providers, MEDIA_DIR)
@@ -98,13 +102,19 @@ async def security_headers_middleware(request: Request, call_next):
 
 @app.get("/")
 async def root():
+    version_payload = build_runtime_version_payload(
+        boot_build=boot_version_info.build,
+        booted_at=process_booted_at,
+    )
     return {
         "name": "OmniaCreata Studio API",
-        "version": version_info.version,
-        "build": version_info.build,
+        "version": version_payload["version"],
+        "build": version_payload["build"],
+        "boot_build": version_payload.get("bootBuild"),
+        "booted_at": version_payload.get("bootedAt"),
         "api_version": STUDIO_API_VERSION,
-        "channel": version_info.channel,
-        "status": version_info.status,
+        "channel": version_payload["channel"],
+        "status": version_payload["status"],
         "docs": "/docs" if settings.enable_api_docs else None,
         "health": "/v1/healthz",
         "app": "studio.omniacreata.com",
@@ -121,7 +131,10 @@ async def root():
 
 @app.get("/v1/version")
 async def get_version():
-    return version_info.to_public_payload()
+    return build_runtime_version_payload(
+        boot_build=boot_version_info.build,
+        booted_at=process_booted_at,
+    )
 
 
 @app.exception_handler(HTTPException)

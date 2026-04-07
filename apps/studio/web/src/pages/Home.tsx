@@ -148,9 +148,9 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#07111a] text-white overflow-x-hidden">
       {/* ambient glows */}
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute left-[-10%] top-[-8%] h-[36rem] w-[36rem] rounded-full blur-[160px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
-        <div className="absolute right-[-8%] top-[20%] h-[30rem] w-[30rem] rounded-full blur-[140px] animate-[oc-gradientShiftB_24s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
-        <div className="absolute bottom-[-6%] left-[25%] h-[28rem] w-[28rem] rounded-full blur-[150px] animate-[oc-float_22s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgb(var() / ), transparent 70%)' }} />
+        <div className="absolute left-[-10%] top-[-8%] h-[36rem] w-[36rem] rounded-full blur-[160px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
+        <div className="absolute right-[-8%] top-[20%] h-[30rem] w-[30rem] rounded-full blur-[140px] animate-[oc-gradientShiftB_24s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
+        <div className="absolute bottom-[-6%] left-[25%] h-[28rem] w-[28rem] rounded-full blur-[150px] animate-[oc-float_22s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-[1360px] px-5 py-6 md:px-8">
@@ -168,7 +168,7 @@ export default function HomePage() {
             <Link to="/subscription" className="transition hover:text-white">Pricing</Link>
             <Link to="/help" className="transition hover:text-white">Help</Link>
             {!isAuthenticated && <Link to="/login" className="transition hover:text-white">Log in</Link>}
-            <Link to={cta} className="rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var() / )' }}>{ctaLabel}</Link>
+            <Link to={cta} className="rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}>{ctaLabel}</Link>
           </nav>
         </header>
 
@@ -188,7 +188,7 @@ export default function HomePage() {
                 Write a prompt, choose a style, and generate. Save your favorites, organize them into collections, and share them with the world.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to={cta} className="inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 4px 24px rgb(var() / )' }}>
+                <Link to={cta} className="inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 4px 24px rgba(124,58,237,0.18)' }}>
                   {ctaLabel} <ArrowRight className="h-4 w-4" />
                 </Link>
                 {!isAuthenticated && (
@@ -253,7 +253,7 @@ export default function HomePage() {
                 return (
                   <Reveal key={`${img.src}-${i}`} delay={i * 70}>
                     <div
-                      className="group relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.02] will-change-transform transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgb(var() / )]"
+                      className="group relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.02] will-change-transform transition-all duration-300 hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgba(124,58,237,0.18)]"
                       style={{ transform: `translateY(${parallaxY}px)` }}
                     >
                       <img src={img.src} alt={img.label} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-700 ease-out group-hover:scale-[1.04]" />
@@ -295,7 +295,7 @@ export default function HomePage() {
                       ? 'text-white font-semibold'
                       : 'border border-white/[0.08] text-zinc-400 hover:bg-white/[0.04] hover:text-white'
                   }`}
-                  style={activeTab === tab.id ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 16px rgb(var() / )' } : undefined}
+                  style={activeTab === tab.id ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 16px rgba(124,58,237,0.18)' } : undefined}
                 >
                   {tab.label}
                 </button>
@@ -304,7 +304,7 @@ export default function HomePage() {
           </Reveal>
 
           <RevealScale delay={100}>
-            <div className="mt-10 overflow-hidden rounded-[28px] border border-white/[0.08] transition-all duration-300 hover:border-[rgb(var() / )]" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }}>
+            <div className="mt-10 overflow-hidden rounded-[28px] border border-white/[0.08] transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' }}>
               <div className="grid gap-0 lg:grid-cols-2">
                 <RevealSlide direction="left" delay={200}>
                   <div className="flex flex-col justify-center p-8 md:p-12">
@@ -354,12 +354,12 @@ export default function HomePage() {
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {steps.map((step, i) => (
               <RevealScale key={step.title} delay={i * 180}>
-                <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] p-8 transition-all duration-300 hover:border-[rgb(var() / )] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25),0_0_0_1px_rgb(var() / )]">
+                <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] p-8 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25),0_0_0_1px_rgba(124,58,237,0.18)]">
                   {/* subtle gradient glow on hover */}
-                  <div className="pointer-events-none absolute inset-0 rounded-[24px] opacity-0 transition duration-500 group-hover:opacity-100" style={{ background: 'linear-gradient(135deg, rgb(var() / ), rgb(var() / ))' }} />
+                  <div className="pointer-events-none absolute inset-0 rounded-[24px] opacity-0 transition duration-500 group-hover:opacity-100" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' }} />
                   <div className="relative">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-[16px] text-white transition" style={{ background: `linear-gradient(135deg, rgb(var() / ), rgb(var() / ))` }}>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[16px] text-white transition" style={{ background: `linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))` }}>
                         <step.icon className="h-5 w-5" />
                       </div>
                       <div className="text-sm font-medium" style={{ color: 'rgb(var(--primary-light))' }}>0{i + 1}</div>

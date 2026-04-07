@@ -1,5 +1,6 @@
 """Environment configuration with validation using Pydantic v2."""
 
+import os
 from pathlib import Path
 from typing import Optional, List
 from pydantic import Field, field_validator, model_validator
@@ -40,8 +41,11 @@ class Settings(BaseSettings):
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
     gemini_model: str = "gemini-2.5-flash"
+    gemini_premium_model: str = "gemini-2.5-pro"
     openrouter_model: str = "google/gemini-2.5-flash"
+    openrouter_premium_model: str = "google/gemini-2.5-pro"
     openai_model: str = "gpt-4o-mini"
+    openai_premium_model: str = "gpt-5.4"
     chat_primary_provider: str = "gemini"
     chat_fallback_provider: str = "openrouter"
     generation_provider_strategy: str = "free-first"
@@ -59,6 +63,8 @@ class Settings(BaseSettings):
     state_store_backend: str = "sqlite"
     state_store_path: Optional[str] = None
     legacy_state_store_path: Optional[str] = None
+    studio_runtime_root: Optional[str] = None
+    studio_log_directory: Optional[str] = None
 
     # Asset Storage
     asset_storage_backend: str = "local"
@@ -113,6 +119,7 @@ class Settings(BaseSettings):
     generation_maintenance_interval_seconds: int = 10
     generation_runtime_mode: str = "all"
     enable_pollinations: bool = True
+    enable_demo_generation_fallback: bool = False
     
     # Cost Tracking
     cost_per_generation_usd: float = 0.01
@@ -169,6 +176,28 @@ class Settings(BaseSettings):
                 deduped.append(value)
         return deduped
 
+    @property
+    def runtime_root_path(self) -> Path:
+        if self.studio_runtime_root:
+            return Path(self.studio_runtime_root).expanduser().resolve()
+
+        if os.name == "nt":
+            local_app_data = os.getenv("LOCALAPPDATA")
+            if local_app_data:
+                return (Path(local_app_data) / "OmniaCreata" / "Studio").resolve()
+
+        xdg_state_home = os.getenv("XDG_STATE_HOME")
+        if xdg_state_home:
+            return (Path(xdg_state_home) / "omnia_creata" / "studio").expanduser().resolve()
+
+        return (Path.home() / ".omnia_creata" / "studio").resolve()
+
+    @property
+    def log_directory_path(self) -> Path:
+        if self.studio_log_directory:
+            return Path(self.studio_log_directory).expanduser().resolve()
+        return (self.runtime_root_path / "logs").resolve()
+
     @field_validator("port")
     @classmethod
     def validate_port(cls, v):
@@ -224,8 +253,8 @@ class Settings(BaseSettings):
     @classmethod
     def validate_chat_provider(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"gemini", "openrouter", "heuristic"}:
-            raise ValueError("Chat providers must be gemini, openrouter, or heuristic")
+        if normalized not in {"gemini", "openrouter", "openai", "heuristic"}:
+            raise ValueError("Chat providers must be gemini, openrouter, openai, or heuristic")
         return normalized
 
     @field_validator("generation_provider_strategy")

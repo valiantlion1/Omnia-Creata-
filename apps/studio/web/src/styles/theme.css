@@ -280,6 +280,6 @@ a,
 
 /* ── Selection Color ─────────────────────── */
 ::selection {
-  background: rgb(var() / );
+  background: rgba(124,58,237,0.18);
   color: white;
 }

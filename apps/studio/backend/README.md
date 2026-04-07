@@ -108,6 +108,50 @@ set REDIS_URL=redis://127.0.0.1:6379/0
 python scripts/generation_worker.py
 ```
 
+### Local always-on helper
+
+Studio now includes a local stack launcher at `apps/studio/ops/start-studio-local.ps1`.
+
+- it starts the backend on `127.0.0.1:8000`
+- it starts the frontend on `127.0.0.1:5173`
+- it writes runtime logs outside the repo under:
+  - Windows: `%LOCALAPPDATA%\OmniaCreata\Studio\logs`
+  - fallback: `~/.omnia_creata/studio/logs`
+- durable SQLite metadata now defaults outside the repo too:
+  - Windows: `%LOCALAPPDATA%\OmniaCreata\Studio\data\studio-state.sqlite3`
+  - fallback: `~/.omnia_creata/studio/data/studio-state.sqlite3`
+- Studio will bootstrap that runtime SQLite store from the legacy workspace SQLite or JSON snapshot the first time it starts, so existing local state is not silently lost
+
+To register it as a Windows logon task:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/studio/ops/install-studio-startup-task.ps1
+```
+
+`start-studio-local.ps1` now defaults to stable always-on backend mode.
+
+If you explicitly want backend hot reload while actively coding, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/studio/ops/start-studio-local.ps1 -HotReload
+```
+
+## Deployment Pack
+
+Studio now includes a first bounded deployment pack for protected staging:
+
+- [deploy/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/README.md)
+- [deploy/docker-compose.staging.yml](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/docker-compose.staging.yml)
+- [backend/Dockerfile](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/Dockerfile)
+- [web/Dockerfile](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/web/Dockerfile)
+
+This pack is meant to move Studio away from single-PC dependence and toward:
+
+- postgres metadata authority
+- redis-backed split runtime
+- backend + worker topology
+- same-origin web-to-api staging behavior
+
 ### API Documentation
 
 Once running, visit:
@@ -124,6 +168,16 @@ Once running, visit:
   - `generation_broker.queued_by_priority`
   - `generation_broker.claimed`
   - `generation_worker.processing_active`
+- owner-only `/v1/healthz/detail` also reports:
+  - `data_authority.backend`
+  - `data_authority.authority_mode`
+  - `data_authority.path`
+  - `data_authority.bootstrap_source`
+  - `data_authority.record_count`
+  - `provider_smoke.recorded_at`
+  - `provider_smoke.summary`
+  - `launch_readiness.status`
+  - `launch_readiness.checks`
 - Generation job lifecycle uses:
   - `queued`
   - `running`
@@ -183,42 +237,30 @@ CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
 
 ### Provider Configuration
 
-Edit `config/providers.json` to configure AI providers:
+Studio no longer treats local ComfyUI as an active runtime lane.
 
-```json
-{
-  "providers": {
-    "comfyui": {
-      "enabled": true,
-      "base_url": "http://localhost:8188",
-      "timeout": 300,
-      "priority": 1
-    },
-    "huggingface": {
-      "enabled": true,
-      "timeout": 60,
-      "priority": 2
-    }
-  }
-}
+Current provider/runtime truth is controlled by environment variables such as:
+
+```env
+CHAT_PRIMARY_PROVIDER=gemini
+CHAT_FALLBACK_PROVIDER=openrouter
+GENERATION_PROVIDER_STRATEGY=balanced
+ENABLE_POLLINATIONS=true
+FAL_API_KEY=
+RUNWARE_API_KEY=
 ```
 
-### Preset Configuration
+### Generation Configuration
 
-Edit `config/presets.json` to customize generation presets:
+Generation behavior is primarily shaped by:
 
-```json
-{
-  "presets": {
-    "realistic": {
-      "model": "RealVisXL_V3.0.safetensors",
-      "steps": 25,
-      "cfg_scale": 7.0,
-      "sampler": "euler",
-      "default_loras": ["detail_enhancer.safetensors"]
-    }
-  }
-}
+```env
+GENERATION_RUNTIME_MODE=all
+REDIS_URL=
+MAX_CONCURRENT_GENERATIONS=3
+MAX_QUEUE_SIZE=100
+GENERATION_CLAIM_LEASE_SECONDS=60
+GENERATION_MAINTENANCE_INTERVAL_SECONDS=10
 ```
 
 ## Architecture
@@ -244,8 +286,7 @@ backend/
 │   └── assets.py        # Asset management and caching
 ├── config/              # Configuration files
 │   ├── env.py           # Environment validation
-│   ├── providers.json   # Provider configuration
-│   └── presets.json     # Preset definitions
+│   └── env.py           # Environment validation and runtime selection
 ├── main.py              # FastAPI application
 ├── requirements.txt     # Python dependencies
 └── README.md           # This file
@@ -279,6 +320,10 @@ python scripts/provider_smoke.py --provider runware
 
 Use `--provider all` to run the whole suite and `--skip-failure-probe` if you only want successful generation checks.
 
+Each smoke run now also writes the latest report to the external Studio runtime directory:
+
+- Windows: `%LOCALAPPDATA%\OmniaCreata\Studio\reports\provider-smoke-latest.json`
+
 ### Code Formatting
 
 ```bash
@@ -295,16 +340,16 @@ mypy .
 
 ### Adding New Providers
 
-1. Create new provider class inheriting from `BaseProvider`
-2. Implement required methods: `authenticate()`, `generate()`, `health_check()`
-3. Add provider configuration to `config/providers.json`
-4. Register provider in `ProviderManager`
+1. Create or extend the provider adapter in `studio_platform/providers.py`
+2. Implement real health and generation behavior
+3. Wire rollout and capability policy through `ProviderRegistry`
+4. Lock the behavior with regression tests before updating docs/ledger
 
 ### Adding New Presets
 
-1. Add preset configuration to `config/presets.json`
-2. Define model, LoRAs, and generation parameters
-3. Add keyword mappings for automatic LoRA selection
+1. Update the backend generation/prompt policy
+2. Keep Create and Chat execution plans aligned
+3. Lock meaningful changes with regression coverage and release bookkeeping
 
 ## Production Deployment
 
@@ -370,10 +415,15 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ### Logs
 
 Logs are written to:
-- Console (stdout)
-- `backend.log` file
+- backend console/stdout
+- rotating backend runtime logs outside the repo:
+  - Windows default: `%LOCALAPPDATA%\OmniaCreata\Studio\logs`
+  - fallback default: `~/.omnia_creata/studio/logs`
+- launcher stdout/stderr logs for backend/frontend in the same external runtime log directory
 
-Adjust log level in `main.py` for debugging.
+You can override the default locations with:
+- `STUDIO_RUNTIME_ROOT`
+- `STUDIO_LOG_DIRECTORY`
 
 ## Contributing
 

@@ -102,6 +102,36 @@ async def test_sqlite_store_bootstraps_once_from_legacy_json(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_sqlite_store_bootstraps_once_from_legacy_sqlite(tmp_path: Path):
+    legacy_db_path = tmp_path / "legacy-state.sqlite3"
+    legacy_store = SqliteStudioStateStore(legacy_db_path)
+    await legacy_store.load()
+
+    identity = OmniaIdentity(
+        id="user-legacy-sqlite",
+        email="legacy-sqlite@example.com",
+        display_name="Legacy Sqlite User",
+        username="legacysqlite",
+        workspace_id="ws-legacy-sqlite",
+    )
+    await legacy_store.save_model("identities", identity)
+
+    runtime_db_path = tmp_path / "runtime-state.sqlite3"
+    store = SqliteStudioStateStore(runtime_db_path, bootstrap_paths=[legacy_db_path])
+    await store.load()
+
+    bootstrapped_identity = await store.get_model("identities", identity.id, OmniaIdentity)
+    description = await store.describe()
+
+    assert bootstrapped_identity is not None
+    assert bootstrapped_identity.email == identity.email
+    assert description["bootstrap_source"] == str(legacy_db_path.resolve())
+    assert description["bootstrap_source_kind"] == "sqlite"
+    assert description["path"] == str(runtime_db_path.resolve())
+    assert description["durable"] is True
+
+
+@pytest.mark.asyncio
 async def test_sqlite_store_mutate_and_delete_round_trip(tmp_path: Path):
     db_path = tmp_path / "studio-state.sqlite3"
     store = SqliteStudioStateStore(db_path)
@@ -136,6 +166,7 @@ async def test_sqlite_store_mutate_and_delete_round_trip(tmp_path: Path):
 def test_build_state_store_selects_configured_backend(tmp_path: Path):
     json_path = tmp_path / "studio-state.json"
     sqlite_path = tmp_path / "studio-state.sqlite3"
+    legacy_sqlite_path = tmp_path / "legacy-state.sqlite3"
 
     json_settings = SimpleNamespace(
         state_store_backend="json",
@@ -160,25 +191,28 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
         json_settings,
         default_json_path=json_path,
         default_sqlite_path=sqlite_path,
+        default_legacy_sqlite_path=legacy_sqlite_path,
     )
     sqlite_store = build_state_store(
         sqlite_settings,
         default_json_path=json_path,
         default_sqlite_path=sqlite_path,
+        default_legacy_sqlite_path=legacy_sqlite_path,
     )
     postgres_store = build_state_store(
         postgres_settings,
         default_json_path=json_path,
         default_sqlite_path=sqlite_path,
+        default_legacy_sqlite_path=legacy_sqlite_path,
     )
 
     assert isinstance(json_store, StudioStateStore)
     assert isinstance(sqlite_store, SqliteStudioStateStore)
     assert isinstance(postgres_store, PostgresStudioStateStore)
     assert sqlite_store.path == sqlite_path
-    assert sqlite_store.bootstrap_json_path == json_path
+    assert sqlite_store.bootstrap_paths == [legacy_sqlite_path.resolve(), json_path.resolve()]
     assert postgres_store.dsn == postgres_settings.database_url
-    assert postgres_store.bootstrap_json_path == json_path
+    assert postgres_store.bootstrap_paths == [legacy_sqlite_path.resolve(), json_path.resolve()]
     assert postgres_store._pool_minconn == 2
     assert postgres_store._pool_maxconn == 10
     assert postgres_store._statement_timeout_ms == 30000
