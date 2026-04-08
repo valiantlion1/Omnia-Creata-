@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha9](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha9)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha10](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha10)
 
 ## Entries
+
+### 2026-04-08 - Alpha 10 file explorer layout foundation
+- Version target: `1.0.0-alpha10`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha10](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha10)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now has a real file explorer control panel instead of a loose list of rows
+  - list view and grid view now both exist for folder browsing
+  - grid cards were added for a more visual phone-friendly explorer layout
+  - folder and file counts are surfaced so the current location feels clearer
+- Known gaps:
+  - sort controls and richer explorer filters still need a dedicated pass
+  - search and storage layouts still need the same level of visual structure as browse
+  - explorer performance tuning is still a separate follow-up sprint
 
 ### 2026-04-08 - Alpha 9 unified launch splash without double screen
 - Version target: `1.0.0-alpha9`

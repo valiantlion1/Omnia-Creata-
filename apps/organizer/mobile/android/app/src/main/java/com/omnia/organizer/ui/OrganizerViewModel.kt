@@ -37,6 +37,11 @@ enum class FileOperationType {
     MOVE
 }
 
+enum class BrowseLayoutMode {
+    LIST,
+    GRID
+}
+
 data class PendingFileOperation(
     val type: FileOperationType,
     val items: List<FileItem>
@@ -63,6 +68,7 @@ data class OrganizerUiState(
     val showCreateFolderDialog: Boolean = false,
     val createFolderTargetDocumentId: String? = null,
     val createFolderForDestination: Boolean = false,
+    val browseLayoutMode: BrowseLayoutMode = BrowseLayoutMode.LIST,
     val isSelectionMode: Boolean = false,
     val selectedDocumentIds: Set<String> = emptySet(),
     val pendingFileOperation: PendingFileOperation? = null,
@@ -230,6 +236,10 @@ class OrganizerViewModel @Inject constructor(
 
     fun clearBrowseActionMode() {
         _uiState.update { it.clearSelectionState() }
+    }
+
+    fun setBrowseLayoutMode(mode: BrowseLayoutMode) {
+        _uiState.update { it.copy(browseLayoutMode = mode) }
     }
 
     fun enterSelectionMode(item: FileItem) {

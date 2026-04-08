@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -216,6 +219,7 @@ fun HomeScreen(
 @Composable
 fun BrowseScreen(
     state: OrganizerUiState,
+    onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
     onOpenFolder: (FileItem) -> Unit,
     onPickFolder: () -> Unit,
     onNavigateToBreadcrumb: (Int) -> Unit,
@@ -244,11 +248,21 @@ fun BrowseScreen(
         return
     }
 
+    val folderCount = state.items.count { it.isDirectory }
+    val fileCount = state.items.size - folderCount
+
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
+            subtitle = "Explorer mode for the phone storage Android currently allows. Switch between list and grid depending on what feels clearer.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
+        BrowseExplorerCard(
+            state = state,
+            folderCount = folderCount,
+            fileCount = fileCount,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            onBrowseLayoutChange = onBrowseLayoutChange
         )
         if (state.isSelectionMode) {
             BrowseActionModeCard(
@@ -282,36 +296,76 @@ fun BrowseScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (state.items.isEmpty()) {
-                    item { SectionHint("This folder is empty.") }
-                } else {
-                    items(state.items, key = { it.documentId }) { item ->
-                        FileRow(
-                            item = item,
-                            selected = state.selectedDocumentIds.contains(item.documentId),
-                            selectionMode = state.isSelectionMode,
-                            onClick = {
-                                if (state.isSelectionMode) {
-                                    onToggleSelection(item)
-                                } else if (item.isDirectory) {
-                                    onOpenFolder(item)
-                                } else {
-                                    onOpenFile(item)
-                                }
-                            },
-                            onLongPress = { onEnterSelectionMode(item) },
-                            onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
-                            onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
-                            onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
-                        )
+            when {
+                state.items.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SectionHint("This folder is empty.")
                     }
                 }
-                item { Spacer(modifier = Modifier.height(12.dp)) }
+
+                state.browseLayoutMode == BrowseLayoutMode.GRID -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 148.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        gridItems(state.items, key = { it.documentId }) { item ->
+                            FileGridCard(
+                                item = item,
+                                selected = state.selectedDocumentIds.contains(item.documentId),
+                                selectionMode = state.isSelectionMode,
+                                onClick = {
+                                    if (state.isSelectionMode) {
+                                        onToggleSelection(item)
+                                    } else if (item.isDirectory) {
+                                        onOpenFolder(item)
+                                    } else {
+                                        onOpenFile(item)
+                                    }
+                                },
+                                onLongPress = { onEnterSelectionMode(item) },
+                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 28.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(state.items, key = { it.documentId }) { item ->
+                            FileRow(
+                                item = item,
+                                selected = state.selectedDocumentIds.contains(item.documentId),
+                                selectionMode = state.isSelectionMode,
+                                onClick = {
+                                    if (state.isSelectionMode) {
+                                        onToggleSelection(item)
+                                    } else if (item.isDirectory) {
+                                        onOpenFolder(item)
+                                    } else {
+                                        onOpenFile(item)
+                                    }
+                                },
+                                onLongPress = { onEnterSelectionMode(item) },
+                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
+                    }
+                }
             }
         }
     }
@@ -936,6 +990,67 @@ private fun BreadcrumbTrail(
 }
 
 @Composable
+private fun BrowseExplorerCard(
+    state: OrganizerUiState,
+    folderCount: Int,
+    fileCount: Int,
+    onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "File Explorer",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Current folder: ${state.breadcrumb.lastOrNull()?.name ?: state.root?.displayName.orEmpty()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                StatPill(label = "${state.items.size} items")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatPill(label = "$folderCount folders")
+                StatPill(label = "$fileCount files")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.browseLayoutMode == BrowseLayoutMode.LIST,
+                    onClick = { onBrowseLayoutChange(BrowseLayoutMode.LIST) },
+                    label = { Text("List view") }
+                )
+                FilterChip(
+                    selected = state.browseLayoutMode == BrowseLayoutMode.GRID,
+                    onClick = { onBrowseLayoutChange(BrowseLayoutMode.GRID) },
+                    label = { Text("Grid view") }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BrowseActionModeCard(
     state: OrganizerUiState,
     modifier: Modifier = Modifier,
@@ -1144,6 +1259,126 @@ private fun DestinationFolderRow(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileGridCard(
+    item: FileItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onClick: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
+        shape = RoundedCornerShape(24.dp),
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                    }
+                ) {
+                    Icon(
+                        imageVector = when {
+                            selected -> Icons.Default.CheckCircle
+                            item.isDirectory -> Icons.Default.Folder
+                            else -> Icons.Default.UploadFile
+                        },
+                        contentDescription = item.name,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .padding(12.dp),
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                if (!selectionMode && (onShare != null || onRename != null || onDelete != null)) {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Actions")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            if (onShare != null) {
+                                DropdownMenuItem(text = { Text("Share") }, onClick = {
+                                    menuExpanded = false
+                                    onShare()
+                                })
+                            }
+                            if (onRename != null) {
+                                DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                                    menuExpanded = false
+                                    onRename()
+                                })
+                            }
+                            if (onDelete != null) {
+                                DropdownMenuItem(text = { Text("Move to Recycle Bin") }, onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (item.isDirectory) "Folder" else kindLabel(item.kind),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = formatBytes(item.sizeBytes ?: 0L),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = formatDate(item.lastModified),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -1390,6 +1625,17 @@ private fun formatBytes(bytes: Long): String {
         index++
     }
     return if (index == 0) "${value.toInt()} ${units[index]}" else String.format("%.1f %s", value, units[index])
+}
+
+private fun kindLabel(kind: FileKind): String = when (kind) {
+    FileKind.DIRECTORY -> "Folder"
+    FileKind.IMAGE -> "Image"
+    FileKind.VIDEO -> "Video"
+    FileKind.AUDIO -> "Audio"
+    FileKind.DOCUMENT -> "Document"
+    FileKind.ARCHIVE -> "Archive"
+    FileKind.APK -> "APK"
+    FileKind.OTHER -> "File"
 }
 
 private fun formatDate(value: Long?): String {
