@@ -1,30 +1,20 @@
-﻿package com.omnia.organizer.core.domain.repository
+package com.omnia.organizer.core.domain.repository
 
-import com.omnia.organizer.core.domain.model.*
+import com.omnia.organizer.core.domain.model.SelectedRoot
+import com.omnia.organizer.core.domain.model.TrashEntry
+import kotlinx.coroutines.flow.Flow
 
-interface ItemRepository {
-    suspend fun upsert(item: Item): Long
-    suspend fun getById(id: Long): Item?
-    suspend fun getAll(): List<Item>
+interface SelectedRootRepository {
+    fun observe(): Flow<SelectedRoot?>
+    suspend fun get(): SelectedRoot?
+    suspend fun save(root: SelectedRoot)
+    suspend fun clear()
+}
+
+interface TrashRepository {
+    fun observeAll(): Flow<List<TrashEntry>>
+    suspend fun getById(id: Long): TrashEntry?
+    suspend fun upsert(entry: TrashEntry): Long
     suspend fun delete(id: Long)
-}
-
-interface TagRepository {
-    suspend fun upsert(tag: Tag): Long
-    suspend fun getAll(): List<Tag>
-}
-
-interface FolderRepository {
-    suspend fun upsert(folder: Folder): Long
-    suspend fun getAll(): List<Folder>
-}
-
-interface TaskRepository {
-    suspend fun upsert(task: Task): Long
-    suspend fun getPending(): List<Task>
-    suspend fun delete(id: Long)
-}
-
-interface SearchRepository {
-    suspend fun search(query: String, limit: Int = 50): List<Item>
+    suspend fun clear()
 }

@@ -1,49 +1,25 @@
 package com.omnia.organizer.core.data.db
 
-import androidx.room.*
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
-@Entity(tableName = "items")
-data class ItemEntity(
+@Entity(tableName = "selected_root")
+data class SelectedRootEntity(
+    @PrimaryKey val singletonId: Int = 1,
+    val treeUri: String,
+    val rootDocumentId: String,
+    val displayName: String,
+    val selectedAt: Long
+)
+
+@Entity(tableName = "trash_entries")
+data class TrashEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val title: String,
-    val contentText: String?,
-    val folderId: Long?,
-    val isArchived: Boolean,
-    val isPinned: Boolean,
-    val createdAt: Long,
-    val updatedAt: Long
-)
-
-@Entity(
-    tableName = "tags",
-    indices = [Index(value = ["name"], unique = true)]
-)
-data class TagEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String
-)
-
-@Entity(tableName = "folders")
-data class FolderEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String,
-    val parentId: Long?
-)
-
-@Entity(tableName = "tasks")
-data class TaskEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val itemId: Long?,
-    val title: String,
-    val notes: String?,
-    val dueAt: Long?,
-    val completed: Boolean,
-    val createdAt: Long,
-    val updatedAt: Long
-)
-
-@Entity(primaryKeys = ["itemId", "tagId"], tableName = "item_tag")
-data class ItemTagCrossRef(
-    val itemId: Long,
-    val tagId: Long
+    val treeUri: String,
+    val originalParentDocumentId: String,
+    val trashedDocumentId: String,
+    val displayName: String,
+    val mimeType: String,
+    val sizeBytes: Long?,
+    val deletedAt: Long
 )

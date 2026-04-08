@@ -22,9 +22,10 @@ android {
         "$baseVersionName-$preRelease$preReleaseNumber"
     } else if (isPreRelease) {
         "$baseVersionName-$preRelease"
-    } else baseVersionName
+    } else {
+        baseVersionName
+    }
 
-    // Simple versionCode scheme: 10000*MAJOR + 100*MINOR + PATCH (fits Play Console)
     val computedVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
 
     defaultConfig {
@@ -44,10 +45,10 @@ android {
         create("alpha") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".alpha"
-            versionNameSuffix = "" // computedVersionName already contains -alphaXX
+            versionNameSuffix = ""
             isDebuggable = true
             matchingFallbacks += listOf("debug")
-            resValue("string", "app_name", "Omnia Organizer α")
+            resValue("string", "app_name", "Omnia Organizer Alpha")
             buildConfigField("boolean", "ALPHA", "true")
         }
         release {
@@ -93,6 +94,10 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-compiler:2.51.1")
