@@ -108,21 +108,30 @@ private fun AppRoot(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        when (currentRoute) {
-                            OrganizerRoute.Home.route -> "Omnia Organizer"
-                            OrganizerRoute.Browse.route -> "Browse"
-                            OrganizerRoute.Search.route -> "Search"
-                            OrganizerRoute.Storage.route -> "Storage"
-                            OrganizerRoute.Trash.route -> "Recycle Bin"
-                            OrganizerRoute.Settings.route -> "Settings"
-                            else -> "Omnia Organizer"
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Text(
+                            when (currentRoute) {
+                                OrganizerRoute.Home.route -> "Omnia Organizer"
+                                OrganizerRoute.Browse.route -> "Browse"
+                                OrganizerRoute.Search.route -> "Search"
+                                OrganizerRoute.Storage.route -> "Storage"
+                                OrganizerRoute.Trash.route -> "Recycle Bin"
+                                OrganizerRoute.Settings.route -> "Settings"
+                                else -> "Omnia Organizer"
+                            }
+                        )
+                        state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
+                            Text(
+                                text = rootName,
+                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    )
+                    }
                 },
                 actions = {
                     IconButton(onClick = openTreePicker) {
-                        Icon(Icons.Default.UploadFile, contentDescription = "Choose folder")
+                        Icon(Icons.Default.UploadFile, contentDescription = "Change storage root")
                     }
                     IconButton(onClick = { viewModel.refreshActiveRoute(currentRoute) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")

@@ -71,7 +71,7 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun OmniaTheme(
     useDarkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current

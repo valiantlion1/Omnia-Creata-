@@ -11,6 +11,20 @@ Track every meaningful Organizer build, release decision, and release gate.
 
 ## Entries
 
+### 2026-04-08 - Alpha 2 performance and UI pass
+- Version target: `1.0.0-alpha2`
+- Track target: GitHub prerelease testing
+- Status: ready to ship as updated alpha build
+- What changed:
+  - search now debounces instead of scanning on every keystroke
+  - storage summary is refreshed in the background instead of on every folder navigation
+  - current root UX is clearer and easier to switch
+  - main mobile UI got a stronger utility-focused visual pass
+- Known gaps:
+  - still scoped to an Android-approved storage root
+  - no multi-select yet
+  - no copy or move flow yet
+
 ### 2026-04-08 - Planning baseline locked
 - Version target: `1.0.0-alpha1`
 - Track target: internal / GitHub artifact testing

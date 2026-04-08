@@ -16,7 +16,10 @@ import com.omnia.organizer.core.domain.repository.SelectedRootRepository
 import com.omnia.organizer.core.domain.repository.TrashRepository
 import com.omnia.organizer.files.SafDocumentManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +44,9 @@ data class OrganizerUiState(
     val renameTarget: FileItem? = null,
     val showCreateFolderDialog: Boolean = false,
     val isLoading: Boolean = false,
+    val isSearchLoading: Boolean = false,
+    val isStorageRefreshing: Boolean = false,
+    val lastStorageScanAt: Long? = null,
     val errorMessage: String? = null
 )
 
@@ -53,10 +59,14 @@ class OrganizerViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(OrganizerUiState())
     val uiState: StateFlow<OrganizerUiState> = _uiState.asStateFlow()
+    private var searchJob: Job? = null
+    private var summaryJob: Job? = null
 
     init {
         selectedRootRepository.observe()
             .onEach { root ->
+                searchJob?.cancel()
+                summaryJob?.cancel()
                 if (root == null) {
                     _uiState.update { OrganizerUiState(trashEntries = it.trashEntries) }
                 } else {
@@ -92,8 +102,9 @@ class OrganizerViewModel @Inject constructor(
         val root = _uiState.value.root ?: return
         viewModelScope.launch {
             when (route) {
-                "search" -> rerunSearch()
-                else -> refreshCurrentFolder(root, keepSearchResults = route == "search")
+                "home", "storage" -> refreshStorageSummary(root, showLoading = true)
+                "search" -> queueSearch(immediate = true)
+                else -> refreshCurrentFolder(root, keepSearchResults = false)
             }
         }
     }
@@ -147,22 +158,22 @@ class OrganizerViewModel @Inject constructor(
 
     fun updateSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
-        rerunSearch()
+        queueSearch(immediate = false)
     }
 
     fun updateKindFilter(kind: FileKind?) {
         _uiState.update { it.copy(searchFilters = it.searchFilters.copy(kind = kind)) }
-        rerunSearch()
+        queueSearch(immediate = true)
     }
 
     fun updateDateFilter(filter: SearchDateFilter) {
         _uiState.update { it.copy(searchFilters = it.searchFilters.copy(dateFilter = filter)) }
-        rerunSearch()
+        queueSearch(immediate = true)
     }
 
     fun updateSizeFilter(filter: SearchSizeFilter) {
         _uiState.update { it.copy(searchFilters = it.searchFilters.copy(sizeFilter = filter)) }
-        rerunSearch()
+        queueSearch(immediate = true)
     }
 
     fun requestRename(item: FileItem) {
@@ -182,6 +193,7 @@ class OrganizerViewModel @Inject constructor(
                 if (renamed == null) error("This file could not be renamed.")
                 _uiState.update { it.copy(renameTarget = null) }
                 refreshCurrentFolder(root, keepSearchResults = true)
+                refreshStorageSummary(root, showLoading = false)
             }
         }
     }
@@ -193,6 +205,7 @@ class OrganizerViewModel @Inject constructor(
                 val entry = withContext(Dispatchers.IO) { documentManager.moveToTrash(root, item) }
                 trashRepository.upsert(entry)
                 refreshCurrentFolder(root, keepSearchResults = true)
+                refreshStorageSummary(root, showLoading = false)
             }
         }
     }
@@ -204,7 +217,10 @@ class OrganizerViewModel @Inject constructor(
                 val restored = withContext(Dispatchers.IO) { documentManager.restoreTrash(entry) }
                 if (!restored) error("The item could not be restored.")
                 trashRepository.delete(entry.id)
-                if (root != null) refreshCurrentFolder(root, keepSearchResults = true)
+                if (root != null) {
+                    refreshCurrentFolder(root, keepSearchResults = true)
+                    refreshStorageSummary(root, showLoading = false)
+                }
             }
         }
     }
@@ -242,6 +258,7 @@ class OrganizerViewModel @Inject constructor(
                 if (!created) error("Folder could not be created.")
                 _uiState.update { it.copy(showCreateFolderDialog = false) }
                 refreshCurrentFolder(root, keepSearchResults = true)
+                refreshStorageSummary(root, showLoading = false)
             }
         }
     }
@@ -262,42 +279,53 @@ class OrganizerViewModel @Inject constructor(
                     documentManager.getFolderHandle(root, root.rootDocumentId)
                 } ?: FolderHandle(root.rootDocumentId, root.displayName)
                 val items = withContext(Dispatchers.IO) { documentManager.listChildren(root, root.rootDocumentId) }
-                val summary = withContext(Dispatchers.IO) { documentManager.summarize(root) }
-                val searchResults = if (_uiState.value.searchQuery.isBlank()) {
-                    emptyList()
-                } else {
-                    withContext(Dispatchers.IO) {
-                        documentManager.search(root, _uiState.value.searchQuery, _uiState.value.searchFilters)
-                    }
-                }
                 _uiState.update {
                     it.copy(
                         root = root,
                         breadcrumb = listOf(rootHandle),
                         items = items,
-                        storageSummary = summary,
-                        recentFiles = summary.recentFiles,
-                        largeFiles = summary.largeFiles,
-                        searchResults = searchResults
+                        storageSummary = null,
+                        recentFiles = emptyList(),
+                        largeFiles = emptyList(),
+                        searchResults = emptyList(),
+                        isStorageRefreshing = true
                     )
+                }
+                refreshStorageSummary(root, showLoading = false)
+                if (_uiState.value.searchQuery.isNotBlank()) {
+                    queueSearch(immediate = true)
                 }
             }
         }
     }
 
-    private fun rerunSearch() {
+    private fun queueSearch(immediate: Boolean) {
         val root = _uiState.value.root ?: return
         val query = _uiState.value.searchQuery
+        searchJob?.cancel()
         if (query.isBlank()) {
-            _uiState.update { it.copy(searchResults = emptyList()) }
+            _uiState.update { it.copy(searchResults = emptyList(), isSearchLoading = false) }
             return
         }
-        viewModelScope.launch {
-            runTask("Search failed.") {
-                val results = withContext(Dispatchers.IO) {
+
+        searchJob = viewModelScope.launch {
+            if (!immediate) delay(350)
+            _uiState.update { it.copy(isSearchLoading = true) }
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
                     documentManager.search(root, query, _uiState.value.searchFilters)
                 }
-                _uiState.update { it.copy(searchResults = results) }
+            }
+            result.onSuccess { results ->
+                _uiState.update { it.copy(searchResults = results, isSearchLoading = false) }
+            }.onFailure { failure ->
+                if (failure is CancellationException) return@onFailure
+                _uiState.update {
+                    it.copy(
+                        isSearchLoading = false,
+                        errorMessage = failure.message ?: "Search failed."
+                    )
+                }
             }
         }
     }
@@ -305,22 +333,45 @@ class OrganizerViewModel @Inject constructor(
     private suspend fun refreshCurrentFolder(root: SelectedRoot, keepSearchResults: Boolean) {
         val currentFolder = _uiState.value.breadcrumb.lastOrNull() ?: FolderHandle(root.rootDocumentId, root.displayName)
         val items = withContext(Dispatchers.IO) { documentManager.listChildren(root, currentFolder.documentId) }
-        val summary = withContext(Dispatchers.IO) { documentManager.summarize(root) }
-        val searchResults = if (keepSearchResults && _uiState.value.searchQuery.isNotBlank()) {
-            withContext(Dispatchers.IO) {
-                documentManager.search(root, _uiState.value.searchQuery, _uiState.value.searchFilters)
-            }
-        } else {
-            emptyList()
-        }
         _uiState.update {
             it.copy(
                 items = items,
-                storageSummary = summary,
-                recentFiles = summary.recentFiles,
-                largeFiles = summary.largeFiles,
-                searchResults = searchResults
+                searchResults = if (keepSearchResults) it.searchResults else emptyList()
             )
+        }
+        if (keepSearchResults && _uiState.value.searchQuery.isNotBlank()) {
+            queueSearch(immediate = true)
+        }
+    }
+
+    private fun refreshStorageSummary(root: SelectedRoot, showLoading: Boolean) {
+        summaryJob?.cancel()
+        summaryJob = viewModelScope.launch {
+            if (showLoading) {
+                _uiState.update { it.copy(isStorageRefreshing = true) }
+            }
+            val result = runCatching {
+                withContext(Dispatchers.IO) { documentManager.summarize(root) }
+            }
+            result.onSuccess { summary ->
+                _uiState.update {
+                    it.copy(
+                        storageSummary = summary,
+                        recentFiles = summary.recentFiles,
+                        largeFiles = summary.largeFiles,
+                        isStorageRefreshing = false,
+                        lastStorageScanAt = System.currentTimeMillis()
+                    )
+                }
+            }.onFailure { failure ->
+                if (failure is CancellationException) return@onFailure
+                _uiState.update {
+                    it.copy(
+                        isStorageRefreshing = false,
+                        errorMessage = failure.message ?: "Storage scan failed."
+                    )
+                }
+            }
         }
     }
 
