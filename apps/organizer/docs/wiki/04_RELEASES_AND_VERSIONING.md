@@ -61,6 +61,7 @@ This rule exists so every Android install is monotonically upgradeable on real d
 - Never reuse a released version string.
 - Never overwrite an existing Git tag with a different build.
 - If a shipped alpha has a bug, ship `alphaN+1` instead of replacing the same release.
+- For OOFM, the default delivery mode is continuous prerelease shipping: every meaningful finished implementation pass should become the next GitHub prerelease unless explicitly paused.
 - Every meaningful phone-testable build must update [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json).
 - Every GitHub or Play release must add or update an entry in [ORGANIZER_RELEASE_LEDGER.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/operations/ORGANIZER_RELEASE_LEDGER.md).
 - Every release must include short notes:
@@ -153,6 +154,7 @@ If the workflow runs manually, set:
 - [Omnia Organizer 1.0.0-alpha1](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha1)
 - [Omnia Organizer 1.0.0-alpha2](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha2)
 - [Omnia Organizer 1.0.0-alpha3](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha3)
+- [Omnia Organizer 1.0.0-alpha4](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha4)
 
 ## Release checklist
 Before every meaningful release:

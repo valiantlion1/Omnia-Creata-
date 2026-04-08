@@ -15,6 +15,11 @@ When working on Organizer, default to this product identity:
 - believable MVP scope
 - releaseable increments
 
+## Release default
+- For OOFM, every meaningful completed implementation pass should ship a GitHub prerelease by default.
+- Do not stop to ask for release approval after each meaningful OOFM change unless the user explicitly pauses shipping.
+- Use the next prerelease number instead of replacing an existing release.
+
 ## Do not drift into
 - cloud-first planning
 - AI-first planning

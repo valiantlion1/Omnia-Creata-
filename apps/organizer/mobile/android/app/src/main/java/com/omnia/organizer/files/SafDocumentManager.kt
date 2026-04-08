@@ -322,9 +322,23 @@ class SafDocumentManager @Inject constructor(
             val children = listChildren(root, parentId)
             for (child in children) {
                 if (!visitor(child)) return
-                if (child.isDirectory) stack.add(child.documentId)
+                if (child.isDirectory && shouldTraverseDirectory(root, child)) {
+                    stack.add(child.documentId)
+                }
             }
         }
+    }
+
+    private fun shouldTraverseDirectory(root: SelectedRoot, item: FileItem): Boolean {
+        if (!item.isDirectory) return false
+        if (item.name == trashFolderName) return false
+        if (root.sourceType != SourceType.FILE_SYSTEM) return true
+
+        val normalizedPath = item.documentId.replace('\\', '/')
+        if (normalizedPath.contains("/Android/data", ignoreCase = true)) return false
+        if (normalizedPath.contains("/Android/obb", ignoreCase = true)) return false
+        if (item.name.equals(".thumbnails", ignoreCase = true)) return false
+        return true
     }
 
     private fun ensureTrashFolder(root: SelectedRoot): String = when (root.sourceType) {

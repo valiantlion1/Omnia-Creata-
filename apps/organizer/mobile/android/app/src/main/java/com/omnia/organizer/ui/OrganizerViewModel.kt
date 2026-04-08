@@ -126,6 +126,12 @@ class OrganizerViewModel @Inject constructor(
         }
     }
 
+    fun ensureStorageSummary() {
+        val root = _uiState.value.root ?: return
+        if (_uiState.value.storageSummary != null || _uiState.value.isStorageRefreshing) return
+        refreshStorageSummary(root, showLoading = true)
+    }
+
     fun openFolder(item: FileItem) {
         val root = _uiState.value.root ?: return
         if (!item.isDirectory) return
@@ -296,19 +302,20 @@ class OrganizerViewModel @Inject constructor(
                     documentManager.getFolderHandle(root, root.rootDocumentId)
                 } ?: FolderHandle(root.rootDocumentId, root.displayName)
                 val items = withContext(Dispatchers.IO) { documentManager.listChildren(root, root.rootDocumentId) }
+                val quickFiles = items.filterNot { it.isDirectory }
                 _uiState.update {
                     it.copy(
                         root = root,
                         breadcrumb = listOf(rootHandle),
                         items = items,
                         storageSummary = null,
-                        recentFiles = emptyList(),
-                        largeFiles = emptyList(),
+                        recentFiles = quickFiles.sortedByDescending { file -> file.lastModified ?: 0L }.take(6),
+                        largeFiles = quickFiles.sortedByDescending { file -> file.sizeBytes ?: 0L }.take(6),
                         searchResults = emptyList(),
-                        isStorageRefreshing = true
+                        isStorageRefreshing = false,
+                        lastStorageScanAt = null
                     )
                 }
-                refreshStorageSummary(root, showLoading = false)
                 if (_uiState.value.searchQuery.isNotBlank()) {
                     queueSearch(immediate = true)
                 }
@@ -350,9 +357,20 @@ class OrganizerViewModel @Inject constructor(
     private suspend fun refreshCurrentFolder(root: SelectedRoot, keepSearchResults: Boolean) {
         val currentFolder = _uiState.value.breadcrumb.lastOrNull() ?: FolderHandle(root.rootDocumentId, root.displayName)
         val items = withContext(Dispatchers.IO) { documentManager.listChildren(root, currentFolder.documentId) }
+        val quickFiles = items.filterNot { it.isDirectory }
         _uiState.update {
             it.copy(
                 items = items,
+                recentFiles = if (currentFolder.documentId == root.rootDocumentId) {
+                    quickFiles.sortedByDescending { file -> file.lastModified ?: 0L }.take(6)
+                } else {
+                    it.recentFiles
+                },
+                largeFiles = if (currentFolder.documentId == root.rootDocumentId) {
+                    quickFiles.sortedByDescending { file -> file.sizeBytes ?: 0L }.take(6)
+                } else {
+                    it.largeFiles
+                },
                 searchResults = if (keepSearchResults) it.searchResults else emptyList()
             )
         }

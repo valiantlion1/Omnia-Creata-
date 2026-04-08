@@ -161,6 +161,12 @@ private fun AppRoot(
         }
     }
 
+    LaunchedEffect(currentRoute, hasStorageAccess, state.root?.treeUri, state.root?.rootDocumentId) {
+        if (hasStorageAccess && currentRoute == OrganizerRoute.Storage.route) {
+            viewModel.ensureStorageSummary()
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(

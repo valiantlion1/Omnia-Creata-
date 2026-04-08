@@ -1,5 +1,6 @@
 package com.omnia.organizer.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
@@ -33,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,9 +52,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.omnia.organizer.BuildConfig
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
+import com.omnia.organizer.core.domain.model.FolderHandle
 import com.omnia.organizer.core.domain.model.SearchDateFilter
 import com.omnia.organizer.core.domain.model.SearchSizeFilter
 import com.omnia.organizer.core.domain.model.StorageSummary
@@ -217,24 +222,12 @@ fun BrowseScreen(
             subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(state.breadcrumb.withIndex().toList(), key = { "${it.index}-${it.value.documentId}" }) { indexed ->
-                AssistChip(
-                    onClick = { onNavigateToBreadcrumb(indexed.index) },
-                    label = { Text(indexed.value.name) }
-                )
-            }
-            item {
-                OutlinedButton(onClick = onCreateFolder) {
-                    Text("New folder")
-                }
-            }
-        }
+        BreadcrumbTrail(
+            breadcrumb = state.breadcrumb,
+            onNavigateToBreadcrumb = onNavigateToBreadcrumb,
+            onCreateFolder = onCreateFolder,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -455,9 +448,13 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Product", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text("Omnia Organizer")
-                    Text("Package ${BuildConfig.APPLICATION_ID}")
-                    Text("Version ${BuildConfig.VERSION_NAME}")
-                    Text(if (BuildConfig.ALPHA) "Channel Alpha" else "Channel Release")
+                    Text("Package com.omnia.organizer")
+                    Text("Channel Alpha")
+                    Text(
+                        "Exact build version is tracked in GitHub releases and the release ledger during alpha.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -694,6 +691,61 @@ private fun WorkspaceContextStrip(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbTrail(
+    breadcrumb: List<FolderHandle>,
+    onNavigateToBreadcrumb: (Int) -> Unit,
+    onCreateFolder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            breadcrumb.forEachIndexed { index, handle ->
+                if (index > 0) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                AssistChip(
+                    onClick = { onNavigateToBreadcrumb(index) },
+                    label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (breadcrumb.size > 1) {
+                OutlinedCard(onClick = { onNavigateToBreadcrumb(breadcrumb.lastIndex - 1) }) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                        Text("Up one folder")
+                    }
+                }
+            }
+            OutlinedButton(onClick = onCreateFolder) {
+                Text("New folder")
+            }
         }
     }
 }
