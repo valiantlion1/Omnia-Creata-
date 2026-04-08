@@ -8,9 +8,28 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha4](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha4)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
 
 ## Entries
+
+### 2026-04-08 - Alpha 5 core actions and destination picker
+- Version target: `1.0.0-alpha5`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now supports long-press multi-select action mode
+  - same-root copy and move now work with an in-app destination picker
+  - bulk delete-to-Recycle-Bin shipped for selected items
+  - bulk share now skips folders and shares regular files
+  - single-item rename is reachable from selection mode
+- Known gaps:
+  - more performance tuning is still needed on very large devices
+  - cross-root copy/move is still out of scope
+  - selection mode is Browse-only in this sprint
 
 ### 2026-04-08 - Alpha 4 scan reduction and breadcrumb clarity
 - Version target: `1.0.0-alpha4`

@@ -167,13 +167,23 @@ private fun AppRoot(
         }
     }
 
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != OrganizerRoute.Browse.route) {
+            viewModel.clearBrowseActionMode()
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Text(
-                            when (currentRoute) {
+                            when {
+                                currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
+                                    "${state.selectedDocumentIds.size} selected"
+
+                                else -> when (currentRoute) {
                                 OrganizerRoute.Home.route -> "Omnia Organizer"
                                 OrganizerRoute.Browse.route -> "Browse"
                                 OrganizerRoute.Search.route -> "Search"
@@ -181,6 +191,7 @@ private fun AppRoot(
                                 OrganizerRoute.Trash.route -> "Recycle Bin"
                                 OrganizerRoute.Settings.route -> "Settings"
                                 else -> "Omnia Organizer"
+                            }
                             }
                         )
                         state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
@@ -292,7 +303,32 @@ private fun AppRoot(
                     onShareFile = { item -> shareDocument(context, viewModel.documentUriFor(item), item.mimeType, item.name) },
                     onRequestRename = viewModel::requestRename,
                     onMoveToTrash = viewModel::moveToTrash,
-                    onCreateFolder = viewModel::requestCreateFolder
+                    onCreateFolder = viewModel::requestCreateFolder,
+                    onEnterSelectionMode = viewModel::enterSelectionMode,
+                    onToggleSelection = viewModel::toggleSelection,
+                    onClearSelection = viewModel::clearBrowseActionMode,
+                    onSelectAll = viewModel::selectAllCurrentFolder,
+                    onRequestCopySelection = viewModel::requestCopySelection,
+                    onRequestMoveSelection = viewModel::requestMoveSelection,
+                    onRequestShareSelection = {
+                        val targets = viewModel.selectedShareTargets()
+                        val uris = viewModel.documentUrisFor(targets)
+                        shareDocuments(context, uris, targets)
+                        viewModel.completeShareSelection(
+                            sharedCount = uris.size,
+                            skippedCount = (state.selectedDocumentIds.size - uris.size).coerceAtLeast(0)
+                        )
+                    },
+                    onRequestRenameSelection = viewModel::requestRenameSelection,
+                    onDeleteSelection = viewModel::deleteSelection,
+                    onDismissDestinationPicker = viewModel::dismissDestinationPicker,
+                    onOpenDestinationFolder = viewModel::openDestinationFolder,
+                    onNavigateDestinationBreadcrumb = viewModel::navigateDestinationBreadcrumb,
+                    onConfirmDestinationOperation = viewModel::confirmDestinationOperation,
+                    onCreateFolderInDestination = {
+                        val target = state.destinationPickerState?.targetDocumentId
+                        viewModel.requestCreateFolder(targetDocumentId = target, forDestinationPicker = true)
+                    }
                 )
 
                 OrganizerRoute.Search.route -> SearchScreen(
@@ -357,6 +393,30 @@ private fun shareDocument(context: Context, uri: Uri?, mimeType: String, display
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Share file")) }
+}
+
+private fun shareDocuments(context: Context, uris: List<Uri>, items: List<com.omnia.organizer.core.domain.model.FileItem>) {
+    if (uris.isEmpty()) return
+    val resolvedType = items
+        .map { item -> item.mimeType.ifBlank { "*/*" } }
+        .distinct()
+        .singleOrNull()
+        ?: "*/*"
+    val intent = if (uris.size == 1) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = resolvedType
+            putExtra(Intent.EXTRA_STREAM, uris.first())
+            putExtra(Intent.EXTRA_SUBJECT, items.firstOrNull()?.name.orEmpty())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = resolvedType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+    runCatching { context.startActivity(Intent.createChooser(intent, "Share files")) }
 }
 
 private fun hasFullStorageAccess(context: Context): Boolean {

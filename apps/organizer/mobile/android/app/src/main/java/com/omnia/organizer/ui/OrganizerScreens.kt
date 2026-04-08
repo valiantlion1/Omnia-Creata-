@@ -1,5 +1,7 @@
 package com.omnia.organizer.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +23,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.UploadFile
@@ -209,7 +213,21 @@ fun BrowseScreen(
     onShareFile: (FileItem) -> Unit,
     onRequestRename: (FileItem) -> Unit,
     onMoveToTrash: (FileItem) -> Unit,
-    onCreateFolder: () -> Unit
+    onCreateFolder: () -> Unit,
+    onEnterSelectionMode: (FileItem) -> Unit,
+    onToggleSelection: (FileItem) -> Unit,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onRequestCopySelection: () -> Unit,
+    onRequestMoveSelection: () -> Unit,
+    onRequestShareSelection: () -> Unit,
+    onRequestRenameSelection: () -> Unit,
+    onDeleteSelection: () -> Unit,
+    onDismissDestinationPicker: () -> Unit,
+    onOpenDestinationFolder: (FileItem) -> Unit,
+    onNavigateDestinationBreadcrumb: (Int) -> Unit,
+    onConfirmDestinationOperation: () -> Unit,
+    onCreateFolderInDestination: () -> Unit
 ) {
     if (state.root == null) {
         EmptyRootState(onPickFolder)
@@ -222,11 +240,32 @@ fun BrowseScreen(
             subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
+        if (state.isSelectionMode) {
+            BrowseActionModeCard(
+                state = state,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                onClearSelection = onClearSelection,
+                onSelectAll = onSelectAll,
+                onRequestCopySelection = onRequestCopySelection,
+                onRequestMoveSelection = onRequestMoveSelection,
+                onRequestShareSelection = onRequestShareSelection,
+                onRequestRenameSelection = onRequestRenameSelection,
+                onDeleteSelection = onDeleteSelection
+            )
+        }
         BreadcrumbTrail(
             breadcrumb = state.breadcrumb,
             onNavigateToBreadcrumb = onNavigateToBreadcrumb,
             onCreateFolder = onCreateFolder,
             modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        DestinationPickerDialog(
+            state = state,
+            onDismiss = onDismissDestinationPicker,
+            onOpenFolder = onOpenDestinationFolder,
+            onNavigateToBreadcrumb = onNavigateDestinationBreadcrumb,
+            onConfirm = onConfirmDestinationOperation,
+            onCreateFolder = onCreateFolderInDestination
         )
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -240,10 +279,21 @@ fun BrowseScreen(
                     items(state.items, key = { it.documentId }) { item ->
                         FileRow(
                             item = item,
-                            onClick = { if (item.isDirectory) onOpenFolder(item) else onOpenFile(item) },
-                            onShare = if (item.isDirectory) null else { { onShareFile(item) } },
-                            onRename = if (item.canRename) { { onRequestRename(item) } } else null,
-                            onDelete = if (item.canDelete) { { onMoveToTrash(item) } } else null
+                            selected = state.selectedDocumentIds.contains(item.documentId),
+                            selectionMode = state.isSelectionMode,
+                            onClick = {
+                                if (state.isSelectionMode) {
+                                    onToggleSelection(item)
+                                } else if (item.isDirectory) {
+                                    onOpenFolder(item)
+                                } else {
+                                    onOpenFile(item)
+                                }
+                            },
+                            onLongPress = { onEnterSelectionMode(item) },
+                            onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                            onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                            onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
                         )
                     }
                 }
@@ -751,6 +801,219 @@ private fun BreadcrumbTrail(
 }
 
 @Composable
+private fun BrowseActionModeCard(
+    state: OrganizerUiState,
+    modifier: Modifier = Modifier,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onRequestCopySelection: () -> Unit,
+    onRequestMoveSelection: () -> Unit,
+    onRequestShareSelection: () -> Unit,
+    onRequestRenameSelection: () -> Unit,
+    onDeleteSelection: () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "${state.selectedDocumentIds.size} selected",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Browse action mode is active for this folder.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onSelectAll) {
+                        Text("Select all")
+                    }
+                    TextButton(onClick = onClearSelection) {
+                        Text("Cancel")
+                    }
+                }
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    FilledTonalButton(onClick = onRequestCopySelection) {
+                        Text("Copy")
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onRequestMoveSelection) {
+                        Text("Move")
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onRequestShareSelection) {
+                        Text("Share")
+                    }
+                }
+                if (state.selectedDocumentIds.size == 1) {
+                    item {
+                        FilledTonalButton(onClick = onRequestRenameSelection) {
+                            Text("Rename")
+                        }
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onDeleteSelection) {
+                        Text("Delete")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DestinationPickerDialog(
+    state: OrganizerUiState,
+    onDismiss: () -> Unit,
+    onOpenFolder: (FileItem) -> Unit,
+    onNavigateToBreadcrumb: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onCreateFolder: () -> Unit
+) {
+    val picker = state.destinationPickerState ?: return
+    val operationLabel = when (state.pendingFileOperation?.type) {
+        FileOperationType.MOVE -> "Move"
+        else -> "Copy"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$operationLabel destination") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "$operationLabel ${state.pendingFileOperation?.items?.size ?: 0} item(s) inside the current storage connection.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DestinationBreadcrumbTrail(
+                    breadcrumb = picker.breadcrumb,
+                    onNavigateToBreadcrumb = onNavigateToBreadcrumb
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (picker.breadcrumb.size > 1) {
+                        OutlinedButton(onClick = { onNavigateToBreadcrumb(picker.breadcrumb.lastIndex - 1) }) {
+                            Text("Up one folder")
+                        }
+                    }
+                    OutlinedButton(onClick = onCreateFolder) {
+                        Text("New folder")
+                    }
+                }
+                if (picker.items.isEmpty()) {
+                    Text(
+                        "No subfolders here. You can still choose this folder.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(picker.items, key = { "destination-${it.documentId}" }) { item ->
+                            DestinationFolderRow(item = item, onClick = { onOpenFolder(item) })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Choose this folder")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DestinationBreadcrumbTrail(
+    breadcrumb: List<FolderHandle>,
+    onNavigateToBreadcrumb: (Int) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        breadcrumb.forEachIndexed { index, handle ->
+            if (index > 0) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AssistChip(
+                onClick = { onNavigateToBreadcrumb(index) },
+                label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationFolderRow(
+    item: FileItem,
+    onClick: () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = item.name,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
@@ -778,10 +1041,14 @@ private fun StatPill(label: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     item: FileItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
     onOpenParent: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onRename: (() -> Unit)? = null,
@@ -791,9 +1058,23 @@ private fun FileRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f))
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
+        border = if (selected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -803,10 +1084,18 @@ private fun FileRow(
         ) {
             Surface(
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                }
             ) {
                 Icon(
-                    imageVector = if (item.kind == FileKind.DIRECTORY) Icons.Default.Folder else Icons.Default.UploadFile,
+                    imageVector = when {
+                        selected -> Icons.Default.CheckCircle
+                        item.kind == FileKind.DIRECTORY -> Icons.Default.Folder
+                        else -> Icons.Default.UploadFile
+                    },
                     contentDescription = item.name,
                     modifier = Modifier
                         .size(38.dp)
@@ -827,7 +1116,7 @@ private fun FileRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (onShare != null || onRename != null || onDelete != null || onOpenParent != null) {
+            if (!selectionMode && (onShare != null || onRename != null || onDelete != null || onOpenParent != null)) {
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Actions")

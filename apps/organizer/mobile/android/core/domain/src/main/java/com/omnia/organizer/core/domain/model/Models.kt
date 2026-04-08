@@ -87,3 +87,14 @@ data class TrashEntry(
     val sizeBytes: Long?,
     val deletedAt: Long
 )
+
+data class FileActionFailure(
+    val documentId: String,
+    val displayName: String,
+    val reason: String
+)
+
+data class FileBatchOperationResult(
+    val succeededDocumentIds: List<String> = emptyList(),
+    val failures: List<FileActionFailure> = emptyList()
+)

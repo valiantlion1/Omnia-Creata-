@@ -8,6 +8,8 @@ import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.omnia.organizer.core.domain.model.CategoryStat
+import com.omnia.organizer.core.domain.model.FileActionFailure
+import com.omnia.organizer.core.domain.model.FileBatchOperationResult
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
 import com.omnia.organizer.core.domain.model.FolderHandle
@@ -20,6 +22,7 @@ import com.omnia.organizer.core.domain.model.StorageSummary
 import com.omnia.organizer.core.domain.model.TrashEntry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 
 class SafDocumentManager @Inject constructor(
@@ -133,6 +136,28 @@ class SafDocumentManager @Inject constructor(
                 ) ?: return null
                 queryDocument(Uri.parse(root.treeUri), DocumentsContract.getDocumentId(renamedUri), item.parentDocumentId)
             }
+        }
+    }
+
+    fun copyItems(
+        root: SelectedRoot,
+        items: List<FileItem>,
+        destinationDocumentId: String
+    ): FileBatchOperationResult = executeBatchOperation(items) { item ->
+        when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> copyFileSystemItem(root, item, destinationDocumentId)
+            SourceType.TREE -> copyTreeItem(root, item, destinationDocumentId)
+        }
+    }
+
+    fun moveItems(
+        root: SelectedRoot,
+        items: List<FileItem>,
+        destinationDocumentId: String
+    ): FileBatchOperationResult = executeBatchOperation(items) { item ->
+        when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> moveFileSystemItem(root, item, destinationDocumentId)
+            SourceType.TREE -> moveTreeItem(root, item, destinationDocumentId)
         }
     }
 
@@ -420,6 +445,119 @@ class SafDocumentManager @Inject constructor(
         }.isSuccess
     }
 
+    private fun executeBatchOperation(
+        items: List<FileItem>,
+        operation: (FileItem) -> Unit
+    ): FileBatchOperationResult {
+        val succeeded = mutableListOf<String>()
+        val failures = mutableListOf<FileActionFailure>()
+        items.forEach { item ->
+            runCatching { operation(item) }
+                .onSuccess { succeeded += item.documentId }
+                .onFailure { failure ->
+                    failures += FileActionFailure(
+                        documentId = item.documentId,
+                        displayName = item.name,
+                        reason = failure.message ?: "Operation failed."
+                    )
+                }
+        }
+        return FileBatchOperationResult(
+            succeededDocumentIds = succeeded,
+            failures = failures
+        )
+    }
+
+    private fun copyFileSystemItem(root: SelectedRoot, item: FileItem, destinationDocumentId: String) {
+        val source = File(item.documentId)
+        val destinationParent = File(destinationDocumentId)
+        ensureSameStorageRoot(root, source, destinationParent)
+        requireDestinationFolder(destinationParent)
+        if (item.isDirectory && isSameOrDescendant(source, destinationParent)) {
+            throw IOException("A folder cannot be copied into itself.")
+        }
+        val target = uniqueTarget(destinationParent, source.name)
+        runCatching {
+            if (source.isDirectory) {
+                source.copyRecursively(target, overwrite = true)
+            } else {
+                source.copyTo(target, overwrite = true)
+            }
+        }.getOrElse { throw IOException("Copy failed for ${item.name}.") }
+    }
+
+    private fun moveFileSystemItem(root: SelectedRoot, item: FileItem, destinationDocumentId: String) {
+        val source = File(item.documentId)
+        val destinationParent = File(destinationDocumentId)
+        ensureSameStorageRoot(root, source, destinationParent)
+        requireDestinationFolder(destinationParent)
+        val sourceParent = source.parentFile ?: throw IOException("The source parent folder is unavailable.")
+        if (sourceParent.absolutePath == destinationParent.absolutePath) {
+            throw IOException("The item is already inside this folder.")
+        }
+        if (item.isDirectory && isSameOrDescendant(source, destinationParent)) {
+            throw IOException("A folder cannot be moved into itself.")
+        }
+        val target = uniqueTarget(destinationParent, source.name)
+        if (!moveFile(source, target)) {
+            throw IOException("Move failed for ${item.name}.")
+        }
+    }
+
+    private fun copyTreeItem(root: SelectedRoot, item: FileItem, destinationDocumentId: String) {
+        val destinationChildren = listTreeChildren(root, destinationDocumentId)
+        val uniqueName = uniqueName(item.name, destinationChildren.map { it.name }.toSet())
+        val copiedUri = DocumentsContract.copyDocument(
+            resolver,
+            buildDocumentUri(root, item.documentId),
+            buildDocumentUri(root, destinationDocumentId)
+        ) ?: throw IOException("Copy is not supported by this storage provider.")
+        if (uniqueName != item.name) {
+            DocumentsContract.renameDocument(resolver, copiedUri, uniqueName)
+                ?: throw IOException("The copied item could not be renamed.")
+        }
+    }
+
+    private fun moveTreeItem(root: SelectedRoot, item: FileItem, destinationDocumentId: String) {
+        if (item.parentDocumentId == destinationDocumentId) {
+            throw IOException("The item is already inside this folder.")
+        }
+        val movedUri = DocumentsContract.moveDocument(
+            resolver,
+            buildDocumentUri(root, item.documentId),
+            buildDocumentUri(root, item.parentDocumentId),
+            buildDocumentUri(root, destinationDocumentId)
+        ) ?: throw IOException("Move is not supported by this storage provider.")
+
+        val destinationChildren = listTreeChildren(root, destinationDocumentId)
+        val uniqueName = uniqueName(item.name, destinationChildren.map { it.name }.toSet() - item.name)
+        if (uniqueName != item.name) {
+            DocumentsContract.renameDocument(resolver, movedUri, uniqueName)
+                ?: throw IOException("The moved item could not be renamed.")
+        }
+    }
+
+    private fun ensureSameStorageRoot(root: SelectedRoot, source: File, destinationParent: File) {
+        val rootPath = File(root.rootDocumentId).canonicalPath
+        val sourcePath = source.canonicalPath
+        val destinationPath = destinationParent.canonicalPath
+        if (!sourcePath.startsWith(rootPath, ignoreCase = true) || !destinationPath.startsWith(rootPath, ignoreCase = true)) {
+            throw IOException("This action is only supported inside the current storage root.")
+        }
+    }
+
+    private fun requireDestinationFolder(destinationParent: File) {
+        if (!destinationParent.exists() || !destinationParent.isDirectory) {
+            throw IOException("The destination folder is not available.")
+        }
+    }
+
+    private fun isSameOrDescendant(sourceDirectory: File, destinationParent: File): Boolean {
+        val sourcePath = sourceDirectory.canonicalPath
+        val destinationPath = destinationParent.canonicalPath
+        return destinationPath == sourcePath || destinationPath.startsWith("$sourcePath${File.separator}", ignoreCase = true)
+    }
+
     private fun uniqueTarget(parent: File, desiredName: String): File {
         if (!parent.exists()) parent.mkdirs()
         var candidate = File(parent, desiredName)
@@ -432,6 +570,20 @@ class SafDocumentManager @Inject constructor(
         while (candidate.exists()) {
             candidate = File(parent, "$baseName ($index)$extension")
             index++
+        }
+        return candidate
+    }
+
+    private fun uniqueName(desiredName: String, existingNames: Set<String>): String {
+        if (!existingNames.contains(desiredName)) return desiredName
+        val dotIndex = desiredName.lastIndexOf('.')
+        val baseName = if (dotIndex > 0) desiredName.substring(0, dotIndex) else desiredName
+        val extension = if (dotIndex > 0) desiredName.substring(dotIndex) else ""
+        var index = 2
+        var candidate = "$baseName ($index)$extension"
+        while (existingNames.contains(candidate)) {
+            index++
+            candidate = "$baseName ($index)$extension"
         }
         return candidate
     }
