@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha6](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha6)
 
 ## Entries
+
+### 2026-04-08 - Alpha 6 OmniaCreata branded UI pass
+- Version target: `1.0.0-alpha6`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha6](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha6)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - OmniaCreata-inspired gold, ink, and ivory visual system replaced the generic utility palette
+  - home, browse, storage, settings, and empty states now use branded hero surfaces and stronger section hierarchy
+  - the OmniaCreata logo now appears inside the Android app UI
+  - navigation chrome was restyled to feel closer to a premium phone product
+- Known gaps:
+  - permission/onboarding flow still needs a dedicated full-screen product tour pass
+  - some utility screens still need a second polish round after device feedback
+  - performance tuning is still not the focus of this release
 
 ### 2026-04-08 - Alpha 5 core actions and destination picker
 - Version target: `1.0.0-alpha5`

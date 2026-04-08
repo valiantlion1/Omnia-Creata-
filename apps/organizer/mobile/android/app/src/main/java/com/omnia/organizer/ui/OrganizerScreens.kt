@@ -1,8 +1,11 @@
 package com.omnia.organizer.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
@@ -53,9 +57,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.omnia.organizer.R
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
 import com.omnia.organizer.core.domain.model.FolderHandle
@@ -150,6 +159,7 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -272,7 +282,11 @@ fun BrowseScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 if (state.items.isEmpty()) {
                     item { SectionHint("This folder is empty.") }
                 } else {
@@ -371,7 +385,11 @@ fun SearchScreen(
             }
             state.searchResults.isEmpty() -> SectionHint("No results matched the current query and filters.")
             else -> {
-                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
                         FileRow(
                             item = item,
@@ -408,7 +426,11 @@ fun StorageScreen(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             StorageOverviewCard(
                 state = state,
@@ -450,7 +472,11 @@ fun TrashScreen(
     onRestore: (TrashEntry) -> Unit,
     onDeletePermanently: (TrashEntry) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         if (state.trashEntries.isEmpty()) {
             item { SectionHint("Recycle Bin is empty.") }
         } else {
@@ -488,22 +514,28 @@ fun SettingsScreen(
     onClearRoot: () -> Unit,
     onClearTrash: () -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Product", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Omnia Organizer")
-                    Text("Package com.omnia.organizer")
-                    Text("Channel Alpha")
+                    BrandWordmarkBadge(compact = true)
+                    Text("Omnia Organizer", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondary)
+                    Text("Package com.omnia.organizer", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                    Text("Channel Alpha", color = MaterialTheme.colorScheme.primary)
                     Text(
                         "Exact build version is tracked in GitHub releases and the release ledger during alpha.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
                     )
                 }
             }
@@ -623,6 +655,74 @@ fun CreateFolderDialog(state: OrganizerUiState, onDismiss: () -> Unit, onConfirm
 }
 
 @Composable
+private fun BrandWordmarkBadge(compact: Boolean = false) {
+    Surface(
+        shape = RoundedCornerShape(if (compact) 18.dp else 22.dp),
+        color = MaterialTheme.colorScheme.secondary,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 10.dp else 12.dp,
+                vertical = if (compact) 8.dp else 10.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.omnia_creata_logo),
+                contentDescription = "Omnia Creata",
+                modifier = Modifier
+                    .size(if (compact) 34.dp else 42.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "OmniaCreata",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Premium file clarity",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandChecklist(points: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        points.forEach { point ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Surface(
+                    modifier = Modifier.padding(top = 2.dp),
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Text(
+                        "•",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Text(
+                    point,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun WorkspaceHeroCard(
     state: OrganizerUiState,
     modifier: Modifier = Modifier,
@@ -630,32 +730,54 @@ private fun WorkspaceHeroCard(
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            BrandWordmarkBadge(compact = true)
             Text(
-                "Device storage",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                state.root?.displayName.orEmpty(),
-                style = MaterialTheme.typography.headlineSmall,
+                "Omnia Organizer",
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onSecondary
             )
             Text(
-                "OOFM is still alpha. Once Android grants storage access, the app uses that connection as the main phone-wide entry point for browsing, search, and storage insight.",
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                "Your premium mobile file manager for everyday control.",
+                color = MaterialTheme.colorScheme.primary
             )
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.06f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "Connected storage",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        state.root?.displayName.orEmpty(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondary
+                    )
+                    Text(
+                        "OOFM is still alpha. This connected storage becomes the main phone-wide entry point for browse, search, and storage insight.",
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
+                    )
+                }
+            }
             if (state.isStorageRefreshing) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.18f)
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -680,13 +802,21 @@ private fun StorageOverviewCard(
     summary: StorageSummary,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Storage overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(state.root?.displayName.orEmpty(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+            Text(
+                state.root?.displayName.orEmpty(),
+                color = MaterialTheme.colorScheme.tertiary,
+                fontWeight = FontWeight.Medium
+            )
             Text("${summary.fileCount} files and ${summary.folderCount} folders")
             Text("Total size ${formatBytes(summary.totalBytes)}")
             if (state.isStorageRefreshing) {
@@ -727,15 +857,20 @@ private fun WorkspaceContextStrip(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Workspace",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -1018,11 +1153,17 @@ private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, m
     Card(
         modifier = modifier,
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Open",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
         }
     }
 }
@@ -1030,13 +1171,14 @@ private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, m
 @Composable
 private fun StatPill(label: String) {
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
 }
@@ -1155,20 +1297,34 @@ private fun FileRow(
 
 @Composable
 private fun EmptyRootState(onPickFolder: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.secondary,
+                        MaterialTheme.colorScheme.surface
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
         Card(
             modifier = Modifier.padding(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            shape = RoundedCornerShape(30.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Connect phone storage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                BrandWordmarkBadge()
+                Text("Connect phone storage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Grant device storage access so OOFM can behave like a proper mobile file manager. Once connected, the app will load your phone storage automatically.",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 FilledTonalButton(onClick = onPickFolder) {
                     Text("Grant access")
@@ -1196,16 +1352,32 @@ private fun SectionTitle(title: String, subtitle: String? = null) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Surface(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .fillMaxWidth(0.18f)
+                .height(3.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.primary
+        ) {}
     }
 }
 
 @Composable
 private fun SectionHint(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 private fun formatBytes(bytes: Long): String {

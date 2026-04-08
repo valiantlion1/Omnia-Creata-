@@ -6,33 +6,83 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+private val BrandDisplayFamily = FontFamily.Serif
+private val BrandBodyFamily = FontFamily.SansSerif
+
 val AppTypography = Typography(
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.25).sp
+        fontFamily = BrandDisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 52.sp,
+        lineHeight = 58.sp,
+        letterSpacing = (-0.5).sp
     ),
-    // Başlıkları net ve okunur: TitleLarge
+    displayMedium = TextStyle(
+        fontFamily = BrandDisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 42.sp,
+        lineHeight = 48.sp
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = BrandDisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 32.sp,
+        lineHeight = 38.sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = BrandDisplayFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 28.sp,
+        lineHeight = 34.sp
+    ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
-        lineHeight = 32.sp
+        lineHeight = 30.sp
     ),
-    // Başlıkları net ve okunur: TitleMedium
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp,
-        lineHeight = 28.sp
+        fontSize = 19.sp,
+        lineHeight = 26.sp
     ),
-    // Body rahat okunur: BodyLarge
+    titleSmall = TextStyle(
+        fontFamily = BrandBodyFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 15.sp,
+        lineHeight = 20.sp
+    ),
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = BrandBodyFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 21.sp
+    ),
+    bodySmall = TextStyle(
+        fontFamily = BrandBodyFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 18.sp
+    ),
+    labelLarge = TextStyle(
+        fontFamily = BrandBodyFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.2.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = BrandBodyFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.2.sp
     )
 )
