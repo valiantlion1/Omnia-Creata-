@@ -52,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -112,7 +113,7 @@ private enum class OrganizerRoute(
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
-private const val LaunchSplashMinimumDurationMs = 1800L
+private const val LaunchSplashMinimumDurationMs = 2200L
 private const val LaunchSplashMaximumDurationMs = 4200L
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -127,7 +128,7 @@ private fun AppRoot(
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
     var splashVisible by rememberSaveable { mutableStateOf(true) }
     var menuExpanded by remember { mutableStateOf(false) }
-    val splashStartedAt = remember { SystemClock.elapsedRealtime() }
+    var splashStartedAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val primaryRoutes = remember {
         listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
     }
@@ -136,6 +137,8 @@ private fun AppRoot(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 accessRefreshTick++
+                splashStartedAt = SystemClock.elapsedRealtime()
+                splashVisible = true
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

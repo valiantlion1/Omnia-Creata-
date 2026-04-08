@@ -8,9 +8,26 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha7](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha7)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha8](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha8)
 
 ## Entries
+
+### 2026-04-08 - Alpha 8 splash on every app open
+- Version target: `1.0.0-alpha8`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha8](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha8)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - the branded splash now restarts whenever the app returns to the foreground instead of only behaving like a cold-start layer
+  - the minimum visible duration was increased so the logo and loading copy actually register on real devices
+  - splash timing is now reset on resume so warm app opens feel intentional too
+- Known gaps:
+  - splash motion is still static for now
+  - onboarding and permission education still need a dedicated first-run flow
+  - broader startup optimization still remains a later pass after more device feedback
 
 ### 2026-04-08 - Alpha 7 full-screen launch splash and loading pass
 - Version target: `1.0.0-alpha7`
