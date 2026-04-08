@@ -8,14 +8,21 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
@@ -32,10 +39,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -47,14 +56,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.omnia.organizer.R
 import com.omnia.organizer.ui.BrowseScreen
 import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
@@ -68,6 +85,7 @@ import com.omnia.organizer.ui.StorageScreen
 import com.omnia.organizer.ui.TrashScreen
 import com.omnia.organizer.ui.theme.OmniaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -94,6 +112,9 @@ private enum class OrganizerRoute(
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
+private const val LaunchSplashMinimumDurationMs = 1800L
+private const val LaunchSplashMaximumDurationMs = 4200L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppRoot(
@@ -104,7 +125,9 @@ private fun AppRoot(
     val lifecycleOwner = LocalLifecycleOwner.current
     var accessRefreshTick by remember { mutableIntStateOf(0) }
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
+    var splashVisible by rememberSaveable { mutableStateOf(true) }
     var menuExpanded by remember { mutableStateOf(false) }
+    val splashStartedAt = remember { SystemClock.elapsedRealtime() }
     val primaryRoutes = remember {
         listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
     }
@@ -155,6 +178,19 @@ private fun AppRoot(
         }
     }
     val requestStorageAccessAction: () -> Unit = { requestStorageAccess() }
+    val splashStatusText = when {
+        !hasStorageAccess -> "Preparing secure storage access"
+        state.root == null -> "Connecting to your phone files"
+        state.isLoading -> "Loading your workspace"
+        state.isStorageRefreshing -> "Warming storage insight"
+        else -> "Launching Omnia Organizer"
+    }
+    val splashSupportingText = when {
+        !hasStorageAccess -> "OOFM is checking permissions, privacy boundaries, and startup safety."
+        state.root == null -> "The first device handshake is happening in the background so the phone stays responsive."
+        state.isStorageRefreshing -> "Heavy storage summaries stay behind the curtain while the app gets ready."
+        else -> "OmniaCreata clarity for the files that actually matter on your phone."
+    }
 
     LaunchedEffect(hasStorageAccess) {
         if (hasStorageAccess) {
@@ -172,6 +208,41 @@ private fun AppRoot(
         if (currentRoute != OrganizerRoute.Browse.route) {
             viewModel.clearBrowseActionMode()
         }
+    }
+
+    LaunchedEffect(
+        splashVisible,
+        hasStorageAccess,
+        state.root?.treeUri,
+        state.root?.rootDocumentId,
+        state.isLoading,
+        state.isStorageRefreshing,
+        state.errorMessage
+    ) {
+        if (!splashVisible) return@LaunchedEffect
+
+        while (splashVisible) {
+            val elapsed = SystemClock.elapsedRealtime() - splashStartedAt
+            val minimumReached = elapsed >= LaunchSplashMinimumDurationMs
+            val readyToContinue =
+                !hasStorageAccess || (state.root != null && !state.isLoading) || (!state.isLoading && state.errorMessage != null)
+            val timedOut = elapsed >= LaunchSplashMaximumDurationMs
+
+            if (minimumReached && (readyToContinue || timedOut)) {
+                splashVisible = false
+                break
+            }
+
+            delay(120L)
+        }
+    }
+
+    if (splashVisible) {
+        LaunchSplashScreen(
+            statusText = splashStatusText,
+            supportingText = splashSupportingText
+        )
+        return
     }
 
     Scaffold(
@@ -381,6 +452,77 @@ private fun AppRoot(
 
     RenameDialog(state = state, onDismiss = viewModel::dismissRename, onConfirm = viewModel::renameRequestedItem)
     CreateFolderDialog(state = state, onDismiss = viewModel::dismissCreateFolder, onConfirm = viewModel::createFolder)
+}
+
+@Composable
+private fun LaunchSplashScreen(
+    statusText: String,
+    supportingText: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF090505),
+                            Color(0xFF140D0A),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+        ) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.omnia_creata_logo),
+                    contentDescription = "Omnia Creata",
+                    modifier = Modifier.size(220.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "Omnia Organizer",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "A calmer way to load, sort, and control your phone files.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+                )
+            }
+
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.size(width = 240.dp, height = 4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
+                )
+            }
+        }
+    }
 }
 
 private fun openDocument(context: Context, uri: Uri?, mimeType: String) {
