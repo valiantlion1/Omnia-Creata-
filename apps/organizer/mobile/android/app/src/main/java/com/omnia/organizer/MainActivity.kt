@@ -8,14 +8,21 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
@@ -32,29 +39,43 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.omnia.organizer.R
 import com.omnia.organizer.ui.BrowseScreen
+import com.omnia.organizer.ui.BrowseLayoutMode
 import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
 import com.omnia.organizer.ui.HomeScreen
@@ -62,16 +83,23 @@ import com.omnia.organizer.ui.OrganizerViewModel
 import com.omnia.organizer.ui.RenameDialog
 import com.omnia.organizer.ui.SearchScreen
 import com.omnia.organizer.ui.SettingsScreen
+import com.omnia.organizer.ui.StorageCategoryKey
 import com.omnia.organizer.ui.StoragePermissionRequiredScreen
 import com.omnia.organizer.ui.StorageScreen
 import com.omnia.organizer.ui.TrashScreen
 import com.omnia.organizer.ui.theme.OmniaTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashStartedAt = SystemClock.elapsedRealtime()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition {
+            SystemClock.elapsedRealtime() - splashStartedAt < ColdStartSplashMinimumDurationMs
+        }
         setContent {
             OmniaTheme {
                 AppRoot()
@@ -93,6 +121,10 @@ private enum class OrganizerRoute(
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
+private const val ColdStartSplashMinimumDurationMs = 1600L
+private const val LaunchSplashMinimumDurationMs = 1600L
+private const val LaunchSplashMaximumDurationMs = 4200L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppRoot(
@@ -103,7 +135,10 @@ private fun AppRoot(
     val lifecycleOwner = LocalLifecycleOwner.current
     var accessRefreshTick by remember { mutableIntStateOf(0) }
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
+    var hasHandledFirstResume by rememberSaveable { mutableStateOf(false) }
+    var splashVisible by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var splashStartedAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val primaryRoutes = remember {
         listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
     }
@@ -112,6 +147,12 @@ private fun AppRoot(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 accessRefreshTick++
+                if (hasHandledFirstResume) {
+                    splashStartedAt = SystemClock.elapsedRealtime()
+                    splashVisible = true
+                } else {
+                    hasHandledFirstResume = true
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -154,6 +195,19 @@ private fun AppRoot(
         }
     }
     val requestStorageAccessAction: () -> Unit = { requestStorageAccess() }
+    val splashStatusText = when {
+        !hasStorageAccess -> "Preparing secure storage access"
+        state.root == null -> "Connecting to your phone files"
+        state.isLoading -> "Loading your workspace"
+        state.isStorageRefreshing -> "Warming storage insight"
+        else -> "Launching Omnia Organizer"
+    }
+    val splashSupportingText = when {
+        !hasStorageAccess -> "OOFM is checking permissions, privacy boundaries, and startup safety."
+        state.root == null -> "The first device handshake is happening in the background so the phone stays responsive."
+        state.isStorageRefreshing -> "Heavy storage summaries stay behind the curtain while the app gets ready."
+        else -> "OmniaCreata clarity for the files that actually matter on your phone."
+    }
 
     LaunchedEffect(hasStorageAccess) {
         if (hasStorageAccess) {
@@ -170,12 +224,56 @@ private fun AppRoot(
     LaunchedEffect(currentRoute) {
         if (currentRoute != OrganizerRoute.Browse.route) {
             viewModel.clearBrowseActionMode()
+            viewModel.dismissBrowseControlsSheet()
+            viewModel.dismissFileDetail()
         }
     }
 
+    LaunchedEffect(
+        splashVisible,
+        hasStorageAccess,
+        state.root?.treeUri,
+        state.root?.rootDocumentId,
+        state.isLoading,
+        state.isStorageRefreshing,
+        state.errorMessage
+    ) {
+        if (!splashVisible) return@LaunchedEffect
+
+        while (splashVisible) {
+            val elapsed = SystemClock.elapsedRealtime() - splashStartedAt
+            val minimumReached = elapsed >= LaunchSplashMinimumDurationMs
+            val readyToContinue =
+                !hasStorageAccess || (state.root != null && !state.isLoading) || (!state.isLoading && state.errorMessage != null)
+            val timedOut = elapsed >= LaunchSplashMaximumDurationMs
+
+            if (minimumReached && (readyToContinue || timedOut)) {
+                splashVisible = false
+                break
+            }
+
+            delay(120L)
+        }
+    }
+
+    if (splashVisible) {
+        LaunchSplashScreen(
+            statusText = splashStatusText,
+            supportingText = splashSupportingText
+        )
+        return
+    }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary
+                ),
                 title = {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Text(
@@ -253,7 +351,7 @@ private fun AppRoot(
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 primaryRoutes.forEach { route ->
                     NavigationBarItem(
                         selected = currentRoute == route.route,
@@ -286,6 +384,18 @@ private fun AppRoot(
                     onOpenSearch = { currentRoute = OrganizerRoute.Search.route },
                     onOpenStorage = { currentRoute = OrganizerRoute.Storage.route },
                     onOpenTrash = { currentRoute = OrganizerRoute.Trash.route },
+                    onOpenDownloads = {
+                        viewModel.openSmartFolder(setOf("downloads", "download"), "Downloads")
+                        currentRoute = OrganizerRoute.Browse.route
+                    },
+                    onOpenScreenshots = {
+                        viewModel.openSmartFolder(setOf("screenshots"), "Screenshots")
+                        currentRoute = OrganizerRoute.Browse.route
+                    },
+                    onOpenDocuments = {
+                        viewModel.openSmartFolder(setOf("documents"), "Documents")
+                        currentRoute = OrganizerRoute.Browse.route
+                    },
                     onPickFolder = requestStorageAccessAction,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onOpenParent = { item ->
@@ -296,9 +406,19 @@ private fun AppRoot(
 
                 OrganizerRoute.Browse.route -> BrowseScreen(
                     state = state,
+                    onBrowseLayoutChange = viewModel::setBrowseLayoutMode,
                     onOpenFolder = viewModel::openFolder,
                     onPickFolder = requestStorageAccessAction,
                     onNavigateToBreadcrumb = viewModel::navigateToBreadcrumb,
+                    onShowBrowseControls = viewModel::showBrowseControlsSheet,
+                    onDismissBrowseControls = viewModel::dismissBrowseControlsSheet,
+                    onBrowseSortOptionChange = viewModel::setBrowseSortOption,
+                    onBrowseSortDirectionChange = viewModel::setBrowseSortDirection,
+                    onBrowseScopeFilterChange = viewModel::setBrowseScopeFilter,
+                    onBrowseTypeFilterChange = viewModel::setBrowseTypeFilter,
+                    onResetBrowseControls = viewModel::resetBrowseExplorerControls,
+                    onOpenFileDetail = viewModel::openFileDetail,
+                    onDismissFileDetail = viewModel::dismissFileDetail,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onShareFile = { item -> shareDocument(context, viewModel.documentUriFor(item), item.mimeType, item.name) },
                     onRequestRename = viewModel::requestRename,
@@ -339,8 +459,8 @@ private fun AppRoot(
                     onDateFilter = viewModel::updateDateFilter,
                     onSizeFilter = viewModel::updateSizeFilter,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
-                    onOpenParent = { item ->
-                        viewModel.openParentOf(item)
+                    onShowInBrowse = { item ->
+                        viewModel.showInBrowse(item)
                         currentRoute = OrganizerRoute.Browse.route
                     }
                 )
@@ -348,6 +468,12 @@ private fun AppRoot(
                 OrganizerRoute.Storage.route -> StorageScreen(
                     state = state,
                     onPickFolder = requestStorageAccessAction,
+                    onOpenStorageCategory = viewModel::openStorageCategory,
+                    onClearStorageCategory = viewModel::clearStorageCategoryView,
+                    onOpenCategoryFolder = {
+                        state.storageCategoryView?.folderPath?.let(viewModel::openFolderPath)
+                        currentRoute = OrganizerRoute.Browse.route
+                    },
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onOpenParent = { item ->
                         viewModel.openParentOf(item)
@@ -373,6 +499,77 @@ private fun AppRoot(
 
     RenameDialog(state = state, onDismiss = viewModel::dismissRename, onConfirm = viewModel::renameRequestedItem)
     CreateFolderDialog(state = state, onDismiss = viewModel::dismissCreateFolder, onConfirm = viewModel::createFolder)
+}
+
+@Composable
+private fun LaunchSplashScreen(
+    statusText: String,
+    supportingText: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF090505),
+                            Color(0xFF140D0A),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+        ) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.omnia_creata_logo),
+                    contentDescription = "Omnia Creata",
+                    modifier = Modifier.size(220.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+                Text(
+                    text = "Omnia Organizer",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "A calmer way to load, sort, and control your phone files.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+                )
+            }
+
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.size(width = 240.dp, height = 4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f)
+                )
+            }
+        }
+    }
 }
 
 private fun openDocument(context: Context, uri: Uri?, mimeType: String) {

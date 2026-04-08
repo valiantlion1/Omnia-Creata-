@@ -1,8 +1,12 @@
 package com.omnia.organizer.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,8 +22,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
@@ -34,12 +42,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -53,9 +63,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.omnia.organizer.R
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
 import com.omnia.organizer.core.domain.model.FolderHandle
@@ -63,7 +78,11 @@ import com.omnia.organizer.core.domain.model.SearchDateFilter
 import com.omnia.organizer.core.domain.model.SearchSizeFilter
 import com.omnia.organizer.core.domain.model.StorageSummary
 import com.omnia.organizer.core.domain.model.TrashEntry
+import com.omnia.organizer.ui.HomeSummary
+import com.omnia.organizer.ui.StorageCategoryKey
+import com.omnia.organizer.ui.StorageCategoryView
 import java.text.DateFormat
+import java.io.File
 import java.util.Date
 
 @Composable
@@ -139,6 +158,9 @@ fun HomeScreen(
     onOpenSearch: () -> Unit,
     onOpenStorage: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenScreenshots: () -> Unit,
+    onOpenDocuments: () -> Unit,
     onPickFolder: () -> Unit,
     onOpenFile: (FileItem) -> Unit,
     onOpenParent: (FileItem) -> Unit
@@ -150,6 +172,7 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -159,6 +182,17 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 onPickFolder = onPickFolder
+            )
+        }
+        item {
+            state.homeSummary?.let { summary ->
+                HomeStorageSummaryCard(
+                    summary = summary,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    onOpenStorage = onOpenStorage
+                )
+            } ?: SectionHint(
+                text = "Storage insight is still warming up. Browse and Search already work while the summary is prepared."
             )
         }
         item {
@@ -181,6 +215,26 @@ fun HomeScreen(
             ) {
                 ShortcutCard("Storage", "See size and categories", onOpenStorage, Modifier.weight(1f))
                 ShortcutCard("Recycle Bin", "Restore deleted items", onOpenTrash, Modifier.weight(1f))
+            }
+        }
+        item { SectionTitle("Pinned entry points", "Jump straight into the phone folders people use most.") }
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item { PinnedEntryCard(title = "Downloads", subtitle = "Packages, PDFs, and app downloads", onClick = onOpenDownloads) }
+                item { PinnedEntryCard(title = "Screenshots", subtitle = "Find captures without hunting through folders", onClick = onOpenScreenshots) }
+                item { PinnedEntryCard(title = "Documents", subtitle = "Contracts, notes, receipts, and office files", onClick = onOpenDocuments) }
+                item { PinnedEntryCard(title = "Recycle Bin", subtitle = "Restore files you removed earlier", onClick = onOpenTrash) }
+            }
+        }
+        item { SectionTitle("New files", "The latest items that probably still need sorting or sharing.") }
+        if (state.newFiles.isEmpty()) {
+            item { SectionHint("No new files have been surfaced yet from the current storage root.") }
+        } else {
+            items(state.newFiles, key = { "new-${it.documentId}" }) { item ->
+                FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
             }
         }
         item { SectionTitle("Recent files", "Fast jump back into what you touched last.") }
@@ -206,9 +260,19 @@ fun HomeScreen(
 @Composable
 fun BrowseScreen(
     state: OrganizerUiState,
+    onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
     onOpenFolder: (FileItem) -> Unit,
     onPickFolder: () -> Unit,
     onNavigateToBreadcrumb: (Int) -> Unit,
+    onShowBrowseControls: () -> Unit,
+    onDismissBrowseControls: () -> Unit,
+    onBrowseSortOptionChange: (BrowseSortOption) -> Unit,
+    onBrowseSortDirectionChange: (BrowseSortDirection) -> Unit,
+    onBrowseScopeFilterChange: (BrowseScopeFilter) -> Unit,
+    onBrowseTypeFilterChange: (BrowseTypeFilter) -> Unit,
+    onResetBrowseControls: () -> Unit,
+    onOpenFileDetail: (FileItem) -> Unit,
+    onDismissFileDetail: () -> Unit,
     onOpenFile: (FileItem) -> Unit,
     onShareFile: (FileItem) -> Unit,
     onRequestRename: (FileItem) -> Unit,
@@ -234,11 +298,46 @@ fun BrowseScreen(
         return
     }
 
+    val visibleItems = remember(
+        state.items,
+        state.browseSortOption,
+        state.browseSortDirection,
+        state.browseScopeFilter,
+        state.browseTypeFilter
+    ) {
+        state.visibleBrowseItems()
+    }
+    val folderCount = visibleItems.count { it.isDirectory }
+    val fileCount = visibleItems.size - folderCount
+    val currentPathSummary = remember(state.breadcrumb) {
+        state.breadcrumb.joinToString(" / ") { it.name }
+    }
+    val hasActiveBrowseFilters = state.browseScopeFilter != BrowseScopeFilter.ALL ||
+        state.browseTypeFilter != BrowseTypeFilter.ALL
+    val browseControlsSummary = remember(
+        state.browseSortOption,
+        state.browseSortDirection,
+        state.browseScopeFilter,
+        state.browseTypeFilter
+    ) {
+        buildBrowseControlsSummary(state)
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
+            subtitle = "Browse stays grounded in the current folder, with sorting, filters, and quick actions that behave like a real mobile file explorer.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
+        BrowseExplorerCard(
+            state = state,
+            visibleItemCount = visibleItems.size,
+            folderCount = folderCount,
+            fileCount = fileCount,
+            controlsSummary = browseControlsSummary,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            onBrowseLayoutChange = onBrowseLayoutChange,
+            onShowBrowseControls = onShowBrowseControls
         )
         if (state.isSelectionMode) {
             BrowseActionModeCard(
@@ -267,38 +366,213 @@ fun BrowseScreen(
             onConfirm = onConfirmDestinationOperation,
             onCreateFolder = onCreateFolderInDestination
         )
+        if (state.showBrowseControlsSheet) {
+            BrowseControlsBottomSheet(
+                state = state,
+                onDismiss = onDismissBrowseControls,
+                onBrowseSortOptionChange = onBrowseSortOptionChange,
+                onBrowseSortDirectionChange = onBrowseSortDirectionChange,
+                onBrowseScopeFilterChange = onBrowseScopeFilterChange,
+                onBrowseTypeFilterChange = onBrowseTypeFilterChange,
+                onReset = onResetBrowseControls
+            )
+        }
+        state.fileDetailTarget?.let { item ->
+            FileDetailBottomSheet(
+                item = item,
+                currentPathSummary = currentPathSummary,
+                onDismiss = onDismissFileDetail,
+                onOpen = {
+                    onDismissFileDetail()
+                    onOpenFile(item)
+                },
+                onShare = {
+                    onDismissFileDetail()
+                    onShareFile(item)
+                },
+                onRename = if (item.canRename) {
+                    {
+                        onDismissFileDetail()
+                        onRequestRename(item)
+                    }
+                } else {
+                    null
+                },
+                onMoveToTrash = if (item.canDelete) {
+                    {
+                        onDismissFileDetail()
+                        onMoveToTrash(item)
+                    }
+                } else {
+                    null
+                }
+            )
+        }
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (state.items.isEmpty()) {
-                    item { SectionHint("This folder is empty.") }
-                } else {
-                    items(state.items, key = { it.documentId }) { item ->
-                        FileRow(
-                            item = item,
-                            selected = state.selectedDocumentIds.contains(item.documentId),
-                            selectionMode = state.isSelectionMode,
-                            onClick = {
-                                if (state.isSelectionMode) {
-                                    onToggleSelection(item)
-                                } else if (item.isDirectory) {
-                                    onOpenFolder(item)
-                                } else {
-                                    onOpenFile(item)
-                                }
-                            },
-                            onLongPress = { onEnterSelectionMode(item) },
-                            onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
-                            onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
-                            onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+            when {
+                state.items.isEmpty() -> BrowseEmptyState(
+                    title = "This folder is empty",
+                    subtitle = "Create a folder here or move files in when you want this part of the explorer to grow.",
+                    resetLabel = null,
+                    onReset = null
+                )
+
+                visibleItems.isEmpty() -> BrowseEmptyState(
+                    title = "Nothing matches the current filter",
+                    subtitle = "The folder still has content, but your current folder/type filter is hiding everything shown here.",
+                    resetLabel = if (hasActiveBrowseFilters) "Reset filters" else null,
+                    onReset = if (hasActiveBrowseFilters) onResetBrowseControls else null
+                )
+
+                state.browseLayoutMode == BrowseLayoutMode.GRID -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 148.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        gridItems(visibleItems, key = { it.documentId }) { item ->
+                            FileGridCard(
+                                item = item,
+                                selected = state.selectedDocumentIds.contains(item.documentId),
+                                selectionMode = state.isSelectionMode,
+                                onClick = {
+                                    if (state.isSelectionMode) {
+                                        onToggleSelection(item)
+                                    } else if (item.isDirectory) {
+                                        onOpenFolder(item)
+                                    } else {
+                                        onOpenFileDetail(item)
+                                    }
+                                },
+                                onLongPress = { onEnterSelectionMode(item) },
+                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 28.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(visibleItems, key = { it.documentId }) { item ->
+                            FileRow(
+                                item = item,
+                                selected = state.selectedDocumentIds.contains(item.documentId),
+                                selectionMode = state.isSelectionMode,
+                                onClick = {
+                                    if (state.isSelectionMode) {
+                                        onToggleSelection(item)
+                                    } else if (item.isDirectory) {
+                                        onOpenFolder(item)
+                                    } else {
+                                        onOpenFileDetail(item)
+                                    }
+                                },
+                                onLongPress = { onEnterSelectionMode(item) },
+                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeStorageSummaryCard(
+    summary: HomeSummary,
+    modifier: Modifier = Modifier,
+    onOpenStorage: () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onOpenStorage,
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Storage summary",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "Used ${formatBytes(summary.usedBytes)}${summary.freeBytes?.let { " • Free ${formatBytes(it)}" }.orEmpty()}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatPill("${summary.fileCount} files")
+                StatPill("${summary.folderCount} folders")
+            }
+            if (summary.topCategories.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(summary.topCategories, key = { it.kind.name }) { category ->
+                        AssistChip(
+                            onClick = onOpenStorage,
+                            label = {
+                                Text(
+                                    "${kindLabel(category.kind)} ${formatBytes(category.bytes)}"
+                                )
+                            }
                         )
                     }
                 }
-                item { Spacer(modifier = Modifier.height(12.dp)) }
             }
+            Text(
+                "Open Storage to drill into categories and large files.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+        }
+    }
+}
+
+@Composable
+private fun PinnedEntryCard(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    OutlinedCard(
+        onClick = onClick,
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+    ) {
+        Column(
+            modifier = Modifier
+                .width(184.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Jump in",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
         }
     }
 }
@@ -312,7 +586,7 @@ fun SearchScreen(
     onDateFilter: (SearchDateFilter) -> Unit,
     onSizeFilter: (SearchSizeFilter) -> Unit,
     onOpenFile: (FileItem) -> Unit,
-    onOpenParent: (FileItem) -> Unit
+    onShowInBrowse: (FileItem) -> Unit
 ) {
     if (state.root == null) {
         EmptyRootState(onPickFolder)
@@ -322,61 +596,51 @@ fun SearchScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Search runs inside the storage access Android approved for OOFM, so results stay fast and reliable.",
+            subtitle = "Search stays scoped to the connected device view, so results can show where a file lives before you jump into Browse.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
-        OutlinedTextField(
-            value = state.searchQuery,
-            onValueChange = onQueryChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            label = { Text("Search files") },
-            singleLine = true
+        SearchExplorerPanel(
+            state = state,
+            onQueryChange = onQueryChange,
+            onKindFilter = onKindFilter,
+            onDateFilter = onDateFilter,
+            onSizeFilter = onSizeFilter
         )
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item { FilterChip(selected = state.searchFilters.kind == null, onClick = { onKindFilter(null) }, label = { Text("All types") }) }
-            item { FilterChip(selected = state.searchFilters.kind == FileKind.IMAGE, onClick = { onKindFilter(FileKind.IMAGE) }, label = { Text("Images") }) }
-            item { FilterChip(selected = state.searchFilters.kind == FileKind.DOCUMENT, onClick = { onKindFilter(FileKind.DOCUMENT) }, label = { Text("Documents") }) }
-            item { FilterChip(selected = state.searchFilters.kind == FileKind.VIDEO, onClick = { onKindFilter(FileKind.VIDEO) }, label = { Text("Videos") }) }
-            item { FilterChip(selected = state.searchFilters.kind == FileKind.AUDIO, onClick = { onKindFilter(FileKind.AUDIO) }, label = { Text("Audio") }) }
-        }
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.ANYTIME, onClick = { onDateFilter(SearchDateFilter.ANYTIME) }, label = { Text("Any time") }) }
-            item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.LAST_7_DAYS, onClick = { onDateFilter(SearchDateFilter.LAST_7_DAYS) }, label = { Text("7 days") }) }
-            item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.LAST_30_DAYS, onClick = { onDateFilter(SearchDateFilter.LAST_30_DAYS) }, label = { Text("30 days") }) }
-            item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.LARGE_10_MB, onClick = { onSizeFilter(SearchSizeFilter.LARGE_10_MB) }, label = { Text("10 MB+") }) }
-            item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.HUGE_100_MB, onClick = { onSizeFilter(SearchSizeFilter.HUGE_100_MB) }, label = { Text("100 MB+") }) }
-        }
         Spacer(modifier = Modifier.height(12.dp))
         when {
-            state.searchQuery.isBlank() -> SectionHint("Type a file name to search inside the current storage root.")
+            state.searchQuery.isBlank() -> SectionHint("Type a file name to search inside the connected storage view.")
             state.isSearchLoading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator()
-                        Text("Scanning files...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Scanning files inside the current storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            state.searchResults.isEmpty() -> SectionHint("No results matched the current query and filters.")
+            state.searchResults.isEmpty() -> SearchEmptyState(
+                query = state.searchQuery,
+                hasFilters = state.searchFilters.kind != null ||
+                    state.searchFilters.dateFilter != SearchDateFilter.ANYTIME ||
+                    state.searchFilters.sizeFilter != SearchSizeFilter.ANY
+            )
             else -> {
-                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        SectionTitle(
+                            "Search results",
+                            "${state.searchResults.size} match(es) in ${state.root.displayName}."
+                        )
+                    }
                     items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
-                        FileRow(
+                        SearchResultCard(
                             item = item,
-                            onClick = { if (item.isDirectory) onOpenParent(item) else onOpenFile(item) },
-                            onOpenParent = { onOpenParent(item) }
+                            rootDocumentId = state.root.rootDocumentId,
+                            onOpen = { if (item.isDirectory) onShowInBrowse(item) else onOpenFile(item) },
+                            onShowInBrowse = { onShowInBrowse(item) }
                         )
                     }
                     item { Spacer(modifier = Modifier.height(12.dp)) }
@@ -390,6 +654,9 @@ fun SearchScreen(
 fun StorageScreen(
     state: OrganizerUiState,
     onPickFolder: () -> Unit,
+    onOpenStorageCategory: (StorageCategoryKey) -> Unit,
+    onClearStorageCategory: () -> Unit,
+    onOpenCategoryFolder: () -> Unit,
     onOpenFile: (FileItem) -> Unit,
     onOpenParent: (FileItem) -> Unit
 ) {
@@ -408,7 +675,11 @@ fun StorageScreen(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             StorageOverviewCard(
                 state = state,
@@ -418,29 +689,272 @@ fun StorageScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
-        item { SectionTitle("Categories", "Where the current storage root is spending most of its space.") }
-        items(summary.categories, key = { it.kind.name }) { category ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+        state.storageCategoryView?.let { categoryView ->
+            item {
+                StorageCategoryExplorerCard(
+                    view = categoryView,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    onBack = onClearStorageCategory,
+                    onOpenCategoryFolder = if (categoryView.folderPath != null) onOpenCategoryFolder else null
+                )
+            }
+            if (categoryView.items.isEmpty()) {
+                item {
+                    SectionHint("OOFM did not surface any items in this category yet.")
+                }
+            } else {
+                items(categoryView.items, key = { "storage-category-${it.documentId}" }) { item ->
+                    FileRow(
+                        item = item,
+                        onClick = { onOpenFile(item) },
+                        onOpenParent = { onOpenParent(item) }
+                    )
+                }
+            }
+        } ?: run {
+            item { SectionTitle("Categories", "Tap a category to inspect matching files with the same explorer language as Browse.") }
+            item {
+                StorageCategoryShortcutGrid(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    onOpenCategory = onOpenStorageCategory
+                )
+            }
+            item { SectionTitle("Largest files", "Open the file directly or jump back to its parent folder.") }
+            items(summary.largeFiles, key = { "storage-${it.documentId}" }) { item ->
+                FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
+            }
+        }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun StorageCategoryShortcutGrid(
+    modifier: Modifier = Modifier,
+    onOpenCategory: (StorageCategoryKey) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier.heightIn(max = 420.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        gridItems(
+            listOf(
+                StorageCategoryKey.IMAGES,
+                StorageCategoryKey.VIDEOS,
+                StorageCategoryKey.AUDIO,
+                StorageCategoryKey.DOCUMENTS,
+                StorageCategoryKey.ARCHIVES_AND_APKS,
+                StorageCategoryKey.DOWNLOADS
+            ),
+            key = { it.name }
+        ) { category ->
+            StorageCategoryCard(category = category, onClick = { onOpenCategory(category) })
+        }
+    }
+}
+
+@Composable
+private fun StorageCategoryCard(
+    category: StorageCategoryKey,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Icon(
+                    imageVector = when (category) {
+                        StorageCategoryKey.DOWNLOADS -> Icons.Default.Folder
+                        else -> Icons.Default.UploadFile
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.padding(12.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Text(storageCategoryTitle(category), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                storageCategorySubtitle(category),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun StorageCategoryExplorerCard(
+    view: StorageCategoryView,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+    onOpenCategoryFolder: (() -> Unit)?
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                view.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                view.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onBack) {
+                    Text("Back to overview")
+                }
+                if (onOpenCategoryFolder != null) {
+                    FilledTonalButton(onClick = onOpenCategoryFolder) {
+                        Text("Open folder in Browse")
+                    }
+                }
+            }
+            Text(
+                "${view.items.size} item(s) surfaced in this category.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchExplorerPanel(
+    state: OrganizerUiState,
+    onQueryChange: (String) -> Unit,
+    onKindFilter: (FileKind?) -> Unit,
+    onDateFilter: (SearchDateFilter) -> Unit,
+    onSizeFilter: (SearchSizeFilter) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(
+                value = state.searchQuery,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search files") },
+                supportingText = { Text("Try invoice, screenshot, download, pdf, or a project name.") },
+                singleLine = true
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(selected = state.searchFilters.kind == null, onClick = { onKindFilter(null) }, label = { Text("All types") }) }
+                item { FilterChip(selected = state.searchFilters.kind == FileKind.IMAGE, onClick = { onKindFilter(FileKind.IMAGE) }, label = { Text("Images") }) }
+                item { FilterChip(selected = state.searchFilters.kind == FileKind.DOCUMENT, onClick = { onKindFilter(FileKind.DOCUMENT) }, label = { Text("Documents") }) }
+                item { FilterChip(selected = state.searchFilters.kind == FileKind.VIDEO, onClick = { onKindFilter(FileKind.VIDEO) }, label = { Text("Videos") }) }
+                item { FilterChip(selected = state.searchFilters.kind == FileKind.AUDIO, onClick = { onKindFilter(FileKind.AUDIO) }, label = { Text("Audio") }) }
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.ANYTIME, onClick = { onDateFilter(SearchDateFilter.ANYTIME) }, label = { Text("Any time") }) }
+                item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.LAST_7_DAYS, onClick = { onDateFilter(SearchDateFilter.LAST_7_DAYS) }, label = { Text("7 days") }) }
+                item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.LAST_30_DAYS, onClick = { onDateFilter(SearchDateFilter.LAST_30_DAYS) }, label = { Text("30 days") }) }
+                item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.LARGE_10_MB, onClick = { onSizeFilter(SearchSizeFilter.LARGE_10_MB) }, label = { Text("10 MB+") }) }
+                item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.HUGE_100_MB, onClick = { onSizeFilter(SearchSizeFilter.HUGE_100_MB) }, label = { Text("100 MB+") }) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(
+    query: String,
+    hasFilters: Boolean
+) {
+    SectionHint(
+        if (hasFilters) {
+            "No results matched \"$query\" with the active filters. Try clearing some filters or opening Browse for a manual path check."
+        } else {
+            "No results matched \"$query\". Try a shorter name or jump into Browse if you remember the folder."
+        }
+    )
+}
+
+@Composable
+private fun SearchResultCard(
+    item: FileItem,
+    rootDocumentId: String,
+    onOpen: () -> Unit,
+    onShowInBrowse: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
                 ) {
-                    Text(category.kind.name.lowercase().replaceFirstChar(Char::uppercase))
-                    Text("${formatBytes(category.bytes)} | ${category.count} items")
+                    Icon(
+                        imageVector = if (item.isDirectory) Icons.Default.Folder else Icons.Default.UploadFile,
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (item.isDirectory) "Folder result" else "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                locationSummary(item, rootDocumentId),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Text(
+                "Modified ${formatDate(item.lastModified)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onOpen) {
+                    Text(if (item.isDirectory) "Open folder" else "Open")
+                }
+                OutlinedButton(onClick = onShowInBrowse) {
+                    Text("Show in Browse")
                 }
             }
         }
-        item { SectionTitle("Largest files", "Open the file directly or jump back to its parent folder.") }
-        items(summary.largeFiles, key = { "storage-${it.documentId}" }) { item ->
-            FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
-        }
-        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -450,7 +964,18 @@ fun TrashScreen(
     onRestore: (TrashEntry) -> Unit,
     onDeletePermanently: (TrashEntry) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            WorkspaceContextStrip(
+                title = "Recycle Bin",
+                subtitle = "Deleted items stay recoverable here until you decide they should disappear forever.",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+        }
         if (state.trashEntries.isEmpty()) {
             item { SectionHint("Recycle Bin is empty.") }
         } else {
@@ -458,7 +983,7 @@ fun TrashScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .padding(horizontal = 16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(entry.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -488,22 +1013,28 @@ fun SettingsScreen(
     onClearRoot: () -> Unit,
     onClearTrash: () -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Product", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Omnia Organizer")
-                    Text("Package com.omnia.organizer")
-                    Text("Channel Alpha")
+                    BrandWordmarkBadge(compact = true)
+                    Text("Omnia Organizer", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondary)
+                    Text("Package com.omnia.organizer", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                    Text("Channel Alpha", color = MaterialTheme.colorScheme.primary)
                     Text(
                         "Exact build version is tracked in GitHub releases and the release ledger during alpha.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
                     )
                 }
             }
@@ -623,6 +1154,74 @@ fun CreateFolderDialog(state: OrganizerUiState, onDismiss: () -> Unit, onConfirm
 }
 
 @Composable
+private fun BrandWordmarkBadge(compact: Boolean = false) {
+    Surface(
+        shape = RoundedCornerShape(if (compact) 18.dp else 22.dp),
+        color = MaterialTheme.colorScheme.secondary,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 10.dp else 12.dp,
+                vertical = if (compact) 8.dp else 10.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.omnia_creata_logo),
+                contentDescription = "Omnia Creata",
+                modifier = Modifier
+                    .size(if (compact) 34.dp else 42.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "OmniaCreata",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Premium file clarity",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandChecklist(points: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        points.forEach { point ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Surface(
+                    modifier = Modifier.padding(top = 2.dp),
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Text(
+                        "•",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Text(
+                    point,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun WorkspaceHeroCard(
     state: OrganizerUiState,
     modifier: Modifier = Modifier,
@@ -630,32 +1229,54 @@ private fun WorkspaceHeroCard(
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            BrandWordmarkBadge(compact = true)
             Text(
-                "Device storage",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                state.root?.displayName.orEmpty(),
-                style = MaterialTheme.typography.headlineSmall,
+                "Omnia Organizer",
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onSecondary
             )
             Text(
-                "OOFM is still alpha. Once Android grants storage access, the app uses that connection as the main phone-wide entry point for browsing, search, and storage insight.",
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                "Your premium mobile file manager for everyday control.",
+                color = MaterialTheme.colorScheme.primary
             )
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.06f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "Connected storage",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        state.root?.displayName.orEmpty(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondary
+                    )
+                    Text(
+                        "OOFM is still alpha. This connected storage becomes the main phone-wide entry point for browse, search, and storage insight.",
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
+                    )
+                }
+            }
             if (state.isStorageRefreshing) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.18f)
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -680,15 +1301,29 @@ private fun StorageOverviewCard(
     summary: StorageSummary,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("Storage overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(state.root?.displayName.orEmpty(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+            Text(
+                state.root?.displayName.orEmpty(),
+                color = MaterialTheme.colorScheme.tertiary,
+                fontWeight = FontWeight.Medium
+            )
             Text("${summary.fileCount} files and ${summary.folderCount} folders")
-            Text("Total size ${formatBytes(summary.totalBytes)}")
+            Text(
+                "Used ${formatBytes(summary.totalBytes)}${summary.freeBytes?.let { " • Free ${formatBytes(it)}" }.orEmpty()}"
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatPill(label = "Large files ${state.largeFiles.size}")
+                StatPill(label = "Recent ${state.recentFiles.size}")
+            }
             if (state.isStorageRefreshing) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else if (state.lastStorageScanAt != null) {
@@ -727,15 +1362,20 @@ private fun WorkspaceContextStrip(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Workspace",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -795,6 +1435,78 @@ private fun BreadcrumbTrail(
             }
             OutlinedButton(onClick = onCreateFolder) {
                 Text("New folder")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseExplorerCard(
+    state: OrganizerUiState,
+    visibleItemCount: Int,
+    folderCount: Int,
+    fileCount: Int,
+    controlsSummary: String,
+    onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
+    onShowBrowseControls: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "File Explorer",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Current folder: ${state.breadcrumb.lastOrNull()?.name ?: state.root?.displayName.orEmpty()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                StatPill(label = "$visibleItemCount shown")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatPill(label = "$folderCount folders")
+                StatPill(label = "$fileCount files")
+            }
+            Text(
+                text = controlsSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.browseLayoutMode == BrowseLayoutMode.LIST,
+                    onClick = { onBrowseLayoutChange(BrowseLayoutMode.LIST) },
+                    label = { Text("List view") }
+                )
+                FilterChip(
+                    selected = state.browseLayoutMode == BrowseLayoutMode.GRID,
+                    onClick = { onBrowseLayoutChange(BrowseLayoutMode.GRID) },
+                    label = { Text("Grid view") }
+                )
+                OutlinedButton(onClick = onShowBrowseControls) {
+                    Text("Sort & filter")
+                }
             }
         }
     }
@@ -872,6 +1584,300 @@ private fun BrowseActionModeCard(
                 item {
                     FilledTonalButton(onClick = onDeleteSelection) {
                         Text("Delete")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrowseControlsBottomSheet(
+    state: OrganizerUiState,
+    onDismiss: () -> Unit,
+    onBrowseSortOptionChange: (BrowseSortOption) -> Unit,
+    onBrowseSortDirectionChange: (BrowseSortDirection) -> Unit,
+    onBrowseScopeFilterChange: (BrowseScopeFilter) -> Unit,
+    onBrowseTypeFilterChange: (BrowseTypeFilter) -> Unit,
+    onReset: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Sort & filter", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "These controls only affect the current folder, so Browse stays predictable as you move around.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            BrowseSheetSection("Sort by") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.NAME,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.NAME) },
+                            label = { Text("Name") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.DATE_MODIFIED,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.DATE_MODIFIED) },
+                            label = { Text("Date modified") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.SIZE,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.SIZE) },
+                            label = { Text("Size") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.TYPE,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.TYPE) },
+                            label = { Text("Type") }
+                        )
+                    }
+                }
+            }
+
+            BrowseSheetSection("Direction") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.browseSortDirection == BrowseSortDirection.ASCENDING,
+                        onClick = { onBrowseSortDirectionChange(BrowseSortDirection.ASCENDING) },
+                        label = { Text("Ascending") }
+                    )
+                    FilterChip(
+                        selected = state.browseSortDirection == BrowseSortDirection.DESCENDING,
+                        onClick = { onBrowseSortDirectionChange(BrowseSortDirection.DESCENDING) },
+                        label = { Text("Descending") }
+                    )
+                }
+            }
+
+            BrowseSheetSection("Scope") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.ALL,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.ALL) },
+                            label = { Text("All items") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.FOLDERS_ONLY,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.FOLDERS_ONLY) },
+                            label = { Text("Folders only") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.FILES_ONLY,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.FILES_ONLY) },
+                            label = { Text("Files only") }
+                        )
+                    }
+                }
+            }
+
+            BrowseSheetSection("File type") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.ALL,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.ALL) },
+                            label = { Text("All files") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.IMAGES,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.IMAGES) },
+                            label = { Text("Images") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.VIDEOS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.VIDEOS) },
+                            label = { Text("Videos") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.AUDIO,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.AUDIO) },
+                            label = { Text("Audio") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.DOCUMENTS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.DOCUMENTS) },
+                            label = { Text("Documents") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.ARCHIVES_AND_APKS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.ARCHIVES_AND_APKS) },
+                            label = { Text("Archives/APKs") }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onReset) {
+                    Text("Reset")
+                }
+                FilledTonalButton(onClick = onDismiss) {
+                    Text("Done")
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun BrowseSheetSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        content()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileDetailBottomSheet(
+    item: FileItem,
+    currentPathSummary: String,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onRename: (() -> Unit)?,
+    onMoveToTrash: (() -> Unit)?
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    currentPathSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FileDetailStatRow(label = "Type", value = kindLabel(item.kind))
+                FileDetailStatRow(label = "Size", value = formatBytes(item.sizeBytes ?: 0L))
+                FileDetailStatRow(label = "Modified", value = formatDate(item.lastModified))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(onClick = onOpen, modifier = Modifier.weight(1f)) {
+                    Text("Open")
+                }
+                OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
+                    Text("Share")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (onRename != null) {
+                    OutlinedButton(onClick = onRename, modifier = Modifier.weight(1f)) {
+                        Text("Rename")
+                    }
+                }
+                if (onMoveToTrash != null) {
+                    OutlinedButton(onClick = onMoveToTrash, modifier = Modifier.weight(1f)) {
+                        Text("Move to Recycle Bin")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun FileDetailStatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+    }
+}
+
+@Composable
+private fun BrowseEmptyState(
+    title: String,
+    subtitle: String,
+    resetLabel: String?,
+    onReset: (() -> Unit)?
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)),
+            shape = RoundedCornerShape(26.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (resetLabel != null && onReset != null) {
+                    OutlinedButton(onClick = onReset) {
+                        Text(resetLabel)
                     }
                 }
             }
@@ -1013,16 +2019,142 @@ private fun DestinationFolderRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileGridCard(
+    item: FileItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onClick: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
+        shape = RoundedCornerShape(24.dp),
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                    }
+                ) {
+                    Icon(
+                        imageVector = when {
+                            selected -> Icons.Default.CheckCircle
+                            item.isDirectory -> Icons.Default.Folder
+                            else -> Icons.Default.UploadFile
+                        },
+                        contentDescription = item.name,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .padding(12.dp),
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                if (!selectionMode && (onShare != null || onRename != null || onDelete != null)) {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Actions")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            if (onShare != null) {
+                                DropdownMenuItem(text = { Text("Share") }, onClick = {
+                                    menuExpanded = false
+                                    onShare()
+                                })
+                            }
+                            if (onRename != null) {
+                                DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                                    menuExpanded = false
+                                    onRename()
+                                })
+                            }
+                            if (onDelete != null) {
+                                DropdownMenuItem(text = { Text("Move to Recycle Bin") }, onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (item.isDirectory) "Folder" else kindLabel(item.kind),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (item.isDirectory) "Tap to open folder" else formatBytes(item.sizeBytes ?: 0L),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = formatDate(item.lastModified),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Open",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
         }
     }
 }
@@ -1030,13 +2162,14 @@ private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, m
 @Composable
 private fun StatPill(label: String) {
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
 }
@@ -1106,7 +2239,11 @@ private fun FileRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${item.kind.name.lowercase().replaceFirstChar(Char::uppercase)} | ${formatBytes(item.sizeBytes ?: 0L)}",
+                    if (item.isDirectory) {
+                        "Folder"
+                    } else {
+                        "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1155,20 +2292,34 @@ private fun FileRow(
 
 @Composable
 private fun EmptyRootState(onPickFolder: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.secondary,
+                        MaterialTheme.colorScheme.surface
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
         Card(
             modifier = Modifier.padding(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            shape = RoundedCornerShape(30.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Connect phone storage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                BrandWordmarkBadge()
+                Text("Connect phone storage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Grant device storage access so OOFM can behave like a proper mobile file manager. Once connected, the app will load your phone storage automatically.",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 FilledTonalButton(onClick = onPickFolder) {
                     Text("Grant access")
@@ -1196,16 +2347,32 @@ private fun SectionTitle(title: String, subtitle: String? = null) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Surface(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .fillMaxWidth(0.18f)
+                .height(3.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.primary
+        ) {}
     }
 }
 
 @Composable
 private fun SectionHint(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 private fun formatBytes(bytes: Long): String {
@@ -1218,6 +2385,83 @@ private fun formatBytes(bytes: Long): String {
         index++
     }
     return if (index == 0) "${value.toInt()} ${units[index]}" else String.format("%.1f %s", value, units[index])
+}
+
+private fun buildBrowseControlsSummary(state: OrganizerUiState): String {
+    val parts = mutableListOf(
+        "Sort: ${browseSortLabel(state.browseSortOption)} ${if (state.browseSortDirection == BrowseSortDirection.ASCENDING) "Asc" else "Desc"}",
+        "Scope: ${browseScopeLabel(state.browseScopeFilter)}"
+    )
+    if (state.browseTypeFilter != BrowseTypeFilter.ALL) {
+        parts += "Files: ${browseTypeFilterLabel(state.browseTypeFilter)}"
+    }
+    return parts.joinToString(" • ")
+}
+
+private fun browseSortLabel(option: BrowseSortOption): String = when (option) {
+    BrowseSortOption.NAME -> "Name"
+    BrowseSortOption.DATE_MODIFIED -> "Date modified"
+    BrowseSortOption.SIZE -> "Size"
+    BrowseSortOption.TYPE -> "Type"
+}
+
+private fun browseScopeLabel(filter: BrowseScopeFilter): String = when (filter) {
+    BrowseScopeFilter.ALL -> "All items"
+    BrowseScopeFilter.FOLDERS_ONLY -> "Folders only"
+    BrowseScopeFilter.FILES_ONLY -> "Files only"
+}
+
+private fun browseTypeFilterLabel(filter: BrowseTypeFilter): String = when (filter) {
+    BrowseTypeFilter.ALL -> "All files"
+    BrowseTypeFilter.IMAGES -> "Images"
+    BrowseTypeFilter.VIDEOS -> "Videos"
+    BrowseTypeFilter.AUDIO -> "Audio"
+    BrowseTypeFilter.DOCUMENTS -> "Documents"
+    BrowseTypeFilter.ARCHIVES_AND_APKS -> "Archives/APKs"
+}
+
+private fun kindLabel(kind: FileKind): String = when (kind) {
+    FileKind.DIRECTORY -> "Folder"
+    FileKind.IMAGE -> "Image"
+    FileKind.VIDEO -> "Video"
+    FileKind.AUDIO -> "Audio"
+    FileKind.DOCUMENT -> "Document"
+    FileKind.ARCHIVE -> "Archive"
+    FileKind.APK -> "APK"
+    FileKind.OTHER -> "File"
+}
+
+private fun storageCategoryTitle(category: StorageCategoryKey): String = when (category) {
+    StorageCategoryKey.IMAGES -> "Images"
+    StorageCategoryKey.VIDEOS -> "Videos"
+    StorageCategoryKey.AUDIO -> "Audio"
+    StorageCategoryKey.DOCUMENTS -> "Documents"
+    StorageCategoryKey.ARCHIVES_AND_APKS -> "Archives & APKs"
+    StorageCategoryKey.DOWNLOADS -> "Downloads"
+}
+
+private fun storageCategorySubtitle(category: StorageCategoryKey): String = when (category) {
+    StorageCategoryKey.IMAGES -> "Photos, screenshots, edits"
+    StorageCategoryKey.VIDEOS -> "Clips, recordings, reels"
+    StorageCategoryKey.AUDIO -> "Voice notes and music"
+    StorageCategoryKey.DOCUMENTS -> "PDFs and office files"
+    StorageCategoryKey.ARCHIVES_AND_APKS -> "Packages and compressed files"
+    StorageCategoryKey.DOWNLOADS -> "The Downloads folder itself"
+}
+
+private fun locationSummary(item: FileItem, rootDocumentId: String): String {
+    val normalizedParent = item.parentDocumentId.replace('\\', '/')
+    val normalizedRoot = rootDocumentId.replace('\\', '/')
+    return if (normalizedParent.startsWith(normalizedRoot, ignoreCase = true)) {
+        val relative = normalizedParent.removePrefix(normalizedRoot).trimStart('/')
+        if (relative.isBlank()) {
+            "Location: ${File(rootDocumentId).name.ifBlank { "Device storage" }}"
+        } else {
+            "Location: ${relative.replace("/", " › ")}"
+        }
+    } else {
+        "Location: ${File(item.parentDocumentId).name.ifBlank { "Current folder" }}"
+    }
 }
 
 private fun formatDate(value: Long?): String {

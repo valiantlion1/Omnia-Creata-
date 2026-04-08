@@ -3,6 +3,7 @@ package com.omnia.organizer.ui
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.omnia.organizer.core.domain.model.CategoryStat
 import com.omnia.organizer.core.domain.model.FileActionFailure
 import com.omnia.organizer.core.domain.model.FileBatchOperationResult
 import com.omnia.organizer.core.domain.model.FileItem
@@ -14,10 +15,12 @@ import com.omnia.organizer.core.domain.model.SearchSizeFilter
 import com.omnia.organizer.core.domain.model.SelectedRoot
 import com.omnia.organizer.core.domain.model.StorageSummary
 import com.omnia.organizer.core.domain.model.TrashEntry
+import com.omnia.organizer.core.domain.model.SourceType
 import com.omnia.organizer.core.domain.repository.SelectedRootRepository
 import com.omnia.organizer.core.domain.repository.TrashRepository
 import com.omnia.organizer.files.SafDocumentManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +40,55 @@ enum class FileOperationType {
     MOVE
 }
 
+enum class BrowseLayoutMode {
+    LIST,
+    GRID
+}
+
+enum class BrowseSortOption {
+    NAME,
+    DATE_MODIFIED,
+    SIZE,
+    TYPE
+}
+
+enum class BrowseSortDirection {
+    ASCENDING,
+    DESCENDING
+}
+
+enum class BrowseScopeFilter {
+    ALL,
+    FOLDERS_ONLY,
+    FILES_ONLY
+}
+
+enum class BrowseTypeFilter {
+    ALL,
+    IMAGES,
+    VIDEOS,
+    AUDIO,
+    DOCUMENTS,
+    ARCHIVES_AND_APKS
+}
+
+enum class StorageCategoryKey {
+    IMAGES,
+    VIDEOS,
+    AUDIO,
+    DOCUMENTS,
+    ARCHIVES_AND_APKS,
+    DOWNLOADS
+}
+
+data class HomeSummary(
+    val usedBytes: Long,
+    val freeBytes: Long?,
+    val fileCount: Int,
+    val folderCount: Int,
+    val topCategories: List<CategoryStat>
+)
+
 data class PendingFileOperation(
     val type: FileOperationType,
     val items: List<FileItem>
@@ -48,6 +100,14 @@ data class DestinationPickerState(
     val targetDocumentId: String
 )
 
+data class StorageCategoryView(
+    val key: StorageCategoryKey,
+    val title: String,
+    val subtitle: String,
+    val items: List<FileItem>,
+    val folderPath: List<FolderHandle>? = null
+)
+
 data class OrganizerUiState(
     val root: SelectedRoot? = null,
     val breadcrumb: List<FolderHandle> = emptyList(),
@@ -56,13 +116,24 @@ data class OrganizerUiState(
     val searchFilters: SearchFilters = SearchFilters(),
     val searchResults: List<FileItem> = emptyList(),
     val storageSummary: StorageSummary? = null,
+    val homeSummary: HomeSummary? = null,
     val recentFiles: List<FileItem> = emptyList(),
+    val newFiles: List<FileItem> = emptyList(),
     val largeFiles: List<FileItem> = emptyList(),
+    val searchTargetFolder: FolderHandle? = null,
+    val storageCategoryView: StorageCategoryView? = null,
     val trashEntries: List<TrashEntry> = emptyList(),
     val renameTarget: FileItem? = null,
     val showCreateFolderDialog: Boolean = false,
     val createFolderTargetDocumentId: String? = null,
     val createFolderForDestination: Boolean = false,
+    val browseLayoutMode: BrowseLayoutMode = BrowseLayoutMode.LIST,
+    val browseSortOption: BrowseSortOption = BrowseSortOption.NAME,
+    val browseSortDirection: BrowseSortDirection = BrowseSortDirection.ASCENDING,
+    val browseScopeFilter: BrowseScopeFilter = BrowseScopeFilter.ALL,
+    val browseTypeFilter: BrowseTypeFilter = BrowseTypeFilter.ALL,
+    val showBrowseControlsSheet: Boolean = false,
+    val fileDetailTarget: FileItem? = null,
     val isSelectionMode: Boolean = false,
     val selectedDocumentIds: Set<String> = emptySet(),
     val pendingFileOperation: PendingFileOperation? = null,
@@ -157,8 +228,10 @@ class OrganizerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         breadcrumb = it.breadcrumb + handle,
-                        items = children
-                    ).clearSelectionState()
+                        items = children,
+                        searchTargetFolder = handle,
+                        storageCategoryView = null
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
             }
         }
@@ -176,8 +249,10 @@ class OrganizerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         breadcrumb = nextBreadcrumb,
-                        items = children
-                    ).clearSelectionState()
+                        items = children,
+                        searchTargetFolder = nextBreadcrumb.lastOrNull(),
+                        storageCategoryView = null
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
             }
         }
@@ -201,9 +276,47 @@ class OrganizerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         breadcrumb = listOfNotNull(rootHandle, parentHandle),
-                        items = children
-                    ).clearSelectionState()
+                        items = children,
+                        searchTargetFolder = parentHandle ?: rootHandle,
+                        storageCategoryView = null
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
+            }
+        }
+    }
+
+    fun showInBrowse(item: FileItem) {
+        val root = _uiState.value.root ?: return
+        viewModelScope.launch {
+            runTask("Unable to open this location in Browse.") {
+                val path = when (root.sourceType) {
+                    SourceType.FILE_SYSTEM -> buildFileSystemBrowsePath(root, if (item.isDirectory) item.documentId else item.parentDocumentId)
+                    SourceType.TREE -> buildTreeBrowsePath(root, item)
+                }
+                if (path.isNullOrEmpty()) error("This location is not available in Browse right now.")
+                openFolderPath(root, path)
+            }
+        }
+    }
+
+    fun openSmartFolder(targetNames: Set<String>, title: String) {
+        val root = _uiState.value.root ?: return
+        viewModelScope.launch {
+            runTask("Unable to open $title right now.") {
+                val path = withContext(Dispatchers.IO) {
+                    documentManager.findFolderPath(root, targetNames)
+                } ?: error("$title is not available in the current storage view yet.")
+                openFolderPath(root, path)
+            }
+        }
+    }
+
+    fun openFolderPath(path: List<FolderHandle>) {
+        val root = _uiState.value.root ?: return
+        if (path.isEmpty()) return
+        viewModelScope.launch {
+            runTask("Unable to open that folder.") {
+                openFolderPath(root, path)
             }
         }
     }
@@ -232,11 +345,126 @@ class OrganizerViewModel @Inject constructor(
         _uiState.update { it.clearSelectionState() }
     }
 
+    fun setBrowseLayoutMode(mode: BrowseLayoutMode) {
+        _uiState.update { it.copy(browseLayoutMode = mode) }
+    }
+
+    fun showBrowseControlsSheet() {
+        _uiState.update { it.copy(showBrowseControlsSheet = true, errorMessage = null) }
+    }
+
+    fun dismissBrowseControlsSheet() {
+        _uiState.update { it.copy(showBrowseControlsSheet = false) }
+    }
+
+    fun setBrowseSortOption(option: BrowseSortOption) {
+        _uiState.update { it.copy(browseSortOption = option, errorMessage = null) }
+    }
+
+    fun setBrowseSortDirection(direction: BrowseSortDirection) {
+        _uiState.update { it.copy(browseSortDirection = direction, errorMessage = null) }
+    }
+
+    fun setBrowseScopeFilter(filter: BrowseScopeFilter) {
+        _uiState.update { it.copy(browseScopeFilter = filter, errorMessage = null) }
+    }
+
+    fun setBrowseTypeFilter(filter: BrowseTypeFilter) {
+        _uiState.update { it.copy(browseTypeFilter = filter, errorMessage = null) }
+    }
+
+    fun resetBrowseExplorerControls() {
+        _uiState.update { it.resetBrowseExplorerControls() }
+    }
+
+    fun refreshHomeSummary() {
+        val root = _uiState.value.root ?: return
+        refreshStorageSummary(root, showLoading = false)
+    }
+
+    fun openStorageCategory(key: StorageCategoryKey) {
+        val root = _uiState.value.root ?: return
+        viewModelScope.launch {
+            runTask("Unable to open this storage category.") {
+                val categoryView = withContext(Dispatchers.IO) {
+                    when (key) {
+                        StorageCategoryKey.IMAGES -> buildStorageCategoryView(
+                            key = key,
+                            title = "Images",
+                            subtitle = "Photos, screenshots, and image exports in your connected storage.",
+                            items = documentManager.listByKinds(root, setOf(FileKind.IMAGE))
+                        )
+
+                        StorageCategoryKey.VIDEOS -> buildStorageCategoryView(
+                            key = key,
+                            title = "Videos",
+                            subtitle = "Clips, recordings, and video files across the current storage root.",
+                            items = documentManager.listByKinds(root, setOf(FileKind.VIDEO))
+                        )
+
+                        StorageCategoryKey.AUDIO -> buildStorageCategoryView(
+                            key = key,
+                            title = "Audio",
+                            subtitle = "Voice notes, music, and other audio stored on this device root.",
+                            items = documentManager.listByKinds(root, setOf(FileKind.AUDIO))
+                        )
+
+                        StorageCategoryKey.DOCUMENTS -> buildStorageCategoryView(
+                            key = key,
+                            title = "Documents",
+                            subtitle = "PDFs, text files, office files, and other document formats.",
+                            items = documentManager.listByKinds(root, setOf(FileKind.DOCUMENT))
+                        )
+
+                        StorageCategoryKey.ARCHIVES_AND_APKS -> buildStorageCategoryView(
+                            key = key,
+                            title = "Archives & APKs",
+                            subtitle = "Compressed files, installers, and package downloads.",
+                            items = documentManager.listByKinds(root, setOf(FileKind.ARCHIVE, FileKind.APK))
+                        )
+
+                        StorageCategoryKey.DOWNLOADS -> {
+                            val path = documentManager.findFolderPath(root, setOf("downloads", "download"))
+                                ?: error("Downloads folder could not be found in the current storage view.")
+                            buildStorageCategoryView(
+                                key = key,
+                                title = "Downloads",
+                                subtitle = "Everything OOFM found inside the Downloads folder.",
+                                items = documentManager.listDescendants(root, path.last().documentId),
+                                folderPath = path
+                            )
+                        }
+                    }
+                }
+                _uiState.update {
+                    it.copy(
+                        storageCategoryView = categoryView,
+                        errorMessage = null
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearStorageCategoryView() {
+        _uiState.update { it.copy(storageCategoryView = null) }
+    }
+
+    fun openFileDetail(item: FileItem) {
+        if (item.isDirectory) return
+        _uiState.update { it.copy(fileDetailTarget = item, errorMessage = null) }
+    }
+
+    fun dismissFileDetail() {
+        _uiState.update { it.copy(fileDetailTarget = null) }
+    }
+
     fun enterSelectionMode(item: FileItem) {
         _uiState.update {
             it.copy(
                 isSelectionMode = true,
                 selectedDocumentIds = setOf(item.documentId),
+                fileDetailTarget = null,
                 errorMessage = null
             )
         }
@@ -256,7 +484,7 @@ class OrganizerViewModel @Inject constructor(
     }
 
     fun selectAllCurrentFolder() {
-        val items = _uiState.value.items
+        val items = _uiState.value.visibleBrowseItems()
         if (items.isEmpty()) return
         _uiState.update {
             it.copy(
@@ -575,11 +803,15 @@ class OrganizerViewModel @Inject constructor(
                         breadcrumb = listOf(rootHandle),
                         items = items,
                         storageSummary = null,
+                        homeSummary = null,
                         recentFiles = emptyList(),
+                        newFiles = emptyList(),
                         largeFiles = emptyList(),
                         searchResults = emptyList(),
+                        searchTargetFolder = rootHandle,
+                        storageCategoryView = null,
                         isStorageRefreshing = true
-                    ).clearSelectionState()
+                    ).clearSelectionState().resetBrowseExplorerControls(resetLayoutMode = true)
                 }
                 refreshStorageSummary(root, showLoading = false)
                 if (_uiState.value.searchQuery.isNotBlank()) {
@@ -629,7 +861,9 @@ class OrganizerViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 items = items,
-                searchResults = if (keepSearchResults) it.searchResults else emptyList()
+                searchResults = if (keepSearchResults) it.searchResults else emptyList(),
+                searchTargetFolder = currentFolder,
+                storageCategoryView = null
             )
         }
         if (keepSearchResults && _uiState.value.searchQuery.isNotBlank()) {
@@ -665,7 +899,9 @@ class OrganizerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         storageSummary = summary,
+                        homeSummary = summary.toHomeSummary(),
                         recentFiles = summary.recentFiles,
+                        newFiles = summary.deriveNewFiles(),
                         largeFiles = summary.largeFiles,
                         isStorageRefreshing = false,
                         lastStorageScanAt = System.currentTimeMillis()
@@ -787,6 +1023,73 @@ class OrganizerViewModel @Inject constructor(
         return failureSummary
     }
 
+    private fun buildFileSystemBrowsePath(root: SelectedRoot, targetDocumentId: String): List<FolderHandle>? {
+        val rootFile = File(root.rootDocumentId)
+        val targetFile = File(targetDocumentId)
+        if (!targetFile.exists()) return null
+        val rootPath = rootFile.canonicalFile
+        val targetPath = targetFile.canonicalFile
+        if (!targetPath.path.startsWith(rootPath.path, ignoreCase = true)) return null
+        val relativeSegments = targetPath.path.removePrefix(rootPath.path).trimStart(File.separatorChar)
+            .split(File.separatorChar)
+            .filter { it.isNotBlank() }
+        if (relativeSegments.isEmpty()) {
+            return listOf(FolderHandle(root.rootDocumentId, root.displayName))
+        }
+        val path = mutableListOf(FolderHandle(root.rootDocumentId, root.displayName))
+        var current = rootFile
+        relativeSegments.forEach { segment ->
+            current = File(current, segment)
+            path += FolderHandle(current.absolutePath, current.name)
+        }
+        return path
+    }
+
+    private suspend fun buildTreeBrowsePath(root: SelectedRoot, item: FileItem): List<FolderHandle>? {
+        val rootHandle = withContext(Dispatchers.IO) {
+            documentManager.getFolderHandle(root, root.rootDocumentId)
+        } ?: FolderHandle(root.rootDocumentId, root.displayName)
+        val targetDocumentId = if (item.isDirectory) item.documentId else item.parentDocumentId
+        val targetHandle = withContext(Dispatchers.IO) {
+            documentManager.getFolderHandle(root, targetDocumentId)
+        } ?: return listOf(rootHandle)
+        return if (targetHandle.documentId == rootHandle.documentId) {
+            listOf(rootHandle)
+        } else {
+            listOf(rootHandle, targetHandle)
+        }
+    }
+
+    private suspend fun openFolderPath(root: SelectedRoot, path: List<FolderHandle>) {
+        val target = path.last()
+        val children = withContext(Dispatchers.IO) {
+            documentManager.listChildren(root, target.documentId)
+        }
+        _uiState.update {
+            it.copy(
+                breadcrumb = path,
+                items = children,
+                searchTargetFolder = target,
+                storageCategoryView = null
+            ).clearSelectionState().resetBrowseExplorerControls(resetLayoutMode = true)
+        }
+    }
+
+    private fun buildStorageCategoryView(
+        key: StorageCategoryKey,
+        title: String,
+        subtitle: String,
+        items: List<FileItem>,
+        folderPath: List<FolderHandle>? = null
+    ): StorageCategoryView = StorageCategoryView(
+        key = key,
+        title = title,
+        subtitle = subtitle,
+        items = items
+            .distinctBy(FileItem::documentId)
+            .sortedWith(compareByDescending<FileItem> { it.lastModified ?: 0L }.thenBy { it.name.lowercase() }),
+        folderPath = folderPath
+    )
 }
 
 private data class TrashBatchResult(
@@ -801,9 +1104,79 @@ private fun TrashBatchResult.toFileBatchOperationResult(): FileBatchOperationRes
     failures = failures
 )
 
+internal fun OrganizerUiState.visibleBrowseItems(): List<FileItem> {
+    val scopedItems = items.filter { item ->
+        when (browseScopeFilter) {
+            BrowseScopeFilter.ALL -> true
+            BrowseScopeFilter.FOLDERS_ONLY -> item.isDirectory
+            BrowseScopeFilter.FILES_ONLY -> !item.isDirectory
+        }
+    }.filter { item ->
+        item.isDirectory || matchesBrowseTypeFilter(item, browseTypeFilter)
+    }
+
+    val comparator = browseComparator(browseSortOption).let { base ->
+        if (browseSortDirection == BrowseSortDirection.ASCENDING) base else base.reversed()
+    }
+
+    val folders = scopedItems.filter(FileItem::isDirectory).sortedWith(comparator)
+    val files = scopedItems.filterNot(FileItem::isDirectory).sortedWith(comparator)
+    return when (browseScopeFilter) {
+        BrowseScopeFilter.FOLDERS_ONLY -> folders
+        BrowseScopeFilter.FILES_ONLY -> files
+        BrowseScopeFilter.ALL -> folders + files
+    }
+}
+
 private fun OrganizerUiState.clearSelectionState(): OrganizerUiState = copy(
     isSelectionMode = false,
     selectedDocumentIds = emptySet(),
     pendingFileOperation = null,
-    destinationPickerState = null
+    destinationPickerState = null,
+    fileDetailTarget = null
 )
+
+private fun OrganizerUiState.resetBrowseExplorerControls(resetLayoutMode: Boolean = false): OrganizerUiState = copy(
+    browseLayoutMode = if (resetLayoutMode) BrowseLayoutMode.LIST else browseLayoutMode,
+    browseSortOption = BrowseSortOption.NAME,
+    browseSortDirection = BrowseSortDirection.ASCENDING,
+    browseScopeFilter = BrowseScopeFilter.ALL,
+    browseTypeFilter = BrowseTypeFilter.ALL,
+    showBrowseControlsSheet = false,
+    fileDetailTarget = null
+)
+
+private fun matchesBrowseTypeFilter(item: FileItem, filter: BrowseTypeFilter): Boolean = when (filter) {
+    BrowseTypeFilter.ALL -> true
+    BrowseTypeFilter.IMAGES -> item.kind == FileKind.IMAGE
+    BrowseTypeFilter.VIDEOS -> item.kind == FileKind.VIDEO
+    BrowseTypeFilter.AUDIO -> item.kind == FileKind.AUDIO
+    BrowseTypeFilter.DOCUMENTS -> item.kind == FileKind.DOCUMENT
+    BrowseTypeFilter.ARCHIVES_AND_APKS -> item.kind == FileKind.ARCHIVE || item.kind == FileKind.APK
+}
+
+private fun browseComparator(option: BrowseSortOption): Comparator<FileItem> = when (option) {
+    BrowseSortOption.NAME -> compareBy<FileItem>({ it.name.lowercase() }, { it.documentId })
+    BrowseSortOption.DATE_MODIFIED -> compareBy<FileItem>({ it.lastModified ?: Long.MIN_VALUE }, { it.name.lowercase() })
+    BrowseSortOption.SIZE -> compareBy<FileItem>({ it.sizeBytes ?: 0L }, { it.name.lowercase() })
+    BrowseSortOption.TYPE -> compareBy<FileItem>({ browseTypeKey(it) }, { it.name.lowercase() })
+}
+
+private fun browseTypeKey(item: FileItem): String = when {
+    item.isDirectory -> "directory"
+    else -> item.kind.name.lowercase()
+}
+
+private fun StorageSummary.toHomeSummary(): HomeSummary = HomeSummary(
+    usedBytes = totalBytes,
+    freeBytes = freeBytes,
+    fileCount = fileCount,
+    folderCount = folderCount,
+    topCategories = categories.take(4)
+)
+
+private fun StorageSummary.deriveNewFiles(): List<FileItem> {
+    val cutoff = System.currentTimeMillis() - 3L * 24 * 60 * 60 * 1000
+    val recentNew = recentFiles.filter { (it.lastModified ?: 0L) >= cutoff }
+    return if (recentNew.isNotEmpty()) recentNew.take(6) else recentFiles.take(4)
+}

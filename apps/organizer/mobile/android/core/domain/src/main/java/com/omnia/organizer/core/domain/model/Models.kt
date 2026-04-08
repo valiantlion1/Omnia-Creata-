@@ -69,6 +69,7 @@ data class CategoryStat(
 
 data class StorageSummary(
     val totalBytes: Long,
+    val freeBytes: Long?,
     val fileCount: Int,
     val folderCount: Int,
     val categories: List<CategoryStat>,

@@ -8,9 +8,133 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha12](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha12)
 
 ## Entries
+
+### 2026-04-08 - Alpha 12 roadmap utility parity
+- Version target: `1.0.0-alpha12`
+- Track target: GitHub prerelease testing
+- Status: ready to ship
+- Release page: [Omnia Organizer 1.0.0-alpha12](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha12)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Home now has a real storage summary card, new files, and pinned entry points for Downloads, Screenshots, Documents, and Recycle Bin
+  - Search results now show clearer location context and can jump directly into Browse
+  - Storage now supports tap-through category drill-ins instead of staying a passive summary screen
+  - Recycle Bin layout now aligns more closely with the explorer surface language
+- Known gaps:
+  - onboarding and trust flow still need a dedicated first-run pass
+  - storage summaries still need a lighter startup strategy on weaker devices
+  - low-end device performance hardening is still the next release after trust
+
+### 2026-04-08 - Alpha 11 explorer completion pass
+- Version target: `1.0.0-alpha11`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha11](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha11)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now has a real sort and filter bottom sheet for the current folder
+  - file taps in Browse open a metadata-first detail sheet instead of jumping straight into Android open
+  - the explorer list and grid now render from one sorted and filtered browse pipeline
+  - empty folder and no-match states now behave like explorer states instead of generic placeholders
+- Known gaps:
+  - Search and Storage still need the same structural polish as Browse
+  - richer media previews are still deferred behind this metadata-first detail layer
+  - another performance pass is still needed after more real-device feedback
+
+### 2026-04-08 - Alpha 10 file explorer layout foundation
+- Version target: `1.0.0-alpha10`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha10](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha10)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now has a real file explorer control panel instead of a loose list of rows
+  - list view and grid view now both exist for folder browsing
+  - grid cards were added for a more visual phone-friendly explorer layout
+  - folder and file counts are surfaced so the current location feels clearer
+- Known gaps:
+  - sort controls and richer explorer filters still need a dedicated pass
+  - search and storage layouts still need the same level of visual structure as browse
+  - explorer performance tuning is still a separate follow-up sprint
+
+### 2026-04-08 - Alpha 9 unified launch splash without double screen
+- Version target: `1.0.0-alpha9`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha9](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha9)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - cold start now uses a branded Android launch splash instead of showing a separate square icon phase and then a second loading screen
+  - foreground returns still show the in-app loading splash, so the brand/loading layer now feels consistent on every app open
+  - splash timing was rebalanced so launch feels visible without stacking two different splash experiences
+- Known gaps:
+  - the system launch splash still uses a centered logo format, not a full cinematic layout
+  - splash motion is still static for now
+  - onboarding and permission education still need a dedicated first-run flow
+
+### 2026-04-08 - Alpha 8 splash on every app open
+- Version target: `1.0.0-alpha8`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha8](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha8)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - the branded splash now restarts whenever the app returns to the foreground instead of only behaving like a cold-start layer
+  - the minimum visible duration was increased so the logo and loading copy actually register on real devices
+  - splash timing is now reset on resume so warm app opens feel intentional too
+- Known gaps:
+  - splash motion is still static for now
+  - onboarding and permission education still need a dedicated first-run flow
+  - broader startup optimization still remains a later pass after more device feedback
+
+### 2026-04-08 - Alpha 7 full-screen launch splash and loading pass
+- Version target: `1.0.0-alpha7`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha7](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha7)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - a real full-screen OmniaCreata launch splash now appears before the app shell
+  - the splash stays visible long enough to actually register the brand instead of flashing past
+  - startup status messaging now explains secure access, device connection, and workspace loading states
+  - the loading layer now covers the first root handshake so the app can warm up without feeling as abrupt
+- Known gaps:
+  - splash motion is still static and can get a second animation pass later
+  - onboarding and permission education still need a dedicated first-run flow
+  - broader startup optimization still remains a later pass after more device feedback
+
+### 2026-04-08 - Alpha 6 OmniaCreata branded UI pass
+- Version target: `1.0.0-alpha6`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha6](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha6)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - OmniaCreata-inspired gold, ink, and ivory visual system replaced the generic utility palette
+  - home, browse, storage, settings, and empty states now use branded hero surfaces and stronger section hierarchy
+  - the OmniaCreata logo now appears inside the Android app UI
+  - navigation chrome was restyled to feel closer to a premium phone product
+- Known gaps:
+  - permission/onboarding flow still needs a dedicated full-screen product tour pass
+  - some utility screens still need a second polish round after device feedback
+  - performance tuning is still not the focus of this release
 
 ### 2026-04-08 - Alpha 5 core actions and destination picker
 - Version target: `1.0.0-alpha5`

@@ -259,6 +259,44 @@ class SafDocumentManager @Inject constructor(
         return results.sortedWith(compareByDescending<FileItem> { it.lastModified ?: 0L }.thenBy { it.name.lowercase() })
     }
 
+    fun listByKinds(root: SelectedRoot, kinds: Set<FileKind>, limit: Int = 240): List<FileItem> {
+        if (kinds.isEmpty()) return emptyList()
+        val results = mutableListOf<FileItem>()
+        walkTree(root) { item ->
+            if (!item.isDirectory && kinds.contains(item.kind)) {
+                results += item
+            }
+            results.size < limit
+        }
+        return results.sortedWith(compareByDescending<FileItem> { it.lastModified ?: 0L }.thenBy { it.name.lowercase() })
+    }
+
+    fun listDescendants(
+        root: SelectedRoot,
+        parentDocumentId: String,
+        limit: Int = 240,
+        kinds: Set<FileKind>? = null
+    ): List<FileItem> {
+        val results = mutableListOf<FileItem>()
+        walkTree(root, parentDocumentId) { item ->
+            if (!item.isDirectory && (kinds == null || kinds.contains(item.kind))) {
+                results += item
+            }
+            results.size < limit
+        }
+        return results.sortedWith(compareByDescending<FileItem> { it.lastModified ?: 0L }.thenBy { it.name.lowercase() })
+    }
+
+    fun findFolderPath(root: SelectedRoot, targetNames: Set<String>): List<FolderHandle>? {
+        if (targetNames.isEmpty()) return null
+        val normalizedTargets = targetNames.map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+        if (normalizedTargets.isEmpty()) return null
+        return when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> findFileSystemFolderPath(File(root.rootDocumentId), normalizedTargets)
+            SourceType.TREE -> findTreeFolderPath(root, normalizedTargets)
+        }
+    }
+
     fun summarize(root: SelectedRoot): StorageSummary {
         var totalBytes = 0L
         var fileCount = 0
@@ -288,6 +326,7 @@ class SafDocumentManager @Inject constructor(
 
         return StorageSummary(
             totalBytes = totalBytes,
+            freeBytes = resolveFreeBytes(root),
             fileCount = fileCount,
             folderCount = folderCount,
             categories = categories,
@@ -340,8 +379,12 @@ class SafDocumentManager @Inject constructor(
     }
 
     private fun walkTree(root: SelectedRoot, visitor: (FileItem) -> Boolean) {
+        walkTree(root, root.rootDocumentId, visitor)
+    }
+
+    private fun walkTree(root: SelectedRoot, startDocumentId: String, visitor: (FileItem) -> Boolean) {
         val stack = ArrayDeque<String>()
-        stack.add(root.rootDocumentId)
+        stack.add(startDocumentId)
         while (stack.isNotEmpty()) {
             val parentId = stack.removeLast()
             val children = listChildren(root, parentId)
@@ -595,6 +638,11 @@ class SafDocumentManager @Inject constructor(
             ?: "application/octet-stream"
     }
 
+    private fun resolveFreeBytes(root: SelectedRoot): Long? = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> runCatching { File(root.rootDocumentId).usableSpace }.getOrNull()
+        SourceType.TREE -> null
+    }
+
     private fun matchesSearch(item: FileItem, query: String, filters: SearchFilters): Boolean {
         if (!item.name.lowercase().contains(query)) return false
         if (filters.kind != null && item.kind != filters.kind) return false
@@ -627,6 +675,74 @@ class SafDocumentManager @Inject constructor(
             mimeType.startsWith("text/") || mimeType.contains("pdf") || mimeType.contains("document") || mimeType.contains("sheet") || mimeType.contains("presentation") -> FileKind.DOCUMENT
             else -> FileKind.OTHER
         }
+    }
+
+    private fun findFileSystemFolderPath(rootFolder: File, targetNames: Set<String>): List<FolderHandle>? {
+        if (!rootFolder.exists() || !rootFolder.isDirectory) return null
+        val rootHandle = FolderHandle(
+            documentId = rootFolder.absolutePath,
+            name = rootFolder.name.ifBlank { "Device storage" }
+        )
+        val stack = ArrayDeque<Pair<File, List<FolderHandle>>>()
+        stack.add(rootFolder to listOf(rootHandle))
+        while (stack.isNotEmpty()) {
+            val (folder, path) = stack.removeLast()
+            val children = folder.listFiles().orEmpty()
+                .filter { it.isDirectory && it.name != trashFolderName }
+                .sortedBy { it.name.lowercase() }
+            for (child in children) {
+                val childPath = path + FolderHandle(child.absolutePath, child.name)
+                if (targetNames.contains(child.name.lowercase())) {
+                    return childPath
+                }
+                if (shouldTraverseDirectory(
+                        root = SelectedRoot(
+                            treeUri = rootFolder.absolutePath,
+                            rootDocumentId = rootFolder.absolutePath,
+                            displayName = rootFolder.name.ifBlank { "Device storage" },
+                            sourceType = SourceType.FILE_SYSTEM,
+                            selectedAt = 0L
+                        ),
+                        item = FileItem(
+                            documentId = child.absolutePath,
+                            parentDocumentId = folder.absolutePath,
+                            name = child.name,
+                            mimeType = DocumentsContract.Document.MIME_TYPE_DIR,
+                            sizeBytes = null,
+                            lastModified = child.lastModified(),
+                            kind = FileKind.DIRECTORY,
+                            isDirectory = true,
+                            canWrite = child.canWrite(),
+                            canDelete = child.parentFile?.canWrite() ?: child.canWrite(),
+                            canRename = child.parentFile?.canWrite() ?: child.canWrite()
+                        )
+                    )
+                ) {
+                    stack.add(child to childPath)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findTreeFolderPath(root: SelectedRoot, targetNames: Set<String>): List<FolderHandle>? {
+        val rootHandle = getFolderHandle(root, root.rootDocumentId)
+            ?: FolderHandle(root.rootDocumentId, root.displayName)
+        val stack = ArrayDeque<Pair<FolderHandle, List<FolderHandle>>>()
+        stack.add(rootHandle to listOf(rootHandle))
+        while (stack.isNotEmpty()) {
+            val (folder, path) = stack.removeLast()
+            val children = listTreeChildren(root, folder.documentId).filter(FileItem::isDirectory)
+            for (child in children) {
+                val childHandle = FolderHandle(child.documentId, child.name)
+                val childPath = path + childHandle
+                if (targetNames.contains(child.name.lowercase())) {
+                    return childPath
+                }
+                stack.add(childHandle to childPath)
+            }
+        }
+        return null
     }
 }
 
