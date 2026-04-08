@@ -26,7 +26,12 @@ android {
         baseVersionName
     }
 
-    val computedVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
+    val preReleaseOrdinal = preReleaseNumber?.toIntOrNull() ?: 0
+    val computedVersionCode = versionMajor * 1_000_000 + versionMinor * 10_000 + versionPatch * 100 + if (isPreRelease) {
+        preReleaseOrdinal.coerceIn(0, 98)
+    } else {
+        99
+    }
 
     defaultConfig {
         applicationId = "com.omnia.organizer"

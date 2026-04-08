@@ -4,7 +4,7 @@
   "packageName": "com.omnia.organizer",
   "platform": "android",
   "version": "1.0.0-alpha2",
-  "versionCode": 10000,
+  "versionCode": 1000002,
   "track": "internal",
   "releaseChannel": "alpha",
   "mvpPhase": "phase-0-reset",
