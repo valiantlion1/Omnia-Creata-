@@ -1,6 +1,7 @@
 package com.omnia.organizer
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -97,10 +98,11 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashStartedAt = SystemClock.elapsedRealtime()
+        val coldStartMinimumDurationMs = coldStartSplashMinimumDurationMs(this)
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         splashScreen.setKeepOnScreenCondition {
-            SystemClock.elapsedRealtime() - splashStartedAt < ColdStartSplashMinimumDurationMs
+            SystemClock.elapsedRealtime() - splashStartedAt < coldStartMinimumDurationMs
         }
         setContent {
             OmniaTheme {
@@ -126,6 +128,9 @@ private enum class OrganizerRoute(
 private const val ColdStartSplashMinimumDurationMs = 1600L
 private const val LaunchSplashMinimumDurationMs = 1600L
 private const val LaunchSplashMaximumDurationMs = 4200L
+private const val ReducedColdStartSplashMinimumDurationMs = 950L
+private const val ReducedLaunchSplashMinimumDurationMs = 950L
+private const val ReducedLaunchSplashMaximumDurationMs = 2200L
 private const val CurrentDisclosureVersion = 1
 private const val OofmPrefsName = "oofm_startup"
 private const val PrefIntroComplete = "intro_complete"
@@ -263,16 +268,19 @@ private fun AppRoot(
         state.root?.rootDocumentId,
         state.isLoading,
         state.isStorageRefreshing,
-        state.errorMessage
+        state.errorMessage,
+        state.reducedEffectsMode
     ) {
         if (!splashVisible) return@LaunchedEffect
+        val minimumDurationMs = launchSplashMinimumDurationMs(state.reducedEffectsMode)
+        val maximumDurationMs = launchSplashMaximumDurationMs(state.reducedEffectsMode)
 
         while (splashVisible) {
             val elapsed = SystemClock.elapsedRealtime() - splashStartedAt
-            val minimumReached = elapsed >= LaunchSplashMinimumDurationMs
+            val minimumReached = elapsed >= minimumDurationMs
             val readyToContinue =
                 !hasStorageAccess || (state.root != null && !state.isLoading) || (!state.isLoading && state.errorMessage != null)
-            val timedOut = elapsed >= LaunchSplashMaximumDurationMs
+            val timedOut = elapsed >= maximumDurationMs
 
             if (minimumReached && (readyToContinue || timedOut)) {
                 splashVisible = false
@@ -614,6 +622,35 @@ private fun LaunchSplashScreen(
             }
         }
     }
+}
+
+private fun coldStartSplashMinimumDurationMs(context: Context): Long =
+    if (shouldUseReducedEffects(context)) {
+        ReducedColdStartSplashMinimumDurationMs
+    } else {
+        ColdStartSplashMinimumDurationMs
+    }
+
+private fun launchSplashMinimumDurationMs(reducedEffectsMode: Boolean): Long =
+    if (reducedEffectsMode) {
+        ReducedLaunchSplashMinimumDurationMs
+    } else {
+        LaunchSplashMinimumDurationMs
+    }
+
+private fun launchSplashMaximumDurationMs(reducedEffectsMode: Boolean): Long =
+    if (reducedEffectsMode) {
+        ReducedLaunchSplashMaximumDurationMs
+    } else {
+        LaunchSplashMaximumDurationMs
+    }
+
+private fun shouldUseReducedEffects(context: Context): Boolean {
+    val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+    val memoryInfo = ActivityManager.MemoryInfo()
+    activityManager.getMemoryInfo(memoryInfo)
+    val totalMemMb = memoryInfo.totalMem / (1024L * 1024L)
+    return activityManager.isLowRamDevice || activityManager.memoryClass <= 192 || totalMemMb <= 4096L
 }
 
 private fun openDocument(context: Context, uri: Uri?, mimeType: String) {

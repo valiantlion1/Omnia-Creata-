@@ -230,7 +230,7 @@ fun FirstRunOnboardingFlow(
                         onRequestAccess = onRequestAccess
                     )
 
-                    else -> DisclosurePage(onFinish = onFinish)
+                    else -> DisclosurePage()
                 }
             }
 
@@ -318,6 +318,13 @@ fun HomeScreen(
             } ?: SectionHint(
                 text = "Storage insight is still warming up. Browse and Search already work while the summary is prepared."
             )
+        }
+        if (state.reducedEffectsMode) {
+            item {
+                SectionHint(
+                    "Stability mode is active for this device. OOFM keeps startup summaries lighter so Browse and Search stay responsive."
+                )
+            }
         }
         item {
             Row(
@@ -770,7 +777,7 @@ private fun PermissionEducationPage(
 }
 
 @Composable
-private fun DisclosurePage(onFinish: () -> Unit) {
+private fun DisclosurePage() {
     Card(
         shape = RoundedCornerShape(30.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
@@ -1337,6 +1344,26 @@ fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.TERMS }) { Text("Terms & policy") }
                         OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.ABOUT }) { Text("About OOFM") }
+                    }
+                }
+            }
+        }
+        if (state.reducedEffectsMode) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Device stability mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "OOFM detected a lower-memory or lower-headroom device profile and is keeping some startup and summary work lighter so core file actions stay responsive.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

@@ -1,8 +1,11 @@
 package com.omnia.organizer.ui
 
+import android.app.ActivityManager
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.omnia.organizer.core.domain.model.CategoryStat
 import com.omnia.organizer.core.domain.model.FileActionFailure
 import com.omnia.organizer.core.domain.model.FileBatchOperationResult
@@ -108,6 +111,11 @@ data class StorageCategoryView(
     val folderPath: List<FolderHandle>? = null
 )
 
+enum class DeviceTier {
+    STANDARD,
+    REDUCED
+}
+
 data class OrganizerUiState(
     val root: SelectedRoot? = null,
     val breadcrumb: List<FolderHandle> = emptyList(),
@@ -138,6 +146,8 @@ data class OrganizerUiState(
     val selectedDocumentIds: Set<String> = emptySet(),
     val pendingFileOperation: PendingFileOperation? = null,
     val destinationPickerState: DestinationPickerState? = null,
+    val deviceTier: DeviceTier = DeviceTier.STANDARD,
+    val reducedEffectsMode: Boolean = false,
     val isLoading: Boolean = false,
     val isSearchLoading: Boolean = false,
     val isStorageRefreshing: Boolean = false,
@@ -149,7 +159,8 @@ data class OrganizerUiState(
 class OrganizerViewModel @Inject constructor(
     private val selectedRootRepository: SelectedRootRepository,
     private val trashRepository: TrashRepository,
-    private val documentManager: SafDocumentManager
+    private val documentManager: SafDocumentManager,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrganizerUiState())
@@ -157,17 +168,28 @@ class OrganizerViewModel @Inject constructor(
 
     private var searchJob: Job? = null
     private var summaryJob: Job? = null
+    private var homeSummaryJob: Job? = null
 
     init {
+        val deviceTier = detectDeviceTier(context)
+        _uiState.update {
+            it.copy(
+                deviceTier = deviceTier,
+                reducedEffectsMode = deviceTier == DeviceTier.REDUCED
+            )
+        }
         selectedRootRepository.observe()
             .onEach { root ->
                 searchJob?.cancel()
                 summaryJob?.cancel()
+                homeSummaryJob?.cancel()
                 if (root == null) {
                     _uiState.update { previous ->
                         OrganizerUiState(
                             searchFilters = previous.searchFilters,
-                            trashEntries = previous.trashEntries
+                            trashEntries = previous.trashEntries,
+                            deviceTier = previous.deviceTier,
+                            reducedEffectsMode = previous.reducedEffectsMode
                         )
                     }
                 } else {
@@ -203,7 +225,8 @@ class OrganizerViewModel @Inject constructor(
         val root = _uiState.value.root ?: return
         viewModelScope.launch {
             when (route) {
-                "home", "storage" -> refreshStorageSummary(root, showLoading = true)
+                "home" -> refreshHomeOverview(root, force = true)
+                "storage" -> refreshStorageSummary(root, showLoading = true)
                 "search" -> queueSearch(immediate = true)
                 else -> refreshCurrentFolder(root, keepSearchResults = false)
             }
@@ -379,7 +402,7 @@ class OrganizerViewModel @Inject constructor(
 
     fun refreshHomeSummary() {
         val root = _uiState.value.root ?: return
-        refreshStorageSummary(root, showLoading = false)
+        refreshHomeOverview(root, force = true)
     }
 
     fun openStorageCategory(key: StorageCategoryKey) {
@@ -529,7 +552,7 @@ class OrganizerViewModel @Inject constructor(
                     it.copy(renameTarget = null).clearSelectionState()
                 }
                 refreshCurrentFolder(root, keepSearchResults = true)
-                refreshStorageSummary(root, showLoading = false)
+                refreshLightSurfaces(root)
             }
         }
     }
@@ -616,7 +639,7 @@ class OrganizerViewModel @Inject constructor(
                         it.clearSelectionState()
                     }
                     refreshCurrentFolder(root, keepSearchResults = true)
-                    refreshStorageSummary(root, showLoading = false)
+                    refreshLightSurfaces(root)
                 }
 
                 summarizeBatchResult(
@@ -644,7 +667,7 @@ class OrganizerViewModel @Inject constructor(
                 if (result.succeededDocumentIds.isNotEmpty()) {
                     _uiState.update { it.clearSelectionState() }
                     refreshCurrentFolder(root, keepSearchResults = true)
-                    refreshStorageSummary(root, showLoading = false)
+                    refreshLightSurfaces(root)
                 }
                 summarizeBatchResult(
                     operation = "Moved to Recycle Bin",
@@ -662,7 +685,7 @@ class OrganizerViewModel @Inject constructor(
                 val entry = withContext(Dispatchers.IO) { documentManager.moveToTrash(root, item) }
                 trashRepository.upsert(entry)
                 refreshCurrentFolder(root, keepSearchResults = true)
-                refreshStorageSummary(root, showLoading = false)
+                refreshLightSurfaces(root)
             }
         }
     }
@@ -703,7 +726,7 @@ class OrganizerViewModel @Inject constructor(
                 trashRepository.delete(entry.id)
                 if (root != null) {
                     refreshCurrentFolder(root, keepSearchResults = true)
-                    refreshStorageSummary(root, showLoading = false)
+                    refreshLightSurfaces(root)
                 }
             }
         }
@@ -774,7 +797,7 @@ class OrganizerViewModel @Inject constructor(
                 } else {
                     refreshCurrentFolder(root, keepSearchResults = true)
                 }
-                refreshStorageSummary(root, showLoading = false)
+                refreshLightSurfaces(root)
             }
         }
     }
@@ -810,10 +833,10 @@ class OrganizerViewModel @Inject constructor(
                         searchResults = emptyList(),
                         searchTargetFolder = rootHandle,
                         storageCategoryView = null,
-                        isStorageRefreshing = true
+                        isStorageRefreshing = false
                     ).clearSelectionState().resetBrowseExplorerControls(resetLayoutMode = true)
                 }
-                refreshStorageSummary(root, showLoading = false)
+                refreshHomeOverview(root, force = true)
                 if (_uiState.value.searchQuery.isNotBlank()) {
                     queueSearch(immediate = true)
                 }
@@ -886,6 +909,37 @@ class OrganizerViewModel @Inject constructor(
         }
     }
 
+    private fun refreshHomeOverview(root: SelectedRoot, force: Boolean) {
+        if (!force && _uiState.value.homeSummary != null) return
+        homeSummaryJob?.cancel()
+        homeSummaryJob = viewModelScope.launch {
+            val sampleLimit = when (_uiState.value.deviceTier) {
+                DeviceTier.REDUCED -> 120
+                DeviceTier.STANDARD -> 220
+            }
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    documentManager.summarizeForHome(root, limit = sampleLimit)
+                }
+            }
+            result.onSuccess { summary ->
+                _uiState.update {
+                    it.copy(
+                        homeSummary = summary.toHomeSummary(),
+                        recentFiles = summary.recentFiles,
+                        newFiles = summary.deriveNewFiles(),
+                        largeFiles = summary.largeFiles
+                    )
+                }
+            }.onFailure { failure ->
+                if (failure is CancellationException) return@onFailure
+                _uiState.update {
+                    it.copy(errorMessage = failure.message ?: "Home summary failed.")
+                }
+            }
+        }
+    }
+
     private fun refreshStorageSummary(root: SelectedRoot, showLoading: Boolean) {
         summaryJob?.cancel()
         summaryJob = viewModelScope.launch {
@@ -916,6 +970,20 @@ class OrganizerViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    private fun refreshLightSurfaces(root: SelectedRoot) {
+        invalidateStorageSummary()
+        refreshHomeOverview(root, force = true)
+    }
+
+    private fun invalidateStorageSummary() {
+        _uiState.update {
+            it.copy(
+                storageSummary = null,
+                lastStorageScanAt = null
+            )
         }
     }
 
@@ -1090,6 +1158,21 @@ class OrganizerViewModel @Inject constructor(
             .sortedWith(compareByDescending<FileItem> { it.lastModified ?: 0L }.thenBy { it.name.lowercase() }),
         folderPath = folderPath
     )
+
+    private fun detectDeviceTier(context: Context): DeviceTier {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        if (activityManager == null) return DeviceTier.STANDARD
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        val lowRam = activityManager.isLowRamDevice
+        val memoryClass = activityManager.memoryClass
+        val totalMemMb = memoryInfo.totalMem / (1024L * 1024L)
+        return if (lowRam || memoryClass <= 192 || totalMemMb <= 4096L) {
+            DeviceTier.REDUCED
+        } else {
+            DeviceTier.STANDARD
+        }
+    }
 }
 
 private data class TrashBatchResult(

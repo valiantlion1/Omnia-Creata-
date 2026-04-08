@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha13](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha13)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha14](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha14)
 
 ## Entries
+
+### 2026-04-08 - Alpha 14 performance hardening
+- Version target: `1.0.0-alpha14`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha14](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha14)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Home now refreshes from a lightweight startup snapshot instead of depending on the full storage scan path
+  - full storage summaries stay deferred until Storage is explicitly opened again
+  - rename, copy, move, trash, restore, and folder-create flows now refresh only the surfaces that need updating
+  - OOFM now detects reduced-device conditions and softens launch timing plus summary behavior for stability
+- Known gaps:
+  - large-folder rendering can still use another focused optimization pass after more phone testing
+  - reduced-effects mode is practical but still needs a more polished visual language
+  - Play policy, privacy copy, and store hardening still need a pre-launch pass
 
 ### 2026-04-08 - Alpha 13 first-run trust and onboarding
 - Version target: `1.0.0-alpha13`

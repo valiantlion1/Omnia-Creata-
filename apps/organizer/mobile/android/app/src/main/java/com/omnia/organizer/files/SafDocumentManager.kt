@@ -335,6 +335,44 @@ class SafDocumentManager @Inject constructor(
         )
     }
 
+    fun summarizeForHome(root: SelectedRoot, limit: Int = 220): StorageSummary {
+        var sampledBytes = 0L
+        var fileCount = 0
+        var folderCount = 0
+        val categoryMap = linkedMapOf<FileKind, Pair<Long, Int>>()
+        val recentFiles = mutableListOf<FileItem>()
+        val largeFiles = mutableListOf<FileItem>()
+
+        walkTree(root) { item ->
+            if (item.isDirectory) {
+                folderCount++
+            } else {
+                fileCount++
+                val bytes = item.sizeBytes ?: 0L
+                sampledBytes += bytes
+                val previous = categoryMap[item.kind] ?: (0L to 0)
+                categoryMap[item.kind] = (previous.first + bytes) to (previous.second + 1)
+                recentFiles += item
+                largeFiles += item
+            }
+            (fileCount + folderCount) < limit
+        }
+
+        val categories = categoryMap.map { (kind, value) ->
+            CategoryStat(kind = kind, bytes = value.first, count = value.second)
+        }.sortedByDescending { it.bytes }
+
+        return StorageSummary(
+            totalBytes = resolveUsedBytes(root) ?: sampledBytes,
+            freeBytes = resolveFreeBytes(root),
+            fileCount = fileCount,
+            folderCount = folderCount,
+            categories = categories,
+            recentFiles = recentFiles.sortedByDescending { it.lastModified ?: 0L }.take(6),
+            largeFiles = largeFiles.sortedByDescending { it.sizeBytes ?: 0L }.take(6)
+        )
+    }
+
     private fun listTreeChildren(root: SelectedRoot, parentDocumentId: String): List<FileItem> {
         val treeUri = Uri.parse(root.treeUri)
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
@@ -640,6 +678,15 @@ class SafDocumentManager @Inject constructor(
 
     private fun resolveFreeBytes(root: SelectedRoot): Long? = when (root.sourceType) {
         SourceType.FILE_SYSTEM -> runCatching { File(root.rootDocumentId).usableSpace }.getOrNull()
+        SourceType.TREE -> null
+    }
+
+    private fun resolveUsedBytes(root: SelectedRoot): Long? = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> runCatching {
+            val directory = File(root.rootDocumentId)
+            directory.totalSpace - directory.usableSpace
+        }.getOrNull()
+
         SourceType.TREE -> null
     }
 
