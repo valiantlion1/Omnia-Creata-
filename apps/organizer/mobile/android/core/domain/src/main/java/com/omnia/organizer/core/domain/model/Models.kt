@@ -1,7 +1,8 @@
 package com.omnia.organizer.core.domain.model
 
 enum class SourceType {
-    TREE
+    TREE,
+    FILE_SYSTEM
 }
 
 enum class FileKind {
@@ -78,6 +79,7 @@ data class StorageSummary(
 data class TrashEntry(
     val id: Long = 0,
     val treeUri: String,
+    val sourceType: SourceType = SourceType.TREE,
     val originalParentDocumentId: String,
     val trashedDocumentId: String,
     val displayName: String,

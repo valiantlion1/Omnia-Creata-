@@ -85,6 +85,45 @@ fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 }
 
 @Composable
+fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.padding(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("Allow full phone access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Omnia Organizer works best when Android lets it see your phone storage like a real file manager. After approval, the app will load device storage automatically.",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "What this unlocks",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "• Browse folders and files across phone storage\n• Search downloads, documents, screenshots, videos, and more\n• Move items to Recycle Bin and restore them later",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "Trust note: OOFM does not require an account to start. Access is used to help you browse, search, and organize files on your device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                FilledTonalButton(onClick = onGrantAccess) {
+                    Text("Grant device storage access")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun HomeScreen(
     state: OrganizerUiState,
     onOpenBrowse: () -> Unit,
@@ -175,7 +214,7 @@ fun BrowseScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Current storage root. Change it anytime from the top bar if you need wider phone access.",
+            subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
         LazyRow(
@@ -240,7 +279,7 @@ fun SearchScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Search runs inside the active storage root so results stay fast and Android-safe.",
+            subtitle = "Search runs inside the storage access Android approved for OOFM, so results stay fast and reliable.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
         OutlinedTextField(
@@ -430,17 +469,37 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Storage access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(state.root?.displayName ?: "No storage root selected")
+                    Text(state.root?.displayName ?: "Device storage not connected")
                     Text(
-                        "Alpha access follows Android rules. Pick a broader internal storage root or SD card root if you want OOFM to see more of the phone.",
+                        "OOFM now targets full phone storage access where Android allows it. If access is lost, reconnect from here and the app will rebuild its device view.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onPickFolder) { Text("Change storage root") }
+                        FilledTonalButton(onClick = onPickFolder) { Text("Reconnect storage") }
                         if (state.root != null) {
-                            OutlinedButton(onClick = onClearRoot) { Text("Clear root") }
+                            OutlinedButton(onClick = onClearRoot) { Text("Reset access") }
                         }
                     }
+                }
+            }
+        }
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Privacy and trust", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "The app is built to organize files on your device without forcing sign-in first. Storage access is requested so browse, search, open, share, and recycle flows can work like a proper mobile file manager.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Formal privacy policy, terms, and data transparency screens will be expanded before Play Store release.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -531,7 +590,7 @@ private fun WorkspaceHeroCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Current workspace",
+                "Device storage",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -542,7 +601,7 @@ private fun WorkspaceHeroCard(
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                "OOFM is still alpha. It works inside the storage root you approve, and you can switch to a broader phone root anytime.",
+                "OOFM is still alpha. Once Android grants storage access, the app uses that connection as the main phone-wide entry point for browsing, search, and storage insight.",
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             if (state.isStorageRefreshing) {
@@ -554,7 +613,7 @@ private fun WorkspaceHeroCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onPickFolder) {
-                    Text("Change root")
+                    Text("Reconnect storage")
                 }
                 StatPill(label = "${state.recentFiles.size} recents")
                 if (state.storageSummary != null) {
@@ -765,13 +824,13 @@ private fun EmptyRootState(onPickFolder: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Choose a storage root", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text("Connect phone storage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Start with the phone storage root, Downloads, or an SD card root. You can switch later if you want OOFM to see more of the device.",
+                    "Grant device storage access so OOFM can behave like a proper mobile file manager. Once connected, the app will load your phone storage automatically.",
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 FilledTonalButton(onClick = onPickFolder) {
-                    Text("Select storage root")
+                    Text("Grant access")
                 }
             }
         }

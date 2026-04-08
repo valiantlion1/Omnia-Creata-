@@ -92,6 +92,23 @@ class OrganizerViewModel @Inject constructor(
         }
     }
 
+    fun enableDeviceStorageRoot() {
+        viewModelScope.launch {
+            runTask("Unable to enable device storage access.") {
+                val root = withContext(Dispatchers.IO) { documentManager.inspectDeviceStorage() }
+                    ?: error("Device storage is not available on this phone.")
+                val currentRoot = _uiState.value.root
+                val needsSave = currentRoot == null ||
+                    currentRoot.sourceType != root.sourceType ||
+                    currentRoot.treeUri != root.treeUri ||
+                    currentRoot.rootDocumentId != root.rootDocumentId
+                if (needsSave) {
+                    selectedRootRepository.save(root)
+                }
+            }
+        }
+    }
+
     fun clearRoot() {
         viewModelScope.launch {
             selectedRootRepository.clear()

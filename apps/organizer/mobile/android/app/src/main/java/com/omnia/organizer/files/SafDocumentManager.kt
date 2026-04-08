@@ -3,7 +3,10 @@ package com.omnia.organizer.files
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
 import com.omnia.organizer.core.domain.model.CategoryStat
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
@@ -12,9 +15,11 @@ import com.omnia.organizer.core.domain.model.SearchDateFilter
 import com.omnia.organizer.core.domain.model.SearchFilters
 import com.omnia.organizer.core.domain.model.SearchSizeFilter
 import com.omnia.organizer.core.domain.model.SelectedRoot
+import com.omnia.organizer.core.domain.model.SourceType
 import com.omnia.organizer.core.domain.model.StorageSummary
 import com.omnia.organizer.core.domain.model.TrashEntry
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import javax.inject.Inject
 
 class SafDocumentManager @Inject constructor(
@@ -38,123 +43,184 @@ class SafDocumentManager @Inject constructor(
             treeUri = treeUri.toString(),
             rootDocumentId = rootDocumentId,
             displayName = rootInfo.name,
+            sourceType = SourceType.TREE,
             selectedAt = System.currentTimeMillis()
         )
     }
 
-    fun listChildren(root: SelectedRoot, parentDocumentId: String): List<FileItem> {
-        val treeUri = Uri.parse(root.treeUri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
-        val items = mutableListOf<FileItem>()
-        resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            val documentIdIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            val displayNameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-            val mimeTypeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
-            val lastModifiedIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-            val sizeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
-            val flagsIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_FLAGS)
-            while (cursor.moveToNext()) {
-                val documentId = cursor.getString(documentIdIndex)
-                val name = cursor.getString(displayNameIndex) ?: documentId
-                val mimeType = cursor.getString(mimeTypeIndex) ?: ""
-                val isDirectory = mimeType == DocumentsContract.Document.MIME_TYPE_DIR
-                if (isDirectory && name == trashFolderName) continue
-                val flags = cursor.getInt(flagsIndex)
-                items += FileItem(
-                    documentId = documentId,
-                    parentDocumentId = parentDocumentId,
-                    name = name,
-                    mimeType = mimeType,
-                    sizeBytes = cursor.getLongOrNull(sizeIndex),
-                    lastModified = cursor.getLongOrNull(lastModifiedIndex),
-                    kind = classifyKind(name, mimeType, isDirectory),
-                    isDirectory = isDirectory,
-                    canWrite = flags and DocumentsContract.Document.FLAG_SUPPORTS_WRITE != 0,
-                    canDelete = flags and DocumentsContract.Document.FLAG_SUPPORTS_DELETE != 0,
-                    canRename = flags and DocumentsContract.Document.FLAG_SUPPORTS_RENAME != 0
-                )
-            }
-        }
-        return items.sortedWith(compareByDescending<FileItem> { it.isDirectory }.thenBy { it.name.lowercase() })
+    fun inspectDeviceStorage(): SelectedRoot? {
+        val root = Environment.getExternalStorageDirectory() ?: return null
+        if (!root.exists()) return null
+        return SelectedRoot(
+            treeUri = root.absolutePath,
+            rootDocumentId = root.absolutePath,
+            displayName = "Device storage",
+            sourceType = SourceType.FILE_SYSTEM,
+            selectedAt = System.currentTimeMillis()
+        )
+    }
+
+    fun listChildren(root: SelectedRoot, parentDocumentId: String): List<FileItem> = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> listFileChildren(File(parentDocumentId), root.rootDocumentId)
+        SourceType.TREE -> listTreeChildren(root, parentDocumentId)
     }
 
     fun getFolderHandle(root: SelectedRoot, documentId: String): FolderHandle? {
-        val item = queryDocument(Uri.parse(root.treeUri), documentId, documentId) ?: return null
-        return FolderHandle(documentId = item.documentId, name = item.name)
+        return when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> {
+                val folder = File(documentId)
+                if (!folder.exists() || !folder.isDirectory) {
+                    null
+                } else {
+                    FolderHandle(
+                        documentId = folder.absolutePath,
+                        name = folder.name.ifBlank { root.displayName }
+                    )
+                }
+            }
+
+            SourceType.TREE -> {
+                val item = queryDocument(Uri.parse(root.treeUri), documentId, documentId) ?: return null
+                FolderHandle(documentId = item.documentId, name = item.name)
+            }
+        }
     }
 
-    fun buildDocumentUri(root: SelectedRoot, documentId: String): Uri =
-        DocumentsContract.buildDocumentUriUsingTree(Uri.parse(root.treeUri), documentId)
+    fun buildDocumentUri(root: SelectedRoot, documentId: String): Uri = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> {
+            val file = File(documentId)
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }
+        SourceType.TREE -> DocumentsContract.buildDocumentUriUsingTree(Uri.parse(root.treeUri), documentId)
+    }
 
     fun createFolder(root: SelectedRoot, parentDocumentId: String, name: String): Boolean {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return false
-        val parentUri = buildDocumentUri(root, parentDocumentId)
-        return DocumentsContract.createDocument(
-            resolver,
-            parentUri,
-            DocumentsContract.Document.MIME_TYPE_DIR,
-            trimmed
-        ) != null
+        return when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> {
+                val folder = File(parentDocumentId, trimmed)
+                !folder.exists() && folder.mkdirs()
+            }
+            SourceType.TREE -> {
+                val parentUri = buildDocumentUri(root, parentDocumentId)
+                DocumentsContract.createDocument(
+                    resolver,
+                    parentUri,
+                    DocumentsContract.Document.MIME_TYPE_DIR,
+                    trimmed
+                ) != null
+            }
+        }
     }
 
     fun rename(root: SelectedRoot, item: FileItem, newName: String): FileItem? {
         val trimmed = newName.trim()
         if (trimmed.isEmpty()) return null
-        val renamedUri = DocumentsContract.renameDocument(
-            resolver,
-            buildDocumentUri(root, item.documentId),
-            trimmed
-        ) ?: return null
-        return queryDocument(Uri.parse(root.treeUri), DocumentsContract.getDocumentId(renamedUri), item.parentDocumentId)
+        return when (root.sourceType) {
+            SourceType.FILE_SYSTEM -> {
+                val source = File(item.documentId)
+                val parent = source.parentFile ?: return null
+                val target = uniqueTarget(parent, trimmed)
+                if (!moveFile(source, target)) return null
+                fileToItem(target, parent.absolutePath)
+            }
+            SourceType.TREE -> {
+                val renamedUri = DocumentsContract.renameDocument(
+                    resolver,
+                    buildDocumentUri(root, item.documentId),
+                    trimmed
+                ) ?: return null
+                queryDocument(Uri.parse(root.treeUri), DocumentsContract.getDocumentId(renamedUri), item.parentDocumentId)
+            }
+        }
     }
 
-    fun moveToTrash(root: SelectedRoot, item: FileItem): TrashEntry {
-        val trashDocumentId = ensureTrashFolder(root)
-        val movedUri = DocumentsContract.moveDocument(
-            resolver,
-            buildDocumentUri(root, item.documentId),
-            buildDocumentUri(root, item.parentDocumentId),
-            buildDocumentUri(root, trashDocumentId)
-        ) ?: error("Move to Recycle Bin is not supported by this folder provider.")
-        return TrashEntry(
-            treeUri = root.treeUri,
-            originalParentDocumentId = item.parentDocumentId,
-            trashedDocumentId = DocumentsContract.getDocumentId(movedUri),
-            displayName = item.name,
-            mimeType = item.mimeType,
-            sizeBytes = item.sizeBytes,
-            deletedAt = System.currentTimeMillis()
-        )
+    fun moveToTrash(root: SelectedRoot, item: FileItem): TrashEntry = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> {
+            val source = File(item.documentId)
+            val trashDir = ensureTrashFolder(root)
+            val target = uniqueTarget(File(trashDir), source.name)
+            if (!moveFile(source, target)) error("Move to Recycle Bin is not supported by this folder provider.")
+            TrashEntry(
+                treeUri = root.treeUri,
+                sourceType = root.sourceType,
+                originalParentDocumentId = item.parentDocumentId,
+                trashedDocumentId = target.absolutePath,
+                displayName = item.name,
+                mimeType = item.mimeType,
+                sizeBytes = item.sizeBytes,
+                deletedAt = System.currentTimeMillis()
+            )
+        }
+        SourceType.TREE -> {
+            val trashDocumentId = ensureTrashFolder(root)
+            val movedUri = DocumentsContract.moveDocument(
+                resolver,
+                buildDocumentUri(root, item.documentId),
+                buildDocumentUri(root, item.parentDocumentId),
+                buildDocumentUri(root, trashDocumentId)
+            ) ?: error("Move to Recycle Bin is not supported by this folder provider.")
+            TrashEntry(
+                treeUri = root.treeUri,
+                sourceType = root.sourceType,
+                originalParentDocumentId = item.parentDocumentId,
+                trashedDocumentId = DocumentsContract.getDocumentId(movedUri),
+                displayName = item.name,
+                mimeType = item.mimeType,
+                sizeBytes = item.sizeBytes,
+                deletedAt = System.currentTimeMillis()
+            )
+        }
     }
 
     fun restoreTrash(entry: TrashEntry): Boolean {
-        val treeUri = Uri.parse(entry.treeUri)
-        val root = SelectedRoot(
-            treeUri = entry.treeUri,
-            rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri),
-            displayName = "OOFM",
-            selectedAt = System.currentTimeMillis()
-        )
-        val trashDocumentId = ensureTrashFolder(root)
-        val restoredUri = DocumentsContract.moveDocument(
-            resolver,
-            buildDocumentUri(root, entry.trashedDocumentId),
-            buildDocumentUri(root, trashDocumentId),
-            buildDocumentUri(root, entry.originalParentDocumentId)
-        )
-        return restoredUri != null
+        return when (entry.sourceType) {
+            SourceType.FILE_SYSTEM -> {
+                val source = File(entry.trashedDocumentId)
+                val targetParent = File(entry.originalParentDocumentId)
+                if (!source.exists() || !targetParent.exists()) {
+                    false
+                } else {
+                    val target = uniqueTarget(targetParent, entry.displayName)
+                    moveFile(source, target)
+                }
+            }
+
+            SourceType.TREE -> {
+                val treeUri = Uri.parse(entry.treeUri)
+                val root = SelectedRoot(
+                    treeUri = entry.treeUri,
+                    rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri),
+                    displayName = "OOFM",
+                    sourceType = SourceType.TREE,
+                    selectedAt = System.currentTimeMillis()
+                )
+                val trashDocumentId = ensureTrashFolder(root)
+                val restoredUri = DocumentsContract.moveDocument(
+                    resolver,
+                    buildDocumentUri(root, entry.trashedDocumentId),
+                    buildDocumentUri(root, trashDocumentId),
+                    buildDocumentUri(root, entry.originalParentDocumentId)
+                )
+                restoredUri != null
+            }
+        }
     }
 
-    fun permanentlyDeleteTrash(entry: TrashEntry): Boolean {
-        val treeUri = Uri.parse(entry.treeUri)
-        val root = SelectedRoot(
-            treeUri = entry.treeUri,
-            rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri),
-            displayName = "OOFM",
-            selectedAt = System.currentTimeMillis()
-        )
-        return DocumentsContract.deleteDocument(resolver, buildDocumentUri(root, entry.trashedDocumentId))
+    fun permanentlyDeleteTrash(entry: TrashEntry): Boolean = when (entry.sourceType) {
+        SourceType.FILE_SYSTEM -> File(entry.trashedDocumentId).deleteRecursively()
+        SourceType.TREE -> {
+            val treeUri = Uri.parse(entry.treeUri)
+            val root = SelectedRoot(
+                treeUri = entry.treeUri,
+                rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri),
+                displayName = "OOFM",
+                sourceType = SourceType.TREE,
+                selectedAt = System.currentTimeMillis()
+            )
+            DocumentsContract.deleteDocument(resolver, buildDocumentUri(root, entry.trashedDocumentId))
+        }
     }
 
     fun search(root: SelectedRoot, query: String, filters: SearchFilters, limit: Int = 200): List<FileItem> {
@@ -205,6 +271,49 @@ class SafDocumentManager @Inject constructor(
         )
     }
 
+    private fun listTreeChildren(root: SelectedRoot, parentDocumentId: String): List<FileItem> {
+        val treeUri = Uri.parse(root.treeUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
+        val items = mutableListOf<FileItem>()
+        resolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            val documentIdIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val displayNameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val mimeTypeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            val lastModifiedIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+            val sizeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
+            val flagsIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_FLAGS)
+            while (cursor.moveToNext()) {
+                val documentId = cursor.getString(documentIdIndex)
+                val name = cursor.getString(displayNameIndex) ?: documentId
+                val mimeType = cursor.getString(mimeTypeIndex) ?: ""
+                val isDirectory = mimeType == DocumentsContract.Document.MIME_TYPE_DIR
+                if (isDirectory && name == trashFolderName) continue
+                val flags = cursor.getInt(flagsIndex)
+                items += FileItem(
+                    documentId = documentId,
+                    parentDocumentId = parentDocumentId,
+                    name = name,
+                    mimeType = mimeType,
+                    sizeBytes = cursor.getLongOrNull(sizeIndex),
+                    lastModified = cursor.getLongOrNull(lastModifiedIndex),
+                    kind = classifyKind(name, mimeType, isDirectory),
+                    isDirectory = isDirectory,
+                    canWrite = flags and DocumentsContract.Document.FLAG_SUPPORTS_WRITE != 0,
+                    canDelete = flags and DocumentsContract.Document.FLAG_SUPPORTS_DELETE != 0,
+                    canRename = flags and DocumentsContract.Document.FLAG_SUPPORTS_RENAME != 0
+                )
+            }
+        }
+        return items.sortedWith(compareByDescending<FileItem> { it.isDirectory }.thenBy { it.name.lowercase() })
+    }
+
+    private fun listFileChildren(parent: File, rootPath: String): List<FileItem> {
+        val children = parent.listFiles().orEmpty()
+            .filterNot { it.isDirectory && it.name == trashFolderName && parent.absolutePath == rootPath }
+            .mapNotNull { fileToItem(it, parent.absolutePath) }
+        return children.sortedWith(compareByDescending<FileItem> { it.isDirectory }.thenBy { it.name.lowercase() })
+    }
+
     private fun walkTree(root: SelectedRoot, visitor: (FileItem) -> Boolean) {
         val stack = ArrayDeque<String>()
         stack.add(root.rootDocumentId)
@@ -218,19 +327,26 @@ class SafDocumentManager @Inject constructor(
         }
     }
 
-    private fun ensureTrashFolder(root: SelectedRoot): String {
-        listChildren(root, root.rootDocumentId)
-            .firstOrNull { it.isDirectory && it.name == trashFolderName }
-            ?.let { return it.documentId }
+    private fun ensureTrashFolder(root: SelectedRoot): String = when (root.sourceType) {
+        SourceType.FILE_SYSTEM -> {
+            val trashDir = File(root.rootDocumentId, trashFolderName)
+            if (!trashDir.exists()) trashDir.mkdirs()
+            trashDir.absolutePath
+        }
+        SourceType.TREE -> {
+            listTreeChildren(root, root.rootDocumentId)
+                .firstOrNull { it.isDirectory && it.name == trashFolderName }
+                ?.let { return it.documentId }
 
-        val createdUri = DocumentsContract.createDocument(
-            resolver,
-            buildDocumentUri(root, root.rootDocumentId),
-            DocumentsContract.Document.MIME_TYPE_DIR,
-            trashFolderName
-        ) ?: error("Unable to create OOFM Recycle Bin folder.")
+            val createdUri = DocumentsContract.createDocument(
+                resolver,
+                buildDocumentUri(root, root.rootDocumentId),
+                DocumentsContract.Document.MIME_TYPE_DIR,
+                trashFolderName
+            ) ?: error("Unable to create OOFM Recycle Bin folder.")
 
-        return DocumentsContract.getDocumentId(createdUri)
+            DocumentsContract.getDocumentId(createdUri)
+        }
     }
 
     private fun queryDocument(treeUri: Uri, documentId: String, parentDocumentId: String): FileItem? {
@@ -256,6 +372,61 @@ class SafDocumentManager @Inject constructor(
             )
         }
         return null
+    }
+
+    private fun fileToItem(file: File, parentPath: String): FileItem? {
+        if (!file.exists()) return null
+        return FileItem(
+            documentId = file.absolutePath,
+            parentDocumentId = parentPath,
+            name = file.name.ifBlank { file.absolutePath },
+            mimeType = detectMimeType(file),
+            sizeBytes = if (file.isDirectory) null else file.length(),
+            lastModified = file.lastModified(),
+            kind = classifyKind(file.name, detectMimeType(file), file.isDirectory),
+            isDirectory = file.isDirectory,
+            canWrite = file.canWrite(),
+            canDelete = file.parentFile?.canWrite() ?: file.canWrite(),
+            canRename = file.parentFile?.canWrite() ?: file.canWrite()
+        )
+    }
+
+    private fun moveFile(source: File, target: File): Boolean {
+        target.parentFile?.mkdirs()
+        if (source.absolutePath == target.absolutePath) return true
+        if (source.renameTo(target)) return true
+        return runCatching {
+            if (source.isDirectory) {
+                source.copyRecursively(target, overwrite = true)
+                source.deleteRecursively()
+            } else {
+                source.copyTo(target, overwrite = true)
+                source.delete()
+            }
+        }.isSuccess
+    }
+
+    private fun uniqueTarget(parent: File, desiredName: String): File {
+        if (!parent.exists()) parent.mkdirs()
+        var candidate = File(parent, desiredName)
+        if (!candidate.exists()) return candidate
+
+        val dotIndex = desiredName.lastIndexOf('.')
+        val baseName = if (dotIndex > 0) desiredName.substring(0, dotIndex) else desiredName
+        val extension = if (dotIndex > 0) desiredName.substring(dotIndex) else ""
+        var index = 2
+        while (candidate.exists()) {
+            candidate = File(parent, "$baseName ($index)$extension")
+            index++
+        }
+        return candidate
+    }
+
+    private fun detectMimeType(file: File): String {
+        if (file.isDirectory) return DocumentsContract.Document.MIME_TYPE_DIR
+        val extension = file.extension.lowercase()
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            ?: "application/octet-stream"
     }
 
     private fun matchesSearch(item: FileItem, query: String, filters: SearchFilters): Boolean {
