@@ -40,7 +40,8 @@ export function ServiceGrid({ services }: { services: ServiceView[] }) {
                 <p className="mt-2 text-sm leading-6 text-white/65">{service.description}</p>
               </div>
               <div className="text-right text-xs uppercase tracking-[0.26em] text-white/35">
-                {service.slug}
+                <div>{service.projectSlug}</div>
+                <div className="mt-1 text-white/55">{service.slug}</div>
               </div>
             </div>
 

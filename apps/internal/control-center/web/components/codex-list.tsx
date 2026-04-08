@@ -6,6 +6,7 @@ export function CodexList({
   items: Array<{
     id: string;
     incidentId: string;
+    projectSlug?: string;
     serviceSlug: string;
     environmentSlug: "staging" | "production";
     status: string;
@@ -36,12 +37,15 @@ export function CodexList({
                   <span className="rounded-full border border-teal-300/25 bg-teal-300/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-teal-100">
                     {item.status}
                   </span>
+                  {item.projectSlug ? (
+                    <span className="text-xs uppercase tracking-[0.24em] text-teal-100/70">{item.projectSlug}</span>
+                  ) : null}
                   <span className="text-xs uppercase tracking-[0.24em] text-white/45">{item.environmentSlug}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-white/68">{item.recommendedNextPath}</p>
               </div>
               <Link
-                href={`/incidents/${item.incidentId}`}
+                href={`/projects/${item.projectSlug ?? "studio"}/operations?incident=${item.incidentId}`}
                 className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:border-teal-300/35 hover:bg-teal-300/10"
               >
                 Open Incident

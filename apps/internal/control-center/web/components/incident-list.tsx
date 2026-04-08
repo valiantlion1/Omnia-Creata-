@@ -52,7 +52,7 @@ export function IncidentList({
         {incidents.map((incident) => (
           <Link
             key={incident.id}
-            href={`/incidents/${incident.id}`}
+            href={`/projects/${incident.projectSlug}/operations?incident=${incident.id}`}
             className="block rounded-[22px] border border-white/10 bg-white/[0.04] p-4 transition hover:border-teal-300/30 hover:bg-teal-300/[0.08]"
           >
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -60,6 +60,7 @@ export function IncidentList({
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusPill tone={toneFromSeverity(incident.severity)}>{incident.severity}</StatusPill>
                   <StatusPill tone={toneFromState(incident.state)}>{incident.state}</StatusPill>
+                  <span className="text-xs uppercase tracking-[0.24em] text-teal-100/70">{incident.projectSlug}</span>
                   <span className="text-xs uppercase tracking-[0.24em] text-white/45">
                     {incident.environmentName}
                   </span>

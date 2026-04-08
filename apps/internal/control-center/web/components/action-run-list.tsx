@@ -33,6 +33,9 @@ export function ActionRunList({ actionRuns }: { actionRuns: ActionRunResult[] })
                   >
                     {actionRun.status}
                   </StatusPill>
+                  <span className="text-xs uppercase tracking-[0.24em] text-teal-100/70">
+                    {actionRun.projectSlug}
+                  </span>
                   <span className="text-xs uppercase tracking-[0.24em] text-white/45">
                     {actionRun.recipe}
                   </span>

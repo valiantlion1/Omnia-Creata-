@@ -118,6 +118,7 @@ export async function upsertProjectPeriodicReport(projectSlug: string, reportTyp
 export async function getProject(projectSlug: string): Promise<ProjectSummaryView | null> {
   await upsertProjectOverviewReport(projectSlug);
   await upsertProjectPeriodicReport(projectSlug, "daily");
+  await upsertProjectPeriodicReport(projectSlug, "weekly");
 
   return buildProjectSummary(await loadProjectAwareBundle(), projectSlug);
 }

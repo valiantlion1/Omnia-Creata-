@@ -18,9 +18,9 @@ function stripProtocol(value: string) {
 export function CommandDeck({ summary }: { summary: SummaryView }) {
   const primaryIncident = summary.activeIncidents[0];
   const latestAction = summary.actionRuns[0];
-  const cadence = summary.services
-    .flatMap((service) => service.environments.map((environment) => `${environment.slug} ${environment.cadenceMinutes}m`))
-    .join(" / ");
+  const noisiestProject = [...summary.projects].sort((left, right) => right.totalOpenIncidents - left.totalOpenIncidents)[0];
+  const latestReport = summary.latestReports[0];
+  const projectFootprint = `${summary.organizationTotals.projects} project${summary.organizationTotals.projects === 1 ? "" : "s"} / ${summary.organizationTotals.services} service${summary.organizationTotals.services === 1 ? "" : "s"}`;
 
   return (
     <section className="rounded-[32px] border border-white/10 bg-[#091414]/88 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl">
@@ -29,11 +29,11 @@ export function CommandDeck({ summary }: { summary: SummaryView }) {
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.32em] text-teal-200/70">Current Situation</p>
             <h2 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-[2.1rem]">
-              One cockpit for incidents now, plus clear room for CLI, automations, skills, agents, and future AI.
+              Organization-wide signal first, project cockpit second, and a clean path for CLI, skills, agents, and future AI.
             </h2>
             <p className="max-w-3xl text-sm leading-7 text-white/68">
-              OCOS stays readable by keeping the operator surface focused on situation, response, and escalation.
-              New control layers can plug into the same incident model instead of turning the dashboard into a maze.
+              OCOS stays readable by separating the company-wide queue from each project cockpit. New control layers plug
+              into the same incident and report model instead of forcing operators to relearn the surface every sprint.
             </p>
           </div>
 
@@ -64,12 +64,12 @@ export function CommandDeck({ summary }: { summary: SummaryView }) {
 
               <dl className="grid gap-3 self-start rounded-[22px] border border-white/10 bg-[#081111] p-4 text-sm text-white/60 sm:grid-cols-2">
                 <div>
-                  <dt className="text-[11px] uppercase tracking-[0.26em] text-white/38">Service</dt>
-                  <dd className="mt-1.5 text-white/82">{primaryIncident?.serviceName ?? "Studio-first OCOS"}</dd>
+                  <dt className="text-[11px] uppercase tracking-[0.26em] text-white/38">Project</dt>
+                  <dd className="mt-1.5 text-white/82">{primaryIncident?.projectName ?? noisiestProject?.name ?? "OCOS foundation"}</dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] uppercase tracking-[0.26em] text-white/38">Environment</dt>
-                  <dd className="mt-1.5 text-white/82">{primaryIncident?.environmentName ?? "Hosted internal"}</dd>
+                  <dt className="text-[11px] uppercase tracking-[0.26em] text-white/38">Scope</dt>
+                  <dd className="mt-1.5 text-white/82">{primaryIncident?.environmentName ?? projectFootprint}</dd>
                 </div>
                 <div>
                   <dt className="text-[11px] uppercase tracking-[0.26em] text-white/38">Incident Age</dt>
@@ -106,17 +106,19 @@ export function CommandDeck({ summary }: { summary: SummaryView }) {
               </div>
               <div className="flex items-start justify-between gap-4 border-b border-white/8 pb-4">
                 <div>
-                  <div className="text-sm font-medium text-white">Probe cadence</div>
-                  <div className="mt-1 text-sm text-white/58">Sparse checks only, no idle polling storms</div>
+                  <div className="text-sm font-medium text-white">Project footprint</div>
+                  <div className="mt-1 text-sm text-white/58">Org, project, and service hierarchy now stays explicit</div>
                 </div>
-                <div className="text-right text-sm text-white/78">{cadence || "prod 5m / staging 15m"}</div>
+                <div className="text-right text-sm text-white/78">{projectFootprint}</div>
               </div>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm font-medium text-white">Last refresh</div>
-                  <div className="mt-1 text-sm text-white/58">Current summary snapshot</div>
+                  <div className="text-sm font-medium text-white">Latest report</div>
+                  <div className="mt-1 text-sm text-white/58">Human and AI readable report block</div>
                 </div>
-                <div className="text-right text-sm text-white/78">{formatTimestamp(summary.generatedAt)}</div>
+                <div className="text-right text-sm text-white/78">
+                  {latestReport ? formatTimestamp(latestReport.updatedAt) : formatTimestamp(summary.generatedAt)}
+                </div>
               </div>
             </div>
           </section>

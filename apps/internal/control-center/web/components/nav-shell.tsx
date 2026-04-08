@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { appEnv } from "@/lib/env";
 
 const navItems = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Org Home" },
+  { href: "/projects", label: "Projects" },
   { href: "/incidents", label: "Incidents" },
   { href: "/services", label: "Services" },
   { href: "/action-runs", label: "Action Runs" },

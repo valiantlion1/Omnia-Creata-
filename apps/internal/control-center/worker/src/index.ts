@@ -261,12 +261,13 @@ async function runScheduledProbe(env: Env, environmentSlug: "staging" | "product
 
   const remediation = await maybeAutoRemediate(env, ingest);
   if (remediation && remediation.escalationBundle) {
+    const incident = remediation.incident as { id?: string; projectSlug?: string } | undefined;
     await sendTelegram(env, {
       shouldNotify: true,
       channel: "telegram",
       title: "OCOS auto-remediation escalated",
-      body: `Codex bundle created for incident ${String((remediation.incident as { id?: string } | undefined)?.id ?? "")}`,
-      deepLink: `/incidents/${String((remediation.incident as { id?: string } | undefined)?.id ?? "")}`
+      body: `Codex bundle created for incident ${String(incident?.id ?? "")}`,
+      deepLink: `/projects/${String(incident?.projectSlug ?? "studio")}/operations?incident=${String(incident?.id ?? "")}`
     });
   }
 }
