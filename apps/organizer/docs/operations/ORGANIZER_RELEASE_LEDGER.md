@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha12](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha12)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha13](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha13)
 
 ## Entries
+
+### 2026-04-08 - Alpha 13 first-run trust and onboarding
+- Version target: `1.0.0-alpha13`
+- Track target: GitHub prerelease testing
+- Status: ready to ship
+- Release page: [Omnia Organizer 1.0.0-alpha13](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha13)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - first install now has a real welcome, value, permission education, and disclosure flow
+  - onboarding no longer forces account ideas into the core file-manager path
+  - Settings now exposes privacy, data-use, terms/policy, and about trust surfaces
+  - permission states now read more clearly as not requested, denied, limited, or ready
+- Known gaps:
+  - launch and scan responsiveness still need the next hardening pass
+  - disclosure copy is implementation-ready product copy, not final store-reviewed legal text
+  - device-tier and reduced-effects handling still need a performance release
 
 ### 2026-04-08 - Alpha 12 roadmap utility parity
 - Version target: `1.0.0-alpha12`

@@ -78,7 +78,9 @@ import com.omnia.organizer.ui.BrowseScreen
 import com.omnia.organizer.ui.BrowseLayoutMode
 import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
+import com.omnia.organizer.ui.FirstRunOnboardingFlow
 import com.omnia.organizer.ui.HomeScreen
+import com.omnia.organizer.ui.OnboardingPermissionState
 import com.omnia.organizer.ui.OrganizerViewModel
 import com.omnia.organizer.ui.RenameDialog
 import com.omnia.organizer.ui.SearchScreen
@@ -124,6 +126,11 @@ private enum class OrganizerRoute(
 private const val ColdStartSplashMinimumDurationMs = 1600L
 private const val LaunchSplashMinimumDurationMs = 1600L
 private const val LaunchSplashMaximumDurationMs = 4200L
+private const val CurrentDisclosureVersion = 1
+private const val OofmPrefsName = "oofm_startup"
+private const val PrefIntroComplete = "intro_complete"
+private const val PrefDisclosureVersion = "disclosure_version"
+private const val PrefStorageAccessRequested = "storage_access_requested"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,12 +140,22 @@ private fun AppRoot(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val startupPrefs = remember(context) {
+        context.getSharedPreferences(OofmPrefsName, Context.MODE_PRIVATE)
+    }
     var accessRefreshTick by remember { mutableIntStateOf(0) }
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
     var hasHandledFirstResume by rememberSaveable { mutableStateOf(false) }
     var splashVisible by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var splashStartedAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    var hasCompletedIntro by rememberSaveable { mutableStateOf(startupPrefs.getBoolean(PrefIntroComplete, false)) }
+    var acceptedDisclosureVersion by rememberSaveable {
+        mutableIntStateOf(startupPrefs.getInt(PrefDisclosureVersion, 0))
+    }
+    var hasRequestedStorageAccess by rememberSaveable {
+        mutableStateOf(startupPrefs.getBoolean(PrefStorageAccessRequested, false))
+    }
     val primaryRoutes = remember {
         listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
     }
@@ -168,6 +185,8 @@ private fun AppRoot(
     val hasStorageAccess = remember(accessRefreshTick) { hasFullStorageAccess(context) }
     val requestStorageAccess = remember(context, legacyPermissionLauncher) {
         {
+            hasRequestedStorageAccess = true
+            startupPrefs.edit().putBoolean(PrefStorageAccessRequested, true).apply()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val appIntent = Intent(
                     Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
@@ -195,6 +214,14 @@ private fun AppRoot(
         }
     }
     val requestStorageAccessAction: () -> Unit = { requestStorageAccess() }
+    val onboardingPermissionState = when {
+        hasStorageAccess && state.root != null -> OnboardingPermissionState.READY
+        hasStorageAccess -> OnboardingPermissionState.LIMITED
+        hasRequestedStorageAccess -> OnboardingPermissionState.DENIED
+        else -> OnboardingPermissionState.NOT_REQUESTED
+    }
+    val shouldShowOnboarding = !hasCompletedIntro || acceptedDisclosureVersion < CurrentDisclosureVersion
+    val disclosureOnly = hasCompletedIntro && acceptedDisclosureVersion < CurrentDisclosureVersion
     val splashStatusText = when {
         !hasStorageAccess -> "Preparing secure storage access"
         state.root == null -> "Connecting to your phone files"
@@ -260,6 +287,23 @@ private fun AppRoot(
         LaunchSplashScreen(
             statusText = splashStatusText,
             supportingText = splashSupportingText
+        )
+        return
+    }
+
+    if (shouldShowOnboarding) {
+        FirstRunOnboardingFlow(
+            permissionState = onboardingPermissionState,
+            startAtDisclosure = disclosureOnly,
+            onRequestAccess = requestStorageAccessAction,
+            onFinish = {
+                hasCompletedIntro = true
+                acceptedDisclosureVersion = CurrentDisclosureVersion
+                startupPrefs.edit()
+                    .putBoolean(PrefIntroComplete, true)
+                    .putInt(PrefDisclosureVersion, CurrentDisclosureVersion)
+                    .apply()
+            }
         )
         return
     }

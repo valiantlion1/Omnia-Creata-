@@ -163,6 +163,7 @@ If the workflow runs manually, set:
 - [Omnia Organizer 1.0.0-alpha10](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha10)
 - [Omnia Organizer 1.0.0-alpha11](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha11)
 - [Omnia Organizer 1.0.0-alpha12](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha12)
+- [Omnia Organizer 1.0.0-alpha13](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha13)
 
 ## Release checklist
 Before every meaningful release:

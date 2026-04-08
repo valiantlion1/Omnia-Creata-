@@ -85,6 +85,13 @@ import java.text.DateFormat
 import java.io.File
 import java.util.Date
 
+enum class OnboardingPermissionState {
+    NOT_REQUESTED,
+    DENIED,
+    LIMITED,
+    READY
+}
+
 @Composable
 fun ErrorBanner(message: String, onDismiss: () -> Unit) {
     Card(
@@ -145,6 +152,123 @@ fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
                 )
                 FilledTonalButton(onClick = onGrantAccess) {
                     Text("Grant device storage access")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FirstRunOnboardingFlow(
+    permissionState: OnboardingPermissionState,
+    startAtDisclosure: Boolean,
+    onRequestAccess: () -> Unit,
+    onFinish: () -> Unit
+) {
+    var page by remember(startAtDisclosure) { mutableStateOf(if (startAtDisclosure) 3 else 0) }
+    val lastPageIndex = 4
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                BrandWordmarkBadge()
+                OnboardingProgress(page = page, steps = lastPageIndex + 1)
+                when (page) {
+                    0 -> OnboardingPage(
+                        eyebrow = "Welcome",
+                        title = "A calmer file manager for your phone",
+                        body = "Omnia Organizer is built to help you browse, search, sort, and recover files without throwing desktop complexity at a mobile screen.",
+                        points = listOf(
+                            "Browse folders without losing your place",
+                            "Search by real file context, not vague guesses",
+                            "Keep deleted files recoverable through Recycle Bin"
+                        )
+                    )
+
+                    1 -> OnboardingPage(
+                        eyebrow = "What you get",
+                        title = "Fast paths into the files people actually need",
+                        body = "The app focuses on recent work, new files, storage categories, downloads, screenshots, and document-heavy phone usage.",
+                        points = listOf(
+                            "Pinned jumps for Downloads, Screenshots, Documents, and Recycle Bin",
+                            "Explorer-style Browse with list/grid, sort, filters, and detail sheets",
+                            "Storage category views that lead back into the explorer"
+                        )
+                    )
+
+                    2 -> OnboardingPage(
+                        eyebrow = "Trust",
+                        title = "No forced account. No hidden signup wall.",
+                        body = "OOFM starts as a file utility, not a funnel. You are not blocked by account creation, and storage access exists to power file management flows only.",
+                        points = listOf(
+                            "No account required to start browsing your files",
+                            "Permission requests are explained before Android opens its system sheet",
+                            "Privacy and data-use summaries stay reachable in Settings"
+                        )
+                    )
+
+                    3 -> PermissionEducationPage(
+                        permissionState = permissionState,
+                        onRequestAccess = onRequestAccess
+                    )
+
+                    else -> DisclosurePage(onFinish = onFinish)
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (page > 0) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { page = (page - 1).coerceAtLeast(0) }
+                        ) {
+                            Text("Back")
+                        }
+                    }
+                    if (page < lastPageIndex) {
+                        TextButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { page = 3 }
+                        ) {
+                            Text("Skip")
+                        }
+                        FilledTonalButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { page = (page + 1).coerceAtMost(lastPageIndex) }
+                        ) {
+                            Text(if (page == 2) "Go to access" else "Next")
+                        }
+                    }
+                }
+                if (page == lastPageIndex) {
+                    FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onFinish
+                    ) {
+                        Text("I understand")
+                    }
                 }
             }
         }
@@ -540,6 +664,133 @@ private fun HomeStorageSummaryCard(
                 "Open Storage to drill into categories and large files.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.tertiary
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnboardingProgress(page: Int, steps: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(steps) { index ->
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(4.dp),
+                shape = RoundedCornerShape(999.dp),
+                color = if (index <= page) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+            ) {}
+        }
+    }
+}
+
+@Composable
+private fun OnboardingPage(
+    eyebrow: String,
+    title: String,
+    body: String,
+    points: List<String>
+) {
+    Card(
+        shape = RoundedCornerShape(30.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+    ) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(eyebrow, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BrandChecklist(points)
+        }
+    }
+}
+
+@Composable
+private fun PermissionEducationPage(
+    permissionState: OnboardingPermissionState,
+    onRequestAccess: () -> Unit
+) {
+    val title = when (permissionState) {
+        OnboardingPermissionState.NOT_REQUESTED -> "Give OOFM the access a file manager actually needs"
+        OnboardingPermissionState.DENIED -> "Storage access is still blocked"
+        OnboardingPermissionState.LIMITED -> "Access is partially ready"
+        OnboardingPermissionState.READY -> "Storage access is ready"
+    }
+    val body = when (permissionState) {
+        OnboardingPermissionState.NOT_REQUESTED ->
+            "Android will show its own permission UI next. OOFM asks for this so Browse, Search, Storage, and Recycle Bin can behave like a real phone file manager."
+
+        OnboardingPermissionState.DENIED ->
+            "Android did not grant storage access yet. You can retry now; if you skip, the app will still open but file management features will stay blocked until access is granted."
+
+        OnboardingPermissionState.LIMITED ->
+            "Android accepted the permission path, but OOFM is still connecting to the device workspace. You can continue now and let the app finish the handshake."
+
+        OnboardingPermissionState.READY ->
+            "Device storage is connected. Browse, Search, and Storage can use the current workspace right away."
+    }
+    val buttonLabel = when (permissionState) {
+        OnboardingPermissionState.DENIED -> "Retry access"
+        OnboardingPermissionState.READY -> "Access ready"
+        else -> "Grant device access"
+    }
+
+    Card(
+        shape = RoundedCornerShape(30.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+    ) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Permission", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BrandChecklist(
+                listOf(
+                    "Used for browsing, searching, sharing, moving, and restoring files on your phone",
+                    "Not a sign-in requirement and not a hidden data-harvesting step",
+                    "You can revisit the same explanation later from Settings"
+                )
+            )
+            FilledTonalButton(
+                onClick = onRequestAccess,
+                enabled = permissionState != OnboardingPermissionState.READY
+            ) {
+                Text(buttonLabel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DisclosurePage(onFinish: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(30.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+    ) {
+        Column(
+            modifier = Modifier.padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Transparency", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+            Text("What OOFM does and does not do", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Before you continue, the product should be clear about its boundaries. This is a mobile file manager first. Store release legal copy can tighten later, but the core promise should already be understandable.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            BrandChecklist(
+                listOf(
+                    "OOFM uses storage access to help you browse, search, sort, share, and recover files on your device",
+                    "The app does not force account creation before core file-management use",
+                    "Privacy summary, data-use summary, policy, and about surfaces stay reachable in Settings"
+                )
             )
         }
     }
@@ -1013,6 +1264,7 @@ fun SettingsScreen(
     onClearRoot: () -> Unit,
     onClearTrash: () -> Unit
 ) {
+    var infoSheet by remember { mutableStateOf<SettingsInfoSheet?>(null) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 28.dp),
@@ -1049,6 +1301,11 @@ fun SettingsScreen(
                     Text("Storage access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(state.root?.displayName ?: "Device storage not connected")
                     Text(
+                        if (state.root != null) "Status: Connected and ready" else "Status: Waiting for device access",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
                         "OOFM now targets full phone storage access where Android allows it. If access is lost, reconnect from here and the app will rebuild its device view.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1073,11 +1330,14 @@ fun SettingsScreen(
                         "The app is built to organize files on your device without forcing sign-in first. Storage access is requested so browse, search, open, share, and recycle flows can work like a proper mobile file manager.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        "Formal privacy policy, terms, and data transparency screens will be expanded before Play Store release.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = { infoSheet = SettingsInfoSheet.PRIVACY }) { Text("Privacy summary") }
+                        OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.DATA_USE }) { Text("Data use") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.TERMS }) { Text("Terms & policy") }
+                        OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.ABOUT }) { Text("About OOFM") }
+                    }
                 }
             }
         }
@@ -1094,6 +1354,9 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+    infoSheet?.let { sheet ->
+        SettingsInfoDialog(sheet = sheet, onDismiss = { infoSheet = null })
     }
 }
 
@@ -1510,6 +1773,50 @@ private fun BrowseExplorerCard(
             }
         }
     }
+}
+
+private enum class SettingsInfoSheet {
+    PRIVACY,
+    DATA_USE,
+    TERMS,
+    ABOUT
+}
+
+@Composable
+private fun SettingsInfoDialog(
+    sheet: SettingsInfoSheet,
+    onDismiss: () -> Unit
+) {
+    val title = when (sheet) {
+        SettingsInfoSheet.PRIVACY -> "Privacy summary"
+        SettingsInfoSheet.DATA_USE -> "Data use"
+        SettingsInfoSheet.TERMS -> "Terms & policy"
+        SettingsInfoSheet.ABOUT -> "About OOFM"
+    }
+    val body = when (sheet) {
+        SettingsInfoSheet.PRIVACY ->
+            "Omnia Organizer is built around on-device file management. Storage access exists so Browse, Search, Storage, sharing, move, rename, and Recycle Bin flows can work. The app is not designed to force account creation before core use."
+
+        SettingsInfoSheet.DATA_USE ->
+            "At this alpha stage, OOFM keeps its file-management work on the device. Product telemetry, legal copy, and Play listing declarations can tighten later, but the current product promise is to use access for file-management features rather than hidden profiling."
+
+        SettingsInfoSheet.TERMS ->
+            "Formal terms, privacy policy, and store-facing legal copy still need their final review before public launch. This screen exists now so the product already has a visible trust surface instead of leaving everything implicit."
+
+        SettingsInfoSheet.ABOUT ->
+            "OOFM is the internal shorthand for Omnia Organizer: File Manager. It is an OmniaCreata mobile utility focused on calm, premium file control instead of ad-heavy or desktop-style file browsers."
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
