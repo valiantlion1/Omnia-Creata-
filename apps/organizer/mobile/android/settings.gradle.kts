@@ -1,4 +1,4 @@
-﻿pluginManagement {
+pluginManagement {
     repositories {
         gradlePluginPortal()
         google()
@@ -18,8 +18,3 @@ include(":core:domain")
 include(":core:data")
 include(":core:ui")
 include(":core:design")
-include(":feature:capture")
-include(":feature:library")
-include(":feature:search")
-include(":feature:tasks")
-include(":feature:settings")

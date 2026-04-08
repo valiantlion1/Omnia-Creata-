@@ -1,54 +1,39 @@
 package com.omnia.organizer.core.data.db
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Query
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ItemDao {
+interface SelectedRootDao {
+    @Query("SELECT * FROM selected_root WHERE singletonId = 1")
+    fun observe(): Flow<SelectedRootEntity?>
+
+    @Query("SELECT * FROM selected_root WHERE singletonId = 1")
+    suspend fun get(): SelectedRootEntity?
+
     @Upsert
-    suspend fun upsert(entity: ItemEntity): Long
+    suspend fun upsert(entity: SelectedRootEntity)
 
-    @Query("SELECT * FROM items WHERE id = :id")
-    suspend fun getById(id: Long): ItemEntity?
+    @Query("DELETE FROM selected_root")
+    suspend fun clear()
+}
 
-    @Query("SELECT * FROM items ORDER BY updatedAt DESC")
-    suspend fun getAll(): List<ItemEntity>
+@Dao
+interface TrashDao {
+    @Query("SELECT * FROM trash_entries ORDER BY deletedAt DESC")
+    fun observeAll(): Flow<List<TrashEntryEntity>>
 
-    @Query("DELETE FROM items WHERE id = :id")
+    @Query("SELECT * FROM trash_entries WHERE id = :id")
+    suspend fun getById(id: Long): TrashEntryEntity?
+
+    @Upsert
+    suspend fun upsert(entity: TrashEntryEntity): Long
+
+    @Query("DELETE FROM trash_entries WHERE id = :id")
     suspend fun delete(id: Long)
 
-    @Query(
-        "SELECT items.* FROM items JOIN itemsFts ON items.id = itemsFts.rowid " +
-        "WHERE itemsFts MATCH :query ORDER BY items.updatedAt DESC LIMIT :limit"
-    )
-    suspend fun searchFts(query: String, limit: Int): List<ItemEntity>
-}
-
-@Dao
-interface TagDao {
-    @Upsert
-    suspend fun upsert(tag: TagEntity): Long
-
-    @Query("SELECT * FROM tags ORDER BY name ASC")
-    suspend fun getAll(): List<TagEntity>
-}
-
-@Dao
-interface FolderDao {
-    @Upsert
-    suspend fun upsert(folder: FolderEntity): Long
-
-    @Query("SELECT * FROM folders ORDER BY name ASC")
-    suspend fun getAll(): List<FolderEntity>
-}
-
-@Dao
-interface TaskDao {
-    @Upsert
-    suspend fun upsert(task: TaskEntity): Long
-
-    @Query("SELECT * FROM tasks WHERE completed = 0 ORDER BY dueAt IS NULL, dueAt ASC")
-    suspend fun getPending(): List<TaskEntity>
-
-    @Query("DELETE FROM tasks WHERE id = :id")
-    suspend fun delete(id: Long)
+    @Query("DELETE FROM trash_entries")
+    suspend fun clear()
 }

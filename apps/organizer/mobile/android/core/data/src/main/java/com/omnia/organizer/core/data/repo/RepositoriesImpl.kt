@@ -1,58 +1,79 @@
 package com.omnia.organizer.core.data.repo
 
-import com.omnia.organizer.core.data.db.*
-import com.omnia.organizer.core.data.mapper.*
-import com.omnia.organizer.core.domain.model.*
-import com.omnia.organizer.core.domain.repository.*
+import com.omnia.organizer.core.data.db.OmniaDatabase
+import com.omnia.organizer.core.data.db.SelectedRootEntity
+import com.omnia.organizer.core.data.db.TrashEntryEntity
+import com.omnia.organizer.core.domain.model.SelectedRoot
+import com.omnia.organizer.core.domain.model.TrashEntry
+import com.omnia.organizer.core.domain.repository.SelectedRootRepository
+import com.omnia.organizer.core.domain.repository.TrashRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-class ItemRepositoryImpl(private val db: OmniaDatabase) : ItemRepository {
-    override suspend fun upsert(item: Item): Long = db.itemDao().upsert(item.toEntity())
-    override suspend fun getById(id: Long): Item? = db.itemDao().getById(id)?.toDomain()
-    override suspend fun getAll(): List<Item> = db.itemDao().getAll().map { it.toDomain() }
-    override suspend fun delete(id: Long) = db.itemDao().delete(id)
-}
+class SelectedRootRepositoryImpl(private val db: OmniaDatabase) : SelectedRootRepository {
+    override fun observe(): Flow<SelectedRoot?> = db.selectedRootDao().observe().map { it?.toDomain() }
 
-class TagRepositoryImpl(private val db: OmniaDatabase) : TagRepository {
-    override suspend fun upsert(tag: Tag): Long = db.tagDao().upsert(tag.toEntity())
-    override suspend fun getAll(): List<Tag> = db.tagDao().getAll().map { it.toDomain() }
-}
+    override suspend fun get(): SelectedRoot? = db.selectedRootDao().get()?.toDomain()
 
-class FolderRepositoryImpl(private val db: OmniaDatabase) : FolderRepository {
-    override suspend fun upsert(folder: Folder): Long = db.folderDao().upsert(folder.toEntity())
-    override suspend fun getAll(): List<Folder> = db.folderDao().getAll().map { it.toDomain() }
-}
+    override suspend fun save(root: SelectedRoot) {
+        db.selectedRootDao().upsert(root.toEntity())
+    }
 
-class TaskRepositoryImpl(private val db: OmniaDatabase) : TaskRepository {
-    override suspend fun upsert(task: Task): Long = db.taskDao().upsert(task.toEntity())
-    override suspend fun getPending(): List<Task> = db.taskDao().getPending().map { it.toDomain() }
-    override suspend fun delete(id: Long) = db.taskDao().delete(id)
-}
-
-class SearchRepositoryImpl(private val db: OmniaDatabase) : SearchRepository {
-    override suspend fun search(query: String, limit: Int): List<Item> {
-        val built = buildFtsQuery(query)
-        if (built.isBlank()) return emptyList()
-        return db.itemDao().searchFts(built, limit).map { it.toDomain() }
+    override suspend fun clear() {
+        db.selectedRootDao().clear()
     }
 }
 
-private fun buildFtsQuery(input: String): String {
-    val tokens = input.trim()
-        .split(Regex("\\s+"))
-        .map { it.trim().lowercase() }
-        .map { sanitizeFtsToken(it) }
-        .filter { it.isNotEmpty() }
-    if (tokens.isEmpty()) return ""
-    // Prefix search for each token, require all tokens to appear
-    return tokens.joinToString(separator = " AND ") { token -> "\"${token}*\"" }
+class TrashRepositoryImpl(private val db: OmniaDatabase) : TrashRepository {
+    override fun observeAll(): Flow<List<TrashEntry>> = db.trashDao().observeAll().map { entries ->
+        entries.map { it.toDomain() }
+    }
+
+    override suspend fun getById(id: Long): TrashEntry? = db.trashDao().getById(id)?.toDomain()
+
+    override suspend fun upsert(entry: TrashEntry): Long = db.trashDao().upsert(entry.toEntity())
+
+    override suspend fun delete(id: Long) {
+        db.trashDao().delete(id)
+    }
+
+    override suspend fun clear() {
+        db.trashDao().clear()
+    }
 }
 
-private fun sanitizeFtsToken(token: String): String {
-    // Remove/replace characters that have special meaning in FTS queries
-    // e.g., quotes, wildcard, boolean operators/parentheses
-    val removed = token.replace(Regex("[\"'`*^~()<>]"), "")
-        .replace(Regex("OR|AND|NOT", RegexOption.IGNORE_CASE), "")
-        .trim()
-    // Limit token length to avoid pathological queries
-    return if (removed.length > 64) removed.substring(0, 64) else removed
-}
+private fun SelectedRootEntity.toDomain(): SelectedRoot = SelectedRoot(
+    treeUri = treeUri,
+    rootDocumentId = rootDocumentId,
+    displayName = displayName,
+    selectedAt = selectedAt
+)
+
+private fun SelectedRoot.toEntity(): SelectedRootEntity = SelectedRootEntity(
+    treeUri = treeUri,
+    rootDocumentId = rootDocumentId,
+    displayName = displayName,
+    selectedAt = selectedAt
+)
+
+private fun TrashEntryEntity.toDomain(): TrashEntry = TrashEntry(
+    id = id,
+    treeUri = treeUri,
+    originalParentDocumentId = originalParentDocumentId,
+    trashedDocumentId = trashedDocumentId,
+    displayName = displayName,
+    mimeType = mimeType,
+    sizeBytes = sizeBytes,
+    deletedAt = deletedAt
+)
+
+private fun TrashEntry.toEntity(): TrashEntryEntity = TrashEntryEntity(
+    id = id,
+    treeUri = treeUri,
+    originalParentDocumentId = originalParentDocumentId,
+    trashedDocumentId = trashedDocumentId,
+    displayName = displayName,
+    mimeType = mimeType,
+    sizeBytes = sizeBytes,
+    deletedAt = deletedAt
+)
