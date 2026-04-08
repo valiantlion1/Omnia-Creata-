@@ -81,6 +81,7 @@ import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
 import com.omnia.organizer.ui.FirstRunOnboardingFlow
 import com.omnia.organizer.ui.HomeScreen
+import com.omnia.organizer.ui.NoticeBanner
 import com.omnia.organizer.ui.OnboardingPermissionState
 import com.omnia.organizer.ui.OrganizerViewModel
 import com.omnia.organizer.ui.RenameDialog
@@ -427,6 +428,9 @@ private fun AppRoot(
 
             if (state.errorMessage != null) {
                 ErrorBanner(message = state.errorMessage.orEmpty(), onDismiss = viewModel::clearError)
+            }
+            if (state.notice != null) {
+                NoticeBanner(notice = state.notice!!, onDismiss = viewModel::clearNotice)
             }
 
             when (currentRoute) {

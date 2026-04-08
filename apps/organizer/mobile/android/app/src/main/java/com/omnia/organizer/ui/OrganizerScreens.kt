@@ -1,5 +1,6 @@
-package com.omnia.organizer.ui
+﻿package com.omnia.organizer.ui
 
+import com.omnia.organizer.BuildConfig
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -120,6 +122,50 @@ fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 }
 
 @Composable
+fun NoticeBanner(notice: UserNotice, onDismiss: () -> Unit) {
+    val containerColor = if (notice.tone == NoticeTone.SUCCESS) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val contentColor = if (notice.tone == NoticeTone.SUCCESS) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    val icon = if (notice.tone == NoticeTone.SUCCESS) {
+        Icons.Default.CheckCircle
+    } else {
+        Icons.Default.Info
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = contentColor)
+            Text(
+                text = notice.message,
+                color = contentColor,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss")
+            }
+        }
+    }
+}
+
+@Composable
 fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Card(
@@ -142,7 +188,7 @@ fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    "• Browse folders and files across phone storage\n• Search downloads, documents, screenshots, videos, and more\n• Move items to Recycle Bin and restore them later",
+                    "> Browse folders and files across phone storage\n> Search downloads, documents, screenshots, videos, and more\n> Move items to Recycle Bin and restore them later",
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
@@ -646,7 +692,7 @@ private fun HomeStorageSummaryCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Used ${formatBytes(summary.usedBytes)}${summary.freeBytes?.let { " • Free ${formatBytes(it)}" }.orEmpty()}",
+                "Used ${formatBytes(summary.usedBytes)}${summary.freeBytes?.let { " | Free ${formatBytes(it)}" }.orEmpty()}",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1188,7 +1234,7 @@ private fun SearchResultCard(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (item.isDirectory) "Folder result" else "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}",
+                        if (item.isDirectory) "Folder result" else "${kindLabel(item.kind)} | ${formatBytes(item.sizeBytes ?: 0L)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1285,17 +1331,18 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BrandWordmarkBadge(compact = true)
-                    Text("Omnia Organizer", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondary)
-                    Text("Package com.omnia.organizer", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
-                    Text("Channel Alpha", color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        "Exact build version is tracked in GitHub releases and the release ledger during alpha.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
-                    )
-                }
+                  Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      BrandWordmarkBadge(compact = true)
+                      Text("Omnia Organizer", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondary)
+                      Text("Package com.omnia.organizer", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                      Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                      Text(if (BuildConfig.ALPHA) "Channel Alpha" else "Channel Release", color = MaterialTheme.colorScheme.primary)
+                      Text(
+                          "This screen now shows the exact installed build so phone testing and Play-prep reviews stay grounded.",
+                          style = MaterialTheme.typography.bodySmall,
+                          color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
+                      )
+                  }
             }
         }
         item {
@@ -1377,6 +1424,10 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Recycle Bin", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text("${state.trashEntries.size} saved item(s)")
+                    Text(
+                        "Metadata can be cleared without touching the already-trashed files on disk. This is mainly an alpha recovery tool.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     OutlinedButton(onClick = onClearTrash) { Text("Clear metadata list") }
                 }
             }
@@ -1496,7 +1547,7 @@ private fun BrandChecklist(points: List<String>) {
                     color = MaterialTheme.colorScheme.primary
                 ) {
                     Text(
-                        "•",
+                        ">",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = MaterialTheme.colorScheme.onPrimary
                     )
@@ -1608,7 +1659,7 @@ private fun StorageOverviewCard(
             )
             Text("${summary.fileCount} files and ${summary.folderCount} folders")
             Text(
-                "Used ${formatBytes(summary.totalBytes)}${summary.freeBytes?.let { " • Free ${formatBytes(it)}" }.orEmpty()}"
+                "Used ${formatBytes(summary.totalBytes)}${summary.freeBytes?.let { " | Free ${formatBytes(it)}" }.orEmpty()}"
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatPill(label = "Large files ${state.largeFiles.size}")
@@ -1822,22 +1873,26 @@ private fun SettingsInfoDialog(
     }
     val body = when (sheet) {
         SettingsInfoSheet.PRIVACY ->
-            "Omnia Organizer is built around on-device file management. Storage access exists so Browse, Search, Storage, sharing, move, rename, and Recycle Bin flows can work. The app is not designed to force account creation before core use."
+            "Omnia Organizer is built around on-device file management.\n\nStorage access exists so Browse, Search, Storage, sharing, move, rename, and Recycle Bin flows can work.\n\nThe app is not designed to force account creation before core use."
 
         SettingsInfoSheet.DATA_USE ->
-            "At this alpha stage, OOFM keeps its file-management work on the device. Product telemetry, legal copy, and Play listing declarations can tighten later, but the current product promise is to use access for file-management features rather than hidden profiling."
+            "At this alpha stage, OOFM keeps its file-management work on the device.\n\nThe current product promise is to use access for file-management features rather than hidden profiling.\n\nFuture Play declarations and legal copy can tighten this further, but the app already exposes its trust surfaces in product."
 
         SettingsInfoSheet.TERMS ->
-            "Formal terms, privacy policy, and store-facing legal copy still need their final review before public launch. This screen exists now so the product already has a visible trust surface instead of leaving everything implicit."
+            "Formal terms, privacy policy, and store-facing legal copy still need their final review before public launch.\n\nCurrent product boundaries:\n- no forced account wall for core use\n- storage access is asked for file-management flows\n- files stay device-first in the current alpha path"
 
         SettingsInfoSheet.ABOUT ->
-            "OOFM is the internal shorthand for Omnia Organizer: File Manager. It is an OmniaCreata mobile utility focused on calm, premium file control instead of ad-heavy or desktop-style file browsers."
+            "OOFM is the internal shorthand for Omnia Organizer: File Manager.\n\nIt is an OmniaCreata mobile utility focused on calm, premium file control instead of ad-heavy or desktop-style file browsers."
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { Text(body) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(body)
+            }
+        },
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
@@ -2576,7 +2631,7 @@ private fun FileRow(
                     if (item.isDirectory) {
                         "Folder"
                     } else {
-                        "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}"
+                        "${kindLabel(item.kind)} | ${formatBytes(item.sizeBytes ?: 0L)}"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2729,7 +2784,7 @@ private fun buildBrowseControlsSummary(state: OrganizerUiState): String {
     if (state.browseTypeFilter != BrowseTypeFilter.ALL) {
         parts += "Files: ${browseTypeFilterLabel(state.browseTypeFilter)}"
     }
-    return parts.joinToString(" • ")
+    return parts.joinToString(" | ")
 }
 
 private fun browseSortLabel(option: BrowseSortOption): String = when (option) {
@@ -2791,7 +2846,7 @@ private fun locationSummary(item: FileItem, rootDocumentId: String): String {
         if (relative.isBlank()) {
             "Location: ${File(rootDocumentId).name.ifBlank { "Device storage" }}"
         } else {
-            "Location: ${relative.replace("/", " › ")}"
+            "Location: ${relative.replace("/", " > ")}"
         }
     } else {
         "Location: ${File(item.parentDocumentId).name.ifBlank { "Current folder" }}"
@@ -2802,3 +2857,4 @@ private fun formatDate(value: Long?): String {
     if (value == null || value <= 0L) return "Unknown date"
     return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(value))
 }
+

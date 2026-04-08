@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha14](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha14)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha15](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha15)
 
 ## Entries
+
+### 2026-04-08 - Alpha 15 production polish and trust surfacing
+- Version target: `1.0.0-alpha15`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha15](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha15)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - success and info banners now surface rename, move, copy, share, restore, and recycle-bin outcomes more clearly
+  - Settings now exposes the exact installed version/build and reads more like a real product trust center
+  - broken text encoding artifacts in explorer, search, storage, and onboarding copy were cleaned up
+  - legal and trust dialogs were expanded so the app feels less like a raw alpha shell
+- Known gaps:
+  - a real store-reviewed privacy policy and final legal copy still need to be written before Play launch
+  - visual polish is stronger, but the app still needs another pass on iconography, spacing consistency, and store assets
+  - broader device-matrix testing is still required before calling the build Play-ready
 
 ### 2026-04-08 - Alpha 14 performance hardening
 - Version target: `1.0.0-alpha14`

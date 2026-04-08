@@ -116,6 +116,16 @@ enum class DeviceTier {
     REDUCED
 }
 
+enum class NoticeTone {
+    INFO,
+    SUCCESS
+}
+
+data class UserNotice(
+    val message: String,
+    val tone: NoticeTone = NoticeTone.INFO
+)
+
 data class OrganizerUiState(
     val root: SelectedRoot? = null,
     val breadcrumb: List<FolderHandle> = emptyList(),
@@ -148,6 +158,7 @@ data class OrganizerUiState(
     val destinationPickerState: DestinationPickerState? = null,
     val deviceTier: DeviceTier = DeviceTier.STANDARD,
     val reducedEffectsMode: Boolean = false,
+    val notice: UserNotice? = null,
     val isLoading: Boolean = false,
     val isSearchLoading: Boolean = false,
     val isStorageRefreshing: Boolean = false,
@@ -519,7 +530,7 @@ class OrganizerViewModel @Inject constructor(
     }
 
     fun requestRename(item: FileItem) {
-        _uiState.update { it.copy(renameTarget = item, errorMessage = null) }
+        _uiState.update { it.copy(renameTarget = item, errorMessage = null, notice = null) }
     }
 
     fun requestRenameSelection() {
@@ -553,6 +564,7 @@ class OrganizerViewModel @Inject constructor(
                 }
                 refreshCurrentFolder(root, keepSearchResults = true)
                 refreshLightSurfaces(root)
+                postNotice("Renamed to ${renamed.name}.", NoticeTone.SUCCESS)
             }
         }
     }
@@ -641,12 +653,13 @@ class OrganizerViewModel @Inject constructor(
                     refreshCurrentFolder(root, keepSearchResults = true)
                     refreshLightSurfaces(root)
                 }
-
-                summarizeBatchResult(
+                val feedback = summarizeBatchResult(
                     operation = if (pending.type == FileOperationType.COPY) "Copied" else "Moved",
                     total = pending.items.size,
                     result = result
                 )
+                feedback.notice?.let { postNotice(it.message, it.tone) }
+                feedback.error
             }
         }
     }
@@ -669,11 +682,13 @@ class OrganizerViewModel @Inject constructor(
                     refreshCurrentFolder(root, keepSearchResults = true)
                     refreshLightSurfaces(root)
                 }
-                summarizeBatchResult(
+                val feedback = summarizeBatchResult(
                     operation = "Moved to Recycle Bin",
                     total = selected.size,
                     result = result.toFileBatchOperationResult()
                 )
+                feedback.notice?.let { postNotice(it.message, it.tone) }
+                feedback.error
             }
         }
     }
@@ -686,6 +701,7 @@ class OrganizerViewModel @Inject constructor(
                 trashRepository.upsert(entry)
                 refreshCurrentFolder(root, keepSearchResults = true)
                 refreshLightSurfaces(root)
+                postNotice("${item.name} moved to Recycle Bin.", NoticeTone.SUCCESS)
             }
         }
     }
@@ -707,11 +723,15 @@ class OrganizerViewModel @Inject constructor(
 
             else -> _uiState.update {
                 it.clearSelectionState().copy(
-                    errorMessage = if (skippedCount > 0) {
-                        "$skippedCount folder item(s) were skipped because Android share only supports files here."
-                    } else {
-                        null
-                    }
+                    errorMessage = null,
+                    notice = UserNotice(
+                        message = if (skippedCount > 0) {
+                            "Shared $sharedCount file(s). $skippedCount folder item(s) were skipped."
+                        } else {
+                            "Shared $sharedCount file(s)."
+                        },
+                        tone = NoticeTone.SUCCESS
+                    )
                 )
             }
         }
@@ -728,6 +748,7 @@ class OrganizerViewModel @Inject constructor(
                     refreshCurrentFolder(root, keepSearchResults = true)
                     refreshLightSurfaces(root)
                 }
+                postNotice("${entry.displayName} restored.", NoticeTone.SUCCESS)
             }
         }
     }
@@ -738,6 +759,7 @@ class OrganizerViewModel @Inject constructor(
                 val deleted = withContext(Dispatchers.IO) { documentManager.permanentlyDeleteTrash(entry) }
                 if (!deleted) error("The item could not be deleted permanently.")
                 trashRepository.delete(entry.id)
+                postNotice("${entry.displayName} deleted forever.", NoticeTone.INFO)
             }
         }
     }
@@ -745,6 +767,7 @@ class OrganizerViewModel @Inject constructor(
     fun clearTrash() {
         viewModelScope.launch {
             trashRepository.clear()
+            postNotice("Recycle Bin metadata cleared.", NoticeTone.INFO)
         }
     }
 
@@ -798,12 +821,17 @@ class OrganizerViewModel @Inject constructor(
                     refreshCurrentFolder(root, keepSearchResults = true)
                 }
                 refreshLightSurfaces(root)
+                postNotice("Folder created.", NoticeTone.SUCCESS)
             }
         }
     }
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun clearNotice() {
+        _uiState.update { it.copy(notice = null) }
     }
 
     fun documentUriFor(item: FileItem): Uri? {
@@ -1080,15 +1108,24 @@ class OrganizerViewModel @Inject constructor(
         operation: String,
         total: Int,
         result: FileBatchOperationResult
-    ): String? {
-        if (result.failures.isEmpty()) return null
-        val failureSummary = if (result.succeededDocumentIds.isEmpty()) {
-            "$operation failed for all $total item(s). ${result.failures.first().reason}"
+    ): BatchFeedback {
+        if (result.failures.isEmpty()) {
+            return BatchFeedback(
+                notice = UserNotice("$operation $total item(s).", NoticeTone.SUCCESS)
+            )
+        }
+        if (result.succeededDocumentIds.isEmpty()) {
+            val failureSummary = "$operation failed for all $total item(s). ${result.failures.first().reason}"
+            return BatchFeedback(error = failureSummary)
         } else {
             val failedCount = result.failures.size
-            "$operation ${result.succeededDocumentIds.size} item(s). $failedCount item(s) failed."
+            return BatchFeedback(
+                notice = UserNotice(
+                    "$operation ${result.succeededDocumentIds.size} item(s). $failedCount item(s) failed.",
+                    NoticeTone.INFO
+                )
+            )
         }
-        return failureSummary
     }
 
     private fun buildFileSystemBrowsePath(root: SelectedRoot, targetDocumentId: String): List<FolderHandle>? {
@@ -1173,6 +1210,10 @@ class OrganizerViewModel @Inject constructor(
             DeviceTier.STANDARD
         }
     }
+
+    private fun postNotice(message: String, tone: NoticeTone) {
+        _uiState.update { it.copy(notice = UserNotice(message, tone)) }
+    }
 }
 
 private data class TrashBatchResult(
@@ -1185,6 +1226,11 @@ private data class TrashBatchResult(
 private fun TrashBatchResult.toFileBatchOperationResult(): FileBatchOperationResult = FileBatchOperationResult(
     succeededDocumentIds = succeededDocumentIds,
     failures = failures
+)
+
+private data class BatchFeedback(
+    val error: String? = null,
+    val notice: UserNotice? = null
 )
 
 internal fun OrganizerUiState.visibleBrowseItems(): List<FileItem> {
