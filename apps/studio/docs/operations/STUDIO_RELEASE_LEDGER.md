@@ -18,16 +18,104 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
-### `0.5.1-alpha` / build `2026.04.08.07`
+### `0.5.1-alpha` / build `2026.04.08.20`
 - Date: `2026-04-08`
 - Codename: `Foundation`
 - Status: `prelaunch`
 - Why:
-  Sprint 8 protected staging got past Docker discovery and web-build truth, then hit a real dependency pin bug: backend and worker images were asking pip for `cryptography==41.0.8`, which does not exist for Linux and made Docker bring-up fail on an impossible package version
+  Sprint 9 still had one dangerous honesty gap in its closure path: provider truth could see runtime health and a smoke report, but it still did not require current-build live smoke proof per configured launch-grade lane, and smoke probes with both a real success and an expected-failure validation case could overwrite their own good result in owner truth
 - What:
-  `apps/studio/backend/requirements.txt` now pins `cryptography==44.0.3`, which is both real and already aligned with the local backend environment
-  agent memory now explicitly treats container-facing dependency pins as deployment truth, not local-machine assumptions
-  this removes one more fake Docker blocker from the Sprint 8 protected staging path
+  provider smoke reports now persist their selected surface and can be generated from an explicit env file, which makes live recovery runs practical against staging-shaped secret sources instead of only the backend `.env`
+  owner provider truth now aggregates smoke results per provider/surface, so an expected-failure probe no longer hides a real successful smoke result for the same launch-grade lane
+  chat and image launch-grade truth now require current-build live smoke proof before a configured lane reads as healthy-for-launch, and smoke coverage gaps now name the exact configured providers that are still unproven on this build
+
+### `0.5.1-alpha` / build `2026.04.08.19`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 operator truth still made providers look too abstract: health detail could say a lane was degraded, but it still did not expose enough per-provider runtime detail to explain whether the real issue was missing credentials, cooldown, current-build smoke failure, or a non-launch-grade lane class
+- What:
+  `provider_truth` now exposes per-provider runtime diagnostics for both chat and image lanes, including credential presence, runtime availability, launch classification, recent failure state, cooldown/circuit state, and current-build smoke status when available
+  current-build smoke failures can now sit directly beside each provider in owner truth instead of staying buried only in the raw smoke report file
+  fallback-only image lanes and missing managed lanes are now easier to distinguish from healthy launch-grade lanes without terminal log-diving
+
+### `0.5.1-alpha` / build `2026.04.08.18`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 still had two truth gaps: chat replies could say enough to look premium without explicitly declaring whether they came from a live provider or heuristic fallback, and Pro image routing could still prefer fallback-only lanes ahead of managed launch-grade providers on some non-premium prompts
+- What:
+  assistant chat metadata now carries explicit response-mode truth for `live_provider_reply`, `premium_lane_unavailable`, and `degraded_fallback_reply`, which lets the chat surface stay honest without guessing from prose alone
+  owner provider economics no longer treats a single healthy managed lane as public-paid-safe; it stays visible as a warning until redundancy exists
+  Pro image routing now prefers `fal` and `Runware` ahead of fallback-only lanes even on balanced non-premium prompts, which keeps Sprint 9 provider policy consistent with the product promise
+
+### `0.5.1-alpha` / build `2026.04.08.17`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 still had a user-trust gap on the chat surface: static starter prompts and degraded heuristic replies could both feel like “the AI is connected and answering” even when the premium lane was actually unavailable
+- What:
+  the empty chat state now explicitly labels its starter tiles as static quick starts instead of letting them read like live AI output
+  assistant bubbles now mark degraded heuristic responses as fallback replies and surface when the premium lane is unavailable, while real live-provider replies can show the provider name more honestly
+  this keeps the chat surface aligned with Sprint 9’s no-fake-success rule without changing Studio’s core Create/Chat product shape
+
+### `0.5.1-alpha` / build `2026.04.08.16`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 still needed a more honest provider-economics read: seeing one launch-grade lane is not the same thing as having a resilient paid rollout shape, and operators still could not tell that difference clearly from owner health detail
+- What:
+  provider truth now separates `public_paid_usage_ready` from `resilience_status` for both chat and image surfaces, so Studio can say whether a lane is merely billable/configured versus actually redundant enough for broader rollout confidence
+  launch-readiness economics now carries structured cost-class and resilience fields for chat and image, which makes single-lane premium chat or single-lane managed image setups visible without collapsing back into vague prose
+  regression coverage now locks that stronger provider-truth contract, especially the case where image generation is launch-grade but still single-lane and therefore not yet redundancy-safe
+
+### `0.5.1-alpha` / build `2026.04.08.15`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 still had a provider-truth blind spot: a stored smoke report could make Studio look healthier than it really was even when that report came from an older build or only tested one surface while current launch-grade chat or image lanes remained unproven
+- What:
+  provider smoke now records explicit surface coverage for `chat` and `image`, so operator truth can see which part of the AI stack was actually exercised instead of treating every smoke run as equivalent
+  launch-readiness now warns when the latest smoke report is stale for the current build or when configured premium chat / managed image lanes were not smoke-tested on that build
+  the smoke CLI can now probe chat providers as well as image providers, which makes Sprint 9 provider truth less dependent on terminal memory and more aligned with current-build reality
+
+### `0.5.1-alpha` / build `2026.04.08.14`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio recovery had to be restored onto `main` after the last correct Studio work landed on OOFM branches by mistake; we needed one canonical Studio line again without merging Organizer or OCOS drift into the product branch
+- What:
+  `main` now carries the Sprint 8 staging/operator closure files plus the Sprint 9 provider-truth layer again, restored path-by-path from the mistaken branches instead of merging unrelated OOFM work
+  the canonical Studio line on `main` now preserves protected-staging closure, `launch_gate`, and `provider_truth` together, so future Studio work can continue from one real source instead of split branch memory
+  recovery bookkeeping now makes that explicit in the build manifest and operator docs so the next Studio slices can proceed directly from `main`
+
+### `0.5.1-alpha` / build `2026.04.08.08`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had one structural closure gap: even when Docker staging could boot, host-written deployment reports could not round-trip back into owner health detail because the stack used an isolated named volume, and the verify flow still defaulted to the public staging URL instead of the host-reachable forwarded URL used by the local Docker proof
+- What:
+  `docker-compose.staging.yml` now bind-mounts a host-side staging runtime root into `/runtime`, which keeps staging logs and reports outside the repo while letting owner health detail read the same deployment verification files the operator scripts write
+  `start-studio-staging.ps1` and `verify-studio-staging.ps1` now derive a shared external staging runtime root plus a host-reachable verify URL by default, so Sprint 8 local Docker proofs can drive the official closure loop more honestly
+  `.env.staging.example`, deployment docs, and agent memory now document the optional `STAGING_RUNTIME_ROOT` and `STAGING_VERIFY_BASE_URL` overrides for protected staging operators
+
+### `0.5.1-alpha` / build `2026.04.08.13`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 starts with a stricter provider-truth slice because Studio was still looking healthier than it really was: fallback-only image lanes could sit beside launch-readiness and operator health without clearly telling us that paid public image generation is still not trustworthy
+- What:
+  owner health detail and launch-readiness now expose a structured `provider_truth` view for chat and image lanes, including launch-grade readiness, fallback-only providers, and public paid usage safety
+  image provider truth now treats `fal` and `Runware` as the only launch-grade managed lanes; `Pollinations`, `Hugging Face`, and `demo` no longer read like equivalent public-launch options
+  launch-readiness now blocks on fallback-only image routing while keeping provider smoke as an explicit Sprint 9 warning instead of a fake hard deployment blocker
 
 ### `0.5.1-alpha` / build `2026.04.08.06`
 - Date: `2026-04-08`

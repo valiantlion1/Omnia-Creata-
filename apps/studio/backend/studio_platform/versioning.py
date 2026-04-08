@@ -49,7 +49,17 @@ def build_runtime_version_payload(
 
 
 def _default_version_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "version.json"
+    module_path = Path(__file__).resolve()
+    candidates = [
+        module_path.parents[2] / "version.json",
+        module_path.parents[1] / "version.json",
+        Path("/app/version.json"),
+        Path("/version.json"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def load_version_info(path: str | None = None) -> StudioVersionInfo:

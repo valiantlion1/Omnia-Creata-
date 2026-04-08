@@ -1,9 +1,14 @@
 package com.omnia.organizer
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,30 +32,37 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.ui.BrowseScreen
 import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
 import com.omnia.organizer.ui.HomeScreen
-import com.omnia.organizer.ui.OrganizerUiState
 import com.omnia.organizer.ui.OrganizerViewModel
 import com.omnia.organizer.ui.RenameDialog
 import com.omnia.organizer.ui.SearchScreen
 import com.omnia.organizer.ui.SettingsScreen
+import com.omnia.organizer.ui.StoragePermissionRequiredScreen
 import com.omnia.organizer.ui.StorageScreen
 import com.omnia.organizer.ui.TrashScreen
 import com.omnia.organizer.ui.theme.OmniaTheme
@@ -88,21 +100,78 @@ private fun AppRoot(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val openTreeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
-            viewModel.onTreePicked(uri)
-        }
-    }
-    val openTreePicker = remember(openTreeLauncher) { { openTreeLauncher.launch(null) } }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var accessRefreshTick by remember { mutableIntStateOf(0) }
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
     var menuExpanded by remember { mutableStateOf(false) }
-    val primaryRoutes = remember { listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage) }
+    val primaryRoutes = remember {
+        listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                accessRefreshTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val legacyPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        accessRefreshTick++
+    }
+
+    val hasStorageAccess = remember(accessRefreshTick) { hasFullStorageAccess(context) }
+    val requestStorageAccess = remember(context, legacyPermissionLauncher) {
+        {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val appIntent = Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:${context.packageName}")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val fallbackIntent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(appIntent) }
+                    .recoverCatching { context.startActivity(fallbackIntent) }
+            } else {
+                legacyPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                )
+            }
+        }
+    }
+    val handleStorageAction: () -> Unit = {
+        if (hasStorageAccess) {
+            viewModel.enableDeviceStorageRoot()
+        } else {
+            requestStorageAccess()
+        }
+    }
+    val requestStorageAccessAction: () -> Unit = { requestStorageAccess() }
+
+    LaunchedEffect(hasStorageAccess) {
+        if (hasStorageAccess) {
+            viewModel.enableDeviceStorageRoot()
+        }
+    }
+
+    LaunchedEffect(currentRoute, hasStorageAccess, state.root?.treeUri, state.root?.rootDocumentId) {
+        if (hasStorageAccess && currentRoute == OrganizerRoute.Storage.route) {
+            viewModel.ensureStorageSummary()
+        }
+    }
+
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != OrganizerRoute.Browse.route) {
+            viewModel.clearBrowseActionMode()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -110,7 +179,11 @@ private fun AppRoot(
                 title = {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Text(
-                            when (currentRoute) {
+                            when {
+                                currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
+                                    "${state.selectedDocumentIds.size} selected"
+
+                                else -> when (currentRoute) {
                                 OrganizerRoute.Home.route -> "Omnia Organizer"
                                 OrganizerRoute.Browse.route -> "Browse"
                                 OrganizerRoute.Search.route -> "Search"
@@ -119,19 +192,23 @@ private fun AppRoot(
                                 OrganizerRoute.Settings.route -> "Settings"
                                 else -> "Omnia Organizer"
                             }
+                            }
                         )
                         state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
                             Text(
                                 text = rootName,
-                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 },
                 actions = {
-                    IconButton(onClick = openTreePicker) {
-                        Icon(Icons.Default.UploadFile, contentDescription = "Change storage root")
+                    IconButton(onClick = handleStorageAction) {
+                        Icon(
+                            Icons.Default.UploadFile,
+                            contentDescription = if (hasStorageAccess) "Reconnect storage" else "Grant storage access"
+                        )
                     }
                     IconButton(onClick = { viewModel.refreshActiveRoute(currentRoute) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -155,15 +232,15 @@ private fun AppRoot(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Change folder") },
+                            text = { Text(if (hasStorageAccess) "Reconnect device storage" else "Grant device storage access") },
                             onClick = {
                                 menuExpanded = false
-                                openTreePicker()
+                                requestStorageAccess()
                             }
                         )
                         if (state.root != null) {
                             DropdownMenuItem(
-                                text = { Text("Clear selected folder") },
+                                text = { Text("Reset current root") },
                                 onClick = {
                                     currentRoute = OrganizerRoute.Home.route
                                     viewModel.clearRoot()
@@ -193,6 +270,11 @@ private fun AppRoot(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (!hasStorageAccess) {
+                StoragePermissionRequiredScreen(onGrantAccess = requestStorageAccessAction)
+                return@Scaffold
+            }
+
             if (state.errorMessage != null) {
                 ErrorBanner(message = state.errorMessage.orEmpty(), onDismiss = viewModel::clearError)
             }
@@ -204,7 +286,7 @@ private fun AppRoot(
                     onOpenSearch = { currentRoute = OrganizerRoute.Search.route },
                     onOpenStorage = { currentRoute = OrganizerRoute.Storage.route },
                     onOpenTrash = { currentRoute = OrganizerRoute.Trash.route },
-                    onPickFolder = openTreePicker,
+                    onPickFolder = requestStorageAccessAction,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onOpenParent = { item ->
                         viewModel.openParentOf(item)
@@ -215,18 +297,43 @@ private fun AppRoot(
                 OrganizerRoute.Browse.route -> BrowseScreen(
                     state = state,
                     onOpenFolder = viewModel::openFolder,
-                    onPickFolder = openTreePicker,
+                    onPickFolder = requestStorageAccessAction,
                     onNavigateToBreadcrumb = viewModel::navigateToBreadcrumb,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onShareFile = { item -> shareDocument(context, viewModel.documentUriFor(item), item.mimeType, item.name) },
                     onRequestRename = viewModel::requestRename,
                     onMoveToTrash = viewModel::moveToTrash,
-                    onCreateFolder = viewModel::requestCreateFolder
+                    onCreateFolder = viewModel::requestCreateFolder,
+                    onEnterSelectionMode = viewModel::enterSelectionMode,
+                    onToggleSelection = viewModel::toggleSelection,
+                    onClearSelection = viewModel::clearBrowseActionMode,
+                    onSelectAll = viewModel::selectAllCurrentFolder,
+                    onRequestCopySelection = viewModel::requestCopySelection,
+                    onRequestMoveSelection = viewModel::requestMoveSelection,
+                    onRequestShareSelection = {
+                        val targets = viewModel.selectedShareTargets()
+                        val uris = viewModel.documentUrisFor(targets)
+                        shareDocuments(context, uris, targets)
+                        viewModel.completeShareSelection(
+                            sharedCount = uris.size,
+                            skippedCount = (state.selectedDocumentIds.size - uris.size).coerceAtLeast(0)
+                        )
+                    },
+                    onRequestRenameSelection = viewModel::requestRenameSelection,
+                    onDeleteSelection = viewModel::deleteSelection,
+                    onDismissDestinationPicker = viewModel::dismissDestinationPicker,
+                    onOpenDestinationFolder = viewModel::openDestinationFolder,
+                    onNavigateDestinationBreadcrumb = viewModel::navigateDestinationBreadcrumb,
+                    onConfirmDestinationOperation = viewModel::confirmDestinationOperation,
+                    onCreateFolderInDestination = {
+                        val target = state.destinationPickerState?.targetDocumentId
+                        viewModel.requestCreateFolder(targetDocumentId = target, forDestinationPicker = true)
+                    }
                 )
 
                 OrganizerRoute.Search.route -> SearchScreen(
                     state = state,
-                    onPickFolder = openTreePicker,
+                    onPickFolder = requestStorageAccessAction,
                     onQueryChange = viewModel::updateSearchQuery,
                     onKindFilter = viewModel::updateKindFilter,
                     onDateFilter = viewModel::updateDateFilter,
@@ -240,7 +347,7 @@ private fun AppRoot(
 
                 OrganizerRoute.Storage.route -> StorageScreen(
                     state = state,
-                    onPickFolder = openTreePicker,
+                    onPickFolder = requestStorageAccessAction,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onOpenParent = { item ->
                         viewModel.openParentOf(item)
@@ -256,7 +363,7 @@ private fun AppRoot(
 
                 OrganizerRoute.Settings.route -> SettingsScreen(
                     state = state,
-                    onPickFolder = openTreePicker,
+                    onPickFolder = requestStorageAccessAction,
                     onClearRoot = viewModel::clearRoot,
                     onClearTrash = viewModel::clearTrash
                 )
@@ -286,4 +393,37 @@ private fun shareDocument(context: Context, uri: Uri?, mimeType: String, display
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Share file")) }
+}
+
+private fun shareDocuments(context: Context, uris: List<Uri>, items: List<com.omnia.organizer.core.domain.model.FileItem>) {
+    if (uris.isEmpty()) return
+    val resolvedType = items
+        .map { item -> item.mimeType.ifBlank { "*/*" } }
+        .distinct()
+        .singleOrNull()
+        ?: "*/*"
+    val intent = if (uris.size == 1) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = resolvedType
+            putExtra(Intent.EXTRA_STREAM, uris.first())
+            putExtra(Intent.EXTRA_SUBJECT, items.firstOrNull()?.name.orEmpty())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = resolvedType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+    runCatching { context.startActivity(Intent.createChooser(intent, "Share files")) }
+}
+
+private fun hasFullStorageAccess(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+    }
 }

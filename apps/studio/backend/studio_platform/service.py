@@ -2513,6 +2513,12 @@ class StudioService:
                 premium_chat=premium_chat,
                 context=context,
             )
+            premium_lane_unavailable = bool(premium_chat and llm_reply.degraded)
+            response_mode = (
+                "premium_lane_unavailable"
+                if premium_lane_unavailable
+                else "live_provider_reply"
+            )
             metadata = {
                 "provider": llm_reply.provider,
                 "model": llm_reply.model,
@@ -2521,10 +2527,15 @@ class StudioService:
                 "completion_tokens": llm_reply.completion_tokens,
                 "estimated_cost_usd": llm_reply.estimated_cost_usd,
                 "used_fallback": llm_reply.used_fallback,
+                "used_llm": True,
                 "premium_chat": premium_chat,
                 "requested_quality_tier": llm_reply.requested_quality_tier,
                 "selected_quality_tier": llm_reply.selected_quality_tier,
                 "degraded": llm_reply.degraded,
+                "provider_status": "degraded" if premium_lane_unavailable else "healthy",
+                "fallback_reason": "premium_lane_unavailable" if premium_lane_unavailable else None,
+                "premium_lane_unavailable": premium_lane_unavailable,
+                "response_mode": response_mode,
                 "routing_strategy": llm_reply.routing_strategy,
                 "routing_reason": llm_reply.routing_reason,
                 "generation_bridge": generation_bridge,
@@ -2565,6 +2576,7 @@ class StudioService:
                 "mode": resolved_mode,
                 "estimated_cost_usd": 0.0,
                 "used_fallback": True,
+                "used_llm": False,
                 "premium_chat": premium_chat,
                 "requested_quality_tier": "premium" if premium_chat else "standard",
                 "selected_quality_tier": "degraded",
@@ -2573,6 +2585,8 @@ class StudioService:
                 "routing_reason": "provider_unavailable_or_empty",
                 "provider_status": "degraded",
                 "fallback_reason": "all_provider_candidates_failed",
+                "premium_lane_unavailable": premium_chat,
+                "response_mode": "degraded_fallback_reply",
                 "generation_bridge": generation_bridge,
                 **build_chat_metadata(intent, context=context),
             }
@@ -3698,6 +3712,9 @@ class StudioService:
             launch_gate = launch_readiness.get("launch_gate")
             if isinstance(launch_gate, dict):
                 payload["launch_gate"] = launch_gate
+            provider_truth = launch_readiness.get("provider_truth")
+            if isinstance(provider_truth, dict):
+                payload["provider_truth"] = provider_truth
         return payload
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:

@@ -9,9 +9,28 @@ Last updated: 2026-04-08
 - Login/signup currently support Google plus email/password only.
 - UI is intentionally in preservation mode unless explicitly requested.
 - Frontend is under active Antigravity work, so UI-side `type-check` / build status should be re-checked after each frontend merge wave.
+- Sprint 8 is complete; Sprint 9 is now active and focused on provider reliability plus economics truth.
+- `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
 
 ## Recent stabilization wins
 
+- Sprint 9 closure truth is stricter now: a configured launch-grade chat or image lane no longer reads as healthy-for-launch unless the current build has a successful live smoke result for that exact provider.
+- Sprint 9 provider smoke now aggregates per-provider results instead of letting an expected-failure probe overwrite a real success for the same lane, which keeps owner truth honest when both validation styles run in one smoke pass.
+- Sprint 9 smoke CLI can now load an explicit env file before Studio settings initialize, which makes live provider recovery practical when staging/protected secrets live outside the default backend `.env`.
+- Sprint 9 owner truth now exposes per-provider diagnostics such as credential presence, runtime availability, launch classification, cooldown/circuit state, recent failure state, and current-build smoke result, so provider outages are easier to read without terminal log-diving.
+- Sprint 9 chat replies now carry an explicit response-mode contract (`live_provider_reply`, `premium_lane_unavailable`, `degraded_fallback_reply`), so frontend trust chips no longer have to infer live-vs-fallback truth from fuzzy metadata alone.
+- Sprint 9 provider economics is stricter now: a single healthy managed image lane no longer counts as `public_paid_usage_safe`, which keeps broader paid-launch confidence separate from mere lane existence.
+- Pro image routing now prefers managed launch-grade providers before fallback-only lanes even on balanced non-premium prompts, so Studio no longer undercuts its own premium image policy when `fal` or `Runware` is actually available.
+- Sprint 9 chat honesty is stronger now: empty-state quick starts are explicitly marked as static starter prompts, and degraded heuristic assistant replies now show fallback/provider-unavailable chips instead of feeling like live premium model output.
+- Sprint 9 provider truth now separates `public_paid_usage_ready` from `resilience_status` for chat and image lanes, so owner health detail can show the difference between “one billable lane exists” and “the paid rollout still depends on a single lane.”
+- Sprint 9 provider smoke truth now tracks which surface was actually tested (`chat` vs `image`) and whether that smoke proof belongs to the current Studio build, so stale smoke reports no longer overstate launch readiness.
+- Launch-readiness now warns when configured premium chat lanes or managed image lanes were not smoke-tested on the current build, which makes provider-truth audits more honest before public-paid rollout.
+- Studio recovery is now back on `main`, preserving Sprint 8 staging closure plus Sprint 9 provider truth without dragging Organizer/OCOS files into the Studio continuation line.
+- Owner health detail and launch-readiness now expose structured provider truth for chat and image lanes, so fallback-only generation paths no longer look launch-grade or public-paid-safe.
+- Launch-readiness now keeps provider smoke visible as a Sprint 9 warning while separately blocking on image routing that still lacks a healthy managed launch-grade lane.
+- Sprint 8 staging backend and worker images now install `PyJWT`, which matches the runtime `import jwt` path already used by Studio auth and removes another local-only dependency assumption from Docker bring-up.
+- Sprint 8 protected staging now bind-mounts a host-side runtime root into `/runtime`, which lets deployment verification reports and runtime logs round-trip back into owner health detail instead of splitting host operator truth away from the containerized stack.
+- Sprint 8 staging operator scripts now default to a host-reachable verify URL and a dedicated external staging runtime root, so local Docker proofs can exercise the official closure loop without depending on the public staging DNS target already being reachable from the same machine.
 - Sprint 8 staging startup now finds Docker Desktop from the standard Windows install path even when the current shell PATH is stale, which removes a common false blocker right after Docker installation.
 - Sprint 8 staging startup now also prepends the resolved Docker Desktop bin directory to PATH before compose runs, which fixes fresh-install failures where `docker.exe` existed but `docker-credential-desktop.exe` was still invisible to the stale shell.
 - Sprint 8 staging web builds now copy the root `version.json` manifest into the container build, which fixes Dockerized web failures where the footer/version import worked locally but broke inside the staging image.
@@ -193,8 +212,8 @@ Last updated: 2026-04-08
 
 ## Safe next steps
 
-1. Finish Sprint 8 by running the protected staging verify loop with an owner bearer token and confirming `closure_ready=true`.
-2. Re-check launch readiness from a non-local runtime once protected staging actually exists.
+1. Keep Sprint 9 focused on real provider reliability and economics truth, starting with current-build smoke coverage and then moving toward a real managed image lane plus healthier premium chat behavior.
+2. Re-run protected staging verification on the current build when provider-truth slices materially change, so staging proof does not lag behind `main`.
 3. Keep auth, billing, export/delete, queue recovery, and generation flows covered by regression tests.
 4. Continue backend extraction from `service.py` into focused modules where it does not blur sprint boundaries.
 5. Split large frontend files only behind visual no-regression checks.

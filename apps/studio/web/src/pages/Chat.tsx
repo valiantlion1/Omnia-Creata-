@@ -561,10 +561,10 @@ function GenerationBlocked({
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
-    { label: '🎨 Create an image', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
-    { label: '✏️ Edit a photo', value: 'I want to edit a photo — let me upload it first' },
-    { label: '💡 Help with a prompt', value: 'Help me write a prompt for a futuristic city skyline at night' },
-    { label: '🖼️ Describe my image', value: 'Analyze this image and tell me what you see' },
+    { title: 'Create starter', description: 'Start from a cinematic portrait prompt', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
+    { title: 'Edit starter', description: 'Prepare the chat for a photo edit flow', value: 'I want to edit a photo - let me upload it first' },
+    { title: 'Prompt help', description: 'Ask for stronger prompt direction', value: 'Help me write a prompt for a futuristic city skyline at night' },
+    { title: 'Image analysis', description: 'Ask Studio to read an uploaded image', value: 'Analyze this image and tell me what you see' },
   ]
 
   return (
@@ -586,16 +586,19 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
         Describe an image, upload a photo to edit, or ask for creative guidance.
         Images are generated organically right here.
       </p>
+      <div className="relative z-10 mt-5 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2 text-[11px] font-medium tracking-[0.02em] text-zinc-400">
+        Quick starts below are static starter prompts, not live AI replies.
+      </div>
       
       <div className="relative z-10 mt-10 grid max-w-2xl gap-3 sm:grid-cols-2 w-full">
         {suggestions.map((s) => (
           <button
-            key={s.label}
+            key={s.title}
             onClick={() => onHint(s.value)}
             className="group rounded-[20px] border border-white/[0.04] bg-[#111216]/60 backdrop-blur-xl px-5 py-4 text-left text-sm transition-all duration-300 hover:bg-[#1a1b23]/80 hover:border-[rgb(var(--primary-light)/0.3)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgb(var(--primary-light)/0.1)]"
           >
-            <div className="font-semibold text-white/90 group-hover:text-[rgb(var(--primary-light))] transition-colors drop-shadow-sm mb-1">{s.label.split(' ').slice(0, 2).join(' ')}</div>
-            <div className="text-zinc-500 leading-relaxed group-hover:text-zinc-300 transition-colors">{s.label.split(' ').slice(2).join(' ')}</div>
+            <div className="mb-1 font-semibold text-white/90 transition-colors drop-shadow-sm group-hover:text-[rgb(var(--primary-light))]">{s.title}</div>
+            <div className="leading-relaxed text-zinc-500 transition-colors group-hover:text-zinc-300">{s.description}</div>
           </button>
         ))}
       </div>

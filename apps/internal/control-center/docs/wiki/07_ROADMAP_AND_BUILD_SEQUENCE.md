@@ -105,3 +105,18 @@ When unsure what to build next, choose the work that most improves:
 - future composability
 
 Do not choose the work that is merely the most visually impressive.
+
+## Sprint Map
+
+Translate phases into sprint lanes like this:
+
+1. `Sprint 9` = project-aware foundation closeout
+2. `Sprint 10` = capability kernel
+3. `Sprint 11` = service-aware operator memory
+4. `Sprint 12` = automations and bounded agents
+5. `Sprint 13+` = Omnia-owned AI runtime
+
+Current working assumption:
+
+- foundation is complete enough to move into `Sprint 10`
+- new Codex capabilities should be added sprint-first, not ad-hoc

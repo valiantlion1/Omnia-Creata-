@@ -9,6 +9,7 @@ data class SelectedRootEntity(
     val treeUri: String,
     val rootDocumentId: String,
     val displayName: String,
+    val sourceType: String,
     val selectedAt: Long
 )
 
@@ -16,6 +17,7 @@ data class SelectedRootEntity(
 data class TrashEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val treeUri: String,
+    val sourceType: String,
     val originalParentDocumentId: String,
     val trashedDocumentId: String,
     val displayName: String,

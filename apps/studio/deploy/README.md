@@ -36,6 +36,7 @@ Do not treat it as the final production platform contract yet.
 Prerequisite:
 - Docker Desktop or another compatible `docker` CLI must be installed
 - `start-studio-staging.ps1` now also checks the standard Docker Desktop install path on Windows and prepends that directory to the current process `PATH`, so a fresh Docker install does not look missing just because the shell or Docker credential helper path is stale
+- `start-studio-staging.ps1` and `verify-studio-staging.ps1` now also default to an external staging runtime root under `%LOCALAPPDATA%\OmniaCreata\Studio\staging`, which is bind-mounted into `/runtime` so deployment reports can round-trip back into owner health detail
 
 1. Copy `.env.staging.example` to `.env.staging`
 2. Fill in the real secrets
@@ -90,6 +91,14 @@ If you want the verify step to inspect owner-only launch readiness, pass an owne
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -OwnerBearerToken "<owner-token>"
+```
+
+By default the verify script now targets the local forwarded staging URL (`http://127.0.0.1:<WEB_PORT>`) for Docker proofs.
+If you need different operator behavior, set one or both of these optional values in `.env.staging`:
+
+```dotenv
+STAGING_VERIFY_BASE_URL=http://127.0.0.1:8080
+STAGING_RUNTIME_ROOT=C:\Users\<you>\AppData\Local\OmniaCreata\Studio\staging
 ```
 
 When an owner bearer token is present, the verify script now enforces the Sprint 8 closure gate by default. That means a staging run only counts as closure-ready when the resulting report says `closure_ready=true`.

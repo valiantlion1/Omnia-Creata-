@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SelectedRootEntity::class, TrashEntryEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class OmniaDatabase : RoomDatabase() {

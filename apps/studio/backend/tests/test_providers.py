@@ -381,6 +381,92 @@ def test_plan_generation_route_marks_pro_premium_fallback_as_degraded_standard()
     assert decision.routing_reason == "managed_unavailable_fallback_standard"
 
 
+def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="fal",
+            rollout_tier="primary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="runware",
+            rollout_tier="secondary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.PRO,
+        prompt="anime warrior princess illustration with dramatic lighting",
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[:4] == ("fal", "runware", "huggingface", "pollinations")
+    assert decision.selected_provider == "fal"
+    assert decision.selected_quality_tier == "premium"
+    assert decision.degraded is False
+    assert decision.routing_reason == "pro_balanced_standard_default"
+
+
+def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="fal",
+            rollout_tier="primary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="runware",
+            rollout_tier="secondary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="standard",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="demo",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.PRO,
+        prompt="simple blue gradient background with a centered white circle",
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    )
+
+    assert decision.provider_candidates[:4] == ("fal", "runware", "pollinations", "huggingface")
+    assert decision.selected_provider == "fal"
+    assert decision.selected_quality_tier == "premium"
+    assert decision.degraded is False
+    assert decision.routing_reason == "pro_balanced_standard_default"
+
+
 def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows() -> None:
     registry = _registry_with(
         _FakeProvider(

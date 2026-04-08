@@ -11,6 +11,7 @@ from studio_platform.services.deployment_verification import (
     load_deployment_verification_report,
     persist_deployment_verification_report,
 )
+from studio_platform.versioning import load_version_info
 
 
 def test_deployment_verification_blocks_on_build_mismatch() -> None:
@@ -334,6 +335,44 @@ def test_deployment_verification_closure_requires_deployment_report_visibility()
         check for check in report["checks"] if check["key"] == "deployment_verification_visibility"
     )
     assert visibility_check["status"] == "warning"
+
+
+def test_deployment_verification_warning_report_can_still_round_trip_into_launch_gate() -> None:
+    current_build = load_version_info().build
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build=current_build,
+        version_payload={"build": current_build},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Only provider-class warnings remain.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": ["provider_smoke", "image_provider_lane"],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": current_build,
+            },
+            "launch_readiness": {"status": "needs_attention", "summary": "Provider warnings only"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": current_build,
+            },
+            "runtime_logs": {"outside_repo": True},
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build=current_build,
+    )
+
+    assert report["status"] == "pass"
+    assert report["closure_ready"] is True
 
 
 def test_deployment_verification_exit_code_requires_closure_ready_when_requested() -> None:

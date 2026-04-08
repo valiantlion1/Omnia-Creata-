@@ -3,12 +3,13 @@ from __future__ import annotations
 import io
 import time
 from dataclasses import dataclass
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 from PIL import Image, ImageDraw
 
-from config.env import Settings
+from config.env import Settings, get_settings
 
+from ..llm import StudioLLMGateway
 from ..providers import (
     ProviderReferenceImage,
     ProviderRegistry,
@@ -24,6 +25,8 @@ class ProviderSmokeCase:
     provider_name: str
     workflow: str
     prompt: str
+    surface: str = "image"
+    model: str | None = None
     negative_prompt: str = ""
     width: int = 1024
     height: int = 1024
@@ -39,12 +42,15 @@ class ProviderSmokeResult:
     label: str
     provider_name: str
     workflow: str
+    surface: str
     status: str
     latency_ms: int
+    model: str | None = None
     actual_provider: str | None = None
     mime_type: str | None = None
     output_bytes: int | None = None
     estimated_cost: float | None = None
+    text_preview: str | None = None
     error_type: str | None = None
     error: str | None = None
 
@@ -53,12 +59,15 @@ class ProviderSmokeResult:
             "label": self.label,
             "provider_name": self.provider_name,
             "workflow": self.workflow,
+            "surface": self.surface,
             "status": self.status,
             "latency_ms": self.latency_ms,
+            "model": self.model,
             "actual_provider": self.actual_provider,
             "mime_type": self.mime_type,
             "output_bytes": self.output_bytes,
             "estimated_cost": self.estimated_cost,
+            "text_preview": self.text_preview,
             "error_type": self.error_type,
             "error": self.error,
         }
@@ -92,18 +101,22 @@ def build_smoke_reference_image() -> ProviderReferenceImage:
 def build_default_smoke_cases(
     *,
     selected_provider: str = "all",
+    selected_surface: str = "all",
     include_failure_probe: bool = True,
 ) -> list[ProviderSmokeCase]:
+    settings = get_settings()
     normalized_provider = (selected_provider or "all").strip().lower()
+    normalized_surface = (selected_surface or "all").strip().lower()
     reference_image = build_smoke_reference_image()
     cases: list[ProviderSmokeCase] = []
 
-    if normalized_provider in {"all", "fal"}:
+    if normalized_surface in {"all", "image"} and normalized_provider in {"all", "fal"}:
         cases.append(
             ProviderSmokeCase(
                 label="fal-text-to-image",
                 provider_name="fal",
                 workflow="text_to_image",
+                surface="image",
                 prompt="Minimal studio product photograph of a matte ceramic mug on a soft gray backdrop, premium commercial lighting, clean composition, crisp detail.",
             )
         )
@@ -112,6 +125,7 @@ def build_default_smoke_cases(
                 label="fal-image-edit",
                 provider_name="fal",
                 workflow="edit",
+                surface="image",
                 prompt="Turn this into a premium editorial product shot with refined reflections, soft studio lighting, and luxury art-direction.",
                 reference_image=reference_image,
             )
@@ -122,17 +136,19 @@ def build_default_smoke_cases(
                     label="fal-edit-missing-reference-probe",
                     provider_name="fal",
                     workflow="edit",
+                    surface="image",
                     prompt="Attempt edit without a reference image to verify failure mapping.",
                     expected_error_type=ProviderTemporaryError,
                 )
             )
 
-    if normalized_provider in {"all", "runware"}:
+    if normalized_surface in {"all", "image"} and normalized_provider in {"all", "runware"}:
         cases.append(
             ProviderSmokeCase(
                 label="runware-text-to-image",
                 provider_name="runware",
                 workflow="text_to_image",
+                surface="image",
                 prompt="Premium beauty product packshot on a sculpted stone pedestal, dramatic softbox lighting, luxury campaign style, ultra clean background.",
             )
         )
@@ -142,10 +158,47 @@ def build_default_smoke_cases(
                     label="runware-edit-missing-reference-probe",
                     provider_name="runware",
                     workflow="edit",
+                    surface="image",
                     prompt="Attempt edit without a reference image to verify fallback does not silently degrade.",
                     expected_error_type=ProviderTemporaryError,
                 )
             )
+
+    if normalized_surface in {"all", "chat"} and normalized_provider in {"all", "gemini"}:
+        cases.append(
+            ProviderSmokeCase(
+                label="gemini-chat-premium-smoke",
+                provider_name="gemini",
+                workflow="chat",
+                surface="chat",
+                model=settings.gemini_model,
+                prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
+            )
+        )
+
+    if normalized_surface in {"all", "chat"} and normalized_provider in {"all", "openrouter"}:
+        cases.append(
+            ProviderSmokeCase(
+                label="openrouter-chat-premium-smoke",
+                provider_name="openrouter",
+                workflow="chat",
+                surface="chat",
+                model=settings.openrouter_model,
+                prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
+            )
+        )
+
+    if normalized_surface in {"all", "chat"} and normalized_provider in {"all", "openai"}:
+        cases.append(
+            ProviderSmokeCase(
+                label="openai-chat-premium-smoke",
+                provider_name="openai",
+                workflow="chat",
+                surface="chat",
+                model=settings.openai_model,
+                prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
+            )
+        )
 
     return cases
 
@@ -159,17 +212,22 @@ def find_provider(registry: ProviderRegistry, provider_name: str) -> StudioImage
 
 
 async def run_provider_smoke_case(
-    provider: StudioImageProvider,
+    provider: Any,
     case: ProviderSmokeCase,
 ) -> ProviderSmokeResult:
+    if case.surface == "chat":
+        return await run_chat_provider_smoke_case(provider, case)
+
     started_at = time.perf_counter()
     if not await provider.is_available():
         return ProviderSmokeResult(
             label=case.label,
             provider_name=case.provider_name,
             workflow=case.workflow,
+            surface=case.surface,
             status="skipped",
             latency_ms=0,
+            model=case.model,
             error="Provider is not configured in this environment",
         )
 
@@ -192,8 +250,10 @@ async def run_provider_smoke_case(
                 label=case.label,
                 provider_name=case.provider_name,
                 workflow=case.workflow,
+                surface=case.surface,
                 status="expected_failure",
                 latency_ms=latency_ms,
+                model=case.model,
                 error_type=exc.__class__.__name__,
                 error=str(exc),
             )
@@ -201,8 +261,10 @@ async def run_provider_smoke_case(
             label=case.label,
             provider_name=case.provider_name,
             workflow=case.workflow,
+            surface=case.surface,
             status="error",
             latency_ms=latency_ms,
+            model=case.model,
             error_type=exc.__class__.__name__,
             error=str(exc),
         )
@@ -213,8 +275,10 @@ async def run_provider_smoke_case(
             label=case.label,
             provider_name=case.provider_name,
             workflow=case.workflow,
+            surface=case.surface,
             status="error",
             latency_ms=latency_ms,
+            model=case.model,
             actual_provider=result.provider,
             mime_type=result.mime_type,
             output_bytes=len(result.image_bytes),
@@ -226,8 +290,10 @@ async def run_provider_smoke_case(
         label=case.label,
         provider_name=case.provider_name,
         workflow=case.workflow,
+        surface=case.surface,
         status="ok",
         latency_ms=latency_ms,
+        model=case.model,
         actual_provider=result.provider,
         mime_type=result.mime_type,
         output_bytes=len(result.image_bytes),
@@ -235,17 +301,114 @@ async def run_provider_smoke_case(
     )
 
 
+async def run_chat_provider_smoke_case(
+    gateway: Any,
+    case: ProviderSmokeCase,
+) -> ProviderSmokeResult:
+    settings = get_settings()
+    provider_name = (case.provider_name or "").strip().lower()
+    model = case.model or _default_chat_smoke_model(settings, provider_name)
+    if not _chat_provider_is_configured(settings, provider_name):
+        return ProviderSmokeResult(
+            label=case.label,
+            provider_name=provider_name,
+            workflow=case.workflow,
+            surface=case.surface,
+            status="skipped",
+            latency_ms=0,
+            model=model,
+            error="Provider is not configured in this environment",
+        )
+
+    runner_name = _chat_smoke_runner_name(provider_name)
+    runner = getattr(gateway, runner_name, None)
+    if runner is None:
+        return ProviderSmokeResult(
+            label=case.label,
+            provider_name=provider_name,
+            workflow=case.workflow,
+            surface=case.surface,
+            status="skipped",
+            latency_ms=0,
+            model=model,
+            error="Chat provider smoke runner is not registered in this environment",
+        )
+
+    started_at = time.perf_counter()
+    try:
+        result = await runner(
+            model=model,
+            system_prompt=(
+                "You are a provider smoke probe for OmniaCreata Studio. "
+                "Reply briefly, do not use markdown, and include the token STUDIO_SMOKE_OK."
+            ),
+            history=(),
+            current_message=case.prompt,
+            attachments=(),
+            temperature=0.2,
+            max_output_tokens=120,
+        )
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        return ProviderSmokeResult(
+            label=case.label,
+            provider_name=provider_name,
+            workflow=case.workflow,
+            surface=case.surface,
+            status="error",
+            latency_ms=latency_ms,
+            model=model,
+            error_type=exc.__class__.__name__,
+            error=str(exc),
+        )
+
+    latency_ms = int((time.perf_counter() - started_at) * 1000)
+    if result is None or not getattr(result, "text", "").strip():
+        return ProviderSmokeResult(
+            label=case.label,
+            provider_name=provider_name,
+            workflow=case.workflow,
+            surface=case.surface,
+            status="error",
+            latency_ms=latency_ms,
+            model=model,
+            error="Chat provider returned an empty smoke response",
+        )
+
+    text = str(result.text).strip()
+    return ProviderSmokeResult(
+        label=case.label,
+        provider_name=provider_name,
+        workflow=case.workflow,
+        surface=case.surface,
+        status="ok",
+        latency_ms=latency_ms,
+        model=getattr(result, "model", None) or model,
+        actual_provider=getattr(result, "provider", None) or provider_name,
+        mime_type="text/plain",
+        output_bytes=len(text.encode("utf-8")),
+        estimated_cost=getattr(result, "estimated_cost_usd", None),
+        text_preview=_truncate_text_preview(text),
+    )
+
+
 async def run_provider_smoke_suite(
     *,
     registry: ProviderRegistry,
     selected_provider: str = "all",
+    selected_surface: str = "all",
     include_failure_probe: bool = True,
 ) -> list[ProviderSmokeResult]:
     results: list[ProviderSmokeResult] = []
+    gateway = StudioLLMGateway()
     for case in build_default_smoke_cases(
         selected_provider=selected_provider,
+        selected_surface=selected_surface,
         include_failure_probe=include_failure_probe,
     ):
+        if case.surface == "chat":
+            results.append(await run_provider_smoke_case(gateway, case))
+            continue
         provider = find_provider(registry, case.provider_name)
         if provider is None:
             results.append(
@@ -253,11 +416,53 @@ async def run_provider_smoke_suite(
                     label=case.label,
                     provider_name=case.provider_name,
                     workflow=case.workflow,
+                    surface=case.surface,
                     status="skipped",
                     latency_ms=0,
+                    model=case.model,
                     error="Provider is not registered in this environment",
                 )
             )
             continue
         results.append(await run_provider_smoke_case(provider, case))
     return results
+
+
+def _chat_provider_is_configured(settings: Settings, provider_name: str) -> bool:
+    normalized = provider_name.strip().lower()
+    if normalized == "gemini":
+        return bool((settings.gemini_api_key or "").strip())
+    if normalized == "openrouter":
+        return bool((settings.openrouter_api_key or "").strip())
+    if normalized == "openai":
+        return bool((settings.openai_api_key or "").strip())
+    return False
+
+
+def _default_chat_smoke_model(settings: Settings, provider_name: str) -> str | None:
+    normalized = provider_name.strip().lower()
+    if normalized == "gemini":
+        return settings.gemini_model
+    if normalized == "openrouter":
+        return settings.openrouter_model
+    if normalized == "openai":
+        return settings.openai_model
+    return None
+
+
+def _chat_smoke_runner_name(provider_name: str) -> str:
+    normalized = provider_name.strip().lower()
+    if normalized == "gemini":
+        return "_chat_with_gemini"
+    if normalized == "openrouter":
+        return "_chat_with_openrouter"
+    if normalized == "openai":
+        return "_chat_with_openai"
+    return ""
+
+
+def _truncate_text_preview(value: str, limit: int = 120) -> str:
+    cleaned = " ".join(value.strip().split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return f"{cleaned[: limit - 1].rstrip()}..."

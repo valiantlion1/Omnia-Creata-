@@ -8,13 +8,72 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
 
 ## Entries
+
+### 2026-04-08 - Alpha 5 core actions and destination picker
+- Version target: `1.0.0-alpha5`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now supports long-press multi-select action mode
+  - same-root copy and move now work with an in-app destination picker
+  - bulk delete-to-Recycle-Bin shipped for selected items
+  - bulk share now skips folders and shares regular files
+  - single-item rename is reachable from selection mode
+- Known gaps:
+  - more performance tuning is still needed on very large devices
+  - cross-root copy/move is still out of scope
+  - selection mode is Browse-only in this sprint
+
+### 2026-04-08 - Alpha 4 scan reduction and breadcrumb clarity
+- Version target: `1.0.0-alpha4`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha4](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha4)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - storage summary scan no longer blocks the first open as aggressively
+  - home now uses quick root-level file slices before the heavier storage summary is requested
+  - browse path is clearer with arrow-based breadcrumbs and an up-one-folder action
+  - deep traversal skips a few heavy low-value filesystem areas to reduce scan cost
+- Known gaps:
+  - lower-end device performance still needs another pass
+  - multi-select and copy/move are still missing
+  - Play policy and trust hardening still need a dedicated release track pass
+
+### 2026-04-08 - Alpha 3 broad storage access pass
+- Version target: `1.0.0-alpha3`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha3](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha3)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - device storage access flow now targets full-phone file manager behavior instead of a single picked folder
+  - filesystem-backed browse, preview, share, rename, folder create, and recycle-bin flows were expanded
+  - trust and permission copy was rewritten so the app explains why it needs storage access
+- Known gaps:
+  - Android and Play policy hardening still needs a dedicated pass before store rollout
+  - performance still needs another optimization sprint on lower-end phones
+  - multi-select and copy/move are still not shipped
 
 ### 2026-04-08 - Alpha 2 performance and UI pass
 - Version target: `1.0.0-alpha2`
 - Track target: GitHub prerelease testing
-- Status: ready to ship as updated alpha build
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha2](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha2)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
 - What changed:
   - search now debounces instead of scanning on every keystroke
   - storage summary is refreshed in the background instead of on every folder navigation
@@ -24,6 +83,19 @@ Track every meaningful Organizer build, release decision, and release gate.
   - still scoped to an Android-approved storage root
   - no multi-select yet
   - no copy or move flow yet
+
+### 2026-04-08 - Alpha 1 first installable baseline
+- Version target: `1.0.0-alpha1`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha1](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha1)
+- Why it shipped:
+  - first working Android reset baseline for OOFM
+  - first direct-to-phone APK release path
+- Known gaps:
+  - old UX quality
+  - performance issues
+  - too much folder-root feel
 
 ### 2026-04-08 - Planning baseline locked
 - Version target: `1.0.0-alpha1`
@@ -57,4 +129,6 @@ Track every meaningful Organizer build, release decision, and release gate.
   - artifact type
   - why it shipped
   - known risks
+- Never replace an existing release with a new build under the same version.
+- If a GitHub prerelease is already public, the next fix must ship as the next prerelease number.
 - Do not treat random local debug builds as releases.

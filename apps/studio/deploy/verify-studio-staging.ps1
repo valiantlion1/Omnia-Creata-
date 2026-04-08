@@ -41,6 +41,111 @@ function Resolve-AbsolutePath {
   return [System.IO.Path]::GetFullPath($PathValue)
 }
 
+function Resolve-EnvFilePath {
+  param([string]$PathValue)
+
+  if ([string]::IsNullOrWhiteSpace($PathValue)) {
+    return $null
+  }
+
+  if ([System.IO.Path]::IsPathRooted($PathValue)) {
+    return [System.IO.Path]::GetFullPath($PathValue)
+  }
+
+  return [System.IO.Path]::GetFullPath((Join-Path $deployDir $PathValue))
+}
+
+function Resolve-StagingRuntimeRoot {
+  param([hashtable]$EnvValues)
+
+  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_RUNTIME_ROOT")) {
+    $candidate = Resolve-AbsolutePath $EnvValues["STAGING_RUNTIME_ROOT"]
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:STAGING_RUNTIME_ROOT)) {
+    $candidate = Resolve-AbsolutePath $env:STAGING_RUNTIME_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:STUDIO_RUNTIME_ROOT)) {
+    $candidate = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if ($env:LOCALAPPDATA) {
+    return Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio\staging"
+  }
+
+  return Join-Path $HOME ".omnia_creata\studio\staging"
+}
+
+function Resolve-StagingVerifyBaseUrl {
+  param(
+    [hashtable]$EnvValues,
+    [string]$ExplicitBaseUrl
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitBaseUrl)) {
+    return $ExplicitBaseUrl.Trim()
+  }
+
+  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_VERIFY_BASE_URL")) {
+    $candidate = [string]$EnvValues["STAGING_VERIFY_BASE_URL"]
+    $candidate = $candidate.Trim()
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  $webPort = ""
+  if ($EnvValues -and $EnvValues.ContainsKey("WEB_PORT")) {
+    $webPort = [string]$EnvValues["WEB_PORT"]
+    $webPort = $webPort.Trim()
+  }
+  if ([string]::IsNullOrWhiteSpace($webPort)) {
+    $webPort = "8080"
+  }
+  return "http://127.0.0.1:$webPort"
+}
+
+function Resolve-DefaultLocalRuntimeRoot {
+  if ($env:LOCALAPPDATA) {
+    return Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio"
+  }
+
+  return Join-Path $HOME ".omnia_creata\studio"
+}
+
+function Sync-LocalStartupVerificationReport {
+  param([string]$TargetRuntimeRoot)
+
+  if ([string]::IsNullOrWhiteSpace($TargetRuntimeRoot)) {
+    return
+  }
+
+  $sourceRuntimeRoot = Resolve-DefaultLocalRuntimeRoot
+  $sourceReport = Join-Path $sourceRuntimeRoot "reports\local-verify-latest.json"
+  $targetReport = Join-Path $TargetRuntimeRoot "reports\local-verify-latest.json"
+
+  if (-not (Test-Path $sourceReport)) {
+    return
+  }
+
+  if ((Resolve-AbsolutePath $sourceReport) -eq (Resolve-AbsolutePath $targetReport)) {
+    return
+  }
+
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $targetReport) | Out-Null
+  Copy-Item -Path $sourceReport -Destination $targetReport -Force
+}
+
 if (Test-Path $versionFile) {
   try {
     $versionManifest = Get-Content $versionFile -Raw | ConvertFrom-Json
@@ -52,13 +157,7 @@ if (Test-Path $versionFile) {
   }
 }
 
-if ($env:STUDIO_RUNTIME_ROOT) {
-  $runtimeRoot = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
-} elseif ($env:LOCALAPPDATA) {
-  $runtimeRoot = Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio"
-} else {
-  $runtimeRoot = Join-Path $HOME ".omnia_creata\studio"
-}
+$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues @{}
 
 $reportDir = Join-Path $runtimeRoot "reports"
 $blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
@@ -103,7 +202,7 @@ function Write-StagingVerifyBlockerReport {
   [System.IO.File]::WriteAllText($blockerReportPath, $json, $utf8NoBom)
 }
 
-$resolvedEnvFile = [System.IO.Path]::GetFullPath((Join-Path $deployDir $EnvFile))
+$resolvedEnvFile = Resolve-EnvFilePath -PathValue $EnvFile
 if (-not (Test-Path $resolvedEnvFile)) {
   Write-StagingVerifyBlockerReport `
     -Summary "Protected staging verify env file is missing." `
@@ -113,18 +212,15 @@ if (-not (Test-Path $resolvedEnvFile)) {
 }
 
 $envValues = Get-EnvMap -PathValue $resolvedEnvFile
-if (-not $BaseUrl) {
-  $publicUrl = $envValues["PUBLIC_WEB_BASE_URL"]
-  if (-not [string]::IsNullOrWhiteSpace($publicUrl)) {
-    $BaseUrl = $publicUrl
-  } else {
-    $webPort = $envValues["WEB_PORT"]
-    if ([string]::IsNullOrWhiteSpace($webPort)) {
-      $webPort = "8080"
-    }
-    $BaseUrl = "http://127.0.0.1:$webPort"
-  }
-}
+$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues $envValues
+$reportDir = Join-Path $runtimeRoot "reports"
+$blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
+New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+$env:STAGING_RUNTIME_ROOT = $runtimeRoot
+$env:STUDIO_RUNTIME_ROOT = $runtimeRoot
+$BaseUrl = Resolve-StagingVerifyBaseUrl -EnvValues $envValues -ExplicitBaseUrl $BaseUrl
+Sync-LocalStartupVerificationReport -TargetRuntimeRoot $runtimeRoot
 
 $args = @(
   (Join-Path $backendDir "scripts\deployment_verify.py"),
@@ -155,6 +251,7 @@ if ($effectiveRequireClosureReady) {
 Write-Host ""
 Write-Host "Studio protected staging verification" -ForegroundColor Cyan
 Write-Host "Env file:       $resolvedEnvFile"
+Write-Host "Runtime root:   $runtimeRoot"
 Write-Host "Base URL:       $BaseUrl"
 if ($expectedBuild) {
   Write-Host "Expected build: $expectedBuild"

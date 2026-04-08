@@ -11,10 +11,11 @@
 - Sprint 5: production persistence and data authority
 - Sprint 6: premium chat backbone
 - Sprint 7: live provider verification and launch hardening
+- Sprint 8: deployment and always-on environments
 
 ### Active
 
-- Sprint 8: deployment and always-on environments
+- Sprint 9: provider reliability and economics
 
 ## What "Done" Means
 
@@ -41,9 +42,21 @@ Already strong:
 - degraded chat keeps more useful direction and execution context alive
 
 Still strategically important:
-- protected staging and always-on environment shape
 - premium provider lane reliability
+- premium provider economics truth
+- real managed image-generation readiness
 - launch truth under real deployment conditions
+
+## Sprint 8 Outcome
+
+Sprint 8 moved Studio from strong local-only behavior to a staging-proven operator loop.
+
+Key outcomes:
+- stable local always-on loop now verifies itself and writes external reports
+- protected staging now boots through the official Docker path
+- owner-token staging verify now produces a real closure decision
+- external logs and reports remain outside the repo
+- protected launch truth is now provable instead of inferred
 
 ## Sprint 6 Outcome
 
@@ -82,6 +95,6 @@ It concluded that:
 The next sprint family has started.
 
 Current rule:
-- keep work inside Sprint 8 until deployment and always-on foundations are materially stronger
+- keep work inside Sprint 9 until provider truth and economics are materially stronger
 - use the end-to-end review plus live findings as the planning source, not chat memory alone
-- do not call Sprint 8 done just because local verify passes; a protected staging verify run with owner detail and `closure_ready=true` is the actual closure gate
+- do not treat accepted provider requests as success; real premium chat and real managed image output are the truth that matters now

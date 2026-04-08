@@ -1,0 +1,4 @@
+interface:
+  display_name: "OCOS Report Contracts"
+  short_description: "Keep reports readable and machine-safe."
+  default_prompt: "Use $ocos-report-contracts to shape an OCOS report, chart block, or summary so operators and machines can read it safely."

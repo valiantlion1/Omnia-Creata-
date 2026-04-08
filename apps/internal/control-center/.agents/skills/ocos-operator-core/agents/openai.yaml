@@ -1,0 +1,4 @@
+interface:
+  display_name: "OCOS Operator Core"
+  short_description: "Operate the OCOS incident cockpit safely."
+  default_prompt: "Use $ocos-operator-core to assess an OCOS project, incident, or report and recommend the safest next action."

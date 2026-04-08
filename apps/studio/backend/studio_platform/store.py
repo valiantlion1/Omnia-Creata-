@@ -689,7 +689,7 @@ class PostgresStudioStateStore:
                 ON {POSTGRES_RECORDS_TABLE} (
                     ((payload ->> 'identity_id')),
                     ((payload ->> 'status')),
-                    (((payload ->> 'created_at')::timestamptz))
+                    ((payload ->> 'created_at'))
                 )
                 WHERE collection = 'generations'
                 """

@@ -1,5 +1,7 @@
 import pytest
 
+from config.env import get_settings
+from studio_platform.llm import LLMResult
 from studio_platform.providers import (
     ProviderCapabilities,
     ProviderReferenceImage,
@@ -11,6 +13,7 @@ from studio_platform.services.provider_smoke import (
     ProviderSmokeCase,
     build_default_smoke_cases,
     build_smoke_reference_image,
+    run_chat_provider_smoke_case,
     run_provider_smoke_case,
 )
 
@@ -57,10 +60,37 @@ class FakeProvider(StudioImageProvider):
         )
 
 
+class FakeGateway:
+    def __init__(self, *, text: str = "STUDIO_SMOKE_OK ready", error: Exception | None = None):
+        self._text = text
+        self._error = error
+
+    async def _chat_with_gemini(self, **_: object) -> LLMResult | None:
+        if self._error is not None:
+            raise self._error
+        return LLMResult(
+            text=self._text,
+            provider="gemini",
+            model="gemini-2.5-flash",
+            estimated_cost_usd=0.001,
+        )
+
+
 def test_build_default_smoke_cases_filters_selected_provider() -> None:
     cases = build_default_smoke_cases(selected_provider="runware", include_failure_probe=False)
     assert {case.provider_name for case in cases} == {"runware"}
     assert all(case.label.startswith("runware") for case in cases)
+
+
+def test_build_default_smoke_cases_can_filter_chat_surface() -> None:
+    cases = build_default_smoke_cases(
+        selected_provider="gemini",
+        selected_surface="chat",
+        include_failure_probe=False,
+    )
+    assert {case.provider_name for case in cases} == {"gemini"}
+    assert {case.surface for case in cases} == {"chat"}
+    assert all(case.workflow == "chat" for case in cases)
 
 
 def test_build_smoke_reference_image_returns_png_reference() -> None:
@@ -117,3 +147,49 @@ async def test_run_provider_smoke_case_skips_unconfigured_provider() -> None:
         ),
     )
     assert result.status == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_run_chat_provider_smoke_case_reports_success() -> None:
+    settings = get_settings()
+    original_gemini_api_key = settings.gemini_api_key
+    settings.gemini_api_key = "gemini-key"
+    try:
+        result = await run_chat_provider_smoke_case(
+            FakeGateway(),
+            ProviderSmokeCase(
+                label="gemini-chat",
+                provider_name="gemini",
+                workflow="chat",
+                surface="chat",
+                prompt="Return STUDIO_SMOKE_OK and one sentence.",
+            ),
+        )
+        assert result.status == "ok"
+        assert result.surface == "chat"
+        assert result.actual_provider == "gemini"
+        assert result.text_preview and "STUDIO_SMOKE_OK" in result.text_preview
+    finally:
+        settings.gemini_api_key = original_gemini_api_key
+
+
+@pytest.mark.asyncio
+async def test_run_chat_provider_smoke_case_skips_unconfigured_provider() -> None:
+    settings = get_settings()
+    original_gemini_api_key = settings.gemini_api_key
+    settings.gemini_api_key = None
+    try:
+        result = await run_chat_provider_smoke_case(
+            FakeGateway(),
+            ProviderSmokeCase(
+                label="gemini-chat",
+                provider_name="gemini",
+                workflow="chat",
+                surface="chat",
+                prompt="Return STUDIO_SMOKE_OK and one sentence.",
+            ),
+        )
+        assert result.status == "skipped"
+        assert result.surface == "chat"
+    finally:
+        settings.gemini_api_key = original_gemini_api_key

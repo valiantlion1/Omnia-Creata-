@@ -38,6 +38,15 @@ function formatModelLabel(model: string) {
     .join(' ')
 }
 
+function formatProviderLabel(provider: string) {
+  const normalized = provider.trim().toLowerCase()
+  if (normalized === 'openrouter') return 'OpenRouter'
+  if (normalized === 'openai') return 'OpenAI'
+  if (normalized === 'gemini') return 'Gemini'
+  if (normalized === 'heuristic') return 'Fallback reply'
+  return provider
+}
+
 function resolveAssistantPlanChips(message: ChatMessage): AssistantPlanChip[] {
   if (message.role === 'user') return []
 
@@ -54,10 +63,30 @@ function resolveAssistantPlanChips(message: ChatMessage): AssistantPlanChip[] {
   }
 
   const degraded = metadata?.degraded === true || asString(metadata?.provider) === 'heuristic'
-  if (degraded) {
-    pushChip('degraded', 'Guidance mode', 'warning')
+  const provider = asString(metadata?.provider)
+  const responseMode = asString(metadata?.response_mode)
+  const providerStatus = asString(metadata?.provider_status)
+  const usedLlm = metadata?.used_llm === true || responseMode === 'live_provider_reply'
+  const fallbackReason = asString(metadata?.fallback_reason)
+  const premiumLaneUnavailable =
+    metadata?.premium_lane_unavailable === true || responseMode === 'premium_lane_unavailable'
+  const isFallbackReply = degraded || responseMode === 'degraded_fallback_reply'
+
+  if (isFallbackReply) {
+    pushChip('degraded', 'Fallback reply', 'warning')
+    if (premiumLaneUnavailable || providerStatus === 'degraded' || fallbackReason) {
+      pushChip('provider-state', 'Premium lane unavailable', 'warning')
+    }
   } else if (asString(metadata?.selected_quality_tier) === 'premium') {
     pushChip('quality', 'Premium lane', 'accent')
+  }
+
+  if (premiumLaneUnavailable) {
+    pushChip('provider-state', 'Premium lane unavailable', 'warning')
+  }
+
+  if (!isFallbackReply && usedLlm && provider) {
+    pushChip('provider', formatProviderLabel(provider), 'accent')
   }
 
   if (metadata?.follow_up_refinement === true) {

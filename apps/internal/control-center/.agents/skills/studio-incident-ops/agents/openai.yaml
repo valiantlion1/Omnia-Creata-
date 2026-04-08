@@ -1,0 +1,4 @@
+interface:
+  display_name: "Studio Incident Ops"
+  short_description: "Handle Studio incidents inside OCOS safely."
+  default_prompt: "Use $studio-incident-ops to assess a Studio incident in OCOS and recommend the safest bounded next action."

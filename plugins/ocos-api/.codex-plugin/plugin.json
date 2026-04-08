@@ -1,0 +1,41 @@
+{
+  "name": "ocos-api",
+  "version": "0.1.0",
+  "description": "Internal OCOS plugin scaffold for exposing organization, project, incident, and report tooling to Codex.",
+  "author": {
+    "name": "OmniaCreata",
+    "email": "ops@omniacreata.com",
+    "url": "https://omniacreata.com"
+  },
+  "homepage": "https://omniacreata.com",
+  "repository": "https://omniacreata.com",
+  "license": "Proprietary",
+  "keywords": [
+    "ocos",
+    "operations",
+    "incident-response",
+    "internal-tools"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "OCOS API",
+    "shortDescription": "Internal OCOS control-plane plugin scaffold.",
+    "longDescription": "Scaffold for future OCOS-native tooling so Codex can read incidents, reports, projects, and safe action surfaces from the OmniaCreata control plane.",
+    "developerName": "OmniaCreata",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://omniacreata.com",
+    "privacyPolicyURL": "https://omniacreata.com",
+    "termsOfServiceURL": "https://omniacreata.com",
+    "defaultPrompt": [
+      "Read the current OCOS org summary and highlight the top risks.",
+      "Open the Studio project cockpit and summarize active incidents.",
+      "Review the latest OCOS reports and recommend the safest next action."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

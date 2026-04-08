@@ -1,5 +1,8 @@
 package com.omnia.organizer.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,14 +11,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.UploadFile
@@ -33,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,9 +56,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.omnia.organizer.BuildConfig
 import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
+import com.omnia.organizer.core.domain.model.FolderHandle
 import com.omnia.organizer.core.domain.model.SearchDateFilter
 import com.omnia.organizer.core.domain.model.SearchSizeFilter
 import com.omnia.organizer.core.domain.model.StorageSummary
@@ -79,6 +88,45 @@ fun ErrorBanner(message: String, onDismiss: () -> Unit) {
             )
             TextButton(onClick = onDismiss) {
                 Text("Dismiss")
+            }
+        }
+    }
+}
+
+@Composable
+fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.padding(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("Allow full phone access", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Omnia Organizer works best when Android lets it see your phone storage like a real file manager. After approval, the app will load device storage automatically.",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "What this unlocks",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "• Browse folders and files across phone storage\n• Search downloads, documents, screenshots, videos, and more\n• Move items to Recycle Bin and restore them later",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "Trust note: OOFM does not require an account to start. Access is used to help you browse, search, and organize files on your device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                FilledTonalButton(onClick = onGrantAccess) {
+                    Text("Grant device storage access")
+                }
             }
         }
     }
@@ -165,7 +213,21 @@ fun BrowseScreen(
     onShareFile: (FileItem) -> Unit,
     onRequestRename: (FileItem) -> Unit,
     onMoveToTrash: (FileItem) -> Unit,
-    onCreateFolder: () -> Unit
+    onCreateFolder: () -> Unit,
+    onEnterSelectionMode: (FileItem) -> Unit,
+    onToggleSelection: (FileItem) -> Unit,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onRequestCopySelection: () -> Unit,
+    onRequestMoveSelection: () -> Unit,
+    onRequestShareSelection: () -> Unit,
+    onRequestRenameSelection: () -> Unit,
+    onDeleteSelection: () -> Unit,
+    onDismissDestinationPicker: () -> Unit,
+    onOpenDestinationFolder: (FileItem) -> Unit,
+    onNavigateDestinationBreadcrumb: (Int) -> Unit,
+    onConfirmDestinationOperation: () -> Unit,
+    onCreateFolderInDestination: () -> Unit
 ) {
     if (state.root == null) {
         EmptyRootState(onPickFolder)
@@ -175,27 +237,36 @@ fun BrowseScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Current storage root. Change it anytime from the top bar if you need wider phone access.",
+            subtitle = "Current device entry point. OOFM is browsing the phone storage Android currently allows.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(state.breadcrumb.withIndex().toList(), key = { "${it.index}-${it.value.documentId}" }) { indexed ->
-                AssistChip(
-                    onClick = { onNavigateToBreadcrumb(indexed.index) },
-                    label = { Text(indexed.value.name) }
-                )
-            }
-            item {
-                OutlinedButton(onClick = onCreateFolder) {
-                    Text("New folder")
-                }
-            }
+        if (state.isSelectionMode) {
+            BrowseActionModeCard(
+                state = state,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                onClearSelection = onClearSelection,
+                onSelectAll = onSelectAll,
+                onRequestCopySelection = onRequestCopySelection,
+                onRequestMoveSelection = onRequestMoveSelection,
+                onRequestShareSelection = onRequestShareSelection,
+                onRequestRenameSelection = onRequestRenameSelection,
+                onDeleteSelection = onDeleteSelection
+            )
         }
+        BreadcrumbTrail(
+            breadcrumb = state.breadcrumb,
+            onNavigateToBreadcrumb = onNavigateToBreadcrumb,
+            onCreateFolder = onCreateFolder,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        DestinationPickerDialog(
+            state = state,
+            onDismiss = onDismissDestinationPicker,
+            onOpenFolder = onOpenDestinationFolder,
+            onNavigateToBreadcrumb = onNavigateDestinationBreadcrumb,
+            onConfirm = onConfirmDestinationOperation,
+            onCreateFolder = onCreateFolderInDestination
+        )
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -208,10 +279,21 @@ fun BrowseScreen(
                     items(state.items, key = { it.documentId }) { item ->
                         FileRow(
                             item = item,
-                            onClick = { if (item.isDirectory) onOpenFolder(item) else onOpenFile(item) },
-                            onShare = if (item.isDirectory) null else { { onShareFile(item) } },
-                            onRename = if (item.canRename) { { onRequestRename(item) } } else null,
-                            onDelete = if (item.canDelete) { { onMoveToTrash(item) } } else null
+                            selected = state.selectedDocumentIds.contains(item.documentId),
+                            selectionMode = state.isSelectionMode,
+                            onClick = {
+                                if (state.isSelectionMode) {
+                                    onToggleSelection(item)
+                                } else if (item.isDirectory) {
+                                    onOpenFolder(item)
+                                } else {
+                                    onOpenFile(item)
+                                }
+                            },
+                            onLongPress = { onEnterSelectionMode(item) },
+                            onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                            onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                            onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
                         )
                     }
                 }
@@ -240,7 +322,7 @@ fun SearchScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Search runs inside the active storage root so results stay fast and Android-safe.",
+            subtitle = "Search runs inside the storage access Android approved for OOFM, so results stay fast and reliable.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
         OutlinedTextField(
@@ -416,9 +498,13 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Product", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text("Omnia Organizer")
-                    Text("Package ${BuildConfig.APPLICATION_ID}")
-                    Text("Version ${BuildConfig.VERSION_NAME}")
-                    Text(if (BuildConfig.ALPHA) "Channel Alpha" else "Channel Release")
+                    Text("Package com.omnia.organizer")
+                    Text("Channel Alpha")
+                    Text(
+                        "Exact build version is tracked in GitHub releases and the release ledger during alpha.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -430,17 +516,37 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Storage access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(state.root?.displayName ?: "No storage root selected")
+                    Text(state.root?.displayName ?: "Device storage not connected")
                     Text(
-                        "Alpha access follows Android rules. Pick a broader internal storage root or SD card root if you want OOFM to see more of the phone.",
+                        "OOFM now targets full phone storage access where Android allows it. If access is lost, reconnect from here and the app will rebuild its device view.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onPickFolder) { Text("Change storage root") }
+                        FilledTonalButton(onClick = onPickFolder) { Text("Reconnect storage") }
                         if (state.root != null) {
-                            OutlinedButton(onClick = onClearRoot) { Text("Clear root") }
+                            OutlinedButton(onClick = onClearRoot) { Text("Reset access") }
                         }
                     }
+                }
+            }
+        }
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Privacy and trust", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "The app is built to organize files on your device without forcing sign-in first. Storage access is requested so browse, search, open, share, and recycle flows can work like a proper mobile file manager.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Formal privacy policy, terms, and data transparency screens will be expanded before Play Store release.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -531,7 +637,7 @@ private fun WorkspaceHeroCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Current workspace",
+                "Device storage",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -542,7 +648,7 @@ private fun WorkspaceHeroCard(
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                "OOFM is still alpha. It works inside the storage root you approve, and you can switch to a broader phone root anytime.",
+                "OOFM is still alpha. Once Android grants storage access, the app uses that connection as the main phone-wide entry point for browsing, search, and storage insight.",
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             if (state.isStorageRefreshing) {
@@ -554,7 +660,7 @@ private fun WorkspaceHeroCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onPickFolder) {
-                    Text("Change root")
+                    Text("Reconnect storage")
                 }
                 StatPill(label = "${state.recentFiles.size} recents")
                 if (state.storageSummary != null) {
@@ -640,6 +746,274 @@ private fun WorkspaceContextStrip(
 }
 
 @Composable
+private fun BreadcrumbTrail(
+    breadcrumb: List<FolderHandle>,
+    onNavigateToBreadcrumb: (Int) -> Unit,
+    onCreateFolder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            breadcrumb.forEachIndexed { index, handle ->
+                if (index > 0) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                AssistChip(
+                    onClick = { onNavigateToBreadcrumb(index) },
+                    label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (breadcrumb.size > 1) {
+                OutlinedCard(onClick = { onNavigateToBreadcrumb(breadcrumb.lastIndex - 1) }) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                        Text("Up one folder")
+                    }
+                }
+            }
+            OutlinedButton(onClick = onCreateFolder) {
+                Text("New folder")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseActionModeCard(
+    state: OrganizerUiState,
+    modifier: Modifier = Modifier,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onRequestCopySelection: () -> Unit,
+    onRequestMoveSelection: () -> Unit,
+    onRequestShareSelection: () -> Unit,
+    onRequestRenameSelection: () -> Unit,
+    onDeleteSelection: () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "${state.selectedDocumentIds.size} selected",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Browse action mode is active for this folder.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onSelectAll) {
+                        Text("Select all")
+                    }
+                    TextButton(onClick = onClearSelection) {
+                        Text("Cancel")
+                    }
+                }
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    FilledTonalButton(onClick = onRequestCopySelection) {
+                        Text("Copy")
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onRequestMoveSelection) {
+                        Text("Move")
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onRequestShareSelection) {
+                        Text("Share")
+                    }
+                }
+                if (state.selectedDocumentIds.size == 1) {
+                    item {
+                        FilledTonalButton(onClick = onRequestRenameSelection) {
+                            Text("Rename")
+                        }
+                    }
+                }
+                item {
+                    FilledTonalButton(onClick = onDeleteSelection) {
+                        Text("Delete")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DestinationPickerDialog(
+    state: OrganizerUiState,
+    onDismiss: () -> Unit,
+    onOpenFolder: (FileItem) -> Unit,
+    onNavigateToBreadcrumb: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onCreateFolder: () -> Unit
+) {
+    val picker = state.destinationPickerState ?: return
+    val operationLabel = when (state.pendingFileOperation?.type) {
+        FileOperationType.MOVE -> "Move"
+        else -> "Copy"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$operationLabel destination") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "$operationLabel ${state.pendingFileOperation?.items?.size ?: 0} item(s) inside the current storage connection.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DestinationBreadcrumbTrail(
+                    breadcrumb = picker.breadcrumb,
+                    onNavigateToBreadcrumb = onNavigateToBreadcrumb
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (picker.breadcrumb.size > 1) {
+                        OutlinedButton(onClick = { onNavigateToBreadcrumb(picker.breadcrumb.lastIndex - 1) }) {
+                            Text("Up one folder")
+                        }
+                    }
+                    OutlinedButton(onClick = onCreateFolder) {
+                        Text("New folder")
+                    }
+                }
+                if (picker.items.isEmpty()) {
+                    Text(
+                        "No subfolders here. You can still choose this folder.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(picker.items, key = { "destination-${it.documentId}" }) { item ->
+                            DestinationFolderRow(item = item, onClick = { onOpenFolder(item) })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Choose this folder")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DestinationBreadcrumbTrail(
+    breadcrumb: List<FolderHandle>,
+    onNavigateToBreadcrumb: (Int) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        breadcrumb.forEachIndexed { index, handle ->
+            if (index > 0) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AssistChip(
+                onClick = { onNavigateToBreadcrumb(index) },
+                label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationFolderRow(
+    item: FileItem,
+    onClick: () -> Unit
+) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = item.name,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
@@ -667,10 +1041,14 @@ private fun StatPill(label: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileRow(
     item: FileItem,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
     onOpenParent: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onRename: (() -> Unit)? = null,
@@ -680,9 +1058,23 @@ private fun FileRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f))
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
+        border = if (selected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -692,10 +1084,18 @@ private fun FileRow(
         ) {
             Surface(
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                }
             ) {
                 Icon(
-                    imageVector = if (item.kind == FileKind.DIRECTORY) Icons.Default.Folder else Icons.Default.UploadFile,
+                    imageVector = when {
+                        selected -> Icons.Default.CheckCircle
+                        item.kind == FileKind.DIRECTORY -> Icons.Default.Folder
+                        else -> Icons.Default.UploadFile
+                    },
                     contentDescription = item.name,
                     modifier = Modifier
                         .size(38.dp)
@@ -716,7 +1116,7 @@ private fun FileRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (onShare != null || onRename != null || onDelete != null || onOpenParent != null) {
+            if (!selectionMode && (onShare != null || onRename != null || onDelete != null || onOpenParent != null)) {
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Actions")
@@ -765,13 +1165,13 @@ private fun EmptyRootState(onPickFolder: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Choose a storage root", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text("Connect phone storage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Start with the phone storage root, Downloads, or an SD card root. You can switch later if you want OOFM to see more of the device.",
+                    "Grant device storage access so OOFM can behave like a proper mobile file manager. Once connected, the app will load your phone storage automatically.",
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 FilledTonalButton(onClick = onPickFolder) {
-                    Text("Select storage root")
+                    Text("Grant access")
                 }
             }
         }

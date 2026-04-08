@@ -14,14 +14,14 @@ Each sprint should answer:
 
 ### Active Now
 
-- Sprint 8: Deployment and always-on environments
+- Sprint 9: Provider reliability and economics
 
 ### Near-Term
 
-- Stand up the first protected staging / deployment pack
-- Move local always-on behavior toward stable operator defaults
-- Keep launch-readiness honest about premium chat and deployment truth
-- Reassess launch readiness again from a non-local runtime
+- Turn provider health into truthful launch-grade vs fallback-only operator signals
+- Get at least one reliable managed image lane back to a real working state
+- Keep launch-readiness honest about public-paid safety, not only raw configuration
+- Reassess operator truth after provider fixes land
 
 ### After Current Sprint Chain
 
@@ -40,6 +40,9 @@ They are likely next planning domains after the current chain finishes.
 Purpose:
 - stop relying on a single local machine for access
 - introduce protected staging and stable public runtime paths
+
+Status:
+- complete
 
 ### Sprint 9: Provider Reliability And Economics
 

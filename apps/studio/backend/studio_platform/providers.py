@@ -1298,8 +1298,8 @@ class ProviderRegistry:
             if analysis.premium_intent:
                 return ("fal", "runware", "pollinations", "huggingface", "demo")
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("huggingface", "fal", "runware", "pollinations", "demo")
-            return ("pollinations", "huggingface", "fal", "runware", "demo")
+                return ("fal", "runware", "huggingface", "pollinations", "demo")
+            return ("fal", "runware", "pollinations", "huggingface", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")

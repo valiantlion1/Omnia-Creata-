@@ -1356,6 +1356,10 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
     assert assistant_message.metadata["premium_chat"] is True
     assert assistant_message.metadata["requested_quality_tier"] == "premium"
     assert assistant_message.metadata["selected_quality_tier"] == "premium"
+    assert assistant_message.metadata["used_llm"] is True
+    assert assistant_message.metadata["response_mode"] == "live_provider_reply"
+    assert assistant_message.metadata["premium_lane_unavailable"] is False
+    assert assistant_message.metadata["provider_status"] == "healthy"
     assert assistant_message.metadata["routing_strategy"] == "premium-studio"
     assert assistant_message.metadata["generation_bridge"]["workflow"] == "text_to_image"
     assert assistant_message.metadata["generation_bridge"]["prompt"]
@@ -1449,8 +1453,11 @@ async def test_chat_fallback_metadata_marks_provider_degradation(tmp_path: Path)
 
     assistant_message = ChatMessage.model_validate(turn["assistant_message"])
     assert assistant_message.metadata["provider"] == "heuristic"
+    assert assistant_message.metadata["used_llm"] is False
     assert assistant_message.metadata["provider_status"] == "degraded"
     assert assistant_message.metadata["fallback_reason"] == "all_provider_candidates_failed"
+    assert assistant_message.metadata["response_mode"] == "degraded_fallback_reply"
+    assert assistant_message.metadata["premium_lane_unavailable"] is True
     assert assistant_message.metadata["routing_reason"] == "provider_unavailable_or_empty"
     assert "Buradayim" in assistant_message.content or "Iyiyim" in assistant_message.content
 

@@ -9,6 +9,7 @@ WORKDIR /app
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
+COPY version.json /app/version.json
 COPY backend/ ./
 
 RUN mkdir -p /runtime

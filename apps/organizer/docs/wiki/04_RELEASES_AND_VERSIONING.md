@@ -10,19 +10,30 @@ The practical path is:
 - iterate
 
 ## Current version source
-- Gradle properties already support semantic version parts:
+- Gradle properties are the build source of truth for semantic version parts:
   - `versionMajor`
   - `versionMinor`
   - `versionPatch`
-  - optional prerelease fields
-- Product manifest now also exists:
+  - optional prerelease fields:
+    - `preRelease`
+    - `preReleaseNumber`
+- Product manifest also exists for repo-level release tracking:
   - [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
+- Release history must also be mirrored in:
+  - [ORGANIZER_RELEASE_LEDGER.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/operations/ORGANIZER_RELEASE_LEDGER.md)
+
+## Canonical release naming
+- Internal shorthand: `OOFM`
+- App name: `Omnia Organizer`
+- Play Store name: `Omnia Organizer: File Manager`
+- Git tag format: `organizer-v<semver>`
+- GitHub release title format: `Omnia Organizer <semver>`
 
 ## Version policy
 
 ### Before first public launch
-- `1.0.0-alphaN` for internal artifact testing
-- `1.0.0-betaN` for closed Play testing
+- `1.0.0-alphaN` for GitHub prerelease testing and direct phone installs
+- `1.0.0-betaN` for Play internal or closed testing once core flows feel stable
 
 ### First public launch
 - `1.0.0`
@@ -33,13 +44,42 @@ The practical path is:
 - major: only if product contract changes heavily
 
 ## Version code rule
-Use the current Gradle formula:
-- `10000 * major + 100 * minor + patch`
+Use the Gradle formula that is already implemented in the Android app:
+- `major * 1_000_000 + minor * 10_000 + patch * 100 + releaseOrdinal`
+- prerelease `releaseOrdinal` = `preReleaseNumber`
+- stable `releaseOrdinal` = `99`
 
 Examples:
-- `1.0.0` -> `10000`
-- `1.1.0` -> `10100`
-- `1.2.3` -> `10203`
+- `1.0.0-alpha1` -> `1000001`
+- `1.0.0-alpha2` -> `1000002`
+- `1.0.0` -> `1000099`
+- `1.1.0-beta3` -> `1010003`
+
+This rule exists so every Android install is monotonically upgradeable on real devices.
+
+## Required release rules
+- Never reuse a released version string.
+- Never overwrite an existing Git tag with a different build.
+- If a shipped alpha has a bug, ship `alphaN+1` instead of replacing the same release.
+- For OOFM, the default delivery mode is continuous prerelease shipping: every meaningful finished implementation pass should become the next GitHub prerelease unless explicitly paused.
+- Every meaningful phone-testable build must update [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json).
+- Every GitHub or Play release must add or update an entry in [ORGANIZER_RELEASE_LEDGER.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/operations/ORGANIZER_RELEASE_LEDGER.md).
+- Every release must include short notes:
+  - what changed
+  - why it shipped
+  - known gaps
+- `alpha` means:
+  - still moving quickly
+  - safe to break UX
+  - real-device validation is the main goal
+- `beta` means:
+  - core user flow is already present
+  - upgrade path matters
+  - Play testing is expected
+- stable means:
+  - no placeholder product flow
+  - permission model explained clearly
+  - Browse, Search, Storage, and Recycle Bin are trustworthy on real devices
 
 ## Recommended release channels
 
@@ -109,6 +149,13 @@ If the workflow runs manually, set:
 ## Signing rule
 - debug and internal artifact builds can be handled separately from Play release signing
 - Play release AAB should only use GitHub secrets after the keystore and store credentials are stable
+
+## Current live releases
+- [Omnia Organizer 1.0.0-alpha1](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha1)
+- [Omnia Organizer 1.0.0-alpha2](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha2)
+- [Omnia Organizer 1.0.0-alpha3](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha3)
+- [Omnia Organizer 1.0.0-alpha4](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha4)
+- [Omnia Organizer 1.0.0-alpha5](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha5)
 
 ## Release checklist
 Before every meaningful release:
