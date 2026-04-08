@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bounded Remediation Policy"
+  short_description: "Keep OCOS actions safe and bounded."
+  default_prompt: "Use $bounded-remediation-policy to decide whether an OCOS action is safe to automate, should stay manual, or must escalate."

@@ -12,6 +12,9 @@ Last updated: 2026-04-08
 
 ## Recent stabilization wins
 
+- Sprint 8 staging backend and worker images now install `PyJWT`, which matches the runtime `import jwt` path already used by Studio auth and removes another local-only dependency assumption from Docker bring-up.
+- Sprint 8 protected staging now bind-mounts a host-side runtime root into `/runtime`, which lets deployment verification reports and runtime logs round-trip back into owner health detail instead of splitting host operator truth away from the containerized stack.
+- Sprint 8 staging operator scripts now default to a host-reachable verify URL and a dedicated external staging runtime root, so local Docker proofs can exercise the official closure loop without depending on the public staging DNS target already being reachable from the same machine.
 - Sprint 8 staging startup now finds Docker Desktop from the standard Windows install path even when the current shell PATH is stale, which removes a common false blocker right after Docker installation.
 - Sprint 8 staging startup now also prepends the resolved Docker Desktop bin directory to PATH before compose runs, which fixes fresh-install failures where `docker.exe` existed but `docker-credential-desktop.exe` was still invisible to the stale shell.
 - Sprint 8 staging web builds now copy the root `version.json` manifest into the container build, which fixes Dockerized web failures where the footer/version import worked locally but broke inside the staging image.

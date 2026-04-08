@@ -2,7 +2,7 @@
 
 This wiki is the repo-native memory for OCOS.
 
-Use it to answer six questions fast:
+Use it to answer eight questions fast:
 
 1. What is OCOS supposed to become?
 2. What are the hard architectural boundaries?
@@ -10,6 +10,8 @@ Use it to answer six questions fast:
 4. How should reports be readable by both humans and AI?
 5. How do automations, skills, agents, and future AI fit in?
 6. What should be built next, and in what order?
+7. Which Codex capabilities are actually worth keeping, adding, or building ourselves?
+8. Which sprint should capability work land in?
 
 ## Start Here
 
@@ -20,6 +22,8 @@ Use it to answer six questions fast:
 - [Automations, Skills, Agents, And AI](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/05_AUTOMATIONS_SKILLS_AGENTS_AND_AI.md)
 - [Operations And Security](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/06_OPERATIONS_AND_SECURITY.md)
 - [Roadmap And Build Sequence](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/07_ROADMAP_AND_BUILD_SEQUENCE.md)
+- [Codex Capability Stack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/08_CODEX_CAPABILITY_STACK.md)
+- [Sprint Capability Plan](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/09_SPRINT_CAPABILITY_PLAN.md)
 
 ## Canonical Use
 
@@ -52,6 +56,8 @@ Operational truth still lives in:
 - The system is designed to work when local PCs are offline.
 - The dashboard now needs to scale beyond incidents into project-aware command surfaces.
 - Future OCOS layers include automations, skills, agents, and eventually Omnia-owned AI runtime.
+- Capability work is now sprinted instead of being left to ad-hoc prompts.
+- Sprint 10 and the first Sprint 11 capability scaffolds now exist in the repo.
 
 ## Update Rules
 

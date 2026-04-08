@@ -48,6 +48,8 @@ Important local expectations:
 - if protected staging verify itself cannot start cleanly or loses connectivity before it can finish, that verify failure should also overwrite the external deployment report with a blocked truth instead of leaving the last good report behind
 - stable local startup should not accept a stale backend boot build after a version bump; if the first readiness pass still sees the old build, it should force one clean backend restart
 - protected staging startup on Windows should not depend on a freshly restarted shell to find Docker; the operator script should also recognize the standard Docker Desktop install path and prepend it to the process PATH when Docker credential helpers would otherwise be invisible
+- protected staging Docker proofs should bind-mount an external host runtime root into `/runtime`, so deployment reports and runtime logs can round-trip into owner health detail from the same outside-repo operator path
+- protected staging verify should default to the host-reachable forwarded URL for local Docker proofs unless an explicit verify URL override is provided
 
 ## Deployment Discipline
 
@@ -70,6 +72,7 @@ Protected staging now also has operator scripts:
 
 If you pass an owner bearer token to the verify script, it will also inspect `/v1/healthz/detail` and include launch-readiness truth in the deployment verification report.
 With an owner bearer token present, staging verify now enforces the Sprint 8 closure gate by default; if `closure_ready` is still false, the verify command should fail instead of quietly passing with warnings.
+Protected staging operator scripts now also default to a dedicated external staging runtime root and a host-reachable verify URL, so local Docker proofs can still exercise the official closure loop without relying on the public staging hostname being reachable from the same machine.
 
 Sprint 8 closure rule:
 - `local verify` passing is necessary but not sufficient

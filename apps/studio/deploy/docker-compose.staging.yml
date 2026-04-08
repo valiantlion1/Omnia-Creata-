@@ -46,7 +46,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - studio_runtime:/runtime
+      - type: bind
+        source: ${STAGING_RUNTIME_ROOT}
+        target: /runtime
     healthcheck:
       test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/healthz').status == 200 else 1)"]
       interval: 20s
@@ -76,7 +78,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - studio_runtime:/runtime
+      - type: bind
+        source: ${STAGING_RUNTIME_ROOT}
+        target: /runtime
 
   web:
     build:
@@ -93,4 +97,3 @@ services:
 
 volumes:
   studio_postgres:
-  studio_runtime:

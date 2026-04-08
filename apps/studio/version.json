@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.08.07",
+  "build": "2026.04.08.09",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-08",
-  "notes": "Sprint 8 staging backend and worker builds now use a real cryptography pin that exists on Linux, so Docker bring-up no longer dies on an impossible dependency version."
+  "notes": "Sprint 8 staging backend images now install the same JWT library the app imports at runtime, so protected staging no longer dies on a missing `jwt` module after Docker bring-up reaches the backend process."
 }

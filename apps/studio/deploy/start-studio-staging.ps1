@@ -2,6 +2,7 @@ param(
   [string]$EnvFile = ".env.staging",
   [switch]$SkipBuild,
   [switch]$NoVerify,
+  [string]$VerifyBaseUrl,
   [string]$OwnerBearerToken,
   [switch]$RequireClosureReady
 )
@@ -81,6 +82,66 @@ function Ensure-PathContains {
   $env:PATH = "$DirectoryPath;$env:PATH"
 }
 
+function Resolve-StagingRuntimeRoot {
+  param([hashtable]$EnvValues)
+
+  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_RUNTIME_ROOT")) {
+    $candidate = Resolve-AbsolutePath $EnvValues["STAGING_RUNTIME_ROOT"]
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:STAGING_RUNTIME_ROOT)) {
+    $candidate = Resolve-AbsolutePath $env:STAGING_RUNTIME_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:STUDIO_RUNTIME_ROOT)) {
+    $candidate = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  if ($env:LOCALAPPDATA) {
+    return Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio\staging"
+  }
+
+  return Join-Path $HOME ".omnia_creata\studio\staging"
+}
+
+function Resolve-StagingVerifyBaseUrl {
+  param(
+    [hashtable]$EnvValues,
+    [string]$ExplicitBaseUrl
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitBaseUrl)) {
+    return $ExplicitBaseUrl.Trim()
+  }
+
+  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_VERIFY_BASE_URL")) {
+    $candidate = [string]$EnvValues["STAGING_VERIFY_BASE_URL"]
+    $candidate = $candidate.Trim()
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return $candidate
+    }
+  }
+
+  $webPort = ""
+  if ($EnvValues -and $EnvValues.ContainsKey("WEB_PORT")) {
+    $webPort = [string]$EnvValues["WEB_PORT"]
+    $webPort = $webPort.Trim()
+  }
+  if ([string]::IsNullOrWhiteSpace($webPort)) {
+    $webPort = "8080"
+  }
+  return "http://127.0.0.1:$webPort"
+}
+
 if (Test-Path $versionFile) {
   try {
     $versionManifest = Get-Content $versionFile -Raw | ConvertFrom-Json
@@ -91,13 +152,7 @@ if (Test-Path $versionFile) {
   }
 }
 
-if ($env:STUDIO_RUNTIME_ROOT) {
-  $runtimeRoot = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
-} elseif ($env:LOCALAPPDATA) {
-  $runtimeRoot = Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio"
-} else {
-  $runtimeRoot = Join-Path $HOME ".omnia_creata\studio"
-}
+$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues @{}
 
 $reportDir = Join-Path $runtimeRoot "reports"
 $blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
@@ -143,10 +198,16 @@ function Write-StagingBlockerReport {
 }
 
 $envValues = Get-EnvMap -PathValue $resolvedEnvFile
-$baseUrl = ""
-if ($envValues.ContainsKey("PUBLIC_WEB_BASE_URL")) {
-  $baseUrl = $envValues["PUBLIC_WEB_BASE_URL"]
-}
+$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues $envValues
+$reportDir = Join-Path $runtimeRoot "reports"
+$blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
+New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $runtimeRoot "logs") | Out-Null
+$env:STAGING_RUNTIME_ROOT = $runtimeRoot
+$env:STUDIO_RUNTIME_ROOT = $runtimeRoot
+
+$baseUrl = Resolve-StagingVerifyBaseUrl -EnvValues $envValues -ExplicitBaseUrl $VerifyBaseUrl
 
 if (-not (Test-Path $resolvedEnvFile)) {
   Write-StagingBlockerReport `
@@ -171,6 +232,8 @@ Write-Host ""
 Write-Host "Studio protected staging bring-up" -ForegroundColor Cyan
 Write-Host "Compose file: $composeFile"
 Write-Host "Env file:     $resolvedEnvFile"
+Write-Host "Runtime root: $runtimeRoot"
+Write-Host "Verify URL:   $baseUrl"
 Write-Host ""
 
 & python (Join-Path $backendDir "scripts\deployment_preflight.py") --env-file $resolvedEnvFile
@@ -211,7 +274,9 @@ if (-not $NoVerify) {
     "-File",
     $verifyScript,
     "-EnvFile",
-    $resolvedEnvFile
+    $resolvedEnvFile,
+    "-BaseUrl",
+    $baseUrl
   )
   if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
     $verifyArgs += @("-OwnerBearerToken", $OwnerBearerToken)

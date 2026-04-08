@@ -18,6 +18,27 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.08.09`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 protected staging finally reached the real backend process and exposed another deployment-only truth: the app imports `jwt` from `security/auth.py`, but `PyJWT` was never pinned in `requirements.txt`, so Dockerized backend and worker containers crashed immediately even though the local machine happened to have that package already
+- What:
+  `apps/studio/backend/requirements.txt` now explicitly installs `PyJWT==2.10.1`, which aligns the container environment with the runtime imports Studio already depends on
+  this removes another fake local-only assumption from the Sprint 8 staging path and keeps backend/worker bring-up honest across machines
+
+### `0.5.1-alpha` / build `2026.04.08.08`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 8 still had one structural closure gap: even when Docker staging could boot, host-written deployment reports could not round-trip back into owner health detail because the stack used an isolated named volume, and the verify flow still defaulted to the public staging URL instead of the host-reachable forwarded URL used by the local Docker proof
+- What:
+  `docker-compose.staging.yml` now bind-mounts a host-side staging runtime root into `/runtime`, which keeps staging logs and reports outside the repo while letting owner health detail read the same deployment verification files the operator scripts write
+  `start-studio-staging.ps1` and `verify-studio-staging.ps1` now derive a shared external staging runtime root plus a host-reachable verify URL by default, so Sprint 8 local Docker proofs can drive the official closure loop more honestly
+  `.env.staging.example`, deployment docs, and agent memory now document the optional `STAGING_RUNTIME_ROOT` and `STAGING_VERIFY_BASE_URL` overrides for protected staging operators
+
 ### `0.5.1-alpha` / build `2026.04.08.07`
 - Date: `2026-04-08`
 - Codename: `Foundation`
