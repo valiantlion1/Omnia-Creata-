@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -91,7 +92,12 @@ import kotlinx.coroutines.delay
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashStartedAt = SystemClock.elapsedRealtime()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition {
+            SystemClock.elapsedRealtime() - splashStartedAt < ColdStartSplashMinimumDurationMs
+        }
         setContent {
             OmniaTheme {
                 AppRoot()
@@ -113,7 +119,8 @@ private enum class OrganizerRoute(
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
-private const val LaunchSplashMinimumDurationMs = 2200L
+private const val ColdStartSplashMinimumDurationMs = 1600L
+private const val LaunchSplashMinimumDurationMs = 1600L
 private const val LaunchSplashMaximumDurationMs = 4200L
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,7 +133,8 @@ private fun AppRoot(
     val lifecycleOwner = LocalLifecycleOwner.current
     var accessRefreshTick by remember { mutableIntStateOf(0) }
     var currentRoute by rememberSaveable { mutableStateOf(OrganizerRoute.Home.route) }
-    var splashVisible by rememberSaveable { mutableStateOf(true) }
+    var hasHandledFirstResume by rememberSaveable { mutableStateOf(false) }
+    var splashVisible by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var splashStartedAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val primaryRoutes = remember {
@@ -137,8 +145,12 @@ private fun AppRoot(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 accessRefreshTick++
-                splashStartedAt = SystemClock.elapsedRealtime()
-                splashVisible = true
+                if (hasHandledFirstResume) {
+                    splashStartedAt = SystemClock.elapsedRealtime()
+                    splashVisible = true
+                } else {
+                    hasHandledFirstResume = true
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

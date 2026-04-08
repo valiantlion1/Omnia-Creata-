@@ -8,9 +8,26 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha8](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha8)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha9](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha9)
 
 ## Entries
+
+### 2026-04-08 - Alpha 9 unified launch splash without double screen
+- Version target: `1.0.0-alpha9`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha9](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha9)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - cold start now uses a branded Android launch splash instead of showing a separate square icon phase and then a second loading screen
+  - foreground returns still show the in-app loading splash, so the brand/loading layer now feels consistent on every app open
+  - splash timing was rebalanced so launch feels visible without stacking two different splash experiences
+- Known gaps:
+  - the system launch splash still uses a centered logo format, not a full cinematic layout
+  - splash motion is still static for now
+  - onboarding and permission education still need a dedicated first-run flow
 
 ### 2026-04-08 - Alpha 8 splash on every app open
 - Version target: `1.0.0-alpha8`
