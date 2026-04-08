@@ -42,6 +42,33 @@ enum class BrowseLayoutMode {
     GRID
 }
 
+enum class BrowseSortOption {
+    NAME,
+    DATE_MODIFIED,
+    SIZE,
+    TYPE
+}
+
+enum class BrowseSortDirection {
+    ASCENDING,
+    DESCENDING
+}
+
+enum class BrowseScopeFilter {
+    ALL,
+    FOLDERS_ONLY,
+    FILES_ONLY
+}
+
+enum class BrowseTypeFilter {
+    ALL,
+    IMAGES,
+    VIDEOS,
+    AUDIO,
+    DOCUMENTS,
+    ARCHIVES_AND_APKS
+}
+
 data class PendingFileOperation(
     val type: FileOperationType,
     val items: List<FileItem>
@@ -69,6 +96,12 @@ data class OrganizerUiState(
     val createFolderTargetDocumentId: String? = null,
     val createFolderForDestination: Boolean = false,
     val browseLayoutMode: BrowseLayoutMode = BrowseLayoutMode.LIST,
+    val browseSortOption: BrowseSortOption = BrowseSortOption.NAME,
+    val browseSortDirection: BrowseSortDirection = BrowseSortDirection.ASCENDING,
+    val browseScopeFilter: BrowseScopeFilter = BrowseScopeFilter.ALL,
+    val browseTypeFilter: BrowseTypeFilter = BrowseTypeFilter.ALL,
+    val showBrowseControlsSheet: Boolean = false,
+    val fileDetailTarget: FileItem? = null,
     val isSelectionMode: Boolean = false,
     val selectedDocumentIds: Set<String> = emptySet(),
     val pendingFileOperation: PendingFileOperation? = null,
@@ -164,7 +197,7 @@ class OrganizerViewModel @Inject constructor(
                     it.copy(
                         breadcrumb = it.breadcrumb + handle,
                         items = children
-                    ).clearSelectionState()
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
             }
         }
@@ -183,7 +216,7 @@ class OrganizerViewModel @Inject constructor(
                     it.copy(
                         breadcrumb = nextBreadcrumb,
                         items = children
-                    ).clearSelectionState()
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
             }
         }
@@ -208,7 +241,7 @@ class OrganizerViewModel @Inject constructor(
                     it.copy(
                         breadcrumb = listOfNotNull(rootHandle, parentHandle),
                         items = children
-                    ).clearSelectionState()
+                    ).clearSelectionState().resetBrowseExplorerControls()
                 }
             }
         }
@@ -242,11 +275,49 @@ class OrganizerViewModel @Inject constructor(
         _uiState.update { it.copy(browseLayoutMode = mode) }
     }
 
+    fun showBrowseControlsSheet() {
+        _uiState.update { it.copy(showBrowseControlsSheet = true, errorMessage = null) }
+    }
+
+    fun dismissBrowseControlsSheet() {
+        _uiState.update { it.copy(showBrowseControlsSheet = false) }
+    }
+
+    fun setBrowseSortOption(option: BrowseSortOption) {
+        _uiState.update { it.copy(browseSortOption = option, errorMessage = null) }
+    }
+
+    fun setBrowseSortDirection(direction: BrowseSortDirection) {
+        _uiState.update { it.copy(browseSortDirection = direction, errorMessage = null) }
+    }
+
+    fun setBrowseScopeFilter(filter: BrowseScopeFilter) {
+        _uiState.update { it.copy(browseScopeFilter = filter, errorMessage = null) }
+    }
+
+    fun setBrowseTypeFilter(filter: BrowseTypeFilter) {
+        _uiState.update { it.copy(browseTypeFilter = filter, errorMessage = null) }
+    }
+
+    fun resetBrowseExplorerControls() {
+        _uiState.update { it.resetBrowseExplorerControls() }
+    }
+
+    fun openFileDetail(item: FileItem) {
+        if (item.isDirectory) return
+        _uiState.update { it.copy(fileDetailTarget = item, errorMessage = null) }
+    }
+
+    fun dismissFileDetail() {
+        _uiState.update { it.copy(fileDetailTarget = null) }
+    }
+
     fun enterSelectionMode(item: FileItem) {
         _uiState.update {
             it.copy(
                 isSelectionMode = true,
                 selectedDocumentIds = setOf(item.documentId),
+                fileDetailTarget = null,
                 errorMessage = null
             )
         }
@@ -266,7 +337,7 @@ class OrganizerViewModel @Inject constructor(
     }
 
     fun selectAllCurrentFolder() {
-        val items = _uiState.value.items
+        val items = _uiState.value.visibleBrowseItems()
         if (items.isEmpty()) return
         _uiState.update {
             it.copy(
@@ -589,7 +660,7 @@ class OrganizerViewModel @Inject constructor(
                         largeFiles = emptyList(),
                         searchResults = emptyList(),
                         isStorageRefreshing = true
-                    ).clearSelectionState()
+                    ).clearSelectionState().resetBrowseExplorerControls(resetLayoutMode = true)
                 }
                 refreshStorageSummary(root, showLoading = false)
                 if (_uiState.value.searchQuery.isNotBlank()) {
@@ -811,9 +882,65 @@ private fun TrashBatchResult.toFileBatchOperationResult(): FileBatchOperationRes
     failures = failures
 )
 
+internal fun OrganizerUiState.visibleBrowseItems(): List<FileItem> {
+    val scopedItems = items.filter { item ->
+        when (browseScopeFilter) {
+            BrowseScopeFilter.ALL -> true
+            BrowseScopeFilter.FOLDERS_ONLY -> item.isDirectory
+            BrowseScopeFilter.FILES_ONLY -> !item.isDirectory
+        }
+    }.filter { item ->
+        item.isDirectory || matchesBrowseTypeFilter(item, browseTypeFilter)
+    }
+
+    val comparator = browseComparator(browseSortOption).let { base ->
+        if (browseSortDirection == BrowseSortDirection.ASCENDING) base else base.reversed()
+    }
+
+    val folders = scopedItems.filter(FileItem::isDirectory).sortedWith(comparator)
+    val files = scopedItems.filterNot(FileItem::isDirectory).sortedWith(comparator)
+    return when (browseScopeFilter) {
+        BrowseScopeFilter.FOLDERS_ONLY -> folders
+        BrowseScopeFilter.FILES_ONLY -> files
+        BrowseScopeFilter.ALL -> folders + files
+    }
+}
+
 private fun OrganizerUiState.clearSelectionState(): OrganizerUiState = copy(
     isSelectionMode = false,
     selectedDocumentIds = emptySet(),
     pendingFileOperation = null,
-    destinationPickerState = null
+    destinationPickerState = null,
+    fileDetailTarget = null
 )
+
+private fun OrganizerUiState.resetBrowseExplorerControls(resetLayoutMode: Boolean = false): OrganizerUiState = copy(
+    browseLayoutMode = if (resetLayoutMode) BrowseLayoutMode.LIST else browseLayoutMode,
+    browseSortOption = BrowseSortOption.NAME,
+    browseSortDirection = BrowseSortDirection.ASCENDING,
+    browseScopeFilter = BrowseScopeFilter.ALL,
+    browseTypeFilter = BrowseTypeFilter.ALL,
+    showBrowseControlsSheet = false,
+    fileDetailTarget = null
+)
+
+private fun matchesBrowseTypeFilter(item: FileItem, filter: BrowseTypeFilter): Boolean = when (filter) {
+    BrowseTypeFilter.ALL -> true
+    BrowseTypeFilter.IMAGES -> item.kind == FileKind.IMAGE
+    BrowseTypeFilter.VIDEOS -> item.kind == FileKind.VIDEO
+    BrowseTypeFilter.AUDIO -> item.kind == FileKind.AUDIO
+    BrowseTypeFilter.DOCUMENTS -> item.kind == FileKind.DOCUMENT
+    BrowseTypeFilter.ARCHIVES_AND_APKS -> item.kind == FileKind.ARCHIVE || item.kind == FileKind.APK
+}
+
+private fun browseComparator(option: BrowseSortOption): Comparator<FileItem> = when (option) {
+    BrowseSortOption.NAME -> compareBy<FileItem>({ it.name.lowercase() }, { it.documentId })
+    BrowseSortOption.DATE_MODIFIED -> compareBy<FileItem>({ it.lastModified ?: Long.MIN_VALUE }, { it.name.lowercase() })
+    BrowseSortOption.SIZE -> compareBy<FileItem>({ it.sizeBytes ?: 0L }, { it.name.lowercase() })
+    BrowseSortOption.TYPE -> compareBy<FileItem>({ browseTypeKey(it) }, { it.name.lowercase() })
+}
+
+private fun browseTypeKey(item: FileItem): String = when {
+    item.isDirectory -> "directory"
+    else -> item.kind.name.lowercase()
+}

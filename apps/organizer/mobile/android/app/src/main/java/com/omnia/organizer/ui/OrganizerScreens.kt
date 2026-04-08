@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,12 +42,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -223,6 +226,15 @@ fun BrowseScreen(
     onOpenFolder: (FileItem) -> Unit,
     onPickFolder: () -> Unit,
     onNavigateToBreadcrumb: (Int) -> Unit,
+    onShowBrowseControls: () -> Unit,
+    onDismissBrowseControls: () -> Unit,
+    onBrowseSortOptionChange: (BrowseSortOption) -> Unit,
+    onBrowseSortDirectionChange: (BrowseSortDirection) -> Unit,
+    onBrowseScopeFilterChange: (BrowseScopeFilter) -> Unit,
+    onBrowseTypeFilterChange: (BrowseTypeFilter) -> Unit,
+    onResetBrowseControls: () -> Unit,
+    onOpenFileDetail: (FileItem) -> Unit,
+    onDismissFileDetail: () -> Unit,
     onOpenFile: (FileItem) -> Unit,
     onShareFile: (FileItem) -> Unit,
     onRequestRename: (FileItem) -> Unit,
@@ -248,21 +260,46 @@ fun BrowseScreen(
         return
     }
 
-    val folderCount = state.items.count { it.isDirectory }
-    val fileCount = state.items.size - folderCount
+    val visibleItems = remember(
+        state.items,
+        state.browseSortOption,
+        state.browseSortDirection,
+        state.browseScopeFilter,
+        state.browseTypeFilter
+    ) {
+        state.visibleBrowseItems()
+    }
+    val folderCount = visibleItems.count { it.isDirectory }
+    val fileCount = visibleItems.size - folderCount
+    val currentPathSummary = remember(state.breadcrumb) {
+        state.breadcrumb.joinToString(" / ") { it.name }
+    }
+    val hasActiveBrowseFilters = state.browseScopeFilter != BrowseScopeFilter.ALL ||
+        state.browseTypeFilter != BrowseTypeFilter.ALL
+    val browseControlsSummary = remember(
+        state.browseSortOption,
+        state.browseSortDirection,
+        state.browseScopeFilter,
+        state.browseTypeFilter
+    ) {
+        buildBrowseControlsSummary(state)
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         WorkspaceContextStrip(
             title = state.root.displayName,
-            subtitle = "Explorer mode for the phone storage Android currently allows. Switch between list and grid depending on what feels clearer.",
+            subtitle = "Browse stays grounded in the current folder, with sorting, filters, and quick actions that behave like a real mobile file explorer.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
         BrowseExplorerCard(
             state = state,
+            visibleItemCount = visibleItems.size,
             folderCount = folderCount,
             fileCount = fileCount,
+            controlsSummary = browseControlsSummary,
             modifier = Modifier.padding(horizontal = 16.dp),
-            onBrowseLayoutChange = onBrowseLayoutChange
+            onBrowseLayoutChange = onBrowseLayoutChange,
+            onShowBrowseControls = onShowBrowseControls
         )
         if (state.isSelectionMode) {
             BrowseActionModeCard(
@@ -291,20 +328,67 @@ fun BrowseScreen(
             onConfirm = onConfirmDestinationOperation,
             onCreateFolder = onCreateFolderInDestination
         )
+        if (state.showBrowseControlsSheet) {
+            BrowseControlsBottomSheet(
+                state = state,
+                onDismiss = onDismissBrowseControls,
+                onBrowseSortOptionChange = onBrowseSortOptionChange,
+                onBrowseSortDirectionChange = onBrowseSortDirectionChange,
+                onBrowseScopeFilterChange = onBrowseScopeFilterChange,
+                onBrowseTypeFilterChange = onBrowseTypeFilterChange,
+                onReset = onResetBrowseControls
+            )
+        }
+        state.fileDetailTarget?.let { item ->
+            FileDetailBottomSheet(
+                item = item,
+                currentPathSummary = currentPathSummary,
+                onDismiss = onDismissFileDetail,
+                onOpen = {
+                    onDismissFileDetail()
+                    onOpenFile(item)
+                },
+                onShare = {
+                    onDismissFileDetail()
+                    onShareFile(item)
+                },
+                onRename = if (item.canRename) {
+                    {
+                        onDismissFileDetail()
+                        onRequestRename(item)
+                    }
+                } else {
+                    null
+                },
+                onMoveToTrash = if (item.canDelete) {
+                    {
+                        onDismissFileDetail()
+                        onMoveToTrash(item)
+                    }
+                } else {
+                    null
+                }
+            )
+        }
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
             when {
-                state.items.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        SectionHint("This folder is empty.")
-                    }
-                }
+                state.items.isEmpty() -> BrowseEmptyState(
+                    title = "This folder is empty",
+                    subtitle = "Create a folder here or move files in when you want this part of the explorer to grow.",
+                    resetLabel = null,
+                    onReset = null
+                )
+
+                visibleItems.isEmpty() -> BrowseEmptyState(
+                    title = "Nothing matches the current filter",
+                    subtitle = "The folder still has content, but your current folder/type filter is hiding everything shown here.",
+                    resetLabel = if (hasActiveBrowseFilters) "Reset filters" else null,
+                    onReset = if (hasActiveBrowseFilters) onResetBrowseControls else null
+                )
 
                 state.browseLayoutMode == BrowseLayoutMode.GRID -> {
                     LazyVerticalGrid(
@@ -314,7 +398,7 @@ fun BrowseScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        gridItems(state.items, key = { it.documentId }) { item ->
+                        gridItems(visibleItems, key = { it.documentId }) { item ->
                             FileGridCard(
                                 item = item,
                                 selected = state.selectedDocumentIds.contains(item.documentId),
@@ -325,7 +409,7 @@ fun BrowseScreen(
                                     } else if (item.isDirectory) {
                                         onOpenFolder(item)
                                     } else {
-                                        onOpenFile(item)
+                                        onOpenFileDetail(item)
                                     }
                                 },
                                 onLongPress = { onEnterSelectionMode(item) },
@@ -343,7 +427,7 @@ fun BrowseScreen(
                         contentPadding = PaddingValues(bottom = 28.dp, top = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        items(state.items, key = { it.documentId }) { item ->
+                        items(visibleItems, key = { it.documentId }) { item ->
                             FileRow(
                                 item = item,
                                 selected = state.selectedDocumentIds.contains(item.documentId),
@@ -354,7 +438,7 @@ fun BrowseScreen(
                                     } else if (item.isDirectory) {
                                         onOpenFolder(item)
                                     } else {
-                                        onOpenFile(item)
+                                        onOpenFileDetail(item)
                                     }
                                 },
                                 onLongPress = { onEnterSelectionMode(item) },
@@ -992,9 +1076,12 @@ private fun BreadcrumbTrail(
 @Composable
 private fun BrowseExplorerCard(
     state: OrganizerUiState,
+    visibleItemCount: Int,
     folderCount: Int,
     fileCount: Int,
+    controlsSummary: String,
     onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
+    onShowBrowseControls: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -1025,7 +1112,7 @@ private fun BrowseExplorerCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                StatPill(label = "${state.items.size} items")
+                StatPill(label = "$visibleItemCount shown")
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1034,6 +1121,11 @@ private fun BrowseExplorerCard(
                 StatPill(label = "$folderCount folders")
                 StatPill(label = "$fileCount files")
             }
+            Text(
+                text = controlsSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = state.browseLayoutMode == BrowseLayoutMode.LIST,
@@ -1045,6 +1137,9 @@ private fun BrowseExplorerCard(
                     onClick = { onBrowseLayoutChange(BrowseLayoutMode.GRID) },
                     label = { Text("Grid view") }
                 )
+                OutlinedButton(onClick = onShowBrowseControls) {
+                    Text("Sort & filter")
+                }
             }
         }
     }
@@ -1122,6 +1217,300 @@ private fun BrowseActionModeCard(
                 item {
                     FilledTonalButton(onClick = onDeleteSelection) {
                         Text("Delete")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrowseControlsBottomSheet(
+    state: OrganizerUiState,
+    onDismiss: () -> Unit,
+    onBrowseSortOptionChange: (BrowseSortOption) -> Unit,
+    onBrowseSortDirectionChange: (BrowseSortDirection) -> Unit,
+    onBrowseScopeFilterChange: (BrowseScopeFilter) -> Unit,
+    onBrowseTypeFilterChange: (BrowseTypeFilter) -> Unit,
+    onReset: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Sort & filter", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "These controls only affect the current folder, so Browse stays predictable as you move around.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            BrowseSheetSection("Sort by") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.NAME,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.NAME) },
+                            label = { Text("Name") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.DATE_MODIFIED,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.DATE_MODIFIED) },
+                            label = { Text("Date modified") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.SIZE,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.SIZE) },
+                            label = { Text("Size") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseSortOption == BrowseSortOption.TYPE,
+                            onClick = { onBrowseSortOptionChange(BrowseSortOption.TYPE) },
+                            label = { Text("Type") }
+                        )
+                    }
+                }
+            }
+
+            BrowseSheetSection("Direction") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.browseSortDirection == BrowseSortDirection.ASCENDING,
+                        onClick = { onBrowseSortDirectionChange(BrowseSortDirection.ASCENDING) },
+                        label = { Text("Ascending") }
+                    )
+                    FilterChip(
+                        selected = state.browseSortDirection == BrowseSortDirection.DESCENDING,
+                        onClick = { onBrowseSortDirectionChange(BrowseSortDirection.DESCENDING) },
+                        label = { Text("Descending") }
+                    )
+                }
+            }
+
+            BrowseSheetSection("Scope") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.ALL,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.ALL) },
+                            label = { Text("All items") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.FOLDERS_ONLY,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.FOLDERS_ONLY) },
+                            label = { Text("Folders only") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseScopeFilter == BrowseScopeFilter.FILES_ONLY,
+                            onClick = { onBrowseScopeFilterChange(BrowseScopeFilter.FILES_ONLY) },
+                            label = { Text("Files only") }
+                        )
+                    }
+                }
+            }
+
+            BrowseSheetSection("File type") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.ALL,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.ALL) },
+                            label = { Text("All files") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.IMAGES,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.IMAGES) },
+                            label = { Text("Images") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.VIDEOS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.VIDEOS) },
+                            label = { Text("Videos") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.AUDIO,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.AUDIO) },
+                            label = { Text("Audio") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.DOCUMENTS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.DOCUMENTS) },
+                            label = { Text("Documents") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = state.browseTypeFilter == BrowseTypeFilter.ARCHIVES_AND_APKS,
+                            onClick = { onBrowseTypeFilterChange(BrowseTypeFilter.ARCHIVES_AND_APKS) },
+                            label = { Text("Archives/APKs") }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onReset) {
+                    Text("Reset")
+                }
+                FilledTonalButton(onClick = onDismiss) {
+                    Text("Done")
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun BrowseSheetSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        content()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileDetailBottomSheet(
+    item: FileItem,
+    currentPathSummary: String,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onRename: (() -> Unit)?,
+    onMoveToTrash: (() -> Unit)?
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    currentPathSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FileDetailStatRow(label = "Type", value = kindLabel(item.kind))
+                FileDetailStatRow(label = "Size", value = formatBytes(item.sizeBytes ?: 0L))
+                FileDetailStatRow(label = "Modified", value = formatDate(item.lastModified))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(onClick = onOpen, modifier = Modifier.weight(1f)) {
+                    Text("Open")
+                }
+                OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
+                    Text("Share")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (onRename != null) {
+                    OutlinedButton(onClick = onRename, modifier = Modifier.weight(1f)) {
+                        Text("Rename")
+                    }
+                }
+                if (onMoveToTrash != null) {
+                    OutlinedButton(onClick = onMoveToTrash, modifier = Modifier.weight(1f)) {
+                        Text("Move to Recycle Bin")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun FileDetailStatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+    }
+}
+
+@Composable
+private fun BrowseEmptyState(
+    title: String,
+    subtitle: String,
+    resetLabel: String?,
+    onReset: (() -> Unit)?
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)),
+            shape = RoundedCornerShape(26.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (resetLabel != null && onReset != null) {
+                    OutlinedButton(onClick = onReset) {
+                        Text(resetLabel)
                     }
                 }
             }
@@ -1367,7 +1756,7 @@ private fun FileGridCard(
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = formatBytes(item.sizeBytes ?: 0L),
+                    text = if (item.isDirectory) "Tap to open folder" else formatBytes(item.sizeBytes ?: 0L),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -1483,7 +1872,11 @@ private fun FileRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${item.kind.name.lowercase().replaceFirstChar(Char::uppercase)} | ${formatBytes(item.sizeBytes ?: 0L)}",
+                    if (item.isDirectory) {
+                        "Folder"
+                    } else {
+                        "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1625,6 +2018,39 @@ private fun formatBytes(bytes: Long): String {
         index++
     }
     return if (index == 0) "${value.toInt()} ${units[index]}" else String.format("%.1f %s", value, units[index])
+}
+
+private fun buildBrowseControlsSummary(state: OrganizerUiState): String {
+    val parts = mutableListOf(
+        "Sort: ${browseSortLabel(state.browseSortOption)} ${if (state.browseSortDirection == BrowseSortDirection.ASCENDING) "Asc" else "Desc"}",
+        "Scope: ${browseScopeLabel(state.browseScopeFilter)}"
+    )
+    if (state.browseTypeFilter != BrowseTypeFilter.ALL) {
+        parts += "Files: ${browseTypeFilterLabel(state.browseTypeFilter)}"
+    }
+    return parts.joinToString(" • ")
+}
+
+private fun browseSortLabel(option: BrowseSortOption): String = when (option) {
+    BrowseSortOption.NAME -> "Name"
+    BrowseSortOption.DATE_MODIFIED -> "Date modified"
+    BrowseSortOption.SIZE -> "Size"
+    BrowseSortOption.TYPE -> "Type"
+}
+
+private fun browseScopeLabel(filter: BrowseScopeFilter): String = when (filter) {
+    BrowseScopeFilter.ALL -> "All items"
+    BrowseScopeFilter.FOLDERS_ONLY -> "Folders only"
+    BrowseScopeFilter.FILES_ONLY -> "Files only"
+}
+
+private fun browseTypeFilterLabel(filter: BrowseTypeFilter): String = when (filter) {
+    BrowseTypeFilter.ALL -> "All files"
+    BrowseTypeFilter.IMAGES -> "Images"
+    BrowseTypeFilter.VIDEOS -> "Videos"
+    BrowseTypeFilter.AUDIO -> "Audio"
+    BrowseTypeFilter.DOCUMENTS -> "Documents"
+    BrowseTypeFilter.ARCHIVES_AND_APKS -> "Archives/APKs"
 }
 
 private fun kindLabel(kind: FileKind): String = when (kind) {

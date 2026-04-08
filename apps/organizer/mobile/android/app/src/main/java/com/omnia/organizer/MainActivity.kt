@@ -75,6 +75,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.omnia.organizer.R
 import com.omnia.organizer.ui.BrowseScreen
+import com.omnia.organizer.ui.BrowseLayoutMode
 import com.omnia.organizer.ui.CreateFolderDialog
 import com.omnia.organizer.ui.ErrorBanner
 import com.omnia.organizer.ui.HomeScreen
@@ -222,6 +223,8 @@ private fun AppRoot(
     LaunchedEffect(currentRoute) {
         if (currentRoute != OrganizerRoute.Browse.route) {
             viewModel.clearBrowseActionMode()
+            viewModel.dismissBrowseControlsSheet()
+            viewModel.dismissFileDetail()
         }
     }
 
@@ -390,9 +393,19 @@ private fun AppRoot(
 
                 OrganizerRoute.Browse.route -> BrowseScreen(
                     state = state,
+                    onBrowseLayoutChange = viewModel::setBrowseLayoutMode,
                     onOpenFolder = viewModel::openFolder,
                     onPickFolder = requestStorageAccessAction,
                     onNavigateToBreadcrumb = viewModel::navigateToBreadcrumb,
+                    onShowBrowseControls = viewModel::showBrowseControlsSheet,
+                    onDismissBrowseControls = viewModel::dismissBrowseControlsSheet,
+                    onBrowseSortOptionChange = viewModel::setBrowseSortOption,
+                    onBrowseSortDirectionChange = viewModel::setBrowseSortDirection,
+                    onBrowseScopeFilterChange = viewModel::setBrowseScopeFilter,
+                    onBrowseTypeFilterChange = viewModel::setBrowseTypeFilter,
+                    onResetBrowseControls = viewModel::resetBrowseExplorerControls,
+                    onOpenFileDetail = viewModel::openFileDetail,
+                    onDismissFileDetail = viewModel::dismissFileDetail,
                     onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
                     onShareFile = { item -> shareDocument(context, viewModel.documentUriFor(item), item.mimeType, item.name) },
                     onRequestRename = viewModel::requestRename,

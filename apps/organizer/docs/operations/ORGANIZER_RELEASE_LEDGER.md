@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha10](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha10)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha11](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha11)
 
 ## Entries
+
+### 2026-04-08 - Alpha 11 explorer completion pass
+- Version target: `1.0.0-alpha11`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha11](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha11)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now has a real sort and filter bottom sheet for the current folder
+  - file taps in Browse open a metadata-first detail sheet instead of jumping straight into Android open
+  - the explorer list and grid now render from one sorted and filtered browse pipeline
+  - empty folder and no-match states now behave like explorer states instead of generic placeholders
+- Known gaps:
+  - Search and Storage still need the same structural polish as Browse
+  - richer media previews are still deferred behind this metadata-first detail layer
+  - another performance pass is still needed after more real-device feedback
 
 ### 2026-04-08 - Alpha 10 file explorer layout foundation
 - Version target: `1.0.0-alpha10`
