@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
@@ -25,12 +26,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,6 +52,7 @@ import com.omnia.organizer.core.domain.model.FileItem
 import com.omnia.organizer.core.domain.model.FileKind
 import com.omnia.organizer.core.domain.model.SearchDateFilter
 import com.omnia.organizer.core.domain.model.SearchSizeFilter
+import com.omnia.organizer.core.domain.model.StorageSummary
 import com.omnia.organizer.core.domain.model.TrashEntry
 import java.text.DateFormat
 import java.util.Date
@@ -97,17 +102,26 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            WorkspaceHeroCard(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                onPickFolder = onPickFolder
+            )
+        }
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ShortcutCard("Browse", "Open folders", onOpenBrowse, Modifier.weight(1f))
-                ShortcutCard("Search", "Find by name", onOpenSearch, Modifier.weight(1f))
+                ShortcutCard("Browse", "Open folders fast", onOpenBrowse, Modifier.weight(1f))
+                ShortcutCard("Search", "Find by file name", onOpenSearch, Modifier.weight(1f))
             }
         }
         item {
@@ -121,18 +135,15 @@ fun HomeScreen(
                 ShortcutCard("Recycle Bin", "Restore deleted items", onOpenTrash, Modifier.weight(1f))
             }
         }
-        item {
-            StorageSummaryCard(state)
-        }
-        item { SectionTitle("Recent files") }
+        item { SectionTitle("Recent files", "Fast jump back into what you touched last.") }
         if (state.recentFiles.isEmpty()) {
-            item { SectionHint("No recent files yet in the selected folder tree.") }
+            item { SectionHint("No recent files yet in the current storage root.") }
         } else {
             items(state.recentFiles, key = { "recent-${it.documentId}" }) { item ->
                 FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
             }
         }
-        item { SectionTitle("Large files") }
+        item { SectionTitle("Large files", "Good first place to free up space without digging around.") }
         if (state.largeFiles.isEmpty()) {
             item { SectionHint("No large files found yet.") }
         } else {
@@ -162,10 +173,15 @@ fun BrowseScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        WorkspaceContextStrip(
+            title = state.root.displayName,
+            subtitle = "Current storage root. Change it anytime from the top bar if you need wider phone access.",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(state.breadcrumb.withIndex().toList(), key = { "${it.index}-${it.value.documentId}" }) { indexed ->
@@ -185,7 +201,7 @@ fun BrowseScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (state.items.isEmpty()) {
                     item { SectionHint("This folder is empty.") }
                 } else {
@@ -199,6 +215,7 @@ fun BrowseScreen(
                         )
                     }
                 }
+                item { Spacer(modifier = Modifier.height(12.dp)) }
             }
         }
     }
@@ -221,19 +238,24 @@ fun SearchScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        WorkspaceContextStrip(
+            title = state.root.displayName,
+            subtitle = "Search runs inside the active storage root so results stay fast and Android-safe.",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        )
         OutlinedTextField(
             value = state.searchQuery,
             onValueChange = onQueryChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp),
             label = { Text("Search files") },
             singleLine = true
         )
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { FilterChip(selected = state.searchFilters.kind == null, onClick = { onKindFilter(null) }, label = { Text("All types") }) }
@@ -245,7 +267,7 @@ fun SearchScreen(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.ANYTIME, onClick = { onDateFilter(SearchDateFilter.ANYTIME) }, label = { Text("Any time") }) }
@@ -254,18 +276,28 @@ fun SearchScreen(
             item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.LARGE_10_MB, onClick = { onSizeFilter(SearchSizeFilter.LARGE_10_MB) }, label = { Text("10 MB+") }) }
             item { FilterChip(selected = state.searchFilters.sizeFilter == SearchSizeFilter.HUGE_100_MB, onClick = { onSizeFilter(SearchSizeFilter.HUGE_100_MB) }, label = { Text("100 MB+") }) }
         }
-        if (state.searchQuery.isBlank()) {
-            SectionHint("Type a file name to search inside the selected folder tree.")
-        } else if (state.searchResults.isEmpty() && !state.isLoading) {
-            SectionHint("No results matched the current query and filters.")
-        } else if (state.isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(12.dp))
+        when {
+            state.searchQuery.isBlank() -> SectionHint("Type a file name to search inside the current storage root.")
+            state.isSearchLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator()
+                        Text("Scanning files...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
-                    FileRow(item = item, onClick = { if (item.isDirectory) onOpenParent(item) else onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
+            state.searchResults.isEmpty() -> SectionHint("No results matched the current query and filters.")
+            else -> {
+                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
+                        FileRow(
+                            item = item,
+                            onClick = { if (item.isDirectory) onOpenParent(item) else onOpenFile(item) },
+                            onOpenParent = { onOpenParent(item) }
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(12.dp)) }
                 }
             }
         }
@@ -286,25 +318,25 @@ fun StorageScreen(
     val summary = state.storageSummary
     if (summary == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator()
+                Text("Scanning storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         return
     }
+
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Card(
+            StorageOverviewCard(
+                state = state,
+                summary = summary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Storage summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("${summary.fileCount} files and ${summary.folderCount} folders")
-                    Text("Total size ${formatBytes(summary.totalBytes)}")
-                }
-            }
+            )
         }
-        item { SectionTitle("Categories") }
+        item { SectionTitle("Categories", "Where the current storage root is spending most of its space.") }
         items(summary.categories, key = { it.kind.name }) { category ->
             Card(
                 modifier = Modifier
@@ -318,14 +350,15 @@ fun StorageScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(category.kind.name.lowercase().replaceFirstChar(Char::uppercase))
-                    Text("${formatBytes(category.bytes)} • ${category.count} items")
+                    Text("${formatBytes(category.bytes)} | ${category.count} items")
                 }
             }
         }
-        item { SectionTitle("Largest files") }
+        item { SectionTitle("Largest files", "Open the file directly or jump back to its parent folder.") }
         items(summary.largeFiles, key = { "storage-${it.documentId}" }) { item ->
             FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
         }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -335,7 +368,7 @@ fun TrashScreen(
     onRestore: (TrashEntry) -> Unit,
     onDeletePermanently: (TrashEntry) -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (state.trashEntries.isEmpty()) {
             item { SectionHint("Recycle Bin is empty.") }
         } else {
@@ -343,13 +376,16 @@ fun TrashScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(entry.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Deleted ${formatDate(entry.deletedAt)} • ${formatBytes(entry.sizeBytes ?: 0L)}")
+                        Text(
+                            "Deleted ${formatDate(entry.deletedAt)} | ${formatBytes(entry.sizeBytes ?: 0L)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { onRestore(entry) }) {
+                            FilledTonalButton(onClick = { onRestore(entry) }) {
                                 Text("Restore")
                             }
                             OutlinedButton(onClick = { onDeletePermanently(entry) }) {
@@ -393,12 +429,16 @@ fun SettingsScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Selected folder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(state.root?.displayName ?: "No folder selected")
+                    Text("Storage access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(state.root?.displayName ?: "No storage root selected")
+                    Text(
+                        "Alpha access follows Android rules. Pick a broader internal storage root or SD card root if you want OOFM to see more of the phone.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onPickFolder) { Text("Choose folder") }
+                        FilledTonalButton(onClick = onPickFolder) { Text("Change storage root") }
                         if (state.root != null) {
-                            OutlinedButton(onClick = onClearRoot) { Text("Clear") }
+                            OutlinedButton(onClick = onClearRoot) { Text("Clear root") }
                         }
                     }
                 }
@@ -477,41 +517,153 @@ fun CreateFolderDialog(state: OrganizerUiState, onDismiss: () -> Unit, onConfirm
 }
 
 @Composable
-private fun StorageSummaryCard(state: OrganizerUiState) {
-    val summary = state.storageSummary
+private fun WorkspaceHeroCard(
+    state: OrganizerUiState,
+    modifier: Modifier = Modifier,
+    onPickFolder: () -> Unit
+) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Selected root", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(state.root?.displayName.orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (summary == null) {
-                Text("Storage summary will appear after the first scan.")
-            } else {
-                Text("${summary.fileCount} files in ${formatBytes(summary.totalBytes)}")
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(summary.categories) { category ->
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("${category.kind.name.lowercase().replaceFirstChar(Char::uppercase)} ${formatBytes(category.bytes)}") }
-                        )
-                    }
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Current workspace",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                state.root?.displayName.orEmpty(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                "OOFM is still alpha. It works inside the storage root you approve, and you can switch to a broader phone root anytime.",
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            if (state.isStorageRefreshing) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onPickFolder) {
+                    Text("Change root")
                 }
+                StatPill(label = "${state.recentFiles.size} recents")
+                if (state.storageSummary != null) {
+                    StatPill(label = formatBytes(state.storageSummary.totalBytes))
+                }
+            }
+            state.storageSummary?.let { summary ->
+                CategoryPills(summary = summary)
             }
         }
     }
 }
 
 @Composable
+private fun StorageOverviewCard(
+    state: OrganizerUiState,
+    summary: StorageSummary,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Storage overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(state.root?.displayName.orEmpty(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+            Text("${summary.fileCount} files and ${summary.folderCount} folders")
+            Text("Total size ${formatBytes(summary.totalBytes)}")
+            if (state.isStorageRefreshing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else if (state.lastStorageScanAt != null) {
+                Text(
+                    "Last scan ${formatDate(state.lastStorageScanAt)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryPills(summary: StorageSummary) {
+    if (summary.categories.isEmpty()) return
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(summary.categories.take(4), key = { it.kind.name }) { category ->
+            AssistChip(
+                onClick = {},
+                label = {
+                    Text(
+                        "${category.kind.name.lowercase().replaceFirstChar(Char::uppercase)} ${formatBytes(category.bytes)}"
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceContextStrip(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, onClick = onClick) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Card(
+        modifier = modifier,
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+@Composable
+private fun StatPill(label: String) {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }
 
@@ -528,25 +680,38 @@ private fun FileRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        onClick = onClick
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (item.kind == FileKind.DIRECTORY) Icons.Default.Folder else Icons.Default.UploadFile,
-                contentDescription = item.name,
-                modifier = Modifier.size(22.dp)
-            )
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+            ) {
+                Icon(
+                    imageVector = if (item.kind == FileKind.DIRECTORY) Icons.Default.Folder else Icons.Default.UploadFile,
+                    contentDescription = item.name,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .padding(8.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${item.kind.name.lowercase().replaceFirstChar(Char::uppercase)} • ${formatBytes(item.sizeBytes ?: 0L)} • ${formatDate(item.lastModified)}",
+                    "${item.kind.name.lowercase().replaceFirstChar(Char::uppercase)} | ${formatBytes(item.sizeBytes ?: 0L)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    formatDate(item.lastModified),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -591,19 +756,22 @@ private fun FileRow(
 @Composable
 private fun EmptyRootState(onPickFolder: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(modifier = Modifier.padding(24.dp)) {
+        Card(
+            modifier = Modifier.padding(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Choose a folder to start", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text("Choose a storage root", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "OOFM starts with a user-approved folder tree. This keeps access grounded in Android storage rules.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "Start with the phone storage root, Downloads, or an SD card root. You can switch later if you want OOFM to see more of the device.",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                OutlinedButton(onClick = onPickFolder) {
-                    Text("Select folder")
+                FilledTonalButton(onClick = onPickFolder) {
+                    Text("Select storage root")
                 }
             }
         }
@@ -611,13 +779,24 @@ private fun EmptyRootState(onPickFolder: () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(title: String) {
-    Text(
-        text = title,
+private fun SectionTitle(title: String, subtitle: String? = null) {
+    Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold
-    )
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (!subtitle.isNullOrBlank()) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
