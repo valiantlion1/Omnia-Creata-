@@ -421,7 +421,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         />
         <Section title="Library" items={libraryNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         <Section title="Elements" items={elementsNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <Section title="Utility" items={utilityNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <Section items={utilityNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
       <div className="relative border-t border-white/[0.015] p-2.5">
@@ -483,7 +483,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Version */}
         {!collapsed && (
           <div className="mt-4 px-1 text-[10px] text-center font-medium text-zinc-600/50">
-            {APP_VERSION_LABEL} · build {APP_BUILD_LABEL}
+            v{APP_VERSION_LABEL}
           </div>
         )}
       </div>

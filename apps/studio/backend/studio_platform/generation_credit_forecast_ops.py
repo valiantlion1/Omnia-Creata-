@@ -61,6 +61,11 @@ def build_generation_credit_forecasts(
 ) -> dict[str, Any]:
     forecasts: list[GenerationCreditForecast] = []
     for model in models:
+        creative_profile = resolve_creative_profile(
+            model_id=model.id,
+            pricing_lane=None,
+            existing_profile=model.creative_profile,
+        )
         routing_decision = providers.plan_generation_route(
             plan=identity_plan,
             prompt=_GENERIC_FORECAST_PROMPT,
@@ -106,12 +111,8 @@ def build_generation_credit_forecasts(
         forecasts.append(
             GenerationCreditForecast(
                 model_id=model.id,
-                label=model.label,
-                creative_profile=resolve_creative_profile(
-                    model_id=model.id,
-                    pricing_lane=pricing_quote.pricing_lane,
-                    existing_profile=model.creative_profile,
-                ).model_dump(mode="json"),
+                label=creative_profile.label,
+                creative_profile=creative_profile.model_dump(mode="json"),
                 render_experience=build_render_experience(
                     provider_name=routing_decision.selected_provider,
                     pricing_lane=pricing_quote.pricing_lane,

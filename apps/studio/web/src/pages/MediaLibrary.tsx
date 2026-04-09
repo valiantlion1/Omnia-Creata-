@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { LightboxTrigger } from '@/components/ImageLightbox'
@@ -686,27 +686,41 @@ function EmptyInline({
 }
 
 function PendingPreview({ generation, view }: { generation: Generation; view: ViewMode }) {
-  const detail = describePendingGenerationState(generation.status, generation.pricing_lane, generation.provider)
-  const lane = formatGenerationPricingLane(generation.pricing_lane)
-  const creditState = formatGenerationCreditState(generation)
-  const estimateSummary = formatGenerationEstimateSummary(generation.estimated_cost, generation.estimated_cost_source)
+  const normalized = normalizeJobStatus(generation.status)
+  const isFailed = ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalized)
 
   if (view === 'grid') {
     return (
       <div className="space-y-3">
-        <div className="relative overflow-hidden rounded-[22px] bg-white/[0.03]">
-          <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))]" />
-          <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),transparent)]" />
-          <div className="absolute bottom-0 left-0 right-0 h-28 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.6))]" />
+        <div className="relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+          {isFailed ? (
+            <>
+              <div className="aspect-[4/5] w-full bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)] opacity-50" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
+                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20 mb-3 shadow-lg">
+                   <ImageOff className="h-5 w-5 text-rose-400/80" />
+                 </div>
+                 <span className="text-[11px] font-bold tracking-wider text-rose-400/80 uppercase">Blocked / Failed</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.06)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
+              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm">
+                <div className="relative flex h-8 w-8 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" />
+                  <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+                </div>
+              </div>
+            </>
+          )}
         </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-white">{generation.title}</div>
-          <div className="mt-1 text-xs text-zinc-500">{detail}</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <StatusPill tone="neutral">{lane}</StatusPill>
-            <StatusPill tone="neutral">{creditState}</StatusPill>
+        <div className="min-w-0 px-1">
+          <div className="truncate text-[13px] font-semibold text-white">{generation.title}</div>
+          <div className={`mt-0.5 text-[11px] font-medium ${isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+            {isFailed ? 'Could not create image' : 'Painting your vision...'}
           </div>
-          <div className="mt-2 text-xs text-zinc-500">{estimateSummary}</div>
         </div>
       </div>
     )
@@ -714,17 +728,20 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
 
   return (
     <div className="flex items-center gap-4 py-3">
-      <div className="h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03]">
-        <div className="h-full w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))]" />
+      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05]">
+        {isFailed ? (
+           <div className="absolute inset-0 flex items-center justify-center bg-rose-500/5 backdrop-blur-md">
+             <ImageOff className="h-4 w-4 text-rose-400/70" />
+           </div>
+        ) : (
+           <div className="h-full w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+        )}
       </div>
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-white">{generation.title}</div>
-        <div className="mt-1 text-xs text-zinc-500">{detail}</div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <StatusPill tone="neutral">{lane}</StatusPill>
-          <StatusPill tone="neutral">{creditState}</StatusPill>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-white">{generation.title}</div>
+        <div className={`mt-1 text-xs font-medium ${isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+          {isFailed ? 'Could not create image' : 'Painting your vision...'}
         </div>
-        <div className="mt-2 text-xs text-zinc-500">{estimateSummary}</div>
       </div>
     </div>
   )
@@ -914,7 +931,13 @@ export default function MediaLibraryPage() {
       generations
         .filter((generation) => {
           const normalized = normalizeJobStatus(generation.status)
-          return normalized === 'queued' || normalized === 'running'
+          const isPending = normalized === 'queued' || normalized === 'running'
+          const isFailed = ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalized)
+          
+          if (isPending) return true
+          // Display failed images if they are relatively recent (last 7 days) to act as visual feedback
+          if (isFailed && Date.now() - new Date(generation.created_at).getTime() < 1000 * 60 * 60 * 24 * 7) return true
+          return false
         })
         .filter((generation) => matchesQuery(search, generation.title, generation.prompt_snapshot.prompt, generation.model)),
     [generations, search],

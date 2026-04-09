@@ -1372,6 +1372,8 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     flux_model = next(model for model in settings_payload["models"] if model["id"] == "flux-schnell")
     assert flux_model["creative_profile"]["id"] == "fast-draft"
     assert flux_model["creative_profile"]["label"] == "Fast Draft"
+    assert flux_model["label"] == "Fast Draft"
+    assert flux_model["display_label"] == "Fast Draft"
     assert flux_model["render_experience"]["state"] == "fallback"
     assert flux_model["route_preview"]["render_experience"]["state"] == "fallback"
     assert flux_model["route_preview"]["pricing_lane"] == "fallback"
@@ -1382,6 +1384,7 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
         if entry["pricing_lane"] == "fallback"
     )
+    assert fallback_lane["label"] == "Fast Draft"
     assert fallback_lane["creative_profile"]["id"] == "fast-draft"
     assert fallback_lane["render_experience"]["state"] == "fallback"
 
@@ -2140,7 +2143,7 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         assert health["generation_routing"]["demo_policy"] == "degraded_only_last_resort"
         assert health["chat_routing"]["plan_defaults"]["free"] == "standard"
         assert health["chat_routing"]["plan_defaults"]["pro"] == "premium"
-        assert health["chat_routing"]["multimodal_policy"] == "gemini_first_when_images_present"
+        assert health["chat_routing"]["multimodal_policy"] == "configured_provider_order"
     finally:
         await service.shutdown()
 

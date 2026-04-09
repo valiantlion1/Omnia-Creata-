@@ -46,13 +46,13 @@ export default function ProjectPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 md:px-6">
         <EmptyState
           title="Projects open after sign-in."
-          description="Your images, history, and share links stay tied to your account, so guest mode only previews the shell."
+          description="Sign in to view your projects and images."
           action={
             <button
               onClick={() => window.location.assign('/signup')}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
             >
-              Continue with free access
+              Get started free
             </button>
           }
         />
@@ -79,8 +79,8 @@ export default function ProjectPage() {
         description={
           project.description ||
           (isChatSurface
-            ? 'This chat-backed project keeps visual outputs separated from Create while preserving them in your Library.'
-            : 'A focused project for image production, history, and persistent media.')
+            ? 'Images created during this chat session.'
+            : 'Your project workspace for creating and organizing images.')
         }
         actions={
           <>
@@ -93,7 +93,7 @@ export default function ProjectPage() {
               onClick={() => shareMutation.mutate()}
               className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
             >
-              Create share link
+              Share project
             </button>
           </>
         }
@@ -109,7 +109,7 @@ export default function ProjectPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {isChatSurface ? 'Chat visuals stay viewable without leaking back into Create.' : 'The project surface is now fed by real stored assets.'}
+                {isChatSurface ? 'Images from this chat' : 'Recent creations'}
               </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
@@ -131,11 +131,11 @@ export default function ProjectPage() {
             </div>
           ) : (
             <EmptyState
-              title="No assets in this project yet"
+              title="No images yet"
               description={
                 isChatSurface
-                  ? 'The next visual result created from Chat will land here automatically.'
-                  : 'The next completed render will land in this project automatically.'
+                  ? 'Images created from this chat will appear here.'
+                  : 'Start creating and your images will appear here automatically.'
               }
             />
           )}
@@ -144,9 +144,9 @@ export default function ProjectPage() {
         <Panel>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Generation history</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">History</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {isChatSurface ? 'Every chat-triggered render keeps its prompt snapshot attached.' : 'Every run keeps its prompt snapshot attached.'}
+                {isChatSurface ? 'What you\'ve created in this chat' : 'Your generation history'}
               </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
@@ -166,27 +166,18 @@ export default function ProjectPage() {
                   </div>
                   <p className="mt-3 text-sm leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusPill tone="neutral">{formatGenerationCreditState(generation)}</StatusPill>
-                    <StatusPill tone="neutral">{formatGenerationPricingLane(generation.pricing_lane)}</StatusPill>
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
-                    <StatusPill tone="neutral">{generation.provider}</StatusPill>
-                  </div>
-                  <div className="mt-3 text-xs text-zinc-500">
-                    {formatGenerationEstimateSummary(generation.estimated_cost, generation.estimated_cost_source)}
-                  </div>
-                  <div className="mt-1 text-[11px] text-zinc-600">
-                    {describeGenerationLaneTrust(generation.pricing_lane, generation.provider)}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <EmptyState
-              title="No generations yet"
+              title="No history yet"
               description={
                 isChatSurface
-                  ? 'A chat-driven visual generation will appear here as soon as it is queued.'
-                  : 'Open Create and the first project job will show up here as soon as it is queued.'
+                  ? 'Your chat creations will show up here.'
+                  : 'Start creating and your history will appear here.'
               }
             />
           )}

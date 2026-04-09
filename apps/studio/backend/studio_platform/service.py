@@ -3752,6 +3752,9 @@ class StudioService:
             provider_truth = launch_readiness.get("provider_truth")
             if isinstance(provider_truth, dict):
                 payload["provider_truth"] = provider_truth
+            platform_readiness = launch_readiness.get("platform_readiness")
+            if isinstance(platform_readiness, dict):
+                payload["platform_readiness"] = platform_readiness
         return payload
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
@@ -3785,12 +3788,23 @@ class StudioService:
         identity: OmniaIdentity,
         model: ModelCatalogEntry,
     ) -> Dict[str, Any]:
+        creative_profile = resolve_creative_profile(
+            model_id=model.id,
+            pricing_lane=None,
+            existing_profile=model.creative_profile,
+        )
         route_preview = build_model_route_preview(
             model=model,
             identity_plan=identity.plan,
             providers=self.providers,
         )
         serialized = model.model_dump(mode="json")
+        serialized["label"] = creative_profile.label
+        serialized["description"] = creative_profile.description
+        serialized["creative_profile"] = creative_profile.model_dump(mode="json")
+        serialized["display_label"] = creative_profile.label
+        serialized["display_badge"] = creative_profile.badge
+        serialized["display_description"] = creative_profile.description
         serialized["render_experience"] = dict(route_preview["render_experience"])
         serialized["route_preview"] = route_preview
         return serialized
@@ -3803,7 +3817,14 @@ class StudioService:
 
     def _validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
         if width > model.max_width or height > model.max_height:
-            raise ValueError(f"{model.label} supports up to {model.max_width}x{model.max_height}")
+            creative_profile = resolve_creative_profile(
+                model_id=model.id,
+                pricing_lane=None,
+                existing_profile=model.creative_profile,
+            )
+            raise ValueError(
+                f"{creative_profile.label} supports up to {model.max_width}x{model.max_height}"
+            )
 
     def _refresh_monthly_credits_locked(self, state: StudioState, identity: OmniaIdentity) -> None:
         plan_config = PLAN_CATALOG[identity.plan]

@@ -21,6 +21,10 @@ _CHAT_LAUNCH_GRADE_PROVIDERS = frozenset({"gemini", "openrouter", "openai"})
 _IMAGE_LAUNCH_GRADE_PROVIDERS = frozenset({"openai", "fal", "runware"})
 _IMAGE_FALLBACK_ONLY_PROVIDERS = frozenset({"huggingface", "pollinations"})
 _IMAGE_DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
+_LOCAL_ALPHA_REQUIRED_KEYS = frozenset(
+    {"auth_configuration", "data_authority", "runtime_topology", "startup_verification"}
+)
+_LOCAL_ALPHA_WARNING_KEYS = frozenset({"external_logs"})
 
 
 def provider_smoke_report_path(settings: Settings) -> Path:
@@ -462,6 +466,11 @@ def build_launch_readiness_report(
         deployment_verification_report=deployment_verification_report,
         provider_smoke_report=provider_smoke_report,
     )
+    platform_readiness = _build_platform_readiness(
+        checks=checks,
+        launch_gate=launch_gate,
+        provider_truth=provider_truth,
+    )
 
     return {
         "status": status,
@@ -471,6 +480,7 @@ def build_launch_readiness_report(
         "checks": checks,
         "launch_gate": launch_gate,
         "provider_truth": provider_truth,
+        "platform_readiness": platform_readiness,
     }
 
 
@@ -1534,6 +1544,269 @@ def _build_startup_verification_check(startup_verification_report: dict[str, Any
             f"with backend health {backend_health or 'unknown'}."
         ),
     }
+
+
+def _build_platform_readiness(
+    *,
+    checks: list[dict[str, str]],
+    launch_gate: dict[str, Any],
+    provider_truth: dict[str, Any],
+) -> dict[str, Any]:
+    check_lookup = {
+        str(check.get("key") or "").strip(): check
+        for check in checks
+        if isinstance(check, dict) and str(check.get("key") or "").strip()
+    }
+    local_alpha = _build_local_alpha_phase(check_lookup=check_lookup)
+    protected_beta = _build_protected_beta_phase(launch_gate=launch_gate)
+    public_paid_platform = _build_public_paid_platform_phase(
+        check_lookup=check_lookup,
+        launch_gate=launch_gate,
+        provider_truth=provider_truth,
+    )
+    phases = [local_alpha, protected_beta, public_paid_platform]
+    phase_by_id = {phase["id"]: phase for phase in phases}
+
+    current_stage = "foundation_blocked"
+    current_stage_label = "Foundation Blocked"
+    current_stage_status = "blocked"
+    next_stage = "local_alpha"
+    next_stage_label = phase_by_id["local_alpha"]["label"]
+    summary = "Studio still has foundation blockers before it qualifies as a stable local alpha."
+
+    for candidate in ("public_paid_platform", "protected_beta", "local_alpha"):
+        phase = phase_by_id[candidate]
+        if phase["ready"] is True:
+            current_stage = candidate
+            current_stage_label = phase["label"]
+            current_stage_status = phase["status"]
+            if candidate == "public_paid_platform":
+                next_stage = None
+                next_stage_label = None
+                summary = "Studio is backend-ready for a public paid platform pass, pending live operator proof on the current build."
+            elif candidate == "protected_beta":
+                next_stage = "public_paid_platform"
+                next_stage_label = phase_by_id["public_paid_platform"]["label"]
+                summary = "Studio is backend-ready for protected beta operation, but public paid platform blockers still remain."
+            else:
+                next_stage = "protected_beta"
+                next_stage_label = phase_by_id["protected_beta"]["label"]
+                summary = "Studio is stable enough for local alpha iteration, but external launch gates are still not clear."
+            break
+
+    if current_stage == "foundation_blocked":
+        blocked_phase = next((phase for phase in phases if phase["status"] == "blocked"), local_alpha)
+        blockers = blocked_phase.get("blockers") if isinstance(blocked_phase.get("blockers"), list) else []
+        if blockers:
+            summary = blockers[0]
+
+    return {
+        "current_stage": current_stage,
+        "current_stage_label": current_stage_label,
+        "current_stage_status": current_stage_status,
+        "next_stage": next_stage,
+        "next_stage_label": next_stage_label,
+        "summary": summary,
+        "phases": phases,
+    }
+
+
+def _build_local_alpha_phase(*, check_lookup: dict[str, dict[str, str]]) -> dict[str, Any]:
+    blocking_checks: list[dict[str, str]] = []
+    warning_checks: list[dict[str, str]] = []
+    for key in _LOCAL_ALPHA_REQUIRED_KEYS:
+        check = check_lookup.get(key)
+        if not isinstance(check, dict):
+            blocking_checks.append(
+                {
+                    "key": key,
+                    "summary": f"{key} is missing from launch readiness.",
+                    "detail": "Owner truth should expose the local alpha prerequisite explicitly.",
+                }
+            )
+            continue
+        status = str(check.get("status") or "").strip().lower()
+        if status == "blocked":
+            blocking_checks.append(check)
+        elif status == "warning":
+            warning_checks.append(check)
+
+    for key in _LOCAL_ALPHA_WARNING_KEYS:
+        check = check_lookup.get(key)
+        if not isinstance(check, dict):
+            continue
+        status = str(check.get("status") or "").strip().lower()
+        if status == "warning":
+            warning_checks.append(check)
+
+    return _build_platform_phase(
+        phase_id="local_alpha",
+        label="Local Alpha",
+        ready_summary="Core local product loop is stable enough for alpha iteration.",
+        attention_summary="Core local product loop works, but operator hygiene still needs attention.",
+        blocked_summary="Studio still has local foundation blockers before it counts as a stable alpha.",
+        blocking_checks=blocking_checks,
+        warning_checks=warning_checks,
+    )
+
+
+def _build_protected_beta_phase(*, launch_gate: dict[str, Any]) -> dict[str, Any]:
+    blocking_keys = _coerce_string_list(launch_gate.get("blocking_keys"))
+    warning_keys = _coerce_string_list(launch_gate.get("warning_keys"))
+    blocking_reasons = _coerce_display_string_list(launch_gate.get("blocking_reasons"))
+    warning_reasons = _coerce_display_string_list(launch_gate.get("warning_reasons"))
+    ready = launch_gate.get("ready_for_protected_launch") is True
+    if ready:
+        status = "ready"
+        summary = "Protected beta gate is clear on current backend truth."
+    elif blocking_reasons:
+        status = "blocked"
+        summary = "Protected beta still has hard launch blockers."
+    else:
+        status = "needs_attention"
+        summary = "Protected beta has no hard blockers, but still needs warning cleanup."
+    return {
+        "id": "protected_beta",
+        "label": "Protected Beta",
+        "status": status,
+        "ready": ready,
+        "summary": summary,
+        "blocking_keys": blocking_keys,
+        "warning_keys": warning_keys,
+        "blockers": blocking_reasons,
+        "warnings": warning_reasons,
+    }
+
+
+def _build_public_paid_platform_phase(
+    *,
+    check_lookup: dict[str, dict[str, str]],
+    launch_gate: dict[str, Any],
+    provider_truth: dict[str, Any],
+) -> dict[str, Any]:
+    blocking_keys: list[str] = []
+    warning_keys: list[str] = []
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if launch_gate.get("ready_for_protected_launch") is not True:
+        blocking_keys.append("protected_beta")
+        launch_summary = str(launch_gate.get("summary") or "").strip()
+        blockers.append(launch_summary or "Protected beta gate is not clear yet.")
+
+    provider_smoke_check = check_lookup.get("provider_smoke")
+    if isinstance(provider_smoke_check, dict):
+        smoke_status = str(provider_smoke_check.get("status") or "").strip().lower()
+        smoke_summary = str(provider_smoke_check.get("summary") or "").strip()
+        if smoke_status != "pass":
+            blocking_keys.append("provider_smoke")
+            blockers.append(smoke_summary or "Current-build provider smoke is not clean yet.")
+
+    chat_truth = provider_truth.get("chat") if isinstance(provider_truth.get("chat"), dict) else {}
+    image_truth = provider_truth.get("image") if isinstance(provider_truth.get("image"), dict) else {}
+    economics_truth = provider_truth.get("economics") if isinstance(provider_truth.get("economics"), dict) else {}
+
+    if chat_truth.get("public_paid_usage_ready") is not True:
+        blocking_keys.append("chat_public_paid_usage")
+        blockers.append(
+            str(chat_truth.get("summary") or "").strip()
+            or "Premium chat does not yet have a public-paid-safe launch-grade lane."
+        )
+    if image_truth.get("public_paid_usage_ready") is not True:
+        blocking_keys.append("image_public_paid_usage")
+        blockers.append(
+            str(image_truth.get("summary") or "").strip()
+            or "Image generation does not yet have a public-paid-safe launch-grade lane."
+        )
+    if str(provider_truth.get("status") or "").strip().lower() != "pass":
+        blocking_keys.append("provider_mix")
+        blockers.append(
+            str(provider_truth.get("summary") or "").strip()
+            or "Current provider mix is not yet safe for a public paid platform."
+        )
+
+    provider_health_check = check_lookup.get("provider_health_snapshot")
+    if isinstance(provider_health_check, dict):
+        provider_health_status = str(provider_health_check.get("status") or "").strip().lower()
+        provider_health_summary = str(provider_health_check.get("summary") or "").strip()
+        if provider_health_status == "warning":
+            warning_keys.append("provider_health_snapshot")
+            warnings.append(provider_health_summary or "Recent provider health still needs attention.")
+
+    economics_status = str(economics_truth.get("status") or "").strip().lower()
+    economics_summary = str(economics_truth.get("summary") or "").strip()
+    if economics_status == "warning":
+        warning_keys.append("provider_economics")
+        warnings.append(economics_summary or "Provider economics still need attention before broad paid launch.")
+
+    if blockers:
+        status = "blocked"
+        summary = "Public paid platform launch is still blocked."
+    elif warnings:
+        status = "needs_attention"
+        summary = "Public paid platform is close, but some operator warnings still need cleanup."
+    else:
+        status = "ready"
+        summary = "Backend truth says the product is ready for a public paid platform pass."
+
+    return {
+        "id": "public_paid_platform",
+        "label": "Public Paid Platform",
+        "status": status,
+        "ready": not blockers,
+        "summary": summary,
+        "blocking_keys": blocking_keys,
+        "warning_keys": warning_keys,
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
+def _build_platform_phase(
+    *,
+    phase_id: str,
+    label: str,
+    ready_summary: str,
+    attention_summary: str,
+    blocked_summary: str,
+    blocking_checks: list[dict[str, str]],
+    warning_checks: list[dict[str, str]],
+) -> dict[str, Any]:
+    blocking_keys = _collect_launch_gate_keys(blocking_checks)
+    warning_keys = _collect_launch_gate_keys(warning_checks)
+    blockers = [_format_launch_gate_reason(check) for check in blocking_checks]
+    warnings = [_format_launch_gate_reason(check) for check in warning_checks]
+    if blockers:
+        status = "blocked"
+        summary = blocked_summary
+    elif warnings:
+        status = "needs_attention"
+        summary = attention_summary
+    else:
+        status = "ready"
+        summary = ready_summary
+    return {
+        "id": phase_id,
+        "label": label,
+        "status": status,
+        "ready": not blockers,
+        "summary": summary,
+        "blocking_keys": blocking_keys,
+        "warning_keys": warning_keys,
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
+def _coerce_display_string_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    for raw_value in values:
+        value = str(raw_value or "").strip()
+        if value and value not in result:
+            result.append(value)
+    return result
 
 
 def _build_runtime_logs_check(runtime_logs: dict[str, Any] | None, *, settings: Settings) -> dict[str, str]:

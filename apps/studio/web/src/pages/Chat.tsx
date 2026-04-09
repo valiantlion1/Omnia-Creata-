@@ -515,21 +515,26 @@ function GenerationBlocked({
   const summary = summarizeGenerationFailure(error)
 
   return (
-    <div className="max-w-[400px]">
+    <div className="max-w-[360px]">
       <div className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] p-5">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
-            <ImageOff className="h-4 w-4 text-amber-300/80" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20">
+            <ImageOff className="h-4 w-4 text-rose-400/80" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[14px] leading-relaxed text-zinc-300">
-              {summary}
-            </p>
-            <p className="mt-2 text-[12px] text-zinc-500">
-              {title}
-            </p>
+          <div className="text-[14px] font-medium text-rose-200/90">Could not create image</div>
+        </div>
+        
+        <div className="relative overflow-hidden rounded-2xl bg-[#111216] border border-white/[0.04]">
+          <div className="aspect-[4/5] w-full bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)] opacity-50" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl p-5 text-center">
+             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20 mb-3 shadow-lg">
+               <ImageOff className="h-5 w-5 text-rose-400/80" />
+             </div>
+             <p className="text-[12px] leading-relaxed text-zinc-400">{summary}</p>
           </div>
         </div>
+        
+        <div className="mt-4 text-[13px] text-zinc-500 truncate" title={title}>{title}</div>
       </div>
     </div>
   )
@@ -815,10 +820,10 @@ export default function ChatPage() {
     if (composeMode === 'Think') {
       return pendingAttachments.some((attachment) => attachment.kind === 'image')
         ? 'Photo attached'
-        : 'Chat'
+        : ''
     }
-    if (composeMode === 'Vision') return 'Image generation ready'
-    return 'Photo editing ready'
+    if (composeMode === 'Vision') return ''
+    return ''
   }, [composeMode, pendingAttachments])
 
   const focusComposer = useCallback(() => {

@@ -141,12 +141,11 @@ export default function BillingPage() {
     <AppPage className="max-w-[1280px] gap-8 py-6">
       {/* ── Header ── */}
       <section className="text-center">
-        <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Pricing</div>
-        <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] md:text-5xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-          {welcomeMode ? 'Welcome — choose your starting point.' : canLoadPrivate ? 'Pick the plan that matches the work.' : 'Simple, transparent pricing.'}
+        <h1 className="text-4xl font-semibold tracking-[-0.05em] md:text-5xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+          {welcomeMode ? 'Welcome — choose a plan to get started.' : canLoadPrivate ? 'Your plan' : 'Simple, transparent pricing.'}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-400">
-          Start free, upgrade when you need more power. All plans include full access to Library, Collections, and your public profile.
+          Start free, upgrade when you need more. All plans include Library, Collections, and your public profile.
         </p>
 
         {/* ── Monthly/Annual toggle ── */}
@@ -177,61 +176,7 @@ export default function BillingPage() {
       </section>
 
       {/* ── Tier Cards ── */}
-      {canLoadPrivate && billingQuery.data?.generation_credit_guide?.lane_highlights?.length ? (
-        <section className="rounded-[28px] border border-white/[0.08] bg-white/[0.02] p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Credit guardrails</div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Current generation coverage</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-400">
-                This follows today&apos;s live routing truth. It shows which lane Studio would plan right now, how many credits it would hold up front, and how many starts your current balance can safely cover.
-              </p>
-            </div>
-            <div className="rounded-[20px] border border-white/[0.08] bg-black/20 px-4 py-3 text-sm text-zinc-400">
-              <div>Available now: <span className="font-medium text-white">{billingQuery.data.generation_credit_guide.available_to_spend}</span> credits</div>
-              <div className="mt-1">Already held: <span className="font-medium text-white">{billingQuery.data.generation_credit_guide.reserved_total}</span> credits</div>
-            </div>
-          </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {billingQuery.data.generation_credit_guide.lane_highlights.map((entry) => (
-              <div key={`${entry.pricing_lane}-${entry.model_id}`} className="rounded-[24px] border border-white/[0.08] bg-black/20 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">{formatGenerationPricingLane(entry.pricing_lane)}</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{entry.label}</div>
-                  </div>
-                  <StatusPill tone={entry.affordable_now ? 'success' : 'warning'}>
-                    {formatGenerationStartCapacity(entry.max_startable_jobs_now, entry.start_status)}
-                  </StatusPill>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <div className="text-zinc-500">Quoted</div>
-                    <div className="mt-1 font-medium text-white">{entry.quoted_credit_cost} credits</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <div className="text-zinc-500">Held up front</div>
-                    <div className="mt-1 font-medium text-white">{entry.reserved_credit_cost} credits</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <div className="text-zinc-500">Settle target</div>
-                    <div className="mt-1 font-medium text-white">{entry.settlement_credit_cost} credits</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <div className="text-zinc-500">Planned provider</div>
-                    <div className="mt-1 font-medium text-white">{entry.planned_provider ?? 'unplanned'}</div>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs text-zinc-500">{formatGenerationGuideSummary(entry)}</div>
-                <div className="mt-1 text-[11px] leading-5 text-zinc-600">
-                  {describeGenerationLaneTrust(entry.pricing_lane, entry.planned_provider)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-3">
         {tiers.map((tier) => {
@@ -401,7 +346,7 @@ export default function BillingPage() {
 
       {/* ── TBD Notice ── */}
       <div className="text-center text-xs text-zinc-600">
-        Pricing is subject to change during the alpha period. Final pricing will be announced before general availability.
+        Prices may change during alpha. Final pricing will be announced before launch.
       </div>
     </AppPage>
   )

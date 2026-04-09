@@ -11,6 +11,7 @@ from config.env import Settings
 from ..versioning import load_version_info
 
 _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_CLOSURE_SPRINT_LABEL = "Sprint 9"
 _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "provider_smoke",
     "provider_health_snapshot",
@@ -71,7 +72,10 @@ def build_blocked_deployment_verification_report(
         ],
         "owner_health_checked": owner_health_checked,
         "closure_ready": False,
-        "closure_summary": "Protected staging verification cannot close Sprint 8 until this blocker is cleared.",
+        "closure_summary": (
+            f"Protected staging verification cannot close {_CLOSURE_SPRINT_LABEL} "
+            "until this blocker is cleared."
+        ),
         "closure_gaps": [detail],
     }
 
@@ -122,6 +126,7 @@ def build_deployment_verification_report(
     expected_report_build: str | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
+    platform_readiness_payload: dict[str, Any] | None = None
 
     def add_check(key: str, status: str, summary: str, detail: str) -> None:
         checks.append(
@@ -461,17 +466,71 @@ def build_deployment_verification_report(
             "Pass an owner token if you want deployment verify to inspect owner-only runtime log metadata.",
         )
 
+    platform_readiness = None
+    if isinstance(health_detail_payload, dict):
+        platform_readiness = health_detail_payload.get("platform_readiness")
+    if isinstance(platform_readiness, dict):
+        platform_readiness_payload = platform_readiness
+        current_stage = str(platform_readiness.get("current_stage") or "").strip()
+        current_stage_label = str(
+            platform_readiness.get("current_stage_label") or current_stage or ""
+        ).strip()
+        current_stage_status = str(platform_readiness.get("current_stage_status") or "").strip().lower()
+        next_stage = str(platform_readiness.get("next_stage") or "").strip()
+        next_stage_label = str(platform_readiness.get("next_stage_label") or next_stage or "").strip()
+        summary = str(platform_readiness.get("summary") or "").strip()
+        detail_parts: list[str] = []
+        if current_stage_label:
+            if current_stage_status:
+                detail_parts.append(f"current={current_stage_label} ({current_stage_status})")
+            else:
+                detail_parts.append(f"current={current_stage_label}")
+        if next_stage_label:
+            detail_parts.append(f"next={next_stage_label}")
+        if summary:
+            detail_parts.append(summary)
+        add_check(
+            "platform_readiness_visibility",
+            "pass" if current_stage else "warning",
+            "Owner health detail exposes platform readiness phases.",
+            ", ".join(detail_parts) or "platform readiness is visible",
+        )
+        if not current_stage:
+            closure_gaps.append("owner health detail exposed platform_readiness without current_stage")
+    elif owner_health_checked:
+        add_check(
+            "platform_readiness_visibility",
+            "warning",
+            "Owner health detail does not expose platform readiness phases.",
+            "Expected /v1/healthz/detail to include platform_readiness alongside launch truth.",
+        )
+        closure_gaps.append("owner health detail did not expose platform_readiness")
+    else:
+        add_check(
+            "platform_readiness_visibility",
+            "warning",
+            "Platform readiness visibility was not checked because owner health detail was skipped.",
+            "Pass an owner token if you want deployment verify to inspect owner-only platform readiness phases.",
+        )
+
     blocked = sum(1 for check in checks if check["status"] == "blocked")
     warnings = sum(1 for check in checks if check["status"] == "warning")
     closure_ready = owner_health_checked and blocked == 0 and not closure_gaps
     if closure_ready:
-        closure_summary = "Protected staging verification satisfies the Sprint 8 closure gate."
+        closure_summary = (
+            f"Protected staging verification satisfies the {_CLOSURE_SPRINT_LABEL} closure gate."
+        )
     elif not owner_health_checked:
-        closure_summary = "Protected staging verification still needs an owner-token run before Sprint 8 can close."
+        closure_summary = (
+            "Protected staging verification still needs an owner-token run before "
+            f"{_CLOSURE_SPRINT_LABEL} can close."
+        )
     elif blocked:
         closure_summary = "Protected staging verification still has deployment blockers."
     else:
-        closure_summary = "Protected staging verification passed, but Sprint 8 closure gaps remain."
+        closure_summary = (
+            f"Protected staging verification passed, but {_CLOSURE_SPRINT_LABEL} closure gaps remain."
+        )
     if blocked:
         status = "blocked"
         summary = "Deployment verification found one or more blocking issues."
@@ -482,7 +541,7 @@ def build_deployment_verification_report(
         status = "pass"
         summary = "Deployment verification passed."
 
-    return {
+    report = {
         "status": status,
         "summary": summary,
         "blocking_count": blocked,
@@ -496,6 +555,9 @@ def build_deployment_verification_report(
         "closure_summary": closure_summary,
         "closure_gaps": closure_gaps,
     }
+    if platform_readiness_payload is not None:
+        report["platform_readiness"] = platform_readiness_payload
+    return report
 
 
 def format_deployment_verification_lines(report: dict[str, Any]) -> list[str]:
@@ -508,9 +570,17 @@ def format_deployment_verification_lines(report: dict[str, Any]) -> list[str]:
             lines.append(
                 f"[{check.get('status')}] {check.get('key')}: {check.get('summary')} ({check.get('detail')})"
             )
+    platform_readiness = report.get("platform_readiness")
+    if isinstance(platform_readiness, dict):
+        stage_line = _format_platform_readiness_line(platform_readiness)
+        if stage_line:
+            lines.append(stage_line)
     closure_summary = str(report.get("closure_summary") or "").strip()
     if closure_summary:
-        lines.append(f"Sprint 8 closure: {'ready' if report.get('closure_ready') else 'not ready'} - {closure_summary}")
+        lines.append(
+            f"{_CLOSURE_SPRINT_LABEL} closure: "
+            f"{'ready' if report.get('closure_ready') else 'not ready'} - {closure_summary}"
+        )
     return lines
 
 
@@ -575,3 +645,31 @@ def _load_json_payload(path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _format_platform_readiness_line(platform_readiness: dict[str, Any]) -> str:
+    current_stage_label = str(
+        platform_readiness.get("current_stage_label")
+        or platform_readiness.get("current_stage")
+        or ""
+    ).strip()
+    current_stage_status = str(platform_readiness.get("current_stage_status") or "").strip().lower()
+    next_stage_label = str(
+        platform_readiness.get("next_stage_label")
+        or platform_readiness.get("next_stage")
+        or ""
+    ).strip()
+    summary = str(platform_readiness.get("summary") or "").strip()
+    if not current_stage_label and not summary:
+        return ""
+    detail_parts: list[str] = []
+    if current_stage_label:
+        if current_stage_status:
+            detail_parts.append(f"current={current_stage_label} ({current_stage_status})")
+        else:
+            detail_parts.append(f"current={current_stage_label}")
+    if next_stage_label:
+        detail_parts.append(f"next={next_stage_label}")
+    if summary:
+        detail_parts.append(summary)
+    return "Platform readiness: " + " - ".join(detail_parts)

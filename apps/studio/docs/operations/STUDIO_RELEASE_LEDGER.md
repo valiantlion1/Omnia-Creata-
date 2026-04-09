@@ -18,6 +18,39 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.09.35`
+- Date: `2026-04-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had already cleaned up backend truth for provider reliability and render economics, but the default chat lane still started from Gemini, the Create Improve action could not fall back to OpenAI, and signed-in frontend surfaces could still receive raw model labels instead of product-safe display names
+- What:
+  backend chat defaults now prefer the proven OpenRouter lane first and keep OpenAI as the next paid fallback, which makes everyday chat routing more deterministic and less dependent on Gemini behaving well
+  prompt improvement can now use OpenAI when OpenRouter is unavailable, so the Improve action no longer loses its live LLM path just because one provider is unhealthy
+  model catalog payloads and generation credit forecasts now ship user-safe display labels and descriptions derived from `creative_profile`, so frontend consumers can stop showing raw model names like `RealVis XL` when they simply bind to backend labels
+
+### `0.5.1-alpha` / build `2026.04.09.34`
+- Date: `2026-04-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 owner health already exposed `platform_readiness`, but protected staging deployment reports still stopped at launch-gate truth alone, which left the operator chain unable to round-trip the same “local alpha / protected beta / public paid platform” story through staging verification
+- What:
+  deployment verification reports now persist owner-side `platform_readiness` whenever `/v1/healthz/detail` exposes it, so staging/operator truth can carry the same structured readiness phases as owner health
+  deployment verification now also records an explicit `platform_readiness_visibility` check, which warns when owner truth omits those readiness phases instead of silently dropping them from the staging chain
+  owner-only closure wording in deployment verification has been updated from the old Sprint 8 language to current Sprint 9 closure truth
+
+### `0.5.1-alpha` / build `2026.04.09.33`
+- Date: `2026-04-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 backend had already exposed launch truth, provider truth, and safer frontend contracts, but owner-side platform progress was still too implicit; answering “are we still local alpha, are we protected-beta ready, or are we truly close to a paid platform” still required manually interpreting several separate payloads
+- What:
+  `launch_readiness` now includes a structured owner-only `platform_readiness` section with explicit `local_alpha`, `protected_beta`, and `public_paid_platform` phases
+  each phase now reports its own ready state, blockers, warnings, and summary, so backend/operator truth can say how far Studio has progressed without relying on chat memory or manual inference
+  `/v1/healthz/detail` now also exposes `platform_readiness` at the top level beside `launch_gate` and `provider_truth`, which makes `.com`-readiness conversations easier to ground in one backend payload
+
 ### `0.5.1-alpha` / build `2026.04.09.32`
 - Date: `2026-04-09`
 - Codename: `Foundation`

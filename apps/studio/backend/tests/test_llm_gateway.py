@@ -123,7 +123,7 @@ def test_truncation_detector_ignores_complete_replies():
     )
 
 
-def test_premium_multimodal_plan_prefers_gemini_pro_before_openrouter():
+def test_premium_multimodal_plan_prefers_configured_provider_order():
     gateway = StudioLLMGateway()
     settings = get_settings()
     original = {
@@ -164,10 +164,10 @@ def test_premium_multimodal_plan_prefers_gemini_pro_before_openrouter():
 
         assert plan.requested_quality_tier == "premium"
         assert plan.routing_reason == "premium_multimodal_chat"
-        assert plan.provider_plan[0].provider == "gemini"
-        assert plan.provider_plan[0].model == "gemini-2.5-pro"
-        assert plan.provider_plan[1].provider == "openrouter"
-        assert plan.provider_plan[1].model == "google/gemini-2.5-pro"
+        assert plan.provider_plan[0].provider == "openrouter"
+        assert plan.provider_plan[0].model == "google/gemini-2.5-pro"
+        assert plan.provider_plan[1].provider == "gemini"
+        assert plan.provider_plan[1].model == "gemini-2.5-pro"
     finally:
         settings.gemini_api_key = original["gemini_api_key"]
         settings.openrouter_api_key = original["openrouter_api_key"]
@@ -561,3 +561,77 @@ async def test_improve_prompt_skips_provider_models_while_provider_is_on_cooldow
         settings.openrouter_api_key = original["openrouter_api_key"]
         settings.chat_primary_provider = original["chat_primary_provider"]
         settings.chat_fallback_provider = original["chat_fallback_provider"]
+
+
+@pytest.mark.asyncio
+async def test_improve_prompt_can_fall_back_to_openai_when_openrouter_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original = {
+        "openrouter_api_key": settings.openrouter_api_key,
+        "openai_api_key": settings.openai_api_key,
+        "chat_primary_provider": settings.chat_primary_provider,
+        "chat_fallback_provider": settings.chat_fallback_provider,
+        "openrouter_premium_model": settings.openrouter_premium_model,
+        "openai_premium_model": settings.openai_premium_model,
+    }
+    calls: list[tuple[str, str]] = []
+
+    async def fake_openrouter(
+        *,
+        model: str,
+        system_prompt: str,
+        history,
+        current_message: str,
+        attachments,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> LLMResult | None:
+        del system_prompt, history, current_message, attachments, temperature, max_output_tokens
+        calls.append(("openrouter", model))
+        request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+        response = httpx.Response(503, request=request)
+        raise httpx.HTTPStatusError("temporary outage", request=request, response=response)
+
+    async def fake_openai(
+        *,
+        model: str,
+        system_prompt: str,
+        history,
+        current_message: str,
+        attachments,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> LLMResult | None:
+        del system_prompt, history, current_message, attachments, temperature, max_output_tokens
+        calls.append(("openai", model))
+        return LLMResult(
+            text="premium portrait, confident pose, soft cinematic light, refined wardrobe styling, campaign-grade finish",
+            provider="openai",
+            model=model,
+        )
+
+    try:
+        settings.openrouter_api_key = "openrouter-key"
+        settings.openai_api_key = "openai-key"
+        settings.chat_primary_provider = "openrouter"
+        settings.chat_fallback_provider = "openai"
+        settings.openrouter_premium_model = "google/gemini-2.5-pro"
+        settings.openai_premium_model = "gpt-5.4"
+        monkeypatch.setattr(gateway, "_chat_with_openrouter", fake_openrouter)
+        monkeypatch.setattr(gateway, "_chat_with_openai", fake_openai)
+
+        result = await gateway.improve_prompt("cinematic portrait")
+
+        assert result is not None
+        assert result.provider == "openai"
+        assert calls == [("openrouter", "google/gemini-2.5-pro"), ("openai", "gpt-5.4")]
+    finally:
+        settings.openrouter_api_key = original["openrouter_api_key"]
+        settings.openai_api_key = original["openai_api_key"]
+        settings.chat_primary_provider = original["chat_primary_provider"]
+        settings.chat_fallback_provider = original["chat_fallback_provider"]
+        settings.openrouter_premium_model = original["openrouter_premium_model"]
+        settings.openai_premium_model = original["openai_premium_model"]

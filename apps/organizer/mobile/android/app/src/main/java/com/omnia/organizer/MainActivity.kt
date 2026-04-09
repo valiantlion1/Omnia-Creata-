@@ -179,7 +179,31 @@ private fun AppRoot(
     val primaryRoutes = remember {
         listOf(OrganizerRoute.Home, OrganizerRoute.Browse, OrganizerRoute.Search, OrganizerRoute.Storage)
     }
+    val topBarTitle = when {
+        currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
+            "${state.selectedDocumentIds.size} selected"
 
+        else -> when (currentRoute) {
+            OrganizerRoute.Home.route -> "Home"
+            OrganizerRoute.Browse.route -> "Browse"
+            OrganizerRoute.Search.route -> "Search"
+            OrganizerRoute.Storage.route -> "Storage"
+            OrganizerRoute.Trash.route -> "Recycle Bin"
+            OrganizerRoute.Settings.route -> "Settings"
+            else -> "Omnia Organizer"
+        }
+    }
+    val topBarSubtitle = when {
+        currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
+            "Bulk actions are ready"
+
+        currentRoute == OrganizerRoute.Browse.route ||
+            currentRoute == OrganizerRoute.Search.route ||
+            currentRoute == OrganizerRoute.Storage.route ->
+            state.root?.displayName ?: ""
+
+        else -> ""
+    }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -356,7 +380,6 @@ private fun AppRoot(
                     colors = listOf(
                         MaterialTheme.colorScheme.background,
                         MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.06f),
                         MaterialTheme.colorScheme.background
                     )
                 )
@@ -367,7 +390,7 @@ private fun AppRoot(
             topBar = {
                 CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                         navigationIconContentColor = MaterialTheme.colorScheme.primary,
                         titleContentColor = MaterialTheme.colorScheme.onSurface,
                         actionIconContentColor = MaterialTheme.colorScheme.primary
@@ -375,30 +398,14 @@ private fun AppRoot(
                     title = {
                         Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                             Text(
-                                text = "OmniaCreata / OOFM",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
+                                text = "OOFM / $topBarTitle",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                when {
-                                    currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
-                                        "${state.selectedDocumentIds.size} selected"
-
-                                    else -> when (currentRoute) {
-                                        OrganizerRoute.Home.route -> "Omnia Organizer"
-                                        OrganizerRoute.Browse.route -> "Browse"
-                                        OrganizerRoute.Search.route -> "Search"
-                                        OrganizerRoute.Storage.route -> "Storage"
-                                        OrganizerRoute.Trash.route -> "Recycle Bin"
-                                        OrganizerRoute.Settings.route -> "Settings"
-                                        else -> "Omnia Organizer"
-                                    }
-                                }
-                            )
-                            state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
+                            if (topBarSubtitle.isNotBlank()) {
                                 Text(
-                                    text = rootName,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = topBarSubtitle,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -457,13 +464,13 @@ private fun AppRoot(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(30.dp),
+                        shape = RoundedCornerShape(26.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        tonalElevation = 6.dp
+                        tonalElevation = 4.dp
                     ) {
                         NavigationBar(containerColor = Color.Transparent) {
                             primaryRoutes.forEach { route ->

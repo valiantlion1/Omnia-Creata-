@@ -47,78 +47,10 @@ function formatProviderLabel(provider: string) {
   return provider
 }
 
-function resolveAssistantPlanChips(message: ChatMessage): AssistantPlanChip[] {
-  if (message.role === 'user') return []
-
-  const metadata = isRecord(message.metadata) ? message.metadata : null
-  const bridge = isRecord(metadata?.generation_bridge) ? metadata.generation_bridge : null
-  const blueprint = bridge && isRecord(bridge.blueprint) ? bridge.blueprint : null
-  const chips: AssistantPlanChip[] = []
-  const seen = new Set<string>()
-
-  const pushChip = (key: string, label: string | null, tone: AssistantPlanChipTone = 'neutral') => {
-    if (!label || seen.has(key)) return
-    seen.add(key)
-    chips.push({ key, label, tone })
-  }
-
-  const degraded = metadata?.degraded === true || asString(metadata?.provider) === 'heuristic'
-  const provider = asString(metadata?.provider)
-  const responseMode = asString(metadata?.response_mode)
-  const providerStatus = asString(metadata?.provider_status)
-  const usedLlm = metadata?.used_llm === true || responseMode === 'live_provider_reply'
-  const fallbackReason = asString(metadata?.fallback_reason)
-  const premiumLaneUnavailable =
-    metadata?.premium_lane_unavailable === true || responseMode === 'premium_lane_unavailable'
-  const isFallbackReply = degraded || responseMode === 'degraded_fallback_reply'
-
-  if (isFallbackReply) {
-    pushChip('degraded', 'Fallback reply', 'warning')
-    if (premiumLaneUnavailable || providerStatus === 'degraded' || fallbackReason) {
-      pushChip('provider-state', 'Premium lane unavailable', 'warning')
-    }
-  } else if (asString(metadata?.selected_quality_tier) === 'premium') {
-    pushChip('quality', 'Premium lane', 'accent')
-  }
-
-  if (premiumLaneUnavailable) {
-    pushChip('provider-state', 'Premium lane unavailable', 'warning')
-  }
-
-  if (!isFallbackReply && usedLlm && provider) {
-    pushChip('provider', formatProviderLabel(provider), 'accent')
-  }
-
-  if (metadata?.follow_up_refinement === true) {
-    pushChip('follow-up', 'Refinement', 'accent')
-  }
-
-  const workflow = asString(blueprint?.workflow) || asString(bridge?.workflow)
-  if (workflow) {
-    pushChip('workflow', formatWorkflowLabel(workflow), workflow === 'edit' ? 'accent' : 'neutral')
-  }
-
-  if (asString(blueprint?.reference_mode) === 'required') {
-    pushChip('reference', 'Reference locked', 'warning')
-  }
-
-  const model = asString(blueprint?.model)
-  if (model) {
-    pushChip('model', formatModelLabel(model))
-  }
-
-  const aspectRatio = asString(blueprint?.aspect_ratio)
-  if (aspectRatio) {
-    pushChip('aspect', aspectRatio)
-  }
-
-  if (message.suggested_actions.some((action) => action.action === 'open_create')) {
-    pushChip('handoff', 'Create-ready', 'accent')
-  } else if (message.suggested_actions.some((action) => action.action === 'plan_edit')) {
-    pushChip('handoff', 'Edit-ready', 'accent')
-  }
-
-  return chips.slice(0, 6)
+/* Plan chips completely removed — these were exposing backend metadata to end users.
+   No user should ever see "Premium lane unavailable", "Fallback reply", or model IDs. */
+function resolveAssistantPlanChips(_message: ChatMessage): AssistantPlanChip[] {
+  return [] // intentionally empty — no developer metadata shown
 }
 
 function resolveChipClassName(tone: AssistantPlanChipTone) {
@@ -369,18 +301,29 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
           </div>
         )}
 
-        {/* Suggested Actions (Only on latest assistant message) */}
+        {/* Suggested Actions (Only on latest assistant message) — filtered to user-friendly ones */}
         {!isUser && isLatest && message.suggested_actions?.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
-            {message.suggested_actions.slice(0, 4).map((action) => (
-              <button
-                key={action.id}
-                onClick={() => onSuggestionClick?.(action, message)}
-                className="rounded-full border border-white/[0.08] bg-[#111216] px-4 py-2 text-[12px] font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-[rgb(var(--primary-light)/0.3)] shadow-sm"
-              >
-                {action.label}
-              </button>
-            ))}
+            {message.suggested_actions
+              .filter((action) => ['open_create', 'plan_edit', 'improve_prompt'].includes(action.action))
+              .slice(0, 3)
+              .map((action) => {
+                // Consumer-friendly labels
+                const friendlyLabel = 
+                  action.action === 'open_create' ? '✨ Create this image'
+                  : action.action === 'plan_edit' ? '✏️ Edit image'
+                  : action.action === 'improve_prompt' ? '💡 Improve prompt'
+                  : action.label
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => onSuggestionClick?.(action, message)}
+                    className="rounded-full border border-white/[0.08] bg-[#111216] px-4 py-2 text-[12px] font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-[rgb(var(--primary-light)/0.3)] shadow-sm"
+                  >
+                    {friendlyLabel}
+                  </button>
+                )
+              })}
           </div>
         )}
       </div>

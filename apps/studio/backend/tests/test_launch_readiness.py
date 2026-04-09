@@ -408,6 +408,15 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
         assert "single configured launch-grade billable lane" in " ".join(
             readiness["provider_truth"]["economics"]["resilience_warnings"]
         )
+        assert readiness["platform_readiness"]["current_stage"] == "protected_beta"
+        assert readiness["platform_readiness"]["next_stage"] == "public_paid_platform"
+        public_paid_phase = next(
+            phase
+            for phase in readiness["platform_readiness"]["phases"]
+            if phase["id"] == "public_paid_platform"
+        )
+        assert public_paid_phase["status"] == "blocked"
+        assert "provider_mix" in public_paid_phase["blocking_keys"]
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.environment = original_environment
@@ -940,6 +949,14 @@ def test_launch_readiness_blocks_when_only_fallback_image_lanes_exist(tmp_path: 
         assert huggingface_state["runtime_available"] is True
         assert readiness["provider_truth"]["public_paid_usage_safe"] is False
         assert readiness["launch_gate"]["ready_for_protected_launch"] is False
+        assert readiness["platform_readiness"]["current_stage"] == "local_alpha"
+        assert readiness["platform_readiness"]["next_stage"] == "protected_beta"
+        local_alpha_phase = next(
+            phase
+            for phase in readiness["platform_readiness"]["phases"]
+            if phase["id"] == "local_alpha"
+        )
+        assert local_alpha_phase["ready"] is True
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.environment = original_environment
@@ -1013,8 +1030,10 @@ async def test_health_detail_includes_provider_smoke_and_launch_readiness(tmp_pa
             assert "launch_readiness" in health
             assert "launch_gate" in health
             assert "provider_truth" in health
+            assert "platform_readiness" in health
             assert "chat" in health["provider_truth"]
             assert "image" in health["provider_truth"]
+            assert health["platform_readiness"]["current_stage"] == "local_alpha"
             assert health["launch_gate"]["last_verified_build"] == "2026.04.07.25"
             assert any(check["key"] == "provider_smoke" for check in health["launch_readiness"]["checks"])
             assert any(check["key"] == "startup_verification" for check in health["launch_readiness"]["checks"])
@@ -1101,4 +1120,140 @@ def test_launch_gate_is_not_ready_when_warning_is_not_provider_only(tmp_path: Pa
         settings.supabase_anon_key = original_supabase_anon_key
         settings.supabase_service_role_key = original_supabase_service_role_key
         settings.openrouter_api_key = original_openrouter_api_key
+        settings.fal_api_key = original_fal_api_key
+
+
+def test_launch_readiness_reports_public_paid_platform_when_provider_mix_is_ready(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+    original_openrouter_api_key = settings.openrouter_api_key
+    original_openai_api_key = settings.openai_api_key
+    original_fal_api_key = settings.fal_api_key
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.STAGING
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_anon_key = "anon-key"
+    settings.supabase_service_role_key = "service-role-key"
+    settings.openrouter_api_key = "openrouter-key"
+    settings.openai_api_key = "openai-key"
+    settings.fal_api_key = "fal-key"
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        deployment_report = persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://staging-studio.omniacreata.com",
+            report={
+                "status": "pass",
+                "summary": "Deployment verification passed.",
+                "checks": [],
+                "actual_build": load_version_info().build,
+            },
+        )
+        report = persist_provider_smoke_report(
+            settings,
+            selected_provider="all",
+            selected_surface="all",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openrouter-chat",
+                    "provider_name": "openrouter",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 180,
+                    "model": "google/gemini-2.5-flash",
+                },
+                {
+                    "label": "openai-chat",
+                    "provider_name": "openai",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 190,
+                    "model": "gpt-5.4-mini",
+                },
+                {
+                    "label": "openai-draft-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "draft",
+                    "model": settings.openai_image_draft_model,
+                    "status": "ok",
+                    "latency_ms": 380,
+                },
+                {
+                    "label": "openai-final-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "final",
+                    "model": settings.openai_image_model,
+                    "status": "ok",
+                    "latency_ms": 640,
+                },
+                {
+                    "label": "fal-text",
+                    "provider_name": "fal",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "status": "ok",
+                    "latency_ms": 910,
+                },
+            ],
+        )
+
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[
+                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "fal", "status": "healthy", "detail": "configured"},
+            ],
+            data_authority={"backend": "postgres", "durable": True},
+            generation_runtime_mode="web",
+            generation_broker={"enabled": True, "configured": True},
+            chat_routing={
+                "primary_provider": "openrouter",
+                "fallback_provider": "openai",
+                "providers": {
+                    "gemini": {"configured": False, "status": "not_configured"},
+                    "openrouter": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": True, "status": "healthy"},
+                },
+            },
+            provider_smoke_report=report,
+            startup_verification_report=startup_report,
+            deployment_verification_report=deployment_report,
+            runtime_logs=runtime_logs,
+        )
+
+        assert readiness["provider_truth"]["status"] == "pass"
+        assert readiness["launch_gate"]["ready_for_protected_launch"] is True
+        assert readiness["platform_readiness"]["current_stage"] == "public_paid_platform"
+        assert readiness["platform_readiness"]["next_stage"] is None
+        public_paid_phase = next(
+            phase
+            for phase in readiness["platform_readiness"]["phases"]
+            if phase["id"] == "public_paid_platform"
+        )
+        assert public_paid_phase["status"] == "ready"
+        assert public_paid_phase["ready"] is True
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+        settings.openrouter_api_key = original_openrouter_api_key
+        settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key

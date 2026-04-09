@@ -75,7 +75,7 @@ class StudioLLMGateway:
             },
             "primary_provider": settings.chat_primary_provider,
             "fallback_provider": settings.chat_fallback_provider,
-            "multimodal_policy": "gemini_first_when_images_present",
+            "multimodal_policy": "configured_provider_order",
             "models": {
                 "gemini_standard": settings.gemini_model,
                 "gemini_premium": settings.gemini_premium_model,
@@ -324,6 +324,16 @@ class StudioLLMGateway:
                         temperature=0.45,
                         max_output_tokens=700,
                     )
+                elif candidate.provider == "openai":
+                    result = await self._chat_with_openai(
+                        model=candidate.model,
+                        system_prompt=system_prompt,
+                        history=(),
+                        current_message=request_text,
+                        attachments=(),
+                        temperature=0.45,
+                        max_output_tokens=700,
+                    )
                 else:
                     continue
             except Exception as exc:
@@ -532,11 +542,17 @@ class StudioLLMGateway:
 
     def _ordered_chat_providers(self, *, multimodal_request: bool) -> list[str]:
         settings = get_settings()
+        del multimodal_request
         seed: list[str] = []
-        if multimodal_request:
-            seed.extend(["gemini", settings.chat_primary_provider, settings.chat_fallback_provider, "openai", "openrouter"])
-        else:
-            seed.extend([settings.chat_primary_provider, settings.chat_fallback_provider, "openai", "gemini", "openrouter"])
+        seed.extend(
+            [
+                settings.chat_primary_provider,
+                settings.chat_fallback_provider,
+                "openrouter",
+                "openai",
+                "gemini",
+            ]
+        )
         ordered: list[str] = []
         for provider in seed:
             normalized = provider.strip().lower()

@@ -14,6 +14,13 @@ Last updated: 2026-04-09
 
 ## Recent stabilization wins
 
+- Sprint 9 chat defaults now respect the configured provider order across all chat modes, with OpenRouter first and OpenAI next by default, which removes the old Gemini-first multimodal surprise and makes the main chat lane more predictable.
+- Sprint 9 prompt improvement can now fall back to OpenAI as a live LLM path when OpenRouter is temporarily unavailable, so the Create Improve action does not silently lose AI assistance when one provider hiccups.
+- Sprint 9 backend model payloads and generation credit forecasts now emit product-safe display labels and descriptions from `creative_profile`, which gives frontend consumers a cleaner global naming contract without requiring them to reverse-engineer internal model ids.
+- Sprint 9 deployment verification now round-trips owner-side `platform_readiness`, so protected staging reports and `/v1/healthz/detail` both describe the same `local_alpha`, `protected_beta`, and `public_paid_platform` ladder instead of leaving staging proofs one step behind owner truth.
+- Deployment verification now explicitly warns when owner health detail omits those readiness phases, which tightens the staging/operator chain without pushing any new developer wording into the signed-in product UI.
+- Owner-only deployment verification closure text now references Sprint 9 instead of stale Sprint 8 wording, which keeps backend/operator truth aligned with the active sprint.
+- Sprint 9 owner truth now exposes a structured `platform_readiness` ladder on top of launch truth, so backend/operator payloads can state whether Studio is currently only stable for local alpha, clear for protected beta, or approaching a public paid platform pass without pushing that language into the signed-in UI.
 - Sprint 9 backend now publishes a product-safe runtime trust contract for signed-in UI work: settings model entries expose `render_experience` plus `route_preview`, generation and billing forecast payloads expose `render_experience`, and assistant chat metadata exposes `chat_experience`, so frontend work no longer has to infer trust state from raw provider or routing jargon.
 - Sprint 9 backend now exposes server-authoritative `creative_profile` metadata for model catalog entries, generation payloads, and billing forecast cards, so the frontend can stop guessing product labels from raw model ids while Antigravity reshapes the signed-in UI.
 - Billing credit summaries now also carry the legacy `credits_remaining` alias again, which keeps older consumers stable while the newer remaining/gross/available credit contract stays in place.

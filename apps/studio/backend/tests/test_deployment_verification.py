@@ -14,6 +14,26 @@ from studio_platform.services.deployment_verification import (
 from studio_platform.versioning import load_version_info
 
 
+def _platform_readiness_payload(
+    *,
+    current_stage: str = "protected_beta",
+    current_stage_label: str = "Protected Beta",
+    current_stage_status: str = "needs_attention",
+    next_stage: str | None = "public_paid_platform",
+    next_stage_label: str | None = "Public Paid Platform",
+    summary: str = "Studio is stable for local alpha and progressing toward protected beta.",
+) -> dict[str, object]:
+    return {
+        "current_stage": current_stage,
+        "current_stage_label": current_stage_label,
+        "current_stage_status": current_stage_status,
+        "next_stage": next_stage,
+        "next_stage_label": next_stage_label,
+        "summary": summary,
+        "phases": [],
+    }
+
+
 def test_deployment_verification_blocks_on_build_mismatch() -> None:
     report = build_deployment_verification_report(
         base_url="https://staging-studio.omniacreata.com",
@@ -29,6 +49,7 @@ def test_deployment_verification_blocks_on_build_mismatch() -> None:
                 "actual_build": "2026.04.07.25",
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -58,6 +79,7 @@ def test_blocked_deployment_verification_report_is_not_closure_ready() -> None:
     assert report["closure_gaps"] == [
         "Network failure while requesting https://staging.example.com/api/v1/version: timeout"
     ]
+    assert "Sprint 9" in report["closure_summary"]
     blocked_check = report["checks"][0]
     assert blocked_check["key"] == "deployment_connectivity"
     assert blocked_check["status"] == "blocked"
@@ -88,6 +110,10 @@ def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:
                 "actual_build": "2026.04.07.26",
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                current_stage_status="ready",
+                summary="Protected beta gate is clear and public paid work is next.",
+            ),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -102,6 +128,11 @@ def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:
     assert report["closure_ready"] is True
     gate_check = next(check for check in report["checks"] if check["key"] == "launch_gate")
     assert gate_check["status"] == "pass"
+    visibility_check = next(
+        check for check in report["checks"] if check["key"] == "platform_readiness_visibility"
+    )
+    assert visibility_check["status"] == "pass"
+    assert report["platform_readiness"]["current_stage"] == "protected_beta"
 
 
 def test_deployment_verification_uses_launch_gate_for_closure_truth() -> None:
@@ -129,6 +160,9 @@ def test_deployment_verification_uses_launch_gate_for_closure_truth() -> None:
                 "actual_build": "2026.04.08.01",
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                summary="Protected beta is still blocked by launch truth."
+            ),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -258,6 +292,10 @@ def test_deployment_verification_closure_allows_provider_only_launch_warnings() 
                 "actual_build": "2026.04.07.26",
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                current_stage_status="needs_attention",
+                summary="Protected beta is close, but provider warnings remain.",
+            ),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -296,6 +334,9 @@ def test_deployment_verification_requires_launch_gate_build_to_match_expected_bu
                 "actual_build": "2026.04.08.01",
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                summary="Protected beta truth is present, but the verified build is stale."
+            ),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -321,6 +362,7 @@ def test_deployment_verification_closure_requires_deployment_report_visibility()
             "launch_readiness": {"status": "ready", "summary": "No blockers"},
             "startup_verification": {"status": "pass"},
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -363,6 +405,10 @@ def test_deployment_verification_warning_report_can_still_round_trip_into_launch
                 "actual_build": current_build,
             },
             "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                current_stage_status="ready",
+                summary="Protected beta is clear and public paid readiness is next.",
+            ),
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -373,6 +419,48 @@ def test_deployment_verification_warning_report_can_still_round_trip_into_launch
 
     assert report["status"] == "pass"
     assert report["closure_ready"] is True
+
+
+def test_deployment_verification_requires_platform_readiness_visibility_for_owner_truth() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.09.33",
+        version_payload={"build": "2026.04.09.33"},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Safe for protected launch.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": [],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.09.33",
+            },
+            "launch_readiness": {"status": "ready", "summary": "No blockers"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": "2026.04.09.33",
+            },
+            "runtime_logs": {"outside_repo": True},
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build="2026.04.09.33",
+    )
+
+    assert report["status"] == "warning"
+    assert report["closure_ready"] is False
+    visibility_check = next(
+        check for check in report["checks"] if check["key"] == "platform_readiness_visibility"
+    )
+    assert visibility_check["status"] == "warning"
+    assert any("platform_readiness" in gap for gap in report["closure_gaps"])
 
 
 def test_deployment_verification_exit_code_requires_closure_ready_when_requested() -> None:

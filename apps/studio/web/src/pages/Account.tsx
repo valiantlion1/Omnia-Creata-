@@ -39,8 +39,8 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
         title={ownProfile ? 'No profile posts yet' : 'No public posts yet'}
         description={
           ownProfile
-            ? 'Public and private work will start showing up here once you generate and keep images.'
-            : 'This profile has no public work visible yet.'
+            ? 'Your creations will appear here once you start generating images.'
+            : 'This creator hasn\'t published any images yet.'
         }
       />
     )
@@ -320,18 +320,18 @@ export default function AccountPage() {
             ) : null}
             
             <div className="flex items-center justify-between border-t border-white/5 pt-4 text-[13px] font-medium text-white/80">
-              <span className="text-zinc-500">Public visibility</span>
-              <span>{payload.profile.public_post_count} posts</span>
+              <span className="text-zinc-500">Published images</span>
+              <span>{payload.profile.public_post_count}</span>
             </div>
           </div>
 
         <section className="space-y-3.5">
           <div className="border-b border-white/[0.06] pb-3">
-            <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Your work' : 'Public work'}</div>
+            <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Your gallery' : 'Public gallery'}</div>
             <div className="mt-1 text-sm text-zinc-500">
               {payload.own_profile
-                ? 'Public and private outputs are shown here with visibility intact.'
-                : 'Only public work is visible here.'}
+                ? 'All your images. Only you can see the private ones.'
+                : 'Images shared publicly by this creator.'}
             </div>
           </div>
           <PostGrid posts={payload.posts} ownProfile={payload.own_profile} view={view} />
