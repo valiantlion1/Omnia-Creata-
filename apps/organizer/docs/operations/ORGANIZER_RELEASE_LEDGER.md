@@ -8,9 +8,27 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha18](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha18)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha19](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha19)
 
 ## Entries
+
+### 2026-04-10 - Alpha 19 Figma-driven UI master pass
+- Version target: `1.0.0-alpha19`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha19](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha19)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now follows the stronger Stitch/Figma explorer direction, with a calmer header, more deliberate list or grid controls, visible item counts, and cleaner explorer chrome
+  - Home and Storage surfaces were redesigned around lighter premium utility cards, making storage usage, quick actions, pinned entries, and category shortcuts easier to scan on a phone
+  - Search, file detail, and supporting sheets now share the same softer neutral palette and card language, reducing the old mixed-quality feeling across core screens
+  - file rows, grid cards, stat pills, and the bottom navigation shell were refined to feel more like one OmniaCreata product instead of separate unfinished layers
+- Known gaps:
+  - onboarding, splash, and some permission-state screens still need one more visual pass to fully match the new Browse/Home direction
+  - some secondary dialogs and banners can still be refined after another real-device review round
+  - store icon, final screenshots, listing copy, and public legal URLs still need to be finished before Play submission
 
 ### 2026-04-09 - Alpha 18 readability and explorer density pass
 - Version target: `1.0.0-alpha18`

@@ -3,10 +3,10 @@
   "displayName": "Omnia Organizer",
   "packageName": "com.omnia.organizer",
   "platform": "android",
-  "version": "1.0.0-alpha18",
-  "versionCode": 1000018,
+  "version": "1.0.0-alpha19",
+  "versionCode": 1000019,
   "track": "internal",
   "releaseChannel": "alpha",
   "mvpPhase": "phase-1-store-readiness",
-  "updatedAt": "2026-04-09"
+  "updatedAt": "2026-04-10"
 }
