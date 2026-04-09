@@ -63,9 +63,9 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
 function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
   const miniTiers = [
-    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '60', features: ['Core access', '1024px maximum', 'Standard rendering'], style: 'outline' as const },
-    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '1,200', features: ['Premium models', '2048px maximum', 'Accelerated rendering', 'Commercial use'], style: 'gradient' as const },
-    { id: 'creator', label: 'Creator', icon: Crown, price: 'TBD', credits: '5,000', features: ['Early features', '4096px maximum', 'Ultra-fast rendering', 'API access'], style: 'white' as const },
+    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '60', features: ['Core models', '1024px max', 'Standard queue'], style: 'outline' as const },
+    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '1,200', features: ['All models', '2048px max', 'Priority queue', 'Commercial license'], style: 'gradient' as const },
+    { id: 'creator', label: 'Creator', icon: Crown, price: 'TBD', credits: '5,000', features: ['All + early access', '4096px max', 'Priority+', 'API (soon)'], style: 'white' as const },
   ]
 
   return (

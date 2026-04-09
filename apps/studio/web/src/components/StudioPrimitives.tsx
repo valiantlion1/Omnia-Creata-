@@ -51,15 +51,15 @@ export function Surface({
   tone?: 'default' | 'muted' | 'raised'
 }) {
   const toneMap = {
-    default: 'glass-card',
-    muted: 'border-white/[0.04] bg-[#0c0d12]/40 backdrop-blur-md',
-    raised: 'glass-card shadow-[0_32px_90px_rgba(0,0,0,0.4)]',
+    default: 'border-white/[0.08] bg-[#141519]',
+    muted: 'border-white/[0.06] bg-[#111216]',
+    raised: 'border-white/[0.1] bg-[#17181d] shadow-[0_32px_90px_rgba(0,0,0,0.26)]',
   }
 
   return (
     <section
       className={clsx(
-        'rounded-[24px] p-5 md:p-6 transition-all duration-300',
+        'rounded-[26px] border p-5 shadow-[0_24px_70px_rgba(0,0,0,0.2)] md:p-6 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_24px_70px_rgba(0,0,0,0.25),0_0_0_1px_rgba(124,58,237,0.18)]',
         toneMap[tone],
         className,
       )}
@@ -261,8 +261,8 @@ export function EditTextDialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{title}</div>
@@ -306,7 +306,7 @@ export function EditTextDialog({
           <button
             onClick={() => onConfirm(value)}
             disabled={busy || !value.trim() || value.trim() === initialValue.trim()}
-            className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? 'Saving...' : actionLabel}
           </button>

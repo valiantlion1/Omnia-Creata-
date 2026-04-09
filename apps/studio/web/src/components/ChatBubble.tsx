@@ -312,7 +312,7 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
                   className={`px-5 py-3.5 text-[15px] leading-[1.65] shadow-sm transition-all duration-300 ${
                     isUser
                       ? 'rounded-[22px] rounded-br-md bg-gradient-to-br from-[rgb(var(--primary-light)/0.15)] to-[rgb(var(--accent)/0.05)] text-white ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_4px_24px_rgba(0,0,0,0.2)]'
-                      : 'rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md text-zinc-200 ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]'
+                      : 'rounded-[22px] rounded-bl-md bg-[#13151a] text-zinc-200 ring-1 ring-white/[0.06] shadow-[0_4px_16px_rgba(0,0,0,0.1)]'
                   }`}
                 >
                   <ProgressiveText text={message.content} enabled={shouldAnimate} />
