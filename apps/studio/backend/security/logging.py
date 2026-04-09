@@ -13,6 +13,8 @@ import traceback
 import sys
 import os
 
+from .redaction import redact_sensitive_text
+
 
 class LogLevel(Enum):
     """Log levels"""
@@ -323,12 +325,13 @@ class SecurityLogger:
         elif isinstance(data, list):
             return [self._mask_sensitive_data(item) for item in data]
         elif isinstance(data, str):
+            redacted = redact_sensitive_text(data)
             # Simple email masking
-            if "@" in data and "." in data:
-                parts = data.split("@")
+            if "@" in redacted and "." in redacted:
+                parts = redacted.split("@")
                 if len(parts) == 2:
                     return f"{parts[0][:2]}***@{parts[1]}"
-            return data
+            return redacted
         else:
             return data
     
@@ -396,7 +399,7 @@ class SecurityLogger:
         
         error_data = {
             "error_type": type(error).__name__,
-            "error_message": str(error),
+            "error_message": redact_sensitive_text(error),
             "user_id": user_id,
             "request_id": request_id,
             "context": self._mask_sensitive_data(context) if context else None

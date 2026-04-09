@@ -99,6 +99,8 @@ function ProtectedRoutes() {
       <Route path="/usage-policy" element={<Navigate to="/help#usage-policy" replace />} />
       <Route path="/learn" element={<Navigate to="/help" replace />} />
       <Route path="/subscription" element={<BillingPage />} />
+      <Route path="/billing" element={<Navigate to="/subscription" replace />} />
+      <Route path="/plan" element={<Navigate to="/subscription" replace />} />
       <Route path="/account" element={<AccountPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/studio" element={<Navigate to="/explore" replace />} />
@@ -120,7 +122,9 @@ function AppFrame() {
     location.pathname === '/explore' ||
     location.pathname === '/community' ||
     location.pathname === '/social' ||
-    location.pathname === '/subscription'
+    location.pathname === '/subscription' ||
+    location.pathname === '/billing' ||
+    location.pathname === '/plan'
   const isAlwaysPublic =
     location.pathname === '/' ||
     location.pathname === '/landing' ||

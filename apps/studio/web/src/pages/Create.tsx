@@ -4,7 +4,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
-import { isTerminalJobStatus, normalizeJobStatus, studioApi, type Generation, type JobStatus, type ModelCatalogEntry } from '@/lib/studioApi'
+import {
+  describeGenerationLaneTrust,
+  formatGenerationGuideSummary,
+  isTerminalJobStatus,
+  normalizeJobStatus,
+  studioApi,
+  type Generation,
+  type JobStatus,
+  type ModelCatalogEntry,
+} from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 /* ─── Placeholder prompts ──────────────────────────── */
@@ -168,12 +177,21 @@ export default function CreatePage() {
     queryFn: () => studioApi.listModels(),
     enabled: canLoadPrivate,
   })
+  const billingQuery = useQuery({
+    queryKey: ['billing-summary', 'create'],
+    queryFn: () => studioApi.getBillingSummary(),
+    enabled: canLoadPrivate,
+  })
 
   const models = useMemo(
     () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
     [canUseLocalModels, modelsQuery.data],
   )
   const selectedModel = useMemo(() => models.find((entry) => entry.id === selectedModelId) ?? models[0], [models, selectedModelId])
+  const selectedModelCreditGuide = useMemo(
+    () => billingQuery.data?.generation_credit_guide?.models?.find((entry) => entry.model_id === selectedModel?.id) ?? null,
+    [billingQuery.data, selectedModel],
+  )
   const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
   const runningJobs = useMemo(
     () => generationToasts.filter((job) => {
@@ -182,12 +200,16 @@ export default function CreatePage() {
     }).length,
     [generationToasts],
   )
-  const runtimeCredits = auth?.credits.remaining ?? 0
+  const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
   const activeAspect = aspectPresets[aspectRatio]
   const prefillSource = searchParams.get('source')
   const prefillReferenceMode = searchParams.get('reference_mode')
   const requiresChatReference = prefillSource === 'chat' && prefillReferenceMode === 'required'
   const missingRequiredReference = requiresChatReference && !referenceAssetId
+  const blockedByCurrentCredits = Boolean(selectedModelCreditGuide && !selectedModelCreditGuide.affordable_now)
+  const selectedLaneTrustLabel = selectedModelCreditGuide
+    ? describeGenerationLaneTrust(selectedModelCreditGuide.pricing_lane, selectedModelCreditGuide.planned_provider)
+    : null
 
   /* ─── Effects ─────────────────────────────────── */
 
@@ -222,6 +244,12 @@ export default function CreatePage() {
       setCreateError(null)
     }
   }, [createError, missingRequiredReference])
+
+  useEffect(() => {
+    if (!blockedByCurrentCredits && createError?.includes('blocked on the current balance')) {
+      setCreateError(null)
+    }
+  }, [blockedByCurrentCredits, createError])
 
   useEffect(() => {
     if (!searchParams.has('tool')) return
@@ -360,6 +388,13 @@ export default function CreatePage() {
       setCreateError('This chat handoff needs its reference image. Go back to Chat and reopen Create from the image-guided turn.')
       return
     }
+    if (blockedByCurrentCredits && selectedModelCreditGuide) {
+      setCreateError(
+        `This start is blocked on the current balance. ${formatGenerationGuideSummary(selectedModelCreditGuide)}. ` +
+        `${describeGenerationLaneTrust(selectedModelCreditGuide.pricing_lane, selectedModelCreditGuide.planned_provider)}`,
+      )
+      return
+    }
     setCreateError(null)
     setSubmittingCount((value) => value + 1)
     try {
@@ -387,7 +422,7 @@ export default function CreatePage() {
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
-  }, [activeAspect.height, activeAspect.width, aspectRatio, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, queryClient, referenceAssetId, selectedModel, steps])
+  }, [activeAspect.height, activeAspect.width, aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, queryClient, referenceAssetId, selectedModel, selectedModelCreditGuide, steps])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -545,7 +580,15 @@ export default function CreatePage() {
                       {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
                     </div>
                     <div className="mt-0.5 text-[10px] font-mono uppercase tracking-widest text-[#666a7a]">
-                      {selectedModel ? (selectedModel.runtime === 'local' ? 'LOCAL ENGINE' : `${selectedModel.credit_cost} CR_COST`) : ''}
+                      {selectedModel
+                        ? (
+                            selectedModel.runtime === 'local'
+                              ? 'LOCAL ENGINE'
+                              : selectedModelCreditGuide
+                                ? `${selectedModelCreditGuide.reserved_credit_cost} CR_HOLD`
+                                : `${selectedModel.credit_cost} CR_COST`
+                          )
+                        : ''}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -555,6 +598,7 @@ export default function CreatePage() {
                   <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-30 w-[min(400px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
                     {models.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
+                      const entryGuide = billingQuery.data?.generation_credit_guide?.models?.find((guide) => guide.model_id === entry.id) ?? null
                       return (
                         <button
                           key={entry.id}
@@ -571,7 +615,11 @@ export default function CreatePage() {
                             <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
                           </div>
                           <div className="shrink-0 text-right text-[11px] font-mono uppercase tracking-widest text-[#666a7a]">
-                            {entry.runtime === 'local' ? 'LCL' : `${entry.credit_cost} CR`}
+                            {entry.runtime === 'local'
+                              ? 'LCL'
+                              : entryGuide
+                                ? `${entryGuide.reserved_credit_cost} HOLD`
+                                : `${entry.credit_cost} CR`}
                           </div>
                         </button>
                       )
@@ -585,27 +633,41 @@ export default function CreatePage() {
             <div className="flex items-center gap-4">
               <div className="text-right text-[10px] font-mono uppercase tracking-widest text-zinc-500">
                 <div className="mb-0.5">{selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}</div>
-                <div>{selectedModel && selectedModel.runtime !== 'local' ? `${selectedModel.credit_cost} CREDITS` : ''}</div>
+                <div>
+                  {selectedModel && selectedModel.runtime !== 'local'
+                    ? selectedModelCreditGuide
+                      ? `${selectedModelCreditGuide.reserved_credit_cost} HOLD`
+                      : `${selectedModel.credit_cost} CREDITS`
+                    : ''}
+                </div>
               </div>
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference}
+                disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
                 className="group relative inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-[16px] px-8 text-[13px] font-bold tracking-widest uppercase text-white transition-all overflow-hidden disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-0"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }}
               >
                 {/* Content */}
                 <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
                   {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-white/90" /> : <Wand2 className="h-4 w-4 text-white/90" />}
-                  {submittingCount ? 'PROCESSING' : 'INITIALIZE'}
+                  {submittingCount ? 'STARTING' : 'GENERATE'}
                 </span>
               </button>
             </div>
           </div>
 
           {/* Feedback row */}
-          {(createError || improveState === 'done' || improveState === 'fallback') ? (
+          {(createError || improveState === 'done' || improveState === 'fallback' || selectedModelCreditGuide) ? (
             <div className="border-t border-white/[0.04] px-5 py-3">
               {createError ? <div className="text-sm text-rose-300">{createError}</div> : null}
+              {!createError && selectedModelCreditGuide ? (
+                <div className={`text-xs ${blockedByCurrentCredits ? 'text-amber-300' : 'text-zinc-400'}`}>
+                  {formatGenerationGuideSummary(selectedModelCreditGuide)}
+                </div>
+              ) : null}
+              {!createError && selectedLaneTrustLabel ? (
+                <div className="mt-1 text-[11px] text-zinc-500">{selectedLaneTrustLabel}</div>
+              ) : null}
               {improveState === 'done' ? <div className="text-xs text-emerald-300">✓ Prompt improved by AI</div> : null}
               {improveState === 'fallback' ? <div className="text-xs text-zinc-400">Prompt tightened (offline mode)</div> : null}
             </div>

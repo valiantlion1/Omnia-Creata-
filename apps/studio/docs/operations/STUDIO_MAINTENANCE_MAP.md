@@ -14,8 +14,21 @@ Last updated: 2026-04-08
 
 ## Recent stabilization wins
 
+- Sprint 9 visible-trust wording is now shared across Create, Billing, Project, and Library generation surfaces, so lane labels, hold/settle phrasing, estimate provenance, and fallback/degraded trust copy no longer drift by page.
+- Sprint 9 smoke redaction is safer now too: provider error URLs with query-string keys are fully masked in current-build smoke reports instead of leaving trailing key fragments behind.
+- Sprint 9 now treats OpenAI Image as the primary launch-grade image lane, so Pro/edit routing prefers it before `fal` and `Runware` while fallback-only providers still remain visibly non-launch-grade.
+- Sprint 9 generation jobs now inherit route-aware estimated cost when the selected provider can project it up front, so queued OpenAI/fal work no longer looks as cheap as the old legacy model catalog when Studio is really planning a more expensive launch-grade lane.
+- Sprint 9 generation payload truth is now lane-native too: queued jobs persist `pricing_lane` and `estimated_cost_source`, so operators and user-facing generation cards can tell whether a USD estimate came from a live provider quote or the legacy catalog fallback.
+- Sprint 9 billing truth now projects lane-aware credit guardrails before submission too, so Billing can tell how many starts the current balance can safely cover for draft, standard, final, fallback, or degraded lanes under the live provider topology.
+- Sprint 9 Create now consumes that same lane-aware guardrail truth before submission, so selected-model labels, submit-state messaging, and obvious insufficient-balance blocks all follow the live lane plan instead of the older flat credit catalog.
+- Sprint 9 owner truth and smoke coverage now recognize `openai` on the image surface too, which makes current-build proof and launch-grade image gaps line up with the new provider strategy instead of the old fal/Runware-only assumption.
+- Backend and staging env examples now expose `OPENAI_IMAGE_MODEL`, which reduces config drift when OpenAI Image is the intended primary image API.
+- Stable local startup no longer dies while backfilling legacy public posts from completed generations; the `.22` build fixes that boot blocker and lets the local always-on loop actually serve the new Sprint 9 provider slice.
 - Sprint 9 closure truth is stricter now: a configured launch-grade chat or image lane no longer reads as healthy-for-launch unless the current build has a successful live smoke result for that exact provider.
+- Sprint 9 now explicitly hardens against provider embarrassment paths: tracked Studio zip archives are banned, Docker staging builds ignore backend/runtime secret files, provider smoke/runtime/log error strings redact keys, and browser env examples no longer suggest putting provider secrets into Vite.
+- Sprint 9 chat economics truth now distinguishes paid launch-grade chat lanes from limited free-tier lanes, so a Gemini free-tier key can still be visible for development without being mistaken for a public-paid-safe launch lane.
 - Sprint 9 provider smoke now aggregates per-provider results instead of letting an expected-failure probe overwrite a real success for the same lane, which keeps owner truth honest when both validation styles run in one smoke pass.
+- Sprint 9 image truth now keeps OpenAI split into explicit draft and final lanes, so current-build smoke and owner health can show when only cheap drafts are proven versus when premium final output is also proven.
 - Sprint 9 smoke CLI can now load an explicit env file before Studio settings initialize, which makes live provider recovery practical when staging/protected secrets live outside the default backend `.env`.
 - Sprint 9 owner truth now exposes per-provider diagnostics such as credential presence, runtime availability, launch classification, cooldown/circuit state, recent failure state, and current-build smoke result, so provider outages are easier to read without terminal log-diving.
 - Sprint 9 chat replies now carry an explicit response-mode contract (`live_provider_reply`, `premium_lane_unavailable`, `degraded_fallback_reply`), so frontend trust chips no longer have to infer live-vs-fallback truth from fuzzy metadata alone.
@@ -271,3 +284,5 @@ Last updated: 2026-04-08
 - Live provider smoke runs should leave a durable operator breadcrumb outside the repo; if a smoke suite was executed, the latest result should survive in the external runtime directory and be visible from owner health detail.
 - Owner health detail should answer launch questions explicitly. Service uptime is not enough; expose whether auth, durable state, runtime topology, premium provider lanes, external logs, and smoke freshness are actually launch-safe.
 - The repo wiki should now be treated as the strategic memory layer; if product direction, planning rules, or architecture boundaries change, update `docs/wiki` instead of leaving that knowledge only in chat history.
+- Shell route aliases must stay aligned with router gating too; if the UI advertises `/billing` or `/plan` as Subscription aliases, guest and signed-in navigation should resolve to Subscription rather than falling through login confusion or wildcard redirects.
+- Sprint 9 generation surfaces should expose estimate provenance, not only estimate numbers; if Billing, Create, Project, or Library show a USD estimate, users should be able to tell whether it came from a live provider quote or the legacy catalog fallback.

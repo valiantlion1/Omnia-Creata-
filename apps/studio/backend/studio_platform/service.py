@@ -92,6 +92,11 @@ from .generation_ops import (
     requeue_generation_job_locked,
     requeue_incomplete_generations_locked,
 )
+from .generation_credit_forecast_ops import build_generation_credit_forecasts
+from .generation_pricing_ops import (
+    build_generation_pricing_quote,
+    resolve_generation_pricing_lane,
+)
 from .llm import StudioLLMGateway
 from .generation_admission_ops import (
     count_incomplete_generations_for_identity,
@@ -1442,7 +1447,7 @@ class StudioService:
                 cover_asset_id=asset_ids[0],
                 asset_ids=asset_ids,
                 visibility=identity.default_visibility,
-                style_tags=self._infer_style_tags(generation),
+                style_tags=infer_style_tags(generation),
                 liked_by=[],
                 created_at=generation.created_at,
                 updated_at=generation.updated_at,
@@ -1730,7 +1735,15 @@ class StudioService:
             "queue_priority": job.queue_priority,
             "model": job.model,
             "prompt_snapshot": job.prompt_snapshot.model_dump(mode="json"),
+            "pricing_lane": job.pricing_lane
+            or resolve_generation_pricing_lane(
+                provider_name=job.provider,
+                requested_model_id=job.model,
+                workflow=job.prompt_snapshot.workflow,
+                degraded=job.degraded,
+            ),
             "estimated_cost": job.estimated_cost,
+            "estimated_cost_source": job.estimated_cost_source or "catalog_fallback",
             "actual_cost_usd": job.actual_cost_usd,
             "credit_cost": job.credit_cost,
             "reserved_credit_cost": job.reserved_credit_cost,
@@ -3249,8 +3262,6 @@ class StudioService:
         self._validate_model_for_identity(identity, model)
         self._validate_dimensions_for_model(width, height, model)
 
-        total_credit_cost = model.credit_cost * output_count
-
         cleaned_prompt = self._sanitize_generation_text(
             prompt,
             field_name="prompt",
@@ -3311,13 +3322,25 @@ class StudioService:
                 "No real image provider is available for this workflow right now. "
                 "Studio will not replace it with a fake demo render."
             )
-        reserved_credit_cost = (
-            0
-            if self._has_unlimited_generation_access(identity)
-            else self._estimate_generation_reservation_cost(
-                base_credit_cost=total_credit_cost,
-                provider_candidates=list(routing_decision.provider_candidates),
-            )
+        provider_estimated_cost = self.providers.estimate_generation_cost(
+            provider_name=routing_decision.selected_provider,
+            width=width,
+            height=height,
+            model_id=model.id,
+            workflow=routing_decision.workflow,
+            has_reference_image=reference_asset is not None,
+        )
+        pricing_quote = build_generation_pricing_quote(
+            selected_provider=routing_decision.selected_provider,
+            routing_decision=routing_decision,
+            requested_model_id=model.id,
+            workflow=routing_decision.workflow,
+            width=width,
+            height=height,
+            output_count=output_count,
+            provider_estimated_cost=provider_estimated_cost,
+            legacy_model=model,
+            unlimited_generation_access=self._has_unlimited_generation_access(identity),
         )
         job = create_generation_job_record(
             workspace_id=identity.workspace_id,
@@ -3326,8 +3349,10 @@ class StudioService:
             title=build_generation_title(cleaned_prompt),
             model_id=model.id,
             prompt_snapshot=prompt_snapshot,
-            estimated_cost=model.estimated_cost * output_count,
-            credit_cost=total_credit_cost,
+            estimated_cost=pricing_quote.estimated_cost,
+            estimated_cost_source=pricing_quote.estimated_cost_source,
+            pricing_lane=pricing_quote.pricing_lane,
+            credit_cost=pricing_quote.credit_cost,
             output_count=output_count,
             queue_priority=plan_config.queue_priority,
             provider=routing_decision.selected_provider or "pending",
@@ -3340,8 +3365,8 @@ class StudioService:
             routing_reason=routing_decision.routing_reason,
             prompt_profile=routing_decision.prompt_profile,
             provider_candidates=list(routing_decision.provider_candidates),
-            reserved_credit_cost=reserved_credit_cost,
-            credit_status="reserved" if reserved_credit_cost > 0 else "none",
+            reserved_credit_cost=pricing_quote.reserved_credit_cost,
+            credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",
         )
         job = await self._persist_generation_job_with_reservation(
             identity=identity,
@@ -3356,29 +3381,6 @@ class StudioService:
         if self._can_process_generations():
             self._ensure_generation_maintenance_task()
         return job
-
-    def _estimate_generation_reservation_cost(
-        self,
-        *,
-        base_credit_cost: int,
-        provider_candidates: List[str],
-    ) -> int:
-        normalized_cost = max(int(base_credit_cost or 0), 0)
-        if normalized_cost <= 0:
-            return 0
-        has_managed_candidate = any(
-            bool(self.providers.provider_billable(provider_name))
-            for provider_name in provider_candidates
-        )
-        if has_managed_candidate:
-            return normalized_cost
-        has_standard_candidate = any(
-            self.providers.provider_quality_tier(provider_name) == "standard"
-            for provider_name in provider_candidates
-        )
-        if has_standard_candidate:
-            return max(1, int(math.ceil(normalized_cost * 0.5)))
-        return 0
 
     async def _persist_generation_job_with_reservation(
         self,
@@ -3559,6 +3561,13 @@ class StudioService:
         identity = await self.get_identity(identity_id)
         billing_state = await self._resolve_billing_state_for_identity(identity)
         ledger = await self.store.list_credit_entries_for_identity(identity_id)
+        accessible_models = [
+            model
+            for model in await self.list_models_for_identity(identity)
+            if not (
+                identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO
+            )
+        ]
         return build_billing_summary(
             identity=identity,
             identity_id=identity_id,
@@ -3567,6 +3576,12 @@ class StudioService:
             plan_catalog=PLAN_CATALOG,
             checkout_catalog=CHECKOUT_CATALOG,
             entitlements=self.serialize_entitlements(identity, billing_state=billing_state),
+            generation_credit_guide=build_generation_credit_forecasts(
+                identity_plan=identity.plan,
+                billing_state=billing_state,
+                models=accessible_models,
+                providers=self.providers,
+            ),
         )
 
     async def checkout(self, identity_id: str, kind: CheckoutKind) -> Dict[str, Any]:

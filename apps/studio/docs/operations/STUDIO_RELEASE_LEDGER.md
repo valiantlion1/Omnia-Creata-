@@ -18,6 +18,119 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.08.30`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had already exposed lane-aware credits and estimate provenance, but the visible wording still drifted between Create, Billing, Project, and Library, which made blocked or degraded image paths feel less trustworthy than the underlying backend truth
+- What:
+  shared frontend helper copy now drives lane label, hold/settle summary, estimate provenance, and pending-state wording across visible generation surfaces
+  Create now uses that same truth for both normal pre-submit guidance and blocked-on-balance messaging, while Billing lane cards and pending Library states read from the same phrasing instead of page-specific jargon
+  smoke-report query-string redaction now fully masks provider keys too, so current-build operator proofs no longer leave trailing Gemini-style key fragments in error URLs
+  this keeps Sprint 9's visible trust layer calmer and more consistent without changing pricing, checkout, or provider behavior
+
+### `0.5.1-alpha` / build `2026.04.08.29`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had already computed lane-aware USD estimates and their source, but most user-facing generation surfaces still hid whether a displayed estimate came from a live provider quote or a legacy catalog fallback
+- What:
+  Billing, Create, Project, and pending Library generation surfaces now show the USD estimate together with its source
+  provider-quoted estimates are now visibly distinguishable from catalog fallback estimates instead of only existing in API payloads
+  this keeps the visible economics story aligned with the backend lane-truth work without changing public pricing yet
+
+### `0.5.1-alpha` / build `2026.04.08.28`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 auth and billing UX still had one confusing route edge: shell navigation treated `/billing` and `/plan` as subscription aliases, but the router did not, so deep-link attempts could bounce through login and then land on Explore instead of the actual billing surface
+- What:
+  protected routing now treats `/billing` and `/plan` as first-class aliases for `/subscription`
+  public-shell gating now recognizes those aliases too, so auth and guest navigation stay aligned with the sidebar contract
+  this closes the misleading “login bug” shape without changing billing behavior or pricing logic
+
+### `0.5.1-alpha` / build `2026.04.08.27`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 billing truth had become lane-aware, but Create still asked users to infer whether the selected model could really start on the current balance before they pressed generate
+- What:
+  Create now reads the lane-aware billing forecast for the selected model and shows the planned lane, hold amount, settle target, and current start capacity before submit
+  model picker labels now prefer live hold truth over stale flat catalog credit labels when that forecast is available
+  the generate action now blocks clearly impossible starts on the current balance instead of making the user wait for a predictable backend rejection
+
+### `0.5.1-alpha` / build `2026.04.08.26`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 still needed one more honest economics layer: users and operators could see per-job lane truth after queueing, but Billing still did not explain what the current balance could safely start on each lane before a generation was submitted
+- What:
+  billing summary now includes a lane-aware generation credit guide that forecasts each accessible model's planned provider, quoted credits, hold credits, settlement target, and immediate start capacity from the current balance
+  the forecast follows the live provider topology instead of a flat catalog assumption, so managed lanes read differently from fallback or degraded lanes without changing actual product prices
+  Billing now surfaces those lane guardrails in a compact coverage section, which makes Sprint 9 economics easier to reason about before the full pricing model is finalized
+
+### `0.5.1-alpha` / build `2026.04.08.25`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had already made provider economics more route-aware, but queued generation payloads still hid which pricing lane Studio planned and whether the displayed USD estimate came from a live provider quote or the legacy catalog fallback
+- What:
+  generation pricing is now built through one lane-native quote helper that outputs `pricing_lane`, `estimated_cost_source`, `credit_cost`, and `reserved_credit_cost` together
+  generation jobs persist that lane and estimate-source truth, so API payloads can distinguish provider quotes from catalog fallback while keeping the old product credit prices unchanged
+  project and media-library generation surfaces now show the planned lane plus held-versus-settled credit truth, which makes queued and completed generation economics more honest without redesigning Billing or Create
+
+### `0.5.1-alpha` / build `2026.04.08.24`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had made provider truth and smoke more honest, but queued generation jobs were still carrying the old catalog cost even when Studio had already routed the request onto a different real provider lane
+- What:
+  generation job creation now asks the selected provider for a route-aware cost estimate before it falls back to the legacy model catalog, which makes queued job economics closer to the provider lane Studio actually plans to use
+  OpenAI image now projects draft versus final lane cost into queued jobs, and fal can also project its own lane cost without waiting for execution
+  fallback lanes that do not have a trustworthy provider-side estimate still keep the older catalog estimate, so Sprint 9 gets better economics truth without destabilizing older flows
+
+### `0.5.1-alpha` / build `2026.04.08.23`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  make Sprint 9 provider truth more actionable before live-key closure by separating cheap OpenAI draft renders from premium final renders in smoke coverage and owner health detail
+- What:
+  OpenAI image smoke now records explicit `draft` and `final` lanes instead of a single undifferentiated image check
+  owner truth now exposes whether the OpenAI draft lane and final lane were each proven on the current build, plus whether a secondary launch-grade image lane is healthy
+  backend and staging env examples now document `OPENAI_IMAGE_DRAFT_MODEL`
+  regression tests now lock the draft/final lane routing contract so future provider work cannot silently collapse them back together
+
+### `0.5.1-alpha` / build `2026.04.08.22`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had reached the point where image economics and provider truth were stronger than the real routing contract: Studio still treated `fal` and `Runware` as the only launch-grade image lanes even though the product decision had shifted toward OpenAI Image as the primary global image API
+- What:
+  Studio now includes an `OpenAIImageProvider` wired to the official Images API for both text-to-image and reference-guided edit flows, with explicit size/quality mapping, current official cost estimation, and honest retry/error handling
+  provider routing, smoke coverage, and owner launch-readiness truth now recognize `openai` as a launch-grade billable image lane, prefer it ahead of `fal` and `Runware` for Pro/edit paths, and keep smoke-gap wording anchored to launch-grade image lanes instead of only managed lanes
+  backend and staging env examples now expose `OPENAI_IMAGE_MODEL`, while Studio agent memory now records OpenAI Image as the current primary launch-grade image lane for Sprint 9 work
+  the local backend boot path also no longer crashes during legacy public-post backfill for existing completed generations, so stable startup can actually carry the new `.22` build into the live local loop
+
+### `0.5.1-alpha` / build `2026.04.08.21`
+- Date: `2026-04-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 hit a real reputational-risk wall: provider keys had already been exposed once, Docker build context could still accidentally ship local Studio secret/runtime files, provider smoke errors could leak raw query-string keys into reports, and Gemini free tier could still look like a public-paid launch-grade lane even though it cannot carry real launch traffic
+- What:
+  tracked Studio zip archives are now disallowed and the old tracked `backend.zip` secret-bearing archive is removed, while `.dockerignore` now excludes backend env/runtime files, backend zip artifacts, and frontend env files from the staging build context
+  provider smoke, provider circuit-state errors, and backend logging now redact sensitive key/token strings before they can survive into smoke reports, operator truth, or runtime logs
+  browser env examples no longer advertise provider API tokens, and chat provider truth now distinguishes paid launch-grade lanes from limited free-tier lanes so Gemini free tier does not read as public-paid-ready by default
+
 ### `0.5.1-alpha` / build `2026.04.08.20`
 - Date: `2026-04-08`
 - Codename: `Foundation`

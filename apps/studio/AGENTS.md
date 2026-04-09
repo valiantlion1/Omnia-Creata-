@@ -90,10 +90,15 @@ Current next major priority:
 - For Sprint 8 closure, do not treat a passing local verify as sufficient; the sprint only closes once protected staging verification is run with owner detail and the resulting deployment report says `closure_ready=true`.
 - For operator-facing Sprint 8+ truth, keep a single explicit `launch_gate` visible in owner health detail. It should answer four things without extra interpretation: protected-launch safe or not, blocking reasons, warning reasons, and the last verified build.
 - When protected staging verification sees that explicit `launch_gate`, prefer it over reconstructing closure truth from raw readiness checks. Closure logic should follow the same operator contract humans see in owner health detail.
-- For Sprint 9 provider truth, do not treat fallback-only image lanes as launch-grade just because they answer requests. `fal` and `Runware` are the only managed launch-grade image lanes today; `Pollinations`, `Hugging Face`, and `demo` must remain visibly non-launch-grade.
+- For Sprint 9 provider truth, do not treat fallback-only image lanes as launch-grade just because they answer requests. `OpenAI Image`, `fal`, and `Runware` are the billable launch-grade image lanes today; `OpenAI Image` is the primary lane, while `Pollinations`, `Hugging Face`, and `demo` must remain visibly non-launch-grade.
 - For Sprint 9 economics truth, separate “provider exists” from “provider can safely support paid public usage”. Operator surfaces should make that difference obvious without terminal log diving.
 - For Sprint 9 provider smoke, do not treat an older smoke report as lasting proof. Operator truth should know which surface (`chat` vs `image`) was tested and whether that smoke report belongs to the current build before it softens launch warnings.
 - For Sprint 9 closure, do not treat a configured launch-grade lane as healthy-for-launch unless that exact provider has a successful current-build live smoke result. Runtime health alone is not enough anymore.
+- For Sprint 9 image truth, keep OpenAI image split into a draft lane and a final lane. Current-build smoke and operator truth should make it visible when only one of those lanes has actually been proven.
+- For Sprint 9 job economics, do not leave queued generation cost stuck on the legacy model catalog when routing has already moved the work onto a different real provider lane. If the selected provider can project its own cost honestly, use that projection in the job record.
+- For Sprint 9 lane-native pricing truth, keep provider lane, quoted credits, reserved credits, and provider-vs-catalog USD estimate source explicit in generation payloads. Do not collapse those back into one legacy catalog number once routing has already chosen a real lane.
+- For Sprint 9 billing guardrails, expose pre-submit lane truth too. Billing and other operator/user-facing summaries should be able to say which lane a model would use today, what it would hold, what it is expected to settle at, and how many starts the current balance safely covers.
+- For Sprint 9 Create honesty, do not let the selected model look flat-priced when live lane guardrails are available. If Studio already knows the planned lane cannot start on the current balance, surface that before submit instead of waiting for a predictable server-side rejection.
 - For Sprint 9 smoke interpretation, do not let an expected-failure validation probe erase a real successful smoke result for the same provider/surface. Aggregate smoke truth per provider instead of trusting the last probe blindly.
 - For Sprint 9 live recovery, prefer the official smoke CLI with an explicit env file when secrets live in staging/protected env sources instead of the default backend `.env`.
 - For Sprint 9 provider economics, also separate “launch-grade lane exists” from “provider mix is redundancy-safe”. A single configured premium or managed lane may be billable, but operator truth should still flag the lack of a second lane before broader paid rollout.
@@ -140,6 +145,7 @@ Minimum verification after auth-related work:
   - `/login`
   - Google OAuth return path completes and does not silently bounce back to idle `/login`
   - successful signed-in navigation to a protected route
+  - shell-advertised aliases like `/billing` and `/plan` land on the intended page
   - footer still showing current version/build
 
 ## Backend safety rules

@@ -312,10 +312,23 @@ async def test_billing_summary_reports_reserved_and_available_credits(
         assert summary["credits"]["available_to_spend"] == 57
         assert summary["credits"]["spend_order"] == "monthly_then_extra"
         assert summary["credits"]["unlimited"] is False
+        draft_guide = next(
+            entry
+            for entry in summary["generation_credit_guide"]["lane_highlights"]
+            if entry["pricing_lane"] == "fallback"
+        )
+        assert job.estimated_cost == 0.003
+        assert job.pricing_lane == "fallback"
+        assert job.estimated_cost_source == "catalog_fallback"
         assert serialized["reserved_credit_cost"] == 3
         assert serialized["final_credit_cost"] is None
         assert serialized["credit_charge_policy"] == "none"
         assert serialized["credit_status"] == "reserved"
+        assert serialized["pricing_lane"] == "fallback"
+        assert serialized["estimated_cost_source"] == "catalog_fallback"
+        assert draft_guide["quoted_credit_cost"] == 6
+        assert draft_guide["reserved_credit_cost"] == 3
+        assert draft_guide["settlement_credit_cost"] == 3
     finally:
         await service.shutdown()
 
@@ -435,6 +448,52 @@ async def test_managed_generation_consumes_monthly_then_extra_credits(
         assert settled.credit_charge_policy == "managed_full"
         assert updated_identity.monthly_credits_remaining == 0
         assert updated_identity.extra_credits == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_openai_routed_generation_uses_provider_estimated_cost_for_job_truth(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        provider_module.OpenAIImageProvider(
+            "openai-key",
+            draft_image_model="gpt-image-1-mini",
+            image_model="gpt-image-1.5",
+        )
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.PRO,
+            monthly_remaining=1200,
+            monthly_allowance=1200,
+            subscription_status=SubscriptionStatus.ACTIVE,
+        )
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=41,
+            aspect_ratio="1:1",
+            output_count=2,
+        )
+
+        assert job.provider == "openai"
+        assert job.provider_billable is True
+        assert job.pricing_lane == "draft"
+        assert job.estimated_cost_source == "provider_quote"
+        assert job.estimated_cost == 0.018
     finally:
         await service.shutdown()
 
@@ -716,6 +775,7 @@ async def test_subscription_cancelled_keeps_pro_entitlements_until_expired(
         assert summary["entitlements"]["premium_chat"] is True
         assert summary["credits"]["monthly_remaining"] == 700
         assert summary["credits"]["extra_credits"] == 150
+        assert summary["generation_credit_guide"]["available_to_spend"] == summary["credits"]["available_to_spend"]
     finally:
         await service.shutdown()
 

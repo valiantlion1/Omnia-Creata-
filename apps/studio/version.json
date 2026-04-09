@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.08.20",
+  "build": "2026.04.08.30",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-08",
-  "notes": "Sprint 9 provider closure truth now requires current-build live smoke per configured launch-grade lane, aggregates provider smoke results without losing real successes behind expected-failure probes, and lets the official smoke CLI load staging env files for live recovery runs."
+  "notes": "Sprint 9 visible-trust surfaces now share calmer blocked and degraded wording too: Create, Billing, Project, and Library all read from the same lane-truth phrasing for hold, settle, provider route, and estimate provenance instead of drifting into page-specific jargon. The current-build smoke report also fully masks query-string provider keys now instead of leaving trailing key fragments behind."
 }

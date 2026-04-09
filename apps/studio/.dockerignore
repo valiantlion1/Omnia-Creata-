@@ -12,4 +12,12 @@ backend/venv
 logs
 runtime
 docs/wiki/.obsidian
-deploy/.env.staging
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/data
+backend.zip
+web/.env.*
+!web/.env.example
+deploy/.env.*
+!deploy/.env.staging.example

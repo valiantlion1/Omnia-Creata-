@@ -562,6 +562,82 @@ async def test_list_assets_hides_demo_placeholder_outputs(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_service_initialize_backfills_posts_for_existing_generations(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    generation = GenerationJob(
+        id="job-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Legacy Render",
+        status=JobStatus.COMPLETED,
+        queue_priority="standard",
+        model="flux-schnell",
+        prompt_snapshot=PromptSnapshot(
+            prompt="cinematic product render",
+            negative_prompt="blurry",
+            model="flux-schnell",
+            workflow="text_to_image",
+            width=1024,
+            height=1024,
+            steps=24,
+            cfg_scale=6.5,
+            seed=7,
+            aspect_ratio="1:1",
+        ),
+        estimated_cost=0.003,
+        credit_cost=6,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+        completed_at=utc_now(),
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Legacy Render",
+        prompt="cinematic product render",
+        url="stored",
+        metadata={"generation_id": generation.id, "provider": "openai"},
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.generations.__setitem__(generation.id, generation),
+            state.assets.__setitem__(asset.id, asset),
+        )
+    )
+
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    snapshot = await store.snapshot()
+
+    assert generation.id in snapshot.posts
+    assert snapshot.posts[generation.id].cover_asset_id == asset.id
+    assert snapshot.posts[generation.id].style_tags
+
+
+@pytest.mark.asyncio
 async def test_get_public_share_hides_demo_placeholder_assets(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")

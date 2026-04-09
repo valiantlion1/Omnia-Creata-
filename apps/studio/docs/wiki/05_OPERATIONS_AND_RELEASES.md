@@ -56,6 +56,7 @@ Important local expectations:
 - Sprint 9 closure should not treat a configured launch-grade provider as healthy-for-launch unless that exact provider has a successful current-build live smoke result; runtime health without current-build smoke proof is still not closure-grade
 - Sprint 9 smoke interpretation should aggregate probes per provider/surface so an expected-failure validation run does not overwrite a real successful smoke result for the same lane
 - Sprint 9 provider truth should also show whether chat and image lanes are merely configured for paid use or actually redundancy-safe; a single billable lane is not the same thing as a resilient rollout shape
+- Sprint 9 now treats OpenAI Image as a launch-grade billable image lane too; smoke coverage and owner truth should not keep speaking as if only `fal` and `Runware` can satisfy image launch-grade proof
 - Sprint 9 provider economics should not call a single healthy managed image lane `public_paid_usage_safe`; broader paid safety only becomes true once the launch-grade mix is also redundancy-safe
 - Sprint 9 chat surfaces should also distinguish static quick starts and degraded heuristic fallback from real live-provider assistant output; users should not need operator tools just to tell that difference
 - Sprint 9 chat metadata should also carry an explicit response mode (`live_provider_reply`, `premium_lane_unavailable`, `degraded_fallback_reply`) so UI honesty does not depend on reverse-engineering prose
@@ -131,3 +132,4 @@ The documentation system is healthy when:
 - a human can tell what changed recently
 - a sprint can be explained without digging through chat logs
 - product intent can be recovered from the repo itself
+- shell route aliases like `/billing` and `/plan` resolve consistently in both guest and signed-in flows instead of drifting away from the router contract

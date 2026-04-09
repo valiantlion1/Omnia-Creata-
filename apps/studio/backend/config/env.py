@@ -1,11 +1,12 @@
 """Environment configuration with validation using Pydantic v2."""
 
 import os
+from enum import Enum
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
-from enum import Enum
 
 # Always resolve .env relative to this file's parent (backend/), regardless of cwd
 _BACKEND_DIR = Path(__file__).parent.parent
@@ -28,7 +29,7 @@ class LogLevel(str, Enum):
 
 class Settings(BaseSettings):
     """Application settings with validation."""
-    
+
     # API Keys (Required in production)
     openai_api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     stability_api_key: Optional[str] = None
     fal_api_key: Optional[str] = None
     runware_api_key: Optional[str] = None
-    
+
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
     gemini_model: str = "gemini-2.5-flash"
@@ -46,14 +47,19 @@ class Settings(BaseSettings):
     openrouter_premium_model: str = "google/gemini-2.5-pro"
     openai_model: str = "gpt-4o-mini"
     openai_premium_model: str = "gpt-5.4"
+    openai_image_draft_model: str = "gpt-image-1-mini"
+    openai_image_model: str = "gpt-image-1.5"
     chat_primary_provider: str = "gemini"
     chat_fallback_provider: str = "openrouter"
+    gemini_service_tier: str = "free"
+    openrouter_service_tier: str = "paid"
+    openai_service_tier: str = "paid"
     generation_provider_strategy: str = "free-first"
-    
+
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
     studio_root_admin_emails: str = ""
-    
+
     # Database Configuration
     database_url: Optional[str] = None
     supabase_url: Optional[str] = None
@@ -68,18 +74,18 @@ class Settings(BaseSettings):
 
     # Asset Storage
     asset_storage_backend: str = "local"
-    
+
     # Redis Configuration
     redis_url: Optional[str] = None
     enable_live_provider_smoke: bool = False
-    
+
     # Server Configuration
     port: int = 8000
     host: str = "0.0.0.0"
     environment: Environment = Environment.DEVELOPMENT
     debug: bool = True
     log_level: LogLevel = LogLevel.INFO
-    
+
     # CORS Configuration
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
     cors_allow_headers: str = "Authorization,Content-Type,X-API-Key,Accept,Origin"
@@ -91,23 +97,23 @@ class Settings(BaseSettings):
     jwt_expiration: str = "24h"
     enable_api_docs: Optional[bool] = None
     enable_demo_auth: Optional[bool] = None
-    
+
     # Rate Limiting
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 10
-    
+
     # LemonSqueezy Configuration
     lemonsqueezy_api_key: Optional[str] = None
     lemonsqueezy_webhook_secret: Optional[str] = None
     lemonsqueezy_store_id: Optional[str] = None
-    
+
     # Mailer Configuration
     resend_api_key: Optional[str] = None
-    
+
     # Monitoring
     sentry_dsn: Optional[str] = None
     opentelemetry_endpoint: Optional[str] = None
-    
+
     # Generation Limits
     max_concurrent_generations: int = 3
     max_queue_size: int = 100
@@ -120,7 +126,7 @@ class Settings(BaseSettings):
     generation_runtime_mode: str = "all"
     enable_pollinations: bool = True
     enable_demo_generation_fallback: bool = False
-    
+
     # Cost Tracking
     cost_per_generation_usd: float = 0.01
     cost_per_upscale_usd: float = 0.005
@@ -204,7 +210,7 @@ class Settings(BaseSettings):
         if not 1 <= v <= 65535:
             raise ValueError("Port must be between 1 and 65535")
         return v
-    
+
     @field_validator("default_timeout_seconds")
     @classmethod
     def validate_timeout(cls, v):
@@ -257,6 +263,14 @@ class Settings(BaseSettings):
             raise ValueError("Chat providers must be gemini, openrouter, openai, or heuristic")
         return normalized
 
+    @field_validator("gemini_service_tier", "openrouter_service_tier", "openai_service_tier")
+    @classmethod
+    def validate_chat_service_tier(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"free", "paid"}:
+            raise ValueError("Chat service tiers must be either 'free' or 'paid'")
+        return normalized
+
     @field_validator("generation_provider_strategy")
     @classmethod
     def validate_generation_provider_strategy(cls, value: str) -> str:
@@ -288,7 +302,7 @@ class Settings(BaseSettings):
         if self.generation_claim_lease_seconds > self.generation_stale_running_seconds:
             self.generation_claim_lease_seconds = self.generation_stale_running_seconds
         return self
-    
+
     def validate_production_requirements(self):
         """Validate that required settings are present in production."""
         if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
@@ -297,19 +311,19 @@ class Settings(BaseSettings):
                 ("supabase_url", self.supabase_url),
                 ("supabase_service_role_key", self.supabase_service_role_key),
             ]
-            
+
             missing_fields = [
-                field_name for field_name, field_value in required_fields 
+                field_name for field_name, field_value in required_fields
                 if not field_value
             ]
-            
+
             if missing_fields:
                 raise ValueError(
                     f"Missing required production settings: {', '.join(missing_fields)}"
                 )
             if self.state_store_backend != "postgres":
                 raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
-    
+
     model_config = {
         "env_file": _ENV_FILE,
         "env_file_encoding": "utf-8",

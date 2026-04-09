@@ -139,6 +139,9 @@ export type GenerationOutput = {
   variation_index: number
 }
 
+export type GenerationPricingLane = 'draft' | 'standard' | 'final' | 'fallback' | 'degraded'
+export type EstimatedCostSource = 'provider_quote' | 'catalog_fallback'
+
 export type Generation = {
   job_id: string
   title: string
@@ -149,9 +152,13 @@ export type Generation = {
   provider_billable?: boolean | null
   model: string
   prompt_snapshot: PromptSnapshot
+  pricing_lane: GenerationPricingLane
   estimated_cost: number
+  estimated_cost_source: EstimatedCostSource
   actual_cost_usd?: number | null
   credit_cost: number
+  reserved_credit_cost: number
+  final_credit_cost?: number | null
   output_count: number
   outputs: GenerationOutput[]
   error: string | null
@@ -178,6 +185,116 @@ export function normalizeJobStatus(status: JobStatus): Exclude<JobStatus, 'pendi
 export function isTerminalJobStatus(status: JobStatus) {
   const normalized = normalizeJobStatus(status)
   return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
+}
+
+export function formatGenerationPricingLane(lane: GenerationPricingLane | string | null | undefined) {
+  switch (lane) {
+    case 'draft':
+      return 'Draft lane'
+    case 'final':
+      return 'Final lane'
+    case 'fallback':
+      return 'Fallback lane'
+    case 'degraded':
+      return 'Degraded lane'
+    default:
+      return 'Standard lane'
+  }
+}
+
+export function formatGenerationEstimateSource(source: EstimatedCostSource | string | null | undefined) {
+  switch (source) {
+    case 'provider_quote':
+      return 'Provider quote'
+    case 'catalog_fallback':
+      return 'Catalog fallback'
+    default:
+      return 'Estimate source unknown'
+  }
+}
+
+export function formatUsdEstimate(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return 'USD n/a'
+  if (value === 0) return '$0'
+  if (value < 0.001) return `$${value.toFixed(5)}`
+  if (value < 0.01) return `$${value.toFixed(4)}`
+  if (value < 1) return `$${value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}`
+  return `$${value.toFixed(2)}`
+}
+
+export function formatGenerationEstimateSummary(
+  estimatedCost: number | null | undefined,
+  estimatedCostSource: EstimatedCostSource | string | null | undefined,
+) {
+  return `${formatUsdEstimate(estimatedCost)} ${formatGenerationEstimateSource(estimatedCostSource).toLowerCase()}`
+}
+
+export function formatGenerationStartCapacity(maxStartableJobsNow: number | null, startStatus: string) {
+  if (startStatus === 'unlimited') return 'Unlimited starts right now'
+  if (startStatus === 'no_hold') return 'No credit hold on start'
+  if (maxStartableJobsNow === 0) return 'No safe starts left on current balance'
+  if (maxStartableJobsNow === 1) return '1 safe start left'
+  if (maxStartableJobsNow == null) return 'Start capacity unknown'
+  return `${maxStartableJobsNow} safe starts left`
+}
+
+export function formatGenerationGuideSummary(entry: Pick<
+  GenerationCreditGuideEntry,
+  | 'pricing_lane'
+  | 'planned_provider'
+  | 'reserved_credit_cost'
+  | 'settlement_credit_cost'
+  | 'max_startable_jobs_now'
+  | 'start_status'
+  | 'estimated_cost'
+  | 'estimated_cost_source'
+>) {
+  return `${formatGenerationPricingLane(entry.pricing_lane)} via ${entry.planned_provider ?? 'unplanned'} · hold ${entry.reserved_credit_cost} · settle ${entry.settlement_credit_cost} · ${formatGenerationStartCapacity(entry.max_startable_jobs_now, entry.start_status)} · ${formatGenerationEstimateSummary(entry.estimated_cost, entry.estimated_cost_source)}`
+}
+
+export function describeGenerationLaneTrust(
+  lane: GenerationPricingLane | string | null | undefined,
+  provider?: string | null,
+) {
+  const providerSuffix = provider ? ` via ${provider}` : ''
+  switch (lane) {
+    case 'draft':
+      return `Draft route active${providerSuffix}.`
+    case 'final':
+      return `Final route active${providerSuffix}.`
+    case 'fallback':
+      return `Fallback-only route active${providerSuffix}; launch-grade image providers are not configured here.`
+    case 'degraded':
+      return `Degraded safety route active${providerSuffix}; this environment is not on a launch-grade image lane.`
+    default:
+      return `Standard route active${providerSuffix}.`
+  }
+}
+
+export function describePendingGenerationState(
+  status: JobStatus,
+  lane: GenerationPricingLane | string | null | undefined,
+  provider?: string | null,
+) {
+  const normalized = normalizeJobStatus(status)
+  if (normalized === 'running') {
+    return `Rendering in progress. ${describeGenerationLaneTrust(lane, provider)}`
+  }
+  return `Queued to start. ${describeGenerationLaneTrust(lane, provider)}`
+}
+
+export function formatGenerationCreditState(generation: Generation) {
+  const normalized = normalizeJobStatus(generation.status)
+  if (normalized === 'queued' || normalized === 'running') {
+    if ((generation.reserved_credit_cost ?? 0) > 0) {
+      return `${generation.reserved_credit_cost} credits on hold`
+    }
+    return `${generation.credit_cost} credits quoted`
+  }
+  if (generation.final_credit_cost != null) {
+    return `${generation.final_credit_cost} credits settled`
+  }
+  return `${generation.credit_cost} credits quoted`
 }
 
 export type MediaAsset = {
@@ -372,14 +489,42 @@ export type PresetEntry = {
   }
 }
 
+export type GenerationCreditGuideEntry = {
+  model_id: string
+  label: string
+  pricing_lane: GenerationPricingLane
+  planned_provider: string | null
+  estimated_cost: number
+  estimated_cost_source: EstimatedCostSource
+  quoted_credit_cost: number
+  reserved_credit_cost: number
+  settlement_credit_cost: number
+  settlement_policy: string
+  affordable_now: boolean
+  max_startable_jobs_now: number | null
+  start_status: string
+}
+
 export type BillingSummary = {
   plan: PlanInfo
   subscription_status: string
   credits: {
     remaining: number
+    gross_remaining: number
     monthly_remaining: number
     monthly_allowance: number
     extra_credits: number
+    reserved_total: number
+    available_to_spend: number
+    spend_order: string
+    unlimited: boolean
+  }
+  generation_credit_guide: {
+    available_to_spend: number
+    reserved_total: number
+    unlimited: boolean
+    lane_highlights: Array<GenerationCreditGuideEntry>
+    models: Array<GenerationCreditGuideEntry>
   }
   checkout_options: Array<{
     kind: CheckoutKind

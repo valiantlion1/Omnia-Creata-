@@ -1,15 +1,18 @@
 import asyncio
+import base64
 import json
 import time
 
 import httpx
 import pytest
+from PIL import Image
 
 import studio_platform.providers as provider_module
 from studio_platform.models import IdentityPlan
 from studio_platform.providers import (
     FalProvider,
     HuggingFaceImageProvider,
+    OpenAIImageProvider,
     PollinationsProvider,
     ProviderCapabilities,
     ProviderFatalError,
@@ -179,6 +182,7 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
     settings = provider_module.get_settings()
     original_strategy = settings.generation_provider_strategy
     original_hf = settings.huggingface_token
+    original_openai = settings.openai_api_key
     original_pollinations = settings.enable_pollinations
     original_fal = settings.fal_api_key
     original_runware = settings.runware_api_key
@@ -186,15 +190,17 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
     try:
         settings.generation_provider_strategy = "free-first"
         settings.huggingface_token = "hf-token"
+        settings.openai_api_key = None
         settings.enable_pollinations = True
         settings.fal_api_key = None
         settings.runware_api_key = None
         settings.enable_demo_generation_fallback = False
         registry = ProviderRegistry()
-        assert [provider.name for provider in registry.providers[:3]] == ["pollinations", "huggingface", "fal"]
+        assert [provider.name for provider in registry.providers[:3]] == ["pollinations", "huggingface", "openai"]
     finally:
         settings.generation_provider_strategy = original_strategy
         settings.huggingface_token = original_hf
+        settings.openai_api_key = original_openai
         settings.enable_pollinations = original_pollinations
         settings.fal_api_key = original_fal
         settings.runware_api_key = original_runware
@@ -313,8 +319,16 @@ def test_plan_generation_route_prefers_huggingface_for_free_stylized_prompts() -
 def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
     registry = _registry_with(
         _FakeProvider(
-            name="fal",
+            name="openai",
             rollout_tier="primary",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="fal",
+            rollout_tier="secondary",
             capabilities=ProviderCapabilities(
                 workflows=("text_to_image", "image_to_image", "edit"),
                 supports_reference_image=True,
@@ -342,7 +356,8 @@ def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[0] == "fal"
+    assert decision.provider_candidates[:3] == ("openai", "fal", "runware")
+    assert decision.provider_candidates[0] == "openai"
     assert decision.requested_quality_tier == "premium"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
@@ -384,8 +399,13 @@ def test_plan_generation_route_marks_pro_premium_fallback_as_degraded_standard()
 def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() -> None:
     registry = _registry_with(
         _FakeProvider(
-            name="fal",
+            name="openai",
             rollout_tier="primary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="fal",
+            rollout_tier="secondary",
             capabilities=ProviderCapabilities(workflows=("text_to_image",)),
         ),
         _FakeProvider(
@@ -417,8 +437,8 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() 
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:4] == ("fal", "runware", "huggingface", "pollinations")
-    assert decision.selected_provider == "fal"
+    assert decision.provider_candidates[:5] == ("openai", "fal", "runware", "huggingface", "pollinations")
+    assert decision.selected_provider == "openai"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
     assert decision.routing_reason == "pro_balanced_standard_default"
@@ -427,8 +447,13 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() 
 def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -> None:
     registry = _registry_with(
         _FakeProvider(
-            name="fal",
+            name="openai",
             rollout_tier="primary",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="fal",
+            rollout_tier="secondary",
             capabilities=ProviderCapabilities(workflows=("text_to_image",)),
         ),
         _FakeProvider(
@@ -460,8 +485,8 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:4] == ("fal", "runware", "pollinations", "huggingface")
-    assert decision.selected_provider == "fal"
+    assert decision.provider_candidates[:5] == ("openai", "fal", "runware", "pollinations", "huggingface")
+    assert decision.selected_provider == "openai"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
     assert decision.routing_reason == "pro_balanced_standard_default"
@@ -470,8 +495,16 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -
 def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows() -> None:
     registry = _registry_with(
         _FakeProvider(
-            name="fal",
+            name="openai",
             rollout_tier="primary",
+            capabilities=ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            ),
+        ),
+        _FakeProvider(
+            name="fal",
+            rollout_tier="secondary",
             capabilities=ProviderCapabilities(
                 workflows=("text_to_image", "image_to_image", "edit"),
                 supports_reference_image=True,
@@ -505,7 +538,7 @@ def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows
         has_reference_image=True,
     )
 
-    assert decision.provider_candidates == ("fal", "huggingface")
+    assert decision.provider_candidates == ("openai", "fal", "huggingface")
     assert "pollinations" not in decision.provider_candidates
     assert "demo" not in decision.provider_candidates
 
@@ -939,6 +972,189 @@ async def test_runware_provider_surfaces_validation_errors_as_fatal() -> None:
 
 
 @pytest.mark.asyncio
+async def test_openai_image_provider_generates_from_b64_json_response() -> None:
+    submitted_payload: dict[str, object] = {}
+    png_bytes = image_bytes(width=1024, height=1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal submitted_payload
+        submitted_payload = json.loads(request.content.decode("utf-8"))
+        assert request.url.path == "/v1/images/generations"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        image_model="gpt-image-1.5",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await provider.generate(
+        prompt="editorial skincare bottle on marble",
+        negative_prompt="blurry, low detail",
+        width=1024,
+        height=1024,
+        seed=10,
+        model_id="realvis-xl",
+    )
+
+    assert result.provider == "openai"
+    assert result.mime_type == "image/png"
+    assert result.image_bytes == png_bytes
+    assert result.width == 1024
+    assert result.height == 1024
+    assert result.estimated_cost == 0.133
+    assert submitted_payload["model"] == "gpt-image-1.5"
+    assert submitted_payload["quality"] == "high"
+    assert submitted_payload["size"] == "1024x1024"
+    assert "Avoid: blurry, low detail" in str(submitted_payload["prompt"])
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_uses_edit_endpoint_for_reference_workflow() -> None:
+    seen_content_type = ""
+    seen_body = b""
+    png_bytes = image_bytes(width=1024, height=1536)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal seen_content_type, seen_body
+        seen_content_type = request.headers.get("content-type", "")
+        seen_body = request.content
+        assert request.url.path == "/v1/images/edits"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        image_model="gpt-image-1.5",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await provider.generate(
+        prompt="clean premium ecommerce product shot",
+        negative_prompt="muddy reflections",
+        width=900,
+        height=1200,
+        seed=11,
+        reference_image=ProviderReferenceImage(
+            asset_id="asset-1",
+            image_bytes=image_bytes(width=256, height=256),
+            mime_type="image/png",
+            title="Reference",
+        ),
+        model_id="sdxl-base",
+        workflow="edit",
+    )
+
+    assert result.provider == "openai"
+    assert result.mime_type == "image/png"
+    assert result.width == 1024
+    assert result.height == 1536
+    assert result.estimated_cost == 0.05
+    assert "multipart/form-data" in seen_content_type
+    assert b'name="model"' in seen_body
+    assert b"gpt-image-1.5" in seen_body
+    assert b'name="quality"' in seen_body
+    assert b"medium" in seen_body
+    assert b'name="size"' in seen_body
+    assert b"1024x1536" in seen_body
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_uses_draft_model_for_draft_lane() -> None:
+    submitted_payload: dict[str, object] = {}
+    png_bytes = image_bytes(width=1024, height=1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal submitted_payload
+        submitted_payload = json.loads(request.content.decode("utf-8"))
+        assert request.url.path == "/v1/images/generations"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        draft_image_model="gpt-image-1-mini",
+        image_model="gpt-image-1.5",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await provider.generate(
+        prompt="draft skincare bottle on gray seamless",
+        negative_prompt="blurry",
+        width=1024,
+        height=1024,
+        seed=12,
+        model_id="gpt-image-1-mini",
+    )
+
+    assert result.provider == "openai"
+    assert result.estimated_cost == 0.009
+    assert submitted_payload["model"] == "gpt-image-1-mini"
+    assert submitted_payload["quality"] == "low"
+    assert submitted_payload["size"] == "1024x1024"
+
+
+def test_openai_image_provider_estimates_draft_and_final_lane_costs() -> None:
+    provider = OpenAIImageProvider(
+        "openai-key",
+        draft_image_model="gpt-image-1-mini",
+        image_model="gpt-image-1.5",
+    )
+
+    assert provider.estimate_generation_cost(
+        width=1024,
+        height=1024,
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    ) == 0.009
+    assert provider.estimate_generation_cost(
+        width=1024,
+        height=1024,
+        model_id="realvis-xl",
+        workflow="text_to_image",
+    ) == 0.133
+
+
+def test_fal_provider_estimates_cost_from_selected_model_path() -> None:
+    provider = FalProvider("fal-key")
+
+    assert provider.estimate_generation_cost(
+        width=1024,
+        height=1024,
+        model_id="flux-schnell",
+        workflow="text_to_image",
+    ) == 0.003
+    assert provider.estimate_generation_cost(
+        width=1024,
+        height=1024,
+        model_id="realvis-xl",
+        workflow="text_to_image",
+    ) == 0.04
+
+
+@pytest.mark.asyncio
 async def test_fal_provider_retries_temporary_submit_failures_with_exponential_backoff(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1096,3 +1312,10 @@ async def test_huggingface_provider_falls_back_to_next_candidate_model_when_firs
 
 def base64_png(text: str) -> str:
     return __import__("base64").b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def image_bytes(*, width: int, height: int) -> bytes:
+    buffer = __import__("io").BytesIO()
+    image = Image.new("RGB", (width, height), color=(24, 32, 48))
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()

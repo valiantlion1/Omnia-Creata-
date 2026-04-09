@@ -39,6 +39,8 @@ def _build_generation_job() -> GenerationJob:
         provider_candidates=["pollinations", "huggingface", "demo"],
         model="flux-schnell",
         estimated_cost=0.0,
+        estimated_cost_source="catalog_fallback",
+        pricing_lane="fallback",
         credit_cost=6,
         reserved_credit_cost=3,
         credit_status="reserved",
@@ -172,6 +174,8 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["final_credit_cost"] is None
         assert payload["credit_charge_policy"] == "none"
         assert payload["credit_status"] == "reserved"
+        assert payload["pricing_lane"] == "fallback"
+        assert payload["estimated_cost_source"] == "catalog_fallback"
     finally:
         await service.shutdown()
 

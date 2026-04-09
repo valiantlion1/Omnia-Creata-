@@ -1,6 +1,7 @@
 import pytest
 
 from config.env import get_settings
+from security.redaction import redact_sensitive_text
 from studio_platform.llm import LLMResult
 from studio_platform.providers import (
     ProviderCapabilities,
@@ -28,6 +29,7 @@ class FakeProvider(StudioImageProvider):
         self.name = name
         self._available = available
         self._error = error
+        self.calls: list[dict[str, object]] = []
 
     async def is_available(self) -> bool:
         return self._available
@@ -48,6 +50,20 @@ class FakeProvider(StudioImageProvider):
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
     ) -> ProviderResult:
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "width": width,
+                "height": height,
+                "seed": seed,
+                "reference_image": reference_image,
+                "model_id": model_id,
+                "steps": steps,
+                "cfg_scale": cfg_scale,
+                "workflow": workflow,
+            }
+        )
         if self._error is not None:
             raise self._error
         return ProviderResult(
@@ -93,6 +109,36 @@ def test_build_default_smoke_cases_can_filter_chat_surface() -> None:
     assert all(case.workflow == "chat" for case in cases)
 
 
+def test_build_default_smoke_cases_include_openai_image_and_chat_surfaces() -> None:
+    cases = build_default_smoke_cases(
+        selected_provider="openai",
+        selected_surface="all",
+        include_failure_probe=False,
+    )
+    assert {case.provider_name for case in cases} == {"openai"}
+    assert {case.surface for case in cases} == {"chat", "image"}
+    assert any(case.workflow == "text_to_image" for case in cases if case.surface == "image")
+    assert any(case.workflow == "edit" for case in cases if case.surface == "image")
+    assert any(case.workflow == "chat" for case in cases if case.surface == "chat")
+
+
+def test_build_default_smoke_cases_split_openai_image_into_draft_and_final_lanes() -> None:
+    settings = get_settings()
+    cases = build_default_smoke_cases(
+        selected_provider="openai",
+        selected_surface="image",
+        include_failure_probe=False,
+    )
+
+    image_cases = {(case.label, case.lane, case.model, case.workflow) for case in cases}
+
+    assert image_cases == {
+        ("openai-draft-text-to-image", "draft", settings.openai_image_draft_model, "text_to_image"),
+        ("openai-final-text-to-image", "final", settings.openai_image_model, "text_to_image"),
+        ("openai-final-image-edit", "final", settings.openai_image_model, "edit"),
+    }
+
+
 def test_build_smoke_reference_image_returns_png_reference() -> None:
     reference = build_smoke_reference_image()
     assert reference.asset_id == "smoke-reference"
@@ -115,6 +161,27 @@ async def test_run_provider_smoke_case_reports_success() -> None:
     assert result.status == "ok"
     assert result.actual_provider == "fal"
     assert result.output_bytes == len(b"image-bytes")
+
+
+@pytest.mark.asyncio
+async def test_run_provider_smoke_case_forwards_model_and_lane() -> None:
+    provider = FakeProvider("openai")
+    result = await run_provider_smoke_case(
+        provider,
+        ProviderSmokeCase(
+            label="openai-draft",
+            provider_name="openai",
+            workflow="text_to_image",
+            surface="image",
+            lane="draft",
+            model="gpt-image-1-mini",
+            prompt="A draft skincare render",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert result.lane == "draft"
+    assert provider.calls[0]["model_id"] == "gpt-image-1-mini"
 
 
 @pytest.mark.asyncio
@@ -171,6 +238,47 @@ async def test_run_chat_provider_smoke_case_reports_success() -> None:
         assert result.text_preview and "STUDIO_SMOKE_OK" in result.text_preview
     finally:
         settings.gemini_api_key = original_gemini_api_key
+
+
+@pytest.mark.asyncio
+async def test_run_chat_provider_smoke_case_redacts_sensitive_error_text() -> None:
+    settings = get_settings()
+    original_gemini_api_key = settings.gemini_api_key
+    settings.gemini_api_key = "AIzaSyRealKeyShouldNeverLeak1234567890"
+    try:
+        result = await run_chat_provider_smoke_case(
+            FakeGateway(
+                error=RuntimeError(
+                    "provider failed at https://generativelanguage.googleapis.com/v1beta/models"
+                    "/gemini-2.5-flash:generateContent?key=AIzaSyRealKeyShouldNeverLeak1234567890"
+                )
+            ),
+            ProviderSmokeCase(
+                label="gemini-chat",
+                provider_name="gemini",
+                workflow="chat",
+                surface="chat",
+                prompt="Return STUDIO_SMOKE_OK and one sentence.",
+            ),
+        )
+        assert result.status == "error"
+        assert result.error is not None
+        assert "AIzaSyRealKeyShouldNeverLeak1234567890" not in result.error
+        assert "ShouldNeverLeak1234567890" not in result.error
+        assert "***REDACTED***" in result.error
+    finally:
+        settings.gemini_api_key = original_gemini_api_key
+
+
+def test_redact_sensitive_text_fully_masks_query_param_value() -> None:
+    redacted = redact_sensitive_text(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        "?key=AIzaSyCPQPhy6yWLzfJ6W7icofB771qmdfifG90"
+    )
+
+    assert "?key=***REDACTED***" in redacted
+    assert "AIzaSyCPQPhy6yWLzfJ6W7icofB771qmdfifG90" not in redacted
+    assert "SyCPQPhy6yWLzfJ6W7icofB771qmdfifG90" not in redacted
 
 
 @pytest.mark.asyncio

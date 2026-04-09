@@ -18,7 +18,7 @@ _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
 }
 
 _CHAT_LAUNCH_GRADE_PROVIDERS = frozenset({"gemini", "openrouter", "openai"})
-_IMAGE_LAUNCH_GRADE_PROVIDERS = frozenset({"fal", "runware"})
+_IMAGE_LAUNCH_GRADE_PROVIDERS = frozenset({"openai", "fal", "runware"})
 _IMAGE_FALLBACK_ONLY_PROVIDERS = frozenset({"huggingface", "pollinations"})
 _IMAGE_DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
 
@@ -491,6 +491,7 @@ def _summarize_smoke_coverage(results: list[dict[str, Any]]) -> dict[str, Any]:
             "skipped": 0,
             "error": 0,
             "providers": [],
+            "lanes": {},
         }
 
     surfaces: dict[str, dict[str, Any]] = {
@@ -507,6 +508,12 @@ def _summarize_smoke_coverage(results: list[dict[str, Any]]) -> dict[str, Any]:
         provider_name = str(result.get("provider_name") or "").strip().lower()
         if provider_name and provider_name not in surface_summary["providers"]:
             surface_summary["providers"].append(provider_name)
+        lane = str(result.get("lane") or "").strip().lower()
+        if provider_name and lane:
+            lane_map = surface_summary.setdefault("lanes", {})
+            recorded_lanes = lane_map.setdefault(provider_name, [])
+            if lane not in recorded_lanes:
+                recorded_lanes.append(lane)
 
     chat_tested = sorted(
         provider
@@ -529,6 +536,16 @@ def _summarize_smoke_coverage(results: list[dict[str, Any]]) -> dict[str, Any]:
         "chat_launch_grade_providers_tested": chat_tested,
         "image_launch_grade_providers_tested": image_launch_grade_tested,
         "image_fallback_only_providers_tested": image_fallback_tested,
+        "chat_lanes_tested": {
+            provider: lanes
+            for provider, lanes in surfaces.get("chat", {}).get("lanes", {}).items()
+            if provider in _CHAT_LAUNCH_GRADE_PROVIDERS
+        },
+        "image_lanes_tested": {
+            provider: lanes
+            for provider, lanes in surfaces.get("image", {}).get("lanes", {}).items()
+            if provider in (_IMAGE_LAUNCH_GRADE_PROVIDERS | _IMAGE_FALLBACK_ONLY_PROVIDERS)
+        },
     }
 
 
@@ -546,6 +563,7 @@ def _build_provider_truth_report(
         smoke_lookup=smoke_lookup,
     )
     image_truth = _build_image_provider_truth(
+        settings=settings,
         provider_status=provider_status,
         smoke_lookup=smoke_lookup,
     )
@@ -587,7 +605,7 @@ def _build_provider_truth_report(
             ),
             "detail": " | ".join(economics_reasons + resilience_warnings)
             if economics_reasons or resilience_warnings
-            else "Chat can use premium API lanes and image generation has a managed launch-grade lane.",
+            else "Chat can use premium API lanes and image generation has a launch-grade billable lane.",
             "chat_cost_class": chat_truth["cost_class"],
             "image_cost_class": image_truth["cost_class"],
             "chat_public_paid_usage_ready": chat_truth["public_paid_usage_ready"],
@@ -636,6 +654,9 @@ def _build_provider_smoke_lookup(
                 "statuses": [],
                 "labels": [],
                 "models": [],
+                "lanes": [],
+                "lane_ok": {},
+                "lane_error": {},
                 "last_error": None,
                 "last_error_type": None,
                 "successful_probe": False,
@@ -663,6 +684,14 @@ def _build_provider_smoke_lookup(
         model = str(result.get("model") or "").strip()
         if model and model not in entry["models"]:
             entry["models"].append(model)
+        lane = str(result.get("lane") or "").strip().lower()
+        if lane:
+            if lane not in entry["lanes"]:
+                entry["lanes"].append(lane)
+            lane_ok = entry.setdefault("lane_ok", {})
+            lane_error = entry.setdefault("lane_error", {})
+            lane_ok[lane] = bool(lane_ok.get(lane)) or status == "ok"
+            lane_error[lane] = bool(lane_error.get(lane)) or status == "error"
         if result.get("error") is not None:
             entry["last_error"] = result.get("error")
         if result.get("error_type") is not None:
@@ -696,8 +725,17 @@ def _smoke_has_current_build_error(smoke: dict[str, Any] | None) -> bool:
     )
 
 
+def _smoke_lane_verified_for_current_build(smoke: dict[str, Any] | None, *, lane: str) -> bool:
+    normalized_lane = lane.strip().lower()
+    if not normalized_lane or not smoke or smoke.get("current_build_match") is not True:
+        return False
+    lane_ok = smoke.get("lane_ok") if isinstance(smoke.get("lane_ok"), dict) else {}
+    return lane_ok.get(normalized_lane) is True
+
+
 def _serialize_chat_provider_state(
     *,
+    settings: Settings,
     provider_name: str,
     payload: dict[str, Any],
     smoke_lookup: dict[tuple[str, str], dict[str, Any]],
@@ -705,24 +743,27 @@ def _serialize_chat_provider_state(
     configured = payload.get("configured") is True
     status = str(payload.get("status") or "").strip().lower() or ("healthy" if configured else "not_configured")
     cooldown_remaining_seconds = int(payload.get("cooldown_remaining_seconds") or 0)
+    service_tier = _chat_provider_service_tier(settings=settings, provider=provider_name)
+    launch_grade = _chat_provider_counts_as_launch_grade(settings=settings, provider=provider_name)
     smoke = _smoke_state_for_provider(smoke_lookup=smoke_lookup, surface="chat", provider=provider_name)
     smoke_failed = _smoke_has_current_build_error(smoke)
     smoke_verified_for_current_build = _smoke_verified_for_current_build(smoke)
     runtime_available = configured and status == "healthy" and not smoke_failed
-    healthy_for_launch = runtime_available and smoke_verified_for_current_build
+    healthy_for_launch = runtime_available and smoke_verified_for_current_build and launch_grade
     launch_classification = _classify_launch_provider_state(
         configured=configured,
         runtime_available=healthy_for_launch,
-        launch_grade=True,
+        launch_grade=launch_grade,
     )
     return {
         "provider": provider_name,
-        "lane_class": "launch_grade",
-        "launch_grade": True,
+        "lane_class": "launch_grade" if launch_grade else "limited_free_tier",
+        "launch_grade": launch_grade,
+        "service_tier": service_tier,
         "credential_present": configured,
         "configured": configured,
         "status": status,
-        "detail": _format_chat_provider_state(provider_name, payload),
+        "detail": f"{_format_chat_provider_state(provider_name, payload)} [tier={service_tier}]",
         "runtime_available": runtime_available,
         "healthy_for_launch": healthy_for_launch,
         "smoke_verified_for_current_build": smoke_verified_for_current_build,
@@ -761,6 +802,7 @@ def _build_chat_provider_truth(
                 continue
             provider_states.append(
                 _serialize_chat_provider_state(
+                    settings=settings,
                     provider_name=provider_name,
                     payload=payload,
                     smoke_lookup=smoke_lookup,
@@ -772,6 +814,7 @@ def _build_chat_provider_truth(
             configured = _chat_provider_is_configured(settings=settings, provider=provider_name)
             provider_states.append(
                 _serialize_chat_provider_state(
+                    settings=settings,
                     provider_name=provider_name,
                     payload={
                         "configured": configured,
@@ -782,11 +825,13 @@ def _build_chat_provider_truth(
             )
 
     configured_premium = [item for item in provider_states if item["configured"]]
-    healthy_premium = [item for item in configured_premium if item["healthy_for_launch"] is True]
-    degraded_premium = [item for item in configured_premium if item["healthy_for_launch"] is not True]
+    configured_launch_grade = [item for item in configured_premium if item["launch_grade"] is True]
+    configured_limited = [item for item in configured_premium if item["launch_grade"] is not True]
+    healthy_premium = [item for item in configured_launch_grade if item["healthy_for_launch"] is True]
+    degraded_premium = [item for item in configured_launch_grade if item["healthy_for_launch"] is not True]
     unverified_runtime_healthy = [
         item
-        for item in configured_premium
+        for item in configured_launch_grade
         if item["runtime_available"] is True and item["smoke_verified_for_current_build"] is not True
     ]
     detail = ", ".join(item["detail"] for item in configured_premium) or "no premium chat provider configured"
@@ -804,41 +849,47 @@ def _build_chat_provider_truth(
         status = "blocked"
         summary = "Premium chat does not currently have a healthy launch-grade lane."
 
-    economics_status = "pass" if configured_premium else "warning"
+    economics_status = "pass" if configured_launch_grade else "warning"
     economics_summary = (
-        "Premium chat still depends on heuristic fallback only."
-        if not configured_premium
+        "Configured chat providers are limited to free-tier lanes, so public paid usage is not trustworthy yet."
+        if configured_limited and not configured_launch_grade
         else (
-            "Only one premium chat provider is configured, so cost and resilience still need attention."
-            if len(configured_premium) == 1
-            else ""
+            "Premium chat still depends on heuristic fallback only."
+            if not configured_premium
+            else (
+                "Only one paid premium chat provider is configured, so cost and resilience still need attention."
+                if len(configured_launch_grade) == 1
+                else ""
+            )
         )
     )
-    if len(configured_premium) >= 2:
+    if len(configured_launch_grade) >= 2:
         resilience_status = "pass"
-        resilience_summary = "Premium chat has more than one configured launch-grade lane."
-    elif configured_premium:
+        resilience_summary = "Premium chat has more than one configured paid launch-grade lane."
+    elif configured_launch_grade:
         resilience_status = "warning"
-        resilience_summary = "Premium chat currently relies on a single configured launch-grade lane."
+        resilience_summary = "Premium chat currently relies on a single configured paid launch-grade lane."
     else:
         resilience_status = "blocked"
-        resilience_summary = "Premium chat does not yet have any configured launch-grade lane redundancy."
+        resilience_summary = "Premium chat does not yet have any configured paid launch-grade lane redundancy."
 
     return {
         "status": status,
         "summary": summary,
         "detail": detail,
         "launch_grade_ready": bool(healthy_premium),
-        "public_paid_usage_ready": bool(configured_premium),
+        "public_paid_usage_ready": bool(configured_launch_grade),
         "primary_provider": primary_provider or None,
         "fallback_provider": fallback_provider or None,
-        "configured_launch_grade_provider_count": len(configured_premium),
+        "configured_launch_grade_provider_count": len(configured_launch_grade),
         "healthy_launch_grade_provider_count": len(healthy_premium),
-        "configured_launch_grade_providers": [item["provider"] for item in configured_premium],
+        "configured_launch_grade_providers": [item["provider"] for item in configured_launch_grade],
         "healthy_launch_grade_providers": [item["provider"] for item in healthy_premium],
         "degraded_launch_grade_providers": [item["provider"] for item in degraded_premium],
+        "configured_limited_provider_count": len(configured_limited),
+        "configured_limited_providers": [item["provider"] for item in configured_limited],
         "fallback_only_provider": "heuristic",
-        "cost_class": "premium_api_variable" if configured_premium else "fallback_only",
+        "cost_class": "premium_api_variable" if configured_launch_grade else "fallback_only_or_free_tier",
         "economics_status": economics_status,
         "economics_summary": economics_summary,
         "resilience_status": resilience_status,
@@ -876,6 +927,7 @@ def _classify_launch_provider_state(
 
 def _build_image_provider_truth(
     *,
+    settings: Settings,
     provider_status: list[dict[str, Any]],
     smoke_lookup: dict[tuple[str, str], dict[str, Any]],
 ) -> dict[str, Any]:
@@ -887,7 +939,7 @@ def _build_image_provider_truth(
 
     launch_grade_states = [
         _serialize_image_provider_state(provider_map.get(name), provider=name, smoke_lookup=smoke_lookup)
-        for name in ("fal", "runware")
+        for name in ("openai", "fal", "runware")
     ]
     fallback_states = [
         _serialize_image_provider_state(provider_map.get(name), provider=name, smoke_lookup=smoke_lookup)
@@ -907,6 +959,10 @@ def _build_image_provider_truth(
     ]
     configured_fallback = [item for item in fallback_states if item["configured"]]
     configured_degraded = [item for item in degraded_states if item["configured"]]
+    lane_truth = _build_image_lane_truth(
+        settings=settings,
+        launch_grade_states=launch_grade_states,
+    )
 
     detail_groups: list[str] = []
     for label, items in (
@@ -921,16 +977,16 @@ def _build_image_provider_truth(
 
     if healthy_launch_grade:
         status = "pass"
-        summary = "Image generation has a healthy managed launch-grade lane."
+        summary = "Image generation has a healthy launch-grade billable lane."
     elif unverified_runtime_healthy:
         status = "blocked"
-        summary = "Managed image lanes exist, but the current build has not proven them through live smoke yet."
+        summary = "Launch-grade image lanes exist, but the current build has not proven them through live smoke yet."
     elif configured_launch_grade:
         status = "blocked"
-        summary = "Managed image providers are configured, but none are currently healthy."
+        summary = "Launch-grade image providers are configured, but none are currently healthy."
     else:
         status = "blocked"
-        summary = "Image generation does not currently have a launch-grade managed lane."
+        summary = "Image generation does not currently have a launch-grade billable lane."
 
     if configured_launch_grade:
         economics_status = "pass"
@@ -942,17 +998,17 @@ def _build_image_provider_truth(
         )
     else:
         economics_status = "warning"
-        economics_summary = "No managed image provider is configured for public paid usage."
+        economics_summary = "No launch-grade billable image provider is configured for public paid usage."
 
     if len(configured_launch_grade) >= 2:
         resilience_status = "pass"
-        resilience_summary = "Image generation has more than one configured managed launch-grade lane."
+        resilience_summary = "Image generation has more than one configured launch-grade billable lane."
     elif configured_launch_grade:
         resilience_status = "warning"
-        resilience_summary = "Image generation currently relies on a single configured managed launch-grade lane."
+        resilience_summary = "Image generation currently relies on a single configured launch-grade billable lane."
     else:
         resilience_status = "blocked"
-        resilience_summary = "Image generation does not yet have managed launch-grade lane redundancy."
+        resilience_summary = "Image generation does not yet have launch-grade billable lane redundancy."
 
     return {
         "status": status,
@@ -971,7 +1027,106 @@ def _build_image_provider_truth(
         "economics_summary": economics_summary,
         "resilience_status": resilience_status,
         "resilience_summary": resilience_summary,
+        "lane_truth": lane_truth,
         "providers": launch_grade_states + fallback_states + degraded_states,
+    }
+
+
+def _build_image_lane_truth(
+    *,
+    settings: Settings,
+    launch_grade_states: list[dict[str, Any]],
+) -> dict[str, Any]:
+    provider_map = {
+        str(item.get("provider") or "").strip().lower(): item
+        for item in launch_grade_states
+        if isinstance(item, dict)
+    }
+    openai_state = provider_map.get("openai", {})
+    openai_smoke = openai_state.get("smoke") if isinstance(openai_state, dict) else None
+    openai_configured = bool(openai_state.get("configured"))
+    openai_runtime_available = bool(openai_state.get("runtime_available"))
+    draft_model = str(settings.openai_image_draft_model or "gpt-image-1-mini").strip() or "gpt-image-1-mini"
+    final_model = str(settings.openai_image_model or "gpt-image-1.5").strip() or "gpt-image-1.5"
+    draft_verified = _smoke_lane_verified_for_current_build(openai_smoke, lane="draft")
+    final_verified = _smoke_lane_verified_for_current_build(openai_smoke, lane="final")
+
+    secondary_states = [
+        provider_map.get(name, {"provider": name, "configured": False, "healthy_for_launch": False})
+        for name in ("fal", "runware")
+    ]
+    configured_secondary = [
+        str(item.get("provider") or "").strip().lower()
+        for item in secondary_states
+        if item.get("configured") is True
+    ]
+    healthy_secondary = [
+        str(item.get("provider") or "").strip().lower()
+        for item in secondary_states
+        if item.get("healthy_for_launch") is True
+    ]
+
+    if openai_configured and draft_verified and final_verified and healthy_secondary:
+        status = "pass"
+        summary = "OpenAI draft/final lanes and a secondary image lane are proven on the current build."
+    elif openai_configured and draft_verified and final_verified:
+        status = "warning"
+        summary = "OpenAI draft/final image lanes are proven, but no secondary launch-grade image lane is healthy yet."
+    elif openai_configured and (draft_verified or final_verified):
+        status = "warning"
+        summary = "OpenAI image lanes are only partially proven on the current build."
+    elif openai_configured and openai_runtime_available:
+        status = "warning"
+        summary = "OpenAI image lanes are configured, but current-build smoke has not proven both draft and final lanes yet."
+    elif openai_configured:
+        status = "warning"
+        summary = "OpenAI image lane is configured but not currently healthy enough to prove draft/final routing."
+    else:
+        status = "warning"
+        summary = "OpenAI draft/final image ladder is not configured yet."
+
+    details: list[str] = []
+    if openai_configured:
+        details.append(
+            "OpenAI draft="
+            + ("verified" if draft_verified else "unproven")
+            + f" ({draft_model})"
+        )
+        details.append(
+            "OpenAI final="
+            + ("verified" if final_verified else "unproven")
+            + f" ({final_model})"
+        )
+    else:
+        details.append("OpenAI draft/final lanes are not configured")
+
+    if healthy_secondary:
+        details.append("secondary healthy=" + ", ".join(healthy_secondary))
+    elif configured_secondary:
+        details.append("secondary configured but unproven=" + ", ".join(configured_secondary))
+    else:
+        details.append("no secondary launch-grade image lane configured")
+
+    return {
+        "status": status,
+        "summary": summary,
+        "detail": " | ".join(details),
+        "draft_lane": {
+            "provider": "openai" if openai_configured else None,
+            "model": draft_model,
+            "configured": openai_configured,
+            "runtime_available": openai_runtime_available,
+            "smoke_verified_for_current_build": draft_verified,
+        },
+        "final_lane": {
+            "provider": "openai" if openai_configured else None,
+            "model": final_model,
+            "configured": openai_configured,
+            "runtime_available": openai_runtime_available,
+            "smoke_verified_for_current_build": final_verified,
+        },
+        "secondary_launch_grade_providers": secondary_states,
+        "healthy_secondary_launch_grade_providers": healthy_secondary,
     }
 
 
@@ -1067,6 +1222,24 @@ def _chat_provider_is_configured(*, settings: Settings, provider: str) -> bool:
     if normalized == "openai":
         return bool((settings.openai_api_key or "").strip())
     return False
+
+
+def _chat_provider_service_tier(*, settings: Settings, provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized == "gemini":
+        return str(settings.gemini_service_tier or "free").strip().lower() or "free"
+    if normalized == "openrouter":
+        return str(settings.openrouter_service_tier or "paid").strip().lower() or "paid"
+    if normalized == "openai":
+        return str(settings.openai_service_tier or "paid").strip().lower() or "paid"
+    return "paid"
+
+
+def _chat_provider_counts_as_launch_grade(*, settings: Settings, provider: str) -> bool:
+    normalized = provider.strip().lower()
+    if normalized not in _CHAT_LAUNCH_GRADE_PROVIDERS:
+        return False
+    return _chat_provider_service_tier(settings=settings, provider=normalized) == "paid"
 
 
 def _build_smoke_check(
@@ -1178,6 +1351,7 @@ def _resolve_smoke_coverage_gaps(
     gaps: list[str] = []
     chat_tested = set(_coerce_string_list(coverage.get("chat_launch_grade_providers_tested")))
     image_tested = set(_coerce_string_list(coverage.get("image_launch_grade_providers_tested")))
+    image_lanes_tested = _coerce_lane_map(coverage.get("image_lanes_tested"))
 
     configured_chat = set(_configured_chat_launch_grade_providers(settings=settings, chat_routing=chat_routing))
     missing_chat = sorted(configured_chat - chat_tested)
@@ -1191,27 +1365,44 @@ def _resolve_smoke_coverage_gaps(
     missing_image = sorted(configured_image - image_tested)
     if missing_image:
         gaps.append(
-            "configured managed image lanes were not smoke-tested on this build: "
+            "configured launch-grade image lanes were not smoke-tested on this build: "
             + ", ".join(missing_image)
         )
+
+    if "openai" in configured_image:
+        openai_lanes = set(image_lanes_tested.get("openai", []))
+        if "draft" not in openai_lanes:
+            gaps.append("OpenAI draft image lane was not smoke-tested on this build")
+        if "final" not in openai_lanes:
+            gaps.append("OpenAI final image lane was not smoke-tested on this build")
 
     return gaps
 
 
 def _configured_chat_launch_grade_providers(*, settings: Settings, chat_routing: dict[str, Any]) -> list[str]:
+    def _is_launch_grade_configured(provider_name: str, payload: dict[str, Any] | None) -> bool:
+        return bool(
+            isinstance(payload, dict)
+            and payload.get("configured") is True
+            and _chat_provider_counts_as_launch_grade(settings=settings, provider=provider_name)
+        )
+
     providers_payload = chat_routing.get("providers") if isinstance(chat_routing, dict) else None
     configured: list[str] = []
     if isinstance(providers_payload, dict):
         for provider_name in ("gemini", "openrouter", "openai"):
             payload = providers_payload.get(provider_name)
-            if isinstance(payload, dict) and payload.get("configured") is True:
+            if _is_launch_grade_configured(provider_name, payload):
                 configured.append(provider_name)
     if configured:
         return configured
 
     fallback_configured: list[str] = []
     for provider_name in ("gemini", "openrouter", "openai"):
-        if _chat_provider_is_configured(settings=settings, provider=provider_name):
+        if (
+            _chat_provider_is_configured(settings=settings, provider=provider_name)
+            and _chat_provider_counts_as_launch_grade(settings=settings, provider=provider_name)
+        ):
             fallback_configured.append(provider_name)
     return fallback_configured
 
@@ -1223,7 +1414,7 @@ def _configured_image_launch_grade_providers(*, provider_status: list[dict[str, 
         if isinstance(provider, dict) and str(provider.get("name") or "").strip()
     }
     configured: list[str] = []
-    for provider_name in ("fal", "runware"):
+    for provider_name in ("openai", "fal", "runware"):
         payload = provider_map.get(provider_name)
         if not isinstance(payload, dict):
             continue
@@ -1241,9 +1432,17 @@ def _format_smoke_coverage_detail(coverage: dict[str, Any]) -> str:
         if not isinstance(surface_payload, dict):
             continue
         providers = _coerce_string_list(surface_payload.get("providers"))
+        lane_map = _coerce_lane_map(surface_payload.get("lanes"))
         ok_count = int(surface_payload.get("ok") or 0)
         if providers:
-            details.append(f"{surface}={','.join(providers)} (ok={ok_count})")
+            lane_bits = []
+            for provider in providers:
+                lanes = lane_map.get(provider, [])
+                if lanes:
+                    lane_bits.append(f"{provider}[{','.join(lanes)}]")
+                else:
+                    lane_bits.append(provider)
+            details.append(f"{surface}={','.join(lane_bits)} (ok={ok_count})")
     if not details:
         return "no provider surfaces were captured"
     return " | ".join(details)
@@ -1257,6 +1456,19 @@ def _coerce_string_list(values: Any) -> list[str]:
         value = str(raw_value or "").strip().lower()
         if value and value not in result:
             result.append(value)
+    return result
+
+
+def _coerce_lane_map(values: Any) -> dict[str, list[str]]:
+    if not isinstance(values, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for raw_key, raw_lanes in values.items():
+        key = str(raw_key or "").strip().lower()
+        if not key:
+            continue
+        lanes = _coerce_string_list(raw_lanes)
+        result[key] = lanes
     return result
 
 

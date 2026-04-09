@@ -124,6 +124,47 @@ def test_provider_smoke_report_merges_current_build_surfaces_for_same_env_source
         settings.studio_runtime_root = original_runtime_root
 
 
+def test_provider_smoke_report_tracks_openai_image_lanes_for_current_build(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    try:
+        report = persist_provider_smoke_report(
+            settings,
+            selected_provider="openai",
+            selected_surface="image",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openai-draft-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "draft",
+                    "model": "gpt-image-1-mini",
+                    "status": "ok",
+                    "latency_ms": 420,
+                },
+                {
+                    "label": "openai-final-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "final",
+                    "model": "gpt-image-1.5",
+                    "status": "ok",
+                    "latency_ms": 730,
+                },
+            ],
+        )
+
+        assert report["coverage"]["image_launch_grade_providers_tested"] == ["openai"]
+        assert report["coverage"]["image_lanes_tested"]["openai"] == ["draft", "final"]
+        assert report["coverage"]["surfaces"]["image"]["lanes"]["openai"] == ["draft", "final"]
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+
+
 def test_launch_readiness_keeps_successful_smoke_when_failure_probe_also_exists(tmp_path: Path) -> None:
     settings = get_settings()
     original_runtime_root = settings.studio_runtime_root
@@ -251,6 +292,8 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
     original_supabase_service_role_key = settings.supabase_service_role_key
     original_openrouter_api_key = settings.openrouter_api_key
     original_fal_api_key = settings.fal_api_key
+    original_gemini_service_tier = settings.gemini_service_tier
+    original_openrouter_service_tier = settings.openrouter_service_tier
 
     settings.studio_runtime_root = str(tmp_path / "runtime-root")
     settings.environment = Environment.STAGING
@@ -259,6 +302,8 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
     settings.supabase_service_role_key = "service-role-key"
     settings.openrouter_api_key = "openrouter-key"
     settings.fal_api_key = "fal-key"
+    settings.gemini_service_tier = "paid"
+    settings.openrouter_service_tier = "paid"
     try:
         startup_report, runtime_logs = _seed_operator_runtime_artifacts(
             settings,
@@ -360,7 +405,7 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
         assert readiness["provider_truth"]["economics"]["chat_cost_class"] == "premium_api_variable"
         assert readiness["provider_truth"]["economics"]["image_cost_class"] == "managed_image_variable"
         assert readiness["provider_truth"]["economics"]["image_resilience_status"] == "warning"
-        assert "single configured managed launch-grade lane" in " ".join(
+        assert "single configured launch-grade billable lane" in " ".join(
             readiness["provider_truth"]["economics"]["resilience_warnings"]
         )
     finally:
@@ -617,6 +662,202 @@ def test_launch_readiness_marks_provider_smoke_warning_when_report_is_stale_for_
         settings.supabase_service_role_key = original_supabase_service_role_key
         settings.openrouter_api_key = original_openrouter_api_key
         settings.fal_api_key = original_fal_api_key
+
+
+def test_launch_readiness_does_not_treat_free_tier_gemini_as_public_paid_ready(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+    original_gemini_api_key = settings.gemini_api_key
+    original_gemini_service_tier = settings.gemini_service_tier
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.STAGING
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_anon_key = "anon-key"
+    settings.supabase_service_role_key = "service-role-key"
+    settings.gemini_api_key = "gemini-key"
+    settings.gemini_service_tier = "free"
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        deployment_report = persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://staging-studio.omniacreata.com",
+            report={
+                "status": "pass",
+                "summary": "Deployment verification passed.",
+                "checks": [],
+                "actual_build": load_version_info().build,
+            },
+        )
+        report = persist_provider_smoke_report(
+            settings,
+            selected_provider="gemini",
+            selected_surface="chat",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                    "text_preview": "STUDIO_SMOKE_OK creative direction aligned.",
+                }
+            ],
+        )
+
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[{"name": "pollinations", "status": "healthy", "detail": "fallback lane"}],
+            data_authority={"backend": "postgres", "durable": True},
+            generation_runtime_mode="web",
+            generation_broker={"enabled": True, "configured": True},
+            chat_routing={
+                "primary_provider": "gemini",
+                "fallback_provider": "heuristic",
+                "providers": {
+                    "gemini": {"configured": True, "status": "healthy"},
+                    "openrouter": {"configured": False, "status": "not_configured"},
+                    "openai": {"configured": False, "status": "not_configured"},
+                },
+            },
+            provider_smoke_report=report,
+            startup_verification_report=startup_report,
+            deployment_verification_report=deployment_report,
+            runtime_logs=runtime_logs,
+        )
+
+        gemini_state = next(
+            provider
+            for provider in readiness["provider_truth"]["chat"]["providers"]
+            if provider["provider"] == "gemini"
+        )
+        assert gemini_state["service_tier"] == "free"
+        assert gemini_state["lane_class"] == "limited_free_tier"
+        assert gemini_state["runtime_available"] is True
+        assert gemini_state["healthy_for_launch"] is False
+        assert readiness["provider_truth"]["chat"]["public_paid_usage_ready"] is False
+        assert readiness["provider_truth"]["chat"]["configured_launch_grade_provider_count"] == 0
+        assert readiness["provider_truth"]["chat"]["configured_limited_provider_count"] == 1
+        assert readiness["provider_truth"]["chat"]["cost_class"] == "fallback_only_or_free_tier"
+        assert "free-tier" in readiness["provider_truth"]["chat"]["economics_summary"]
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+        settings.gemini_api_key = original_gemini_api_key
+        settings.gemini_service_tier = original_gemini_service_tier
+
+
+def test_launch_readiness_reports_openai_image_lane_truth_for_current_build_smoke(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+    original_openai_api_key = settings.openai_api_key
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.STAGING
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_anon_key = "anon-key"
+    settings.supabase_service_role_key = "service-role-key"
+    settings.openai_api_key = "openai-key"
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        deployment_report = persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://staging-studio.omniacreata.com",
+            report={
+                "status": "pass",
+                "summary": "Deployment verification passed.",
+                "checks": [],
+                "actual_build": load_version_info().build,
+            },
+        )
+        report = persist_provider_smoke_report(
+            settings,
+            selected_provider="openai",
+            selected_surface="image",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openai-draft-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "draft",
+                    "model": settings.openai_image_draft_model,
+                    "status": "ok",
+                    "latency_ms": 380,
+                },
+                {
+                    "label": "openai-final-text-to-image",
+                    "provider_name": "openai",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "lane": "final",
+                    "model": settings.openai_image_model,
+                    "status": "ok",
+                    "latency_ms": 640,
+                },
+            ],
+        )
+
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[{"name": "openai", "status": "healthy", "detail": "configured"}],
+            data_authority={"backend": "postgres", "durable": True},
+            generation_runtime_mode="web",
+            generation_broker={"enabled": True, "configured": True},
+            chat_routing={
+                "primary_provider": "openrouter",
+                "fallback_provider": "heuristic",
+                "providers": {
+                    "gemini": {"configured": False, "status": "not_configured"},
+                    "openrouter": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
+                },
+            },
+            provider_smoke_report=report,
+            startup_verification_report=startup_report,
+            deployment_verification_report=deployment_report,
+            runtime_logs=runtime_logs,
+        )
+
+        lane_truth = readiness["provider_truth"]["image"]["lane_truth"]
+        assert lane_truth["status"] == "warning"
+        assert lane_truth["draft_lane"]["configured"] is True
+        assert lane_truth["draft_lane"]["smoke_verified_for_current_build"] is True
+        assert lane_truth["draft_lane"]["model"] == settings.openai_image_draft_model
+        assert lane_truth["final_lane"]["smoke_verified_for_current_build"] is True
+        assert lane_truth["final_lane"]["model"] == settings.openai_image_model
+        assert lane_truth["healthy_secondary_launch_grade_providers"] == []
+        assert "no secondary launch-grade image lane configured" in lane_truth["detail"]
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+        settings.openai_api_key = original_openai_api_key
 
 
 def test_launch_readiness_blocks_when_only_fallback_image_lanes_exist(tmp_path: Path) -> None:

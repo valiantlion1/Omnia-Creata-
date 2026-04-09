@@ -8,6 +8,7 @@ from typing import Any, Optional, Type
 from PIL import Image, ImageDraw
 
 from config.env import Settings, get_settings
+from security.redaction import redact_sensitive_text
 
 from ..llm import StudioLLMGateway
 from ..providers import (
@@ -26,6 +27,7 @@ class ProviderSmokeCase:
     workflow: str
     prompt: str
     surface: str = "image"
+    lane: str | None = None
     model: str | None = None
     negative_prompt: str = ""
     width: int = 1024
@@ -43,6 +45,7 @@ class ProviderSmokeResult:
     provider_name: str
     workflow: str
     surface: str
+    lane: str | None
     status: str
     latency_ms: int
     model: str | None = None
@@ -60,6 +63,7 @@ class ProviderSmokeResult:
             "provider_name": self.provider_name,
             "workflow": self.workflow,
             "surface": self.surface,
+            "lane": self.lane,
             "status": self.status,
             "latency_ms": self.latency_ms,
             "model": self.model,
@@ -117,6 +121,7 @@ def build_default_smoke_cases(
                 provider_name="fal",
                 workflow="text_to_image",
                 surface="image",
+                lane="managed_primary",
                 prompt="Minimal studio product photograph of a matte ceramic mug on a soft gray backdrop, premium commercial lighting, clean composition, crisp detail.",
             )
         )
@@ -126,6 +131,7 @@ def build_default_smoke_cases(
                 provider_name="fal",
                 workflow="edit",
                 surface="image",
+                lane="managed_primary",
                 prompt="Turn this into a premium editorial product shot with refined reflections, soft studio lighting, and luxury art-direction.",
                 reference_image=reference_image,
             )
@@ -137,6 +143,7 @@ def build_default_smoke_cases(
                     provider_name="fal",
                     workflow="edit",
                     surface="image",
+                    lane="managed_primary",
                     prompt="Attempt edit without a reference image to verify failure mapping.",
                     expected_error_type=ProviderTemporaryError,
                 )
@@ -149,6 +156,7 @@ def build_default_smoke_cases(
                 provider_name="runware",
                 workflow="text_to_image",
                 surface="image",
+                lane="managed_secondary",
                 prompt="Premium beauty product packshot on a sculpted stone pedestal, dramatic softbox lighting, luxury campaign style, ultra clean background.",
             )
         )
@@ -159,7 +167,57 @@ def build_default_smoke_cases(
                     provider_name="runware",
                     workflow="edit",
                     surface="image",
+                    lane="managed_secondary",
                     prompt="Attempt edit without a reference image to verify fallback does not silently degrade.",
+                    expected_error_type=ProviderTemporaryError,
+                )
+            )
+
+    if normalized_surface in {"all", "image"} and normalized_provider in {"all", "openai"}:
+        cases.append(
+            ProviderSmokeCase(
+                label="openai-draft-text-to-image",
+                provider_name="openai",
+                workflow="text_to_image",
+                surface="image",
+                lane="draft",
+                model=settings.openai_image_draft_model,
+                prompt="Low-cost draft render of a skincare bottle on a minimal plinth, clean lighting, simple ecommerce framing.",
+            )
+        )
+        cases.append(
+            ProviderSmokeCase(
+                label="openai-final-text-to-image",
+                provider_name="openai",
+                workflow="text_to_image",
+                surface="image",
+                lane="final",
+                model=settings.openai_image_model,
+                prompt="Luxury skincare bottle on a sculpted stone plinth, premium studio campaign lighting, editorial polish, high-end product photography.",
+            )
+        )
+        cases.append(
+            ProviderSmokeCase(
+                label="openai-final-image-edit",
+                provider_name="openai",
+                workflow="edit",
+                surface="image",
+                lane="final",
+                model=settings.openai_image_model,
+                prompt="Turn this into a premium ecommerce hero image with soft daylight, clean background separation, and crisp product styling.",
+                reference_image=reference_image,
+            )
+        )
+        if include_failure_probe:
+            cases.append(
+                ProviderSmokeCase(
+                    label="openai-edit-missing-reference-probe",
+                    provider_name="openai",
+                    workflow="edit",
+                    surface="image",
+                    lane="final",
+                    model=settings.openai_image_model,
+                    prompt="Attempt edit without a reference image to verify honest failure mapping.",
                     expected_error_type=ProviderTemporaryError,
                 )
             )
@@ -171,6 +229,7 @@ def build_default_smoke_cases(
                 provider_name="gemini",
                 workflow="chat",
                 surface="chat",
+                lane="primary" if settings.chat_primary_provider == "gemini" else "dev_or_backup",
                 model=settings.gemini_model,
                 prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
             )
@@ -183,6 +242,11 @@ def build_default_smoke_cases(
                 provider_name="openrouter",
                 workflow="chat",
                 surface="chat",
+                lane=(
+                    "primary"
+                    if settings.chat_primary_provider == "openrouter"
+                    else "secondary" if settings.chat_fallback_provider == "openrouter" else "backup"
+                ),
                 model=settings.openrouter_model,
                 prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
             )
@@ -195,6 +259,11 @@ def build_default_smoke_cases(
                 provider_name="openai",
                 workflow="chat",
                 surface="chat",
+                lane=(
+                    "primary"
+                    if settings.chat_primary_provider == "openai"
+                    else "secondary" if settings.chat_fallback_provider == "openai" else "optional"
+                ),
                 model=settings.openai_model,
                 prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
             )
@@ -225,6 +294,7 @@ async def run_provider_smoke_case(
             provider_name=case.provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="skipped",
             latency_ms=0,
             model=case.model,
@@ -239,6 +309,7 @@ async def run_provider_smoke_case(
             height=case.height,
             seed=case.seed,
             reference_image=case.reference_image,
+            model_id=case.model,
             steps=case.steps,
             cfg_scale=case.cfg_scale,
             workflow=case.workflow,
@@ -251,22 +322,24 @@ async def run_provider_smoke_case(
                 provider_name=case.provider_name,
                 workflow=case.workflow,
                 surface=case.surface,
+                lane=case.lane,
                 status="expected_failure",
                 latency_ms=latency_ms,
                 model=case.model,
                 error_type=exc.__class__.__name__,
-                error=str(exc),
+                error=redact_sensitive_text(exc),
             )
         return ProviderSmokeResult(
             label=case.label,
             provider_name=case.provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="error",
             latency_ms=latency_ms,
             model=case.model,
             error_type=exc.__class__.__name__,
-            error=str(exc),
+            error=redact_sensitive_text(exc),
         )
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
@@ -276,6 +349,7 @@ async def run_provider_smoke_case(
             provider_name=case.provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="error",
             latency_ms=latency_ms,
             model=case.model,
@@ -291,6 +365,7 @@ async def run_provider_smoke_case(
         provider_name=case.provider_name,
         workflow=case.workflow,
         surface=case.surface,
+        lane=case.lane,
         status="ok",
         latency_ms=latency_ms,
         model=case.model,
@@ -314,6 +389,7 @@ async def run_chat_provider_smoke_case(
             provider_name=provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="skipped",
             latency_ms=0,
             model=model,
@@ -328,6 +404,7 @@ async def run_chat_provider_smoke_case(
             provider_name=provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="skipped",
             latency_ms=0,
             model=model,
@@ -355,11 +432,12 @@ async def run_chat_provider_smoke_case(
             provider_name=provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="error",
             latency_ms=latency_ms,
             model=model,
             error_type=exc.__class__.__name__,
-            error=str(exc),
+            error=redact_sensitive_text(exc),
         )
 
     latency_ms = int((time.perf_counter() - started_at) * 1000)
@@ -369,6 +447,7 @@ async def run_chat_provider_smoke_case(
             provider_name=provider_name,
             workflow=case.workflow,
             surface=case.surface,
+            lane=case.lane,
             status="error",
             latency_ms=latency_ms,
             model=model,
@@ -381,6 +460,7 @@ async def run_chat_provider_smoke_case(
         provider_name=provider_name,
         workflow=case.workflow,
         surface=case.surface,
+        lane=case.lane,
         status="ok",
         latency_ms=latency_ms,
         model=getattr(result, "model", None) or model,
@@ -417,6 +497,7 @@ async def run_provider_smoke_suite(
                     provider_name=case.provider_name,
                     workflow=case.workflow,
                     surface=case.surface,
+                    lane=case.lane,
                     status="skipped",
                     latency_ms=0,
                     model=case.model,

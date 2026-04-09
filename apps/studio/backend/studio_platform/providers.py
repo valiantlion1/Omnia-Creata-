@@ -17,6 +17,7 @@ import httpx
 from PIL import Image, ImageDraw, ImageFont
 
 from config.env import get_settings
+from security.redaction import redact_sensitive_text
 
 from .models import IdentityPlan
 from .prompt_engineering import PromptProfileAnalysis, analyze_generation_prompt_profile
@@ -92,7 +93,7 @@ WORKFLOW_COMPATIBILITY: dict[str, tuple[str, ...]] = {
     "image_to_image": ("image_to_image",),
     "edit": ("edit", "image_to_image"),
 }
-_PREMIUM_CAPABLE_PROVIDERS = frozenset({"fal", "runware"})
+_PREMIUM_CAPABLE_PROVIDERS = frozenset({"openai", "fal", "runware"})
 _STANDARD_CAPABLE_PROVIDERS = frozenset({"pollinations", "huggingface"})
 _DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
 _QUALITY_TIER_RANK = {"degraded": 0, "standard": 1, "premium": 2}
@@ -179,6 +180,17 @@ class StudioImageProvider(ABC):
         workflow: str = "text_to_image",
     ) -> ProviderResult:
         raise NotImplementedError
+
+    def estimate_generation_cost(
+        self,
+        *,
+        width: int,
+        height: int,
+        model_id: Optional[str] = None,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> float | None:
+        return None
 
     def supports_generation(self, workflow: str, *, has_reference_image: bool) -> bool:
         normalized = normalize_generation_workflow(workflow, has_reference_image=has_reference_image)
@@ -330,6 +342,26 @@ class FalProvider(StudioImageProvider):
             provider_rollout_tier=self.rollout_tier,
             billable=self.billable,
         )
+
+    def estimate_generation_cost(
+        self,
+        *,
+        width: int,
+        height: int,
+        model_id: Optional[str] = None,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> float | None:
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=has_reference_image,
+        )
+        model_path = self._resolve_model_path(
+            model_id=model_id,
+            workflow=normalized_workflow,
+            has_reference_image=has_reference_image,
+        )
+        return self._estimate_cost(model_path)
 
     def _resolve_model_path(
         self,
@@ -746,6 +778,350 @@ class RunwareProvider(StudioImageProvider):
         raise ProviderTemporaryError(f"Runware request failed ({status_code}): {detail}")
 
 
+class OpenAIImageProvider(StudioImageProvider):
+    name = "openai"
+    rollout_tier = "primary"
+    billable = True
+    capabilities = ProviderCapabilities(
+        workflows=("text_to_image", "image_to_image", "edit"),
+        supports_reference_image=True,
+    )
+
+    _API_BASE_URL = "https://api.openai.com/v1"
+    _DEFAULT_DRAFT_IMAGE_MODEL = "gpt-image-1-mini"
+    _DEFAULT_IMAGE_MODEL = "gpt-image-1.5"
+    _SQUARE_SIZE = "1024x1024"
+    _PORTRAIT_SIZE = "1024x1536"
+    _LANDSCAPE_SIZE = "1536x1024"
+    _QUALITY_BY_MODEL_ID = {
+        "flux-schnell": "low",
+        "sdxl-base": "medium",
+        "realvis-xl": "high",
+        "juggernaut-xl": "high",
+    }
+    _COST_TABLE = {
+        ("1024x1024", "low"): 0.009,
+        ("1024x1024", "medium"): 0.034,
+        ("1024x1024", "high"): 0.133,
+        ("1024x1536", "low"): 0.013,
+        ("1024x1536", "medium"): 0.05,
+        ("1024x1536", "high"): 0.2,
+        ("1536x1024", "low"): 0.013,
+        ("1536x1024", "medium"): 0.05,
+        ("1536x1024", "high"): 0.2,
+    }
+
+    def __init__(
+        self,
+        api_key: Optional[str],
+        *,
+        draft_image_model: Optional[str] = None,
+        image_model: Optional[str] = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
+        self.api_key = api_key
+        self.draft_image_model = (
+            (draft_image_model or self._DEFAULT_DRAFT_IMAGE_MODEL).strip()
+            or self._DEFAULT_DRAFT_IMAGE_MODEL
+        )
+        self.image_model = (image_model or self._DEFAULT_IMAGE_MODEL).strip() or self._DEFAULT_IMAGE_MODEL
+        self._transport = transport
+
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+    async def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    async def health(self, probe: bool = True) -> Dict[str, object]:
+        return {
+            "name": self.name,
+            "status": "healthy" if self.api_key else "not_configured",
+            "detail": (
+                "primary billable image provider configured "
+                f"(draft={self.draft_image_model}, final={self.image_model})"
+                if self.api_key
+                else "OPENAI_API_KEY missing"
+            ),
+        }
+
+    async def generate(
+        self,
+        prompt: str,
+        negative_prompt: str,
+        width: int,
+        height: int,
+        seed: int,
+        reference_image: Optional[ProviderReferenceImage] = None,
+        model_id: Optional[str] = None,
+        steps: int = 30,
+        cfg_scale: float = 6.5,
+        workflow: str = "text_to_image",
+    ) -> ProviderResult:
+        if not self.api_key:
+            raise ProviderTemporaryError("OpenAI image provider is not configured")
+        if not self.supports_generation(workflow, has_reference_image=reference_image is not None):
+            raise ProviderTemporaryError("OpenAI image provider does not support this generation workflow")
+
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
+        )
+        requested_size = self._select_size(width=width, height=height)
+        quality = self._select_quality(model_id=model_id)
+        request_model = self._select_request_model(model_id=model_id, quality=quality)
+        composed_prompt = self._compose_prompt(prompt=prompt, negative_prompt=negative_prompt)
+
+        if normalized_workflow == "text_to_image" and reference_image is None:
+            response_payload = await self._request_generation(
+                prompt=composed_prompt,
+                size=requested_size,
+                quality=quality,
+                model=request_model,
+            )
+        else:
+            if reference_image is None:
+                raise ProviderTemporaryError("OpenAI image edit workflow requires a reference image")
+            response_payload = await self._request_edit(
+                prompt=composed_prompt,
+                size=requested_size,
+                quality=quality,
+                model=request_model,
+                reference_image=reference_image,
+            )
+
+        image_bytes, mime_type = await self._extract_image_bytes(response_payload)
+        actual_width, actual_height = self._inspect_dimensions(
+            image_bytes=image_bytes,
+            requested_size=requested_size,
+        )
+
+        return ProviderResult(
+            provider=self.name,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            width=actual_width,
+            height=actual_height,
+            estimated_cost=self._estimate_cost(size=requested_size, quality=quality),
+            provider_rollout_tier=self.rollout_tier,
+            billable=self.billable,
+        )
+
+    def estimate_generation_cost(
+        self,
+        *,
+        width: int,
+        height: int,
+        model_id: Optional[str] = None,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> float | None:
+        requested_size = self._select_size(width=width, height=height)
+        quality = self._select_quality(model_id=model_id)
+        return self._estimate_cost(size=requested_size, quality=quality)
+
+    async def _request_generation(
+        self,
+        *,
+        prompt: str,
+        size: str,
+        quality: str,
+        model: str,
+    ) -> dict[str, object]:
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "quality": quality,
+            "output_format": "png",
+        }
+        async with self._build_client() as client:
+            async def send_request() -> httpx.Response:
+                try:
+                    response = await client.post(
+                        f"{self._API_BASE_URL}/images/generations",
+                        json=payload,
+                        headers=self._build_headers(json_request=True),
+                    )
+                    response.raise_for_status()
+                    return response
+                except httpx.HTTPStatusError as exc:
+                    self._raise_provider_error(
+                        status_code=exc.response.status_code,
+                        detail=exc.response.text,
+                    )
+                except Exception as exc:
+                    raise ProviderTemporaryError(f"OpenAI image generation failed: {exc}") from exc
+
+            response = await self._run_with_retry(
+                operation_name="image generation",
+                operation=send_request,
+            )
+        return response.json()
+
+    async def _request_edit(
+        self,
+        *,
+        prompt: str,
+        size: str,
+        quality: str,
+        model: str,
+        reference_image: ProviderReferenceImage,
+    ) -> dict[str, object]:
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "quality": quality,
+            "output_format": "png",
+        }
+        files = {
+            "image": (
+                f"{reference_image.asset_id or 'reference'}.png",
+                reference_image.image_bytes,
+                reference_image.mime_type,
+            )
+        }
+        async with self._build_client() as client:
+            async def send_request() -> httpx.Response:
+                try:
+                    response = await client.post(
+                        f"{self._API_BASE_URL}/images/edits",
+                        data=data,
+                        files=files,
+                        headers=self._build_headers(json_request=False),
+                    )
+                    response.raise_for_status()
+                    return response
+                except httpx.HTTPStatusError as exc:
+                    self._raise_provider_error(
+                        status_code=exc.response.status_code,
+                        detail=exc.response.text,
+                    )
+                except Exception as exc:
+                    raise ProviderTemporaryError(f"OpenAI image edit failed: {exc}") from exc
+
+            response = await self._run_with_retry(
+                operation_name="image edit",
+                operation=send_request,
+            )
+        return response.json()
+
+    async def _extract_image_bytes(self, payload: dict[str, object]) -> tuple[bytes, str]:
+        data = payload.get("data")
+        if not isinstance(data, list) or not data:
+            raise ProviderTemporaryError("OpenAI image response did not include result data")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise ProviderTemporaryError("OpenAI image result payload is malformed")
+
+        b64_json = first.get("b64_json")
+        if isinstance(b64_json, str) and b64_json:
+            return base64.b64decode(b64_json), "image/png"
+
+        image_url = first.get("url")
+        if isinstance(image_url, str) and image_url:
+            return await self._download_image(image_url)
+
+        raise ProviderTemporaryError("OpenAI image response did not include image bytes")
+
+    async def _download_image(self, image_url: str) -> tuple[bytes, str]:
+        async with self._build_client() as client:
+            async def download() -> httpx.Response:
+                try:
+                    response = await client.get(image_url)
+                    response.raise_for_status()
+                    return response
+                except httpx.HTTPStatusError as exc:
+                    raise ProviderTemporaryError(
+                        f"OpenAI image download returned {exc.response.status_code}"
+                    ) from exc
+                except Exception as exc:
+                    raise ProviderTemporaryError(f"OpenAI image download failed: {exc}") from exc
+
+            response = await self._run_with_retry(
+                operation_name="image download",
+                operation=download,
+            )
+        content_type = response.headers.get("content-type", "image/png").split(";", 1)[0] or "image/png"
+        return response.content, content_type
+
+    def _inspect_dimensions(self, *, image_bytes: bytes, requested_size: str) -> tuple[int, int]:
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                return int(image.width), int(image.height)
+        except Exception:
+            return self._size_to_dimensions(requested_size)
+
+    def _compose_prompt(self, *, prompt: str, negative_prompt: str) -> str:
+        cleaned_prompt = prompt.strip()
+        cleaned_negative = negative_prompt.strip()
+        if not cleaned_negative:
+            return cleaned_prompt
+        return f"{cleaned_prompt}\n\nAvoid: {cleaned_negative}"
+
+    def _select_quality(self, *, model_id: Optional[str]) -> str:
+        normalized_model = (model_id or "").strip().lower()
+        if normalized_model == self.draft_image_model.strip().lower():
+            return "low"
+        if normalized_model == self.image_model.strip().lower():
+            return "medium"
+        return self._QUALITY_BY_MODEL_ID.get(normalized_model, "medium")
+
+    def _select_request_model(self, *, model_id: Optional[str], quality: str) -> str:
+        normalized_model = (model_id or "").strip().lower()
+        if normalized_model in {
+            self.draft_image_model.strip().lower(),
+            self.image_model.strip().lower(),
+        }:
+            return normalized_model
+        if quality == "low":
+            return self.draft_image_model
+        return self.image_model
+
+    def _select_size(self, *, width: int, height: int) -> str:
+        safe_width = max(int(width or 0), 1)
+        safe_height = max(int(height or 0), 1)
+        if safe_width >= safe_height * 1.2:
+            return self._LANDSCAPE_SIZE
+        if safe_height >= safe_width * 1.2:
+            return self._PORTRAIT_SIZE
+        return self._SQUARE_SIZE
+
+    def _size_to_dimensions(self, size: str) -> tuple[int, int]:
+        try:
+            width_text, height_text = size.split("x", 1)
+            return int(width_text), int(height_text)
+        except Exception:
+            return (1024, 1024)
+
+    def _estimate_cost(self, *, size: str, quality: str) -> float:
+        return float(
+            self._COST_TABLE.get(
+                (size, quality),
+                self._COST_TABLE[(self._SQUARE_SIZE, "medium")],
+            )
+        )
+
+    def _build_client(self) -> httpx.AsyncClient:
+        timeout = httpx.Timeout(self.request_timeout_seconds, connect=min(10.0, self.request_timeout_seconds))
+        return httpx.AsyncClient(timeout=timeout, transport=self._transport, follow_redirects=True)
+
+    def _build_headers(self, *, json_request: bool) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json",
+        }
+        if json_request:
+            headers["Content-Type"] = "application/json"
+        return headers
+
+    def _raise_provider_error(self, *, status_code: int, detail: str) -> None:
+        if status_code in {400, 401, 403, 404, 409, 422}:
+            raise ProviderFatalError(f"OpenAI image request was rejected ({status_code}): {detail}")
+        raise ProviderTemporaryError(f"OpenAI image request failed ({status_code}): {detail}")
+
+
 class PollinationsProvider(StudioImageProvider):
     name = "pollinations"
     rollout_tier = "degraded"
@@ -1121,6 +1497,11 @@ class ProviderRegistry:
         self._configured_strategy = (settings.generation_provider_strategy or "free-first").strip().lower()
         self._enable_demo_generation_fallback = bool(settings.enable_demo_generation_fallback)
         providers_by_name: dict[str, StudioImageProvider | None] = {
+            "openai": OpenAIImageProvider(
+                settings.openai_api_key,
+                draft_image_model=settings.openai_image_draft_model,
+                image_model=settings.openai_image_model,
+            ),
             "fal": FalProvider(settings.fal_api_key),
             "runware": RunwareProvider(settings.runware_api_key),
             "huggingface": HuggingFaceImageProvider(settings.huggingface_token) if settings.huggingface_token else None,
@@ -1143,10 +1524,10 @@ class ProviderRegistry:
     def _provider_order(self, strategy: str) -> tuple[str, ...]:
         normalized = (strategy or "managed-first").strip().lower()
         if normalized == "free-first":
-            return ("pollinations", "huggingface", "fal", "runware", "demo")
+            return ("pollinations", "huggingface", "openai", "fal", "runware", "demo")
         if normalized == "balanced":
-            return ("pollinations", "fal", "huggingface", "runware", "demo")
-        return ("fal", "runware", "huggingface", "pollinations", "demo")
+            return ("pollinations", "openai", "fal", "huggingface", "runware", "demo")
+        return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
 
     def get_provider(self, provider_name: str | None) -> StudioImageProvider | None:
         normalized = (provider_name or "").strip().lower()
@@ -1161,6 +1542,30 @@ class ProviderRegistry:
     def provider_billable(self, provider_name: str | None) -> bool | None:
         provider = self.get_provider(provider_name)
         return provider.billable if provider is not None else None
+
+    def estimate_generation_cost(
+        self,
+        *,
+        provider_name: str | None,
+        width: int,
+        height: int,
+        model_id: str | None = None,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> float | None:
+        provider = self.get_provider(provider_name)
+        if provider is None:
+            return None
+        try:
+            return provider.estimate_generation_cost(
+                width=width,
+                height=height,
+                model_id=model_id,
+                workflow=workflow,
+                has_reference_image=has_reference_image,
+            )
+        except Exception:
+            return None
 
     def routing_summary(self) -> dict[str, object]:
         demo_provider_enabled = self.get_provider("demo") is not None
@@ -1293,13 +1698,13 @@ class ProviderRegistry:
         analysis: PromptProfileAnalysis,
     ) -> tuple[str, ...]:
         if workflow in {"image_to_image", "edit"}:
-            return ("fal", "runware", "huggingface")
+            return ("openai", "fal", "runware", "huggingface")
         if plan == IdentityPlan.PRO.value:
             if analysis.premium_intent:
-                return ("fal", "runware", "pollinations", "huggingface", "demo")
+                return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("fal", "runware", "huggingface", "pollinations", "demo")
-            return ("fal", "runware", "pollinations", "huggingface", "demo")
+                return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
+            return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")
@@ -1558,7 +1963,7 @@ class ProviderRegistry:
         state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
         now = time.monotonic()
         state.consecutive_failures += 1
-        state.last_error = str(error)
+        state.last_error = redact_sensitive_text(error)
         state.half_open_in_flight = False
         if state.half_open or state.consecutive_failures >= self._CIRCUIT_FAILURE_THRESHOLD:
             state.opened_until_monotonic = now + self._CIRCUIT_OPEN_SECONDS
@@ -1581,7 +1986,7 @@ class ProviderRegistry:
         state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
         now = time.monotonic()
         state.consecutive_failures += 1
-        state.last_error = str(error)
+        state.last_error = redact_sensitive_text(error)
         state.half_open = False
         state.half_open_in_flight = False
         state.opened_until_monotonic = now + self._CIRCUIT_OPEN_SECONDS

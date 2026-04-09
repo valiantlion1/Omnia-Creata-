@@ -94,6 +94,8 @@ class GenerationJob(BaseModel):
     model: str
     prompt_snapshot: PromptSnapshot
     estimated_cost: float
+    estimated_cost_source: str = "catalog_fallback"
+    pricing_lane: Optional[str] = None
     actual_cost_usd: Optional[float] = None
     credit_cost: int
     reserved_credit_cost: int = 0

@@ -4,7 +4,14 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
-import { normalizeJobStatus, studioApi } from '@/lib/studioApi'
+import {
+  describeGenerationLaneTrust,
+  formatGenerationCreditState,
+  formatGenerationEstimateSummary,
+  formatGenerationPricingLane,
+  normalizeJobStatus,
+  studioApi,
+} from '@/lib/studioApi'
 
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
@@ -159,9 +166,16 @@ export default function ProjectPage() {
                   </div>
                   <p className="mt-3 text-sm leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusPill tone="neutral">{generation.credit_cost} credits</StatusPill>
+                    <StatusPill tone="neutral">{formatGenerationCreditState(generation)}</StatusPill>
+                    <StatusPill tone="neutral">{formatGenerationPricingLane(generation.pricing_lane)}</StatusPill>
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
                     <StatusPill tone="neutral">{generation.provider}</StatusPill>
+                  </div>
+                  <div className="mt-3 text-xs text-zinc-500">
+                    {formatGenerationEstimateSummary(generation.estimated_cost, generation.estimated_cost_source)}
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-600">
+                    {describeGenerationLaneTrust(generation.pricing_lane, generation.provider)}
                   </div>
                 </div>
               ))}

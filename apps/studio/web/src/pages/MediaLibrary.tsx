@@ -6,7 +6,17 @@ import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
-import { normalizeJobStatus, studioApi, type Generation, type MediaAsset, type Project } from '@/lib/studioApi'
+import {
+  describePendingGenerationState,
+  formatGenerationCreditState,
+  formatGenerationEstimateSummary,
+  formatGenerationPricingLane,
+  normalizeJobStatus,
+  studioApi,
+  type Generation,
+  type MediaAsset,
+  type Project,
+} from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 type LibrarySection = 'images' | 'collections' | 'likes' | 'trash'
@@ -676,7 +686,10 @@ function EmptyInline({
 }
 
 function PendingPreview({ generation, view }: { generation: Generation; view: ViewMode }) {
-  const detail = normalizeJobStatus(generation.status) === 'running' ? 'Processing preview...' : 'Queued for render...'
+  const detail = describePendingGenerationState(generation.status, generation.pricing_lane, generation.provider)
+  const lane = formatGenerationPricingLane(generation.pricing_lane)
+  const creditState = formatGenerationCreditState(generation)
+  const estimateSummary = formatGenerationEstimateSummary(generation.estimated_cost, generation.estimated_cost_source)
 
   if (view === 'grid') {
     return (
@@ -689,6 +702,11 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-white">{generation.title}</div>
           <div className="mt-1 text-xs text-zinc-500">{detail}</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <StatusPill tone="neutral">{lane}</StatusPill>
+            <StatusPill tone="neutral">{creditState}</StatusPill>
+          </div>
+          <div className="mt-2 text-xs text-zinc-500">{estimateSummary}</div>
         </div>
       </div>
     )
@@ -702,6 +720,11 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
       <div className="min-w-0">
         <div className="truncate text-sm font-medium text-white">{generation.title}</div>
         <div className="mt-1 text-xs text-zinc-500">{detail}</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <StatusPill tone="neutral">{lane}</StatusPill>
+          <StatusPill tone="neutral">{creditState}</StatusPill>
+        </div>
+        <div className="mt-2 text-xs text-zinc-500">{estimateSummary}</div>
       </div>
     </div>
   )

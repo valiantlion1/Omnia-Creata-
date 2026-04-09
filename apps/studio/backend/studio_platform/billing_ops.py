@@ -136,6 +136,7 @@ def build_billing_summary(
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
     checkout_catalog: Mapping[CheckoutKind, Dict[str, Any]],
     entitlements: Mapping[str, Any] | None = None,
+    generation_credit_guide: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     recent_entries = [
         entry
@@ -147,6 +148,7 @@ def build_billing_summary(
         "subscription_status": identity.subscription_status.value,
         "entitlements": dict(entitlements or {}),
         "credits": billing_state.credits_dict(),
+        "generation_credit_guide": dict(generation_credit_guide or {}),
         "checkout_options": [
             {"kind": kind.value, **meta}
             for kind, meta in checkout_catalog.items()
