@@ -46,6 +46,14 @@ class BillingWebhookReceipt(BaseModel):
     processed_at: datetime = Field(default_factory=utc_now)
 
 
+class CreativeProfileEntry(BaseModel):
+    id: str
+    label: str
+    badge: str
+    description: str
+    default_lane: str
+
+
 class ModelCatalogEntry(BaseModel):
     id: str
     label: str
@@ -59,6 +67,7 @@ class ModelCatalogEntry(BaseModel):
     runtime: str = "cloud"
     owner_only: bool = False
     provider_hint: Optional[str] = None
+    creative_profile: Optional[CreativeProfileEntry] = None
     source_id: Optional[str] = None
     source_path: Optional[str] = Field(default=None, exclude=True, repr=False)
     license_reference: Optional[str] = None

@@ -18,6 +18,28 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.09.32`
+- Date: `2026-04-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 backend had already introduced creative profiles, but signed-in UI work still lacked one official server-side trust contract for render readiness, fallback status, and chat lane honesty, which kept frontend work too dependent on raw routing/provider metadata
+- What:
+  settings model payloads now expose `render_experience` plus `route_preview`, so the frontend can read current image-route trust directly from backend truth without guessing from provider names or pricing lanes
+  generation payloads and billing forecast cards now also expose `render_experience`, which keeps fallback/degraded/unavailable state aligned across Create, Billing, Project, and Library surfaces
+  chat assistant metadata now exposes a user-safe `chat_experience` contract (`live_premium`, `premium_unavailable`, `degraded_fallback`) while raw metadata remains available for compatibility and operator use
+
+### `0.5.1-alpha` / build `2026.04.09.31`
+- Date: `2026-04-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 had already made routing, pricing lanes, and estimate provenance more honest, but signed-in UI work still had to infer product-facing model language from raw ids like `flux-schnell` and `realvis-xl`, which kept backend truth too close to internal/operator naming
+- What:
+  backend model catalog entries can now carry a server-authoritative `creative_profile`, and the same creative-profile metadata is now attached to generation payloads plus billing forecast cards
+  this gives frontend/UI work one stable product-language contract for render profiles like `Fast Draft` or `Polished Realism` without breaking existing raw model/provider fields
+  billing credits payloads also restore the `credits_remaining` alias alongside the newer remaining/gross fields, which tightens backward compatibility while Sprint 9 contracts keep evolving
+
 ### `0.5.1-alpha` / build `2026.04.08.30`
 - Date: `2026-04-08`
 - Codename: `Foundation`

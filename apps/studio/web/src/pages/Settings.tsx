@@ -247,7 +247,7 @@ export default function SettingsPage() {
           <SettingRow
             icon={Sparkles}
             title="Interface hints"
-            description="Small tips in Explore, Compose, Chat, and Library"
+            description="Small tips in Explore, Create, Chat, and Library"
             trailing={
               <QuickAction onClick={() => setTipsEnabled(!prefs.tipsEnabled)}>
                 {prefs.tipsEnabled ? 'On' : 'Off'}

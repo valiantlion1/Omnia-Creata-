@@ -1369,8 +1369,21 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert settings_payload["entitlements"]["allowed_chat_modes"] == ["think"]
     assert settings_payload["entitlements"]["premium_chat"] is False
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
+    flux_model = next(model for model in settings_payload["models"] if model["id"] == "flux-schnell")
+    assert flux_model["creative_profile"]["id"] == "fast-draft"
+    assert flux_model["creative_profile"]["label"] == "Fast Draft"
+    assert flux_model["render_experience"]["state"] == "fallback"
+    assert flux_model["route_preview"]["render_experience"]["state"] == "fallback"
+    assert flux_model["route_preview"]["pricing_lane"] == "fallback"
     assert billing_summary["entitlements"]["can_access_chat"] is True
-    assert billing_summary["entitlements"]["credits_remaining"] == 60
+    assert billing_summary["credits"]["credits_remaining"] == 60
+    fallback_lane = next(
+        entry
+        for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
+        if entry["pricing_lane"] == "fallback"
+    )
+    assert fallback_lane["creative_profile"]["id"] == "fast-draft"
+    assert fallback_lane["render_experience"]["state"] == "fallback"
 
 
 @pytest.mark.asyncio
@@ -1436,6 +1449,8 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
     assert assistant_message.metadata["response_mode"] == "live_provider_reply"
     assert assistant_message.metadata["premium_lane_unavailable"] is False
     assert assistant_message.metadata["provider_status"] == "healthy"
+    assert assistant_message.metadata["chat_experience"]["state"] == "live_premium"
+    assert assistant_message.metadata["chat_experience"]["show_provider"] is True
     assert assistant_message.metadata["routing_strategy"] == "premium-studio"
     assert assistant_message.metadata["generation_bridge"]["workflow"] == "text_to_image"
     assert assistant_message.metadata["generation_bridge"]["prompt"]
@@ -1534,6 +1549,8 @@ async def test_chat_fallback_metadata_marks_provider_degradation(tmp_path: Path)
     assert assistant_message.metadata["fallback_reason"] == "all_provider_candidates_failed"
     assert assistant_message.metadata["response_mode"] == "degraded_fallback_reply"
     assert assistant_message.metadata["premium_lane_unavailable"] is True
+    assert assistant_message.metadata["chat_experience"]["state"] == "degraded_fallback"
+    assert assistant_message.metadata["chat_experience"]["show_provider"] is False
     assert assistant_message.metadata["routing_reason"] == "provider_unavailable_or_empty"
     assert "Buradayim" in assistant_message.content or "Iyiyim" in assistant_message.content
 

@@ -6,6 +6,8 @@ import posthog from 'posthog-js'
 import { PostHogProvider } from 'posthog-js/react'
 
 import StudioShell from '@/components/StudioShell'
+import { CommandPalette } from '@/components/CommandPalette'
+import { ShortcutModal } from '@/components/ShortcutModal'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
 const shouldEnablePosthog = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
@@ -183,6 +185,8 @@ export default function App() {
       <PostHogProvider client={posthog}>
         <LightboxProvider>
           <Router>
+            <ShortcutModal />
+            <CommandPalette />
             <AppFrame />
           </Router>
         </LightboxProvider>

@@ -176,6 +176,9 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["credit_status"] == "reserved"
         assert payload["pricing_lane"] == "fallback"
         assert payload["estimated_cost_source"] == "catalog_fallback"
+        assert payload["creative_profile"]["id"] == "fast-draft"
+        assert payload["creative_profile"]["label"] == "Fast Draft"
+        assert payload["render_experience"]["state"] == "fallback"
     finally:
         await service.shutdown()
 

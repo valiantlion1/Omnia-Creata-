@@ -14,6 +14,7 @@ from .chat import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, C
 from .billing import (
     BillingWebhookReceipt,
     CheckoutKind,
+    CreativeProfileEntry,
     CreditEntryType,
     CreditLedgerEntry,
     ModelCatalogEntry,
@@ -53,6 +54,7 @@ __all__ = [
     "CreditEntryType",
     "CreditLedgerEntry",
     "BillingWebhookReceipt",
+    "CreativeProfileEntry",
     "ModelCatalogEntry",
     "PlanCatalogEntry",
     # State

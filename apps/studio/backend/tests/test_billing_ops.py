@@ -326,9 +326,15 @@ async def test_billing_summary_reports_reserved_and_available_credits(
         assert serialized["credit_status"] == "reserved"
         assert serialized["pricing_lane"] == "fallback"
         assert serialized["estimated_cost_source"] == "catalog_fallback"
+        assert serialized["creative_profile"]["id"] == "fast-draft"
+        assert serialized["creative_profile"]["label"] == "Fast Draft"
+        assert serialized["render_experience"]["state"] == "fallback"
         assert draft_guide["quoted_credit_cost"] == 6
         assert draft_guide["reserved_credit_cost"] == 3
         assert draft_guide["settlement_credit_cost"] == 3
+        assert draft_guide["creative_profile"]["id"] == "fast-draft"
+        assert draft_guide["creative_profile"]["badge"] == "Quick ideas"
+        assert draft_guide["render_experience"]["state"] == "fallback"
     finally:
         await service.shutdown()
 

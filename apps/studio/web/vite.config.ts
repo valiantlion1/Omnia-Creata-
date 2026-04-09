@@ -48,3 +48,5 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
+
+// Trigger full reload

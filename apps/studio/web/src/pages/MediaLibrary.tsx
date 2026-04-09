@@ -135,8 +135,8 @@ function ConfirmDialog({
   const resolvedTitle = state.kind === 'empty-trash' ? 'Empty trash?' : state.kind === 'delete-project' ? 'Delete collection?' : 'Delete forever?'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{resolvedTitle}</div>
@@ -157,7 +157,7 @@ function ConfirmDialog({
           <button
             onClick={onConfirm}
             disabled={busy}
-            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Working...' : 'Confirm'}
           </button>
@@ -177,8 +177,8 @@ function NoticeDialog({
   if (!state) return null
 
   return (
-    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+    <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{state.title}</div>
@@ -192,8 +192,8 @@ function NoticeDialog({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-6 flex justify-end">
-          <button onClick={onClose} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90">
+        <div className="mt-8 flex justify-end">
+          <button onClick={onClose} className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200">
             Got it
           </button>
         </div>
@@ -224,8 +224,8 @@ function RenameDialog({
   const heading = state.kind === 'post' ? 'Rename image set' : 'Rename collection'
 
   return (
-    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+    <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{heading}</div>
@@ -246,7 +246,7 @@ function RenameDialog({
             autoFocus
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            className="mt-2 w-full rounded-[18px] bg-white/[0.03] px-4 py-3 text-sm text-white outline-none ring-1 ring-white/8 transition focus:ring-white/20"
+            className="input mt-2"
             placeholder={state.kind === 'post' ? 'Image set name' : 'Collection name'}
           />
         </div>
@@ -674,11 +674,11 @@ function EmptyInline({
 }) {
   return (
     <section
-      className={`flex flex-col gap-2.5 py-4 ${
+      className={`flex flex-col gap-3 py-6 ${
         compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.03] text-zinc-300 ring-1 ring-white/8">{icon}</div>
+      <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111216]/60 text-zinc-300 ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.05)] backdrop-blur-md">{icon}</div>
       <div className="text-base font-semibold text-white">{title}</div>
       <div className={`text-sm leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
     </section>
@@ -1040,7 +1040,7 @@ export default function MediaLibraryPage() {
                 <EmptyInline
                   icon={<Sparkles className="h-4 w-4" />}
                   title="Nothing is rendering right now."
-                  description="Start a new generation from Compose and it will preview here until it lands in Library."
+                  description="Start a new generation from Create and it will preview here until it lands in Library."
                 />
               )
             ) : filteredImageGroups.length ? (
@@ -1275,7 +1275,7 @@ export default function MediaLibraryPage() {
                 ))}
               </section>
             ) : (
-              <EmptyInline icon={<ImageIcon className="h-4 w-4" />} title="No images yet." description="Generate something in Compose and it will land here automatically." />
+              <EmptyInline icon={<ImageIcon className="h-4 w-4" />} title="No images yet." description="Generate something in Create and it will land here automatically." />
             )}
           </>
         ) : null}
@@ -1334,7 +1334,7 @@ export default function MediaLibraryPage() {
                                   setActionMenu(null)
                                 }}
                               >
-                                Open in Compose
+                                Open in Create
                               </MenuAction>
                               <MenuDivider />
                               <MenuAction
@@ -1405,7 +1405,7 @@ export default function MediaLibraryPage() {
                                     setActionMenu(null)
                                   }}
                                 >
-                                  Open in Compose
+                                  Open in Create
                                 </MenuAction>
                                 <MenuDivider />
                                 <MenuAction

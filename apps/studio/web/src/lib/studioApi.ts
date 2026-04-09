@@ -187,29 +187,105 @@ export function isTerminalJobStatus(status: JobStatus) {
   return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
 }
 
+type CreativeProfileKey = 'fast-draft' | 'balanced-render' | 'polished-realism' | 'cinematic-detail' | 'studio-default'
+
+function cleanCreativeProfileLabel(value: string) {
+  return value
+    .split(/[\/_-]/g)
+    .filter(Boolean)
+    .map((segment) => {
+      const upper = segment.toUpperCase()
+      if (upper === 'SDXL') return 'SDXL'
+      if (upper === 'XL') return 'XL'
+      return segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase()
+    })
+    .join(' ')
+}
+
+export function getCreativeProfileKey(modelId: string | null | undefined): CreativeProfileKey {
+  const normalized = modelId?.trim().toLowerCase() ?? ''
+  if (normalized.includes('flux-schnell') || normalized.includes('flux.1-schnell')) return 'fast-draft'
+  if (normalized.includes('sdxl') || normalized.includes('stable-diffusion-xl')) return 'balanced-render'
+  if (normalized.includes('realvis')) return 'polished-realism'
+  if (normalized.includes('juggernaut')) return 'cinematic-detail'
+  return 'studio-default'
+}
+
+export function getCreativeProfileLabel(modelId: string | null | undefined, fallbackLabel?: string | null) {
+  switch (getCreativeProfileKey(modelId)) {
+    case 'fast-draft':
+      return 'Fast Draft'
+    case 'balanced-render':
+      return 'Balanced Render'
+    case 'polished-realism':
+      return 'Polished Realism'
+    case 'cinematic-detail':
+      return 'Cinematic Detail'
+    default:
+      if (fallbackLabel?.trim()) return cleanCreativeProfileLabel(fallbackLabel)
+      if (modelId?.trim()) return cleanCreativeProfileLabel(modelId)
+      return 'Studio Profile'
+  }
+}
+
+export function getCreativeProfileDescription(
+  modelId: string | null | undefined,
+  fallbackDescription?: string | null,
+) {
+  switch (getCreativeProfileKey(modelId)) {
+    case 'fast-draft':
+      return 'Best for quick ideas, loose compositions, and rapid prompt exploration.'
+    case 'balanced-render':
+      return 'A versatile everyday profile for polished concepts and steady detail.'
+    case 'polished-realism':
+      return 'Tuned for glossy product shots, portraits, and believable lighting.'
+    case 'cinematic-detail':
+      return 'Built for dramatic scenes, bold atmosphere, and premium finishing passes.'
+    default:
+      return fallbackDescription?.trim() || 'A Studio image profile matched to your current plan.'
+  }
+}
+
+export function getCreativeProfileBadge(modelId: string | null | undefined) {
+  switch (getCreativeProfileKey(modelId)) {
+    case 'fast-draft':
+      return 'Quick ideas'
+    case 'balanced-render':
+      return 'Everyday'
+    case 'polished-realism':
+      return 'Realism'
+    case 'cinematic-detail':
+      return 'Signature'
+    default:
+      return 'Studio'
+  }
+}
+
 export function formatGenerationPricingLane(lane: GenerationPricingLane | string | null | undefined) {
   switch (lane) {
     case 'draft':
-      return 'Draft lane'
+      return 'Fast draft'
+    case 'standard':
+      return 'Balanced render'
     case 'final':
-      return 'Final lane'
+      return 'Premium finish'
     case 'fallback':
-      return 'Fallback lane'
+      return 'Preview mode'
     case 'degraded':
-      return 'Degraded lane'
+      return 'Safe mode'
     default:
-      return 'Standard lane'
+      return 'Balanced render'
   }
 }
 
 export function formatGenerationEstimateSource(source: EstimatedCostSource | string | null | undefined) {
   switch (source) {
     case 'provider_quote':
-      return 'Provider quote'
+      return 'live estimate'
     case 'catalog_fallback':
-      return 'Catalog fallback'
+      return 'reference estimate'
     default:
-      return 'Estimate source unknown'
+      return 'estimate unavailable'
   }
 }
 
@@ -226,16 +302,16 @@ export function formatGenerationEstimateSummary(
   estimatedCost: number | null | undefined,
   estimatedCostSource: EstimatedCostSource | string | null | undefined,
 ) {
-  return `${formatUsdEstimate(estimatedCost)} ${formatGenerationEstimateSource(estimatedCostSource).toLowerCase()}`
+  return `${formatUsdEstimate(estimatedCost)} ${formatGenerationEstimateSource(estimatedCostSource)}`
 }
 
 export function formatGenerationStartCapacity(maxStartableJobsNow: number | null, startStatus: string) {
-  if (startStatus === 'unlimited') return 'Unlimited starts right now'
-  if (startStatus === 'no_hold') return 'No credit hold on start'
-  if (maxStartableJobsNow === 0) return 'No safe starts left on current balance'
-  if (maxStartableJobsNow === 1) return '1 safe start left'
-  if (maxStartableJobsNow == null) return 'Start capacity unknown'
-  return `${maxStartableJobsNow} safe starts left`
+  if (startStatus === 'unlimited') return 'Starts available without a cap'
+  if (startStatus === 'no_hold') return 'No credits held on start'
+  if (maxStartableJobsNow === 0) return 'No starts available on current balance'
+  if (maxStartableJobsNow === 1) return '1 start available now'
+  if (maxStartableJobsNow == null) return 'Start capacity updating'
+  return `${maxStartableJobsNow} starts available now`
 }
 
 export function formatGenerationGuideSummary(entry: Pick<
@@ -249,25 +325,24 @@ export function formatGenerationGuideSummary(entry: Pick<
   | 'estimated_cost'
   | 'estimated_cost_source'
 >) {
-  return `${formatGenerationPricingLane(entry.pricing_lane)} via ${entry.planned_provider ?? 'unplanned'} · hold ${entry.reserved_credit_cost} · settle ${entry.settlement_credit_cost} · ${formatGenerationStartCapacity(entry.max_startable_jobs_now, entry.start_status)} · ${formatGenerationEstimateSummary(entry.estimated_cost, entry.estimated_cost_source)}`
+  return `${formatGenerationPricingLane(entry.pricing_lane)} - ${entry.reserved_credit_cost} credits held on start - ${entry.settlement_credit_cost} credits typically used - ${formatGenerationStartCapacity(entry.max_startable_jobs_now, entry.start_status)} - ${formatGenerationEstimateSummary(entry.estimated_cost, entry.estimated_cost_source)}`
 }
 
 export function describeGenerationLaneTrust(
   lane: GenerationPricingLane | string | null | undefined,
   provider?: string | null,
 ) {
-  const providerSuffix = provider ? ` via ${provider}` : ''
   switch (lane) {
     case 'draft':
-      return `Draft route active${providerSuffix}.`
+      return 'Studio is set to the fast-draft route for quick idea finding.'
     case 'final':
-      return `Final route active${providerSuffix}.`
+      return 'Studio is set to the premium finishing route for higher-quality output.'
     case 'fallback':
-      return `Fallback-only route active${providerSuffix}; launch-grade image providers are not configured here.`
+      return 'Preview rendering is active here. Premium image connections are not available in this environment yet.'
     case 'degraded':
-      return `Degraded safety route active${providerSuffix}; this environment is not on a launch-grade image lane.`
+      return 'Safe mode is active here, so premium rendering is temporarily unavailable.'
     default:
-      return `Standard route active${providerSuffix}.`
+      return 'Studio is set to the balanced render route right now.'
   }
 }
 
@@ -278,25 +353,24 @@ export function describePendingGenerationState(
 ) {
   const normalized = normalizeJobStatus(status)
   if (normalized === 'running') {
-    return `Rendering in progress. ${describeGenerationLaneTrust(lane, provider)}`
+    return `Rendering now. ${describeGenerationLaneTrust(lane, provider)}`
   }
-  return `Queued to start. ${describeGenerationLaneTrust(lane, provider)}`
+  return `Lined up to render next. ${describeGenerationLaneTrust(lane, provider)}`
 }
 
 export function formatGenerationCreditState(generation: Generation) {
   const normalized = normalizeJobStatus(generation.status)
   if (normalized === 'queued' || normalized === 'running') {
     if ((generation.reserved_credit_cost ?? 0) > 0) {
-      return `${generation.reserved_credit_cost} credits on hold`
+      return `${generation.reserved_credit_cost} credits held while rendering`
     }
-    return `${generation.credit_cost} credits quoted`
+    return `${generation.credit_cost} credits listed`
   }
   if (generation.final_credit_cost != null) {
-    return `${generation.final_credit_cost} credits settled`
+    return `${generation.final_credit_cost} credits used`
   }
-  return `${generation.credit_cost} credits quoted`
+  return `${generation.credit_cost} credits listed`
 }
-
 export type MediaAsset = {
   id: string
   workspace_id: string

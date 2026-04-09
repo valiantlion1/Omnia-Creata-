@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from .billing_ops import BillingStateSnapshot, calculate_generation_final_charge
+from .creative_profile_ops import resolve_creative_profile
+from .experience_contract_ops import build_render_experience
 from .generation_pricing_ops import build_generation_pricing_quote
 from .models import IdentityPlan, ModelCatalogEntry
 from .providers import ProviderRegistry
@@ -16,6 +18,8 @@ _GENERIC_FORECAST_PROMPT = "Studio generation credit forecast"
 class GenerationCreditForecast:
     model_id: str
     label: str
+    creative_profile: dict[str, Any]
+    render_experience: dict[str, Any]
     pricing_lane: str
     planned_provider: str | None
     estimated_cost: float
@@ -32,6 +36,8 @@ class GenerationCreditForecast:
         return {
             "model_id": self.model_id,
             "label": self.label,
+            "creative_profile": dict(self.creative_profile),
+            "render_experience": dict(self.render_experience),
             "pricing_lane": self.pricing_lane,
             "planned_provider": self.planned_provider,
             "estimated_cost": self.estimated_cost,
@@ -101,6 +107,17 @@ def build_generation_credit_forecasts(
             GenerationCreditForecast(
                 model_id=model.id,
                 label=model.label,
+                creative_profile=resolve_creative_profile(
+                    model_id=model.id,
+                    pricing_lane=pricing_quote.pricing_lane,
+                    existing_profile=model.creative_profile,
+                ).model_dump(mode="json"),
+                render_experience=build_render_experience(
+                    provider_name=routing_decision.selected_provider,
+                    pricing_lane=pricing_quote.pricing_lane,
+                    degraded=routing_decision.degraded,
+                    provider_billable=providers.provider_billable(routing_decision.selected_provider),
+                ),
                 pricing_lane=pricing_quote.pricing_lane,
                 planned_provider=routing_decision.selected_provider,
                 estimated_cost=pricing_quote.estimated_cost,

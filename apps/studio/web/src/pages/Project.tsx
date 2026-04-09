@@ -79,7 +79,7 @@ export default function ProjectPage() {
         description={
           project.description ||
           (isChatSurface
-            ? 'This chat-backed project keeps visual outputs separated from Compose while preserving them in your Library.'
+            ? 'This chat-backed project keeps visual outputs separated from Create while preserving them in your Library.'
             : 'A focused project for image production, history, and persistent media.')
         }
         actions={
@@ -109,7 +109,7 @@ export default function ProjectPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {isChatSurface ? 'Chat visuals stay viewable without leaking back into Compose.' : 'The project surface is now fed by real stored assets.'}
+                {isChatSurface ? 'Chat visuals stay viewable without leaking back into Create.' : 'The project surface is now fed by real stored assets.'}
               </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">

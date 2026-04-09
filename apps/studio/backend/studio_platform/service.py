@@ -72,11 +72,17 @@ from .conversation_ops import (
     push_message_revision,
     remove_conversation_from_state,
 )
+from .creative_profile_ops import attach_creative_profile, resolve_creative_profile
 from .entitlement_ops import (
     ensure_chat_request_allowed,
     ensure_clean_export_allowed,
     resolve_entitlements,
     resolve_guest_entitlements,
+)
+from .experience_contract_ops import (
+    attach_chat_experience,
+    build_model_route_preview,
+    build_render_experience,
 )
 from .generation_ops import (
     apply_completed_generation_to_state,
@@ -1718,6 +1724,24 @@ class StudioService:
                 }
             )
 
+        pricing_lane = job.pricing_lane or resolve_generation_pricing_lane(
+            provider_name=job.provider,
+            requested_model_id=job.model,
+            workflow=job.prompt_snapshot.workflow,
+            degraded=job.degraded,
+        )
+        creative_profile = resolve_creative_profile(
+            model_id=job.model,
+            pricing_lane=pricing_lane,
+            existing_profile=MODEL_CATALOG.get(job.model).creative_profile if job.model in MODEL_CATALOG else None,
+        )
+        render_experience = build_render_experience(
+            provider_name=job.provider,
+            pricing_lane=pricing_lane,
+            degraded=job.degraded,
+            provider_billable=job.provider_billable,
+        )
+
         return {
             "job_id": job.id,
             "title": job.title,
@@ -1734,14 +1758,10 @@ class StudioService:
             "prompt_profile": job.prompt_profile,
             "queue_priority": job.queue_priority,
             "model": job.model,
+            "creative_profile": creative_profile.model_dump(mode="json"),
+            "render_experience": render_experience,
             "prompt_snapshot": job.prompt_snapshot.model_dump(mode="json"),
-            "pricing_lane": job.pricing_lane
-            or resolve_generation_pricing_lane(
-                provider_name=job.provider,
-                requested_model_id=job.model,
-                workflow=job.prompt_snapshot.workflow,
-                degraded=job.degraded,
-            ),
+            "pricing_lane": pricing_lane,
             "estimated_cost": job.estimated_cost,
             "estimated_cost_source": job.estimated_cost_source or "catalog_fallback",
             "actual_cost_usd": job.actual_cost_usd,
@@ -2554,6 +2574,7 @@ class StudioService:
                 "generation_bridge": generation_bridge,
                 **build_chat_metadata(intent, context=context),
             }
+            metadata = attach_chat_experience(metadata)
         else:
             response_body, suggested_actions = build_chat_reply(
                 intent=intent,
@@ -2603,6 +2624,7 @@ class StudioService:
                 "generation_bridge": generation_bridge,
                 **build_chat_metadata(intent, context=context),
             }
+            metadata = attach_chat_experience(metadata)
         return ChatMessage(
             conversation_id=conversation.id,
             identity_id=identity.id,
@@ -3740,7 +3762,7 @@ class StudioService:
             "entitlements": self.serialize_entitlements(identity, billing_state=billing_state),
             "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values()],
             "models": [
-                model.model_dump(mode="json")
+                self._serialize_model_catalog_for_identity(identity=identity, model=model)
                 for model in await self.list_models_for_identity(identity)
             ],
             "presets": PRESET_CATALOG,
@@ -3750,12 +3772,28 @@ class StudioService:
         self,
         identity: OmniaIdentity | None = None,
     ) -> List[ModelCatalogEntry]:
-        return [model.model_copy(deep=True) for model in MODEL_CATALOG.values()]
+        return [attach_creative_profile(model) for model in MODEL_CATALOG.values()]
 
     async def get_model(self, model_id: str) -> ModelCatalogEntry:
         if model_id in MODEL_CATALOG:
-            return MODEL_CATALOG[model_id]
+            return attach_creative_profile(MODEL_CATALOG[model_id])
         raise KeyError("Model not found")
+
+    def _serialize_model_catalog_for_identity(
+        self,
+        *,
+        identity: OmniaIdentity,
+        model: ModelCatalogEntry,
+    ) -> Dict[str, Any]:
+        route_preview = build_model_route_preview(
+            model=model,
+            identity_plan=identity.plan,
+            providers=self.providers,
+        )
+        serialized = model.model_dump(mode="json")
+        serialized["render_experience"] = dict(route_preview["render_experience"])
+        serialized["route_preview"] = route_preview
+        return serialized
 
     def _validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
         if identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO:

@@ -49,7 +49,7 @@ type NavChild = {
 
 const primaryNav: NavItem[] = [
   { to: '/explore', label: 'Explore', icon: Compass, aliases: ['/community'] },
-  { to: '/create', label: 'Compose', icon: Sparkles, aliases: ['/projects'] },
+  { to: '/create', label: 'Create', icon: Sparkles, aliases: ['/projects'] },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
@@ -102,7 +102,7 @@ function Section({
   return (
     <div className="mb-4">
       {title && !collapsed ? (
-        <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</div>
+        <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-500">{title}</div>
       ) : title ? (
         <div className="mx-auto mb-2 h-px w-5 bg-white/[0.06]" />
       ) : null}
@@ -117,10 +117,10 @@ function Section({
           const actionChildren = childItems.filter((child) => child.kind !== 'history')
           const historyChildren = childItems.filter((child) => child.kind === 'history')
           const rowClasses = `relative flex min-w-0 items-center rounded-xl px-3 py-2.5 text-[13px] transition ${
-            active ? 'bg-white/[0.08] text-white' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
+            active ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:bg-white/[0.03] hover:text-white font-medium'
           }`
           const activeBar = active ? (
-            <div className="absolute left-0 top-[7px] bottom-[7px] w-[3px] rounded-r-full bg-gradient-to-b from-cyan-400 to-blue-500 shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]" />
           ) : null
           return (
             <div key={item.to}>
@@ -400,8 +400,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </div>
           {!collapsed ? (
             <div className="min-w-0 overflow-hidden">
-              <div className="whitespace-nowrap text-sm font-semibold tracking-tight text-white">Omnia Creata</div>
-              <div className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.16em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Studio</div>
+              <div className="whitespace-nowrap text-sm font-semibold tracking-tight text-white/95">Omnia Creata</div>
+              <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Studio</div>
             </div>
           ) : null}
         </Link>
@@ -450,8 +450,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             </div>
             {!collapsed ? (
               <div className="min-w-0">
-                <div className="flex items-center truncate text-[13px] font-medium text-white">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
-                <div className="mt-0.5 text-[10px] text-zinc-500">
+                <div className="flex items-center truncate text-[13px] font-semibold text-white/95">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
+                <div className="mt-0.5 text-[11px] text-zinc-500">
                   {isGuestShell
                     ? 'Public explore'
                     : `${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
@@ -492,11 +492,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-[#0b0b0d] text-white">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-12%] top-[-10%] h-[32rem] w-[32rem] rounded-full bg-[rgb(var()/)] blur-[120px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" />
-        <div className="absolute right-[-8%] top-[5%] h-[28rem] w-[28rem] rounded-full bg-[rgb(var()/)] blur-[130px] animate-[oc-gradientShiftB_26s_ease-in-out_infinite]" />
-        <div className="absolute bottom-[-15%] left-[30%] h-[30rem] w-[30rem] rounded-full bg-[rgb(var()/)] blur-[150px] animate-[oc-float_24s_ease-in-out_infinite]" />
-        <div className="absolute top-[40%] right-[15%] h-[20rem] w-[20rem] rounded-full bg-[rgb(var()/)] blur-[100px] animate-[oc-pulse_18s_ease-in-out_infinite]" />
+      <div className="fx-layer">
+        <div className="fx-glow fx-glow-1" />
+        <div className="fx-glow fx-glow-2" />
+        <div className="fx-glow fx-glow-3" />
+        <div className="noise-overlay" />
       </div>
       <aside
         className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible transition-[width] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] lg:flex lg:flex-col ${

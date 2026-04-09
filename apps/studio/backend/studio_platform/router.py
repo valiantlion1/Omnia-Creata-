@@ -14,6 +14,7 @@ from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
 
+from .experience_contract_ops import attach_chat_experience
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
 from .service import GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 
@@ -176,6 +177,9 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         }
 
     def _serialize_chat_message(message: ChatMessage) -> dict:
+        metadata = dict(message.metadata)
+        if message.role.value == "assistant":
+            metadata = attach_chat_experience(metadata)
         return {
             "id": message.id,
             "conversation_id": message.conversation_id,
@@ -186,7 +190,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             "attachments": [attachment.model_dump(mode="json") for attachment in message.attachments],
             "suggested_actions": [action.model_dump(mode="json") for action in message.suggested_actions],
             "feedback": message.feedback.value if message.feedback else None,
-            "metadata": message.metadata,
+            "metadata": metadata,
             "version": message.version,
             "created_at": message.created_at.isoformat(),
             "edited_at": message.edited_at.isoformat() if message.edited_at else None,

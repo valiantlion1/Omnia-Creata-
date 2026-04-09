@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Current baseline
 
@@ -14,6 +14,9 @@ Last updated: 2026-04-08
 
 ## Recent stabilization wins
 
+- Sprint 9 backend now publishes a product-safe runtime trust contract for signed-in UI work: settings model entries expose `render_experience` plus `route_preview`, generation and billing forecast payloads expose `render_experience`, and assistant chat metadata exposes `chat_experience`, so frontend work no longer has to infer trust state from raw provider or routing jargon.
+- Sprint 9 backend now exposes server-authoritative `creative_profile` metadata for model catalog entries, generation payloads, and billing forecast cards, so the frontend can stop guessing product labels from raw model ids while Antigravity reshapes the signed-in UI.
+- Billing credit summaries now also carry the legacy `credits_remaining` alias again, which keeps older consumers stable while the newer remaining/gross/available credit contract stays in place.
 - Sprint 9 visible-trust wording is now shared across Create, Billing, Project, and Library generation surfaces, so lane labels, hold/settle phrasing, estimate provenance, and fallback/degraded trust copy no longer drift by page.
 - Sprint 9 smoke redaction is safer now too: provider error URLs with query-string keys are fully masked in current-build smoke reports instead of leaving trailing key fragments behind.
 - Sprint 9 now treats OpenAI Image as the primary launch-grade image lane, so Pro/edit routing prefers it before `fal` and `Runware` while fallback-only providers still remain visibly non-launch-grade.

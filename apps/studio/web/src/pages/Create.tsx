@@ -74,9 +74,9 @@ function getToastLabel(status: JobStatus) {
 
 function getToastDescription(job: GenerationToast) {
   const normalized = normalizeJobStatus(job.status)
-  if (normalized === 'succeeded') return 'Saved to Library / My Images.'
-  if (normalized === 'running' || normalized === 'queued') return 'Your image is being rendered...'
-  return job.error || 'This run did not finish successfully.'
+  if (normalized === 'succeeded') return 'Your image is ready! Check your Library.'
+  if (normalized === 'running' || normalized === 'queued') return 'Creating your image...'
+  return job.error || 'This image could not be created. Try again?'
 }
 
 function mapGenerationToToast(generation: Generation, projectId: string): GenerationToast {
@@ -100,23 +100,21 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
 function getProprietaryModelName(id: string, originalLabel: string): string {
   const lower = id.toLowerCase()
   
-  // Sektör standardı: Provider ismi (fal-ai, runware) gizlenir. Gerçek orijinal model ismi "Temiz" bir formatla verilir.
-  if (lower.includes('flux-schnell') || lower.includes('flux.1-schnell')) return 'FLUX.1 Schnell'
-  if (lower.includes('flux-dev') || lower.includes('flux.1-dev')) return 'FLUX.1 Dev'
-  if (lower.includes('flux-pro') || lower.includes('flux.1-pro')) return 'FLUX.1 Pro'
-  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl')) return 'SDXL 1.0'
-  if (lower.includes('stable-diffusion-3') || lower.includes('sd3')) return 'Stable Diffusion 3'
-  if (lower.includes('kandinsky')) return 'Kandinsky 3'
-  if (lower.includes('playground')) return 'Playground v2.5'
+  // Consumer-friendly names — no one outside of AI Twitter knows what "FLUX.1 Schnell" means
+  if (lower.includes('flux-schnell') || lower.includes('flux.1-schnell')) return 'Fast'
+  if (lower.includes('flux-dev') || lower.includes('flux.1-dev')) return 'Standard'
+  if (lower.includes('flux-pro') || lower.includes('flux.1-pro')) return 'Pro'
+  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl')) return 'Classic'
+  if (lower.includes('stable-diffusion-3') || lower.includes('sd3')) return 'HD'
+  if (lower.includes('kandinsky')) return 'Artistic'
+  if (lower.includes('playground')) return 'Creative'
   
-  // Eğer bilinmeyen bir şey gelirse, "fal-ai/" veya "runware/" kısımlarını kesip atar, sadece modelin ismini temizler.
   const withoutProvider = originalLabel.split('/').pop() || originalLabel
   
   return withoutProvider
     .split(/[-_ ]/)
     .filter(Boolean)
     .map(word => {
-      // API kısaltmaları için küçük bir harf dokunuşu
       if (word.toUpperCase() === 'SDXL') return 'SDXL'
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     })
@@ -164,6 +162,7 @@ export default function CreatePage() {
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(requestedProjectId ?? null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
@@ -434,7 +433,7 @@ export default function CreatePage() {
   /* ─── Render: Loading ─────────────────────────── */
 
   if (isLoading) {
-    return <div className="px-6 py-10 text-sm text-zinc-500">Loading compose...</div>
+    return <div className="px-6 py-10 text-sm text-zinc-500">Loading...</div>
   }
 
   /* ─── Render: Guest ───────────────────────────── */
@@ -446,7 +445,7 @@ export default function CreatePage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 ring-1 ring-white/[0.08]">
             <Wand2 className="h-7 w-7 text-cyan-300" />
           </div>
-          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Compose</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Create</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
             Write a prompt, pick a model, choose a ratio, and generate. Your creations land straight in your Library.
           </p>
@@ -472,45 +471,28 @@ export default function CreatePage() {
         {/* ── Header ─────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
           <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Compose</h1>
-            <p className="mt-1 text-sm text-zinc-500">Describe your vision and generate.</p>
-            {prefillSource === 'chat' ? (
-              <div className="mt-2 space-y-1">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-[rgb(var(--primary-light))]">
-                  Prefilled from chat direction
-                </p>
-                {prefillReferenceMode === 'required' ? (
-                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-                    Reference-guided handoff{referenceAssetId ? ' attached' : ' pending'}
-                  </p>
-                ) : null}
-                {missingRequiredReference ? (
-                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-amber-300">
-                    Return to chat to keep the source image attached
-                  </p>
-                ) : null}
-              </div>
+            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Create</h1>
+            <p className="mt-1 text-sm text-zinc-500">Describe what you'd like to create.</p>
+            {missingRequiredReference ? (
+              <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <StatusPill tone="brand">{runtimeCredits} credits</StatusPill>
-            {runningJobs ? <StatusPill tone="neutral">{runningJobs} running</StatusPill> : null}
+            {runningJobs ? <StatusPill tone="neutral">{runningJobs} creating</StatusPill> : null}
           </div>
         </div>
 
-        {/* ── Prompt card: Holographic Console ────────────────────────── */}
-          <div className="overflow-visible rounded-[24px] border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_16px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl ring-1 ring-white/[0.02]">
+        {/* ── Prompt Area ────────────────────────── */}
+        <div className="glass-card overflow-visible p-[2px]">
           
-          {/* Prompt Matrix Area */}
-          <div className="relative flex flex-col bg-[#090a0d] p-6 pb-14 shadow-inner transition-all duration-500 focus-within:shadow-[0_0_80px_rgb(var(--primary-light)/0.06)_inset]">
+          {/* Prompt Box */}
+          <div className="relative flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80">
             
             {/* Subtle bottom border line */}
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
 
-            {/* Telemetry info */}
-            <div className="mb-4 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-[rgb(var(--primary-light))]" /> OPTICAL MATRIX</span>
-              <span>CHAR_COUNT: {prompt.length.toString().padStart(4, '0')}</span>
+            <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
+              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-zinc-400" /> Your idea</span>
             </div>
 
             <textarea
@@ -540,146 +522,161 @@ export default function CreatePage() {
           </div>
 
           {/* Controls bar */}
-          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-white/[0.01]">
+          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
 
-            {/* Left: aspect ratio + model */}
+            {/* Left: toggle + advanced options */}
             <div className="flex flex-wrap items-center gap-2">
 
-              {/* Aspect ratio buttons */}
-              {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => {
-                const Icon = config.icon
-                const active = aspectRatio === ratio
-                return (
-                  <button
-                    key={ratio}
-                    onClick={() => setAspectRatio(ratio)}
-                    title={`${ratio} — ${config.label}`}
-                    className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] transition-all duration-300 ${
-                      active
-                        ? 'bg-[rgb(var(--primary-light)/0.1)] text-white shadow-[0_0_15px_rgb(var(--primary-light)/0.1)] ring-1 ring-[rgb(var(--primary-light)/0.2)]'
-                        : 'bg-white/[0.03] text-zinc-500 ring-1 ring-white/[0.04] hover:bg-white/[0.06] hover:text-zinc-300'
-                    }`}
-                  >
-                    <Icon className={`h-[22px] w-[22px] ${active ? 'opacity-100 drop-shadow-sm' : 'opacity-60 transition-opacity group-hover:opacity-100'}`} />
-                  </button>
-                )
-              })}
+              {/* Tune toggle */}
+              <button
+                onClick={() => setShowAdvanced((v) => !v)}
+                className={`flex h-11 items-center gap-2 rounded-[14px] px-4 text-[13px] font-medium transition ring-1 ${
+                  showAdvanced
+                    ? 'bg-white/[0.08] text-white ring-white/[0.12]'
+                    : 'bg-white/[0.03] text-zinc-400 ring-white/[0.04] hover:bg-white/[0.06] hover:text-zinc-300'
+                }`}
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+                Tune
+              </button>
 
-              {/* Divider */}
-              <div className="mx-1 hidden h-6 w-px bg-white/[0.06] sm:block" />
+              {/* Aspect ratio buttons — only visible when expanded */}
+              {showAdvanced ? (
+                <>
+                  <div className="mx-1 hidden h-6 w-px bg-white/[0.06] sm:block" />
+                  {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => {
+                    const Icon = config.icon
+                    const active = aspectRatio === ratio
+                    return (
+                      <button
+                        key={ratio}
+                        onClick={() => setAspectRatio(ratio)}
+                        title={`${ratio} — ${config.label}`}
+                        className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] transition-all duration-300 ${
+                          active
+                            ? 'bg-[rgb(var(--primary-light)/0.1)] text-white shadow-[0_0_15px_rgb(var(--primary-light)/0.1)] ring-1 ring-[rgb(var(--primary-light)/0.2)]'
+                            : 'bg-white/[0.03] text-zinc-500 ring-1 ring-white/[0.04] hover:bg-white/[0.06] hover:text-zinc-300'
+                        }`}
+                      >
+                        <Icon className={`h-[22px] w-[22px] ${active ? 'opacity-100 drop-shadow-sm' : 'opacity-60 transition-opacity group-hover:opacity-100'}`} />
+                      </button>
+                    )
+                  })}
+                </>
+              ) : null}
 
-              {/* Model picker */}
-              <div ref={modelPickerRef} className="relative">
-                <button
-                  ref={modelPickerButtonRef}
-                  onClick={() => setModelPickerOpen((value) => !value)}
-                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
-                    </div>
-                    <div className="mt-0.5 text-[10px] font-mono uppercase tracking-widest text-[#666a7a]">
-                      {selectedModel
-                        ? (
-                            selectedModel.runtime === 'local'
-                              ? 'LOCAL ENGINE'
-                              : selectedModelCreditGuide
-                                ? `${selectedModelCreditGuide.reserved_credit_cost} CR_HOLD`
-                                : `${selectedModel.credit_cost} CR_COST`
+              {/* Model picker — only visible when expanded */}
+              {showAdvanced ? (
+                <>
+                  <div className="mx-1 hidden h-6 w-px bg-white/[0.06] sm:block" />
+                  <div ref={modelPickerRef} className="relative">
+                    <button
+                      ref={modelPickerButtonRef}
+                      onClick={() => setModelPickerOpen((value) => !value)}
+                      className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-semibold text-white">
+                          {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
+                        </div>
+                        <div className="mt-0.5 text-[11px] font-medium text-zinc-500">
+                          {selectedModel
+                            ? (
+                                selectedModel.runtime === 'local'
+                                  ? 'On your device'
+                                  : selectedModelCreditGuide
+                                    ? `${selectedModelCreditGuide.reserved_credit_cost} credits`
+                                    : `${selectedModel.credit_cost} credits`
+                              )
+                            : ''}
+                        </div>
+                      </div>
+                      <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
+                    </button>
+
+                    {modelPickerOpen ? (
+                      <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-30 w-[min(400px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
+                        {models.slice(0, 6).map((entry) => {
+                          const active = entry.id === selectedModel?.id
+                          const entryGuide = billingQuery.data?.generation_credit_guide?.models?.find((guide) => guide.model_id === entry.id) ?? null
+                          return (
+                            <button
+                              key={entry.id}
+                              onClick={() => setSelectedModelId(entry.id)}
+                              className={`flex w-full items-start justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
+                                active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 text-[13px] font-semibold tracking-wide">
+                                  {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
+                                  <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
+                                </div>
+                                <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
+                              </div>
+                              <div className="shrink-0 text-right text-[11px] font-medium text-zinc-500">
+                                {entry.runtime === 'local'
+                                  ? 'Local'
+                                  : entryGuide
+                                    ? `${entryGuide.reserved_credit_cost} rsv`
+                                    : `${entry.credit_cost} cr`}
+                              </div>
+                            </button>
                           )
-                        : ''}
-                    </div>
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                  <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
-                </button>
-
-                {modelPickerOpen ? (
-                  <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-30 w-[min(400px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
-                    {models.slice(0, 6).map((entry) => {
-                      const active = entry.id === selectedModel?.id
-                      const entryGuide = billingQuery.data?.generation_credit_guide?.models?.find((guide) => guide.model_id === entry.id) ?? null
-                      return (
-                        <button
-                          key={entry.id}
-                          onClick={() => setSelectedModelId(entry.id)}
-                          className={`flex w-full items-start justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
-                            active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-[13px] font-semibold tracking-wide">
-                              {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
-                              <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
-                            </div>
-                            <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
-                          </div>
-                          <div className="shrink-0 text-right text-[11px] font-mono uppercase tracking-widest text-[#666a7a]">
-                            {entry.runtime === 'local'
-                              ? 'LCL'
-                              : entryGuide
-                                ? `${entryGuide.reserved_credit_cost} HOLD`
-                                : `${entry.credit_cost} CR`}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
-              </div>
+                </>
+              ) : null}
             </div>
 
             {/* Right: generate button */}
             <div className="flex items-center gap-4">
-              <div className="text-right text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                <div className="mb-0.5">{selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}</div>
-                <div>
-                  {selectedModel && selectedModel.runtime !== 'local'
-                    ? selectedModelCreditGuide
-                      ? `${selectedModelCreditGuide.reserved_credit_cost} HOLD`
-                      : `${selectedModel.credit_cost} CREDITS`
-                    : ''}
+              {showAdvanced ? (
+                <div className="text-right text-[11px] font-medium text-zinc-500">
+                  <div className="mb-0.5">{selectedModel ? `${activeAspect.width} × ${activeAspect.height}` : ''}</div>
+                  <div>
+                    {selectedModel && selectedModel.runtime !== 'local'
+                      ? selectedModelCreditGuide
+                        ? `${selectedModelCreditGuide.reserved_credit_cost} credits`
+                        : `${selectedModel.credit_cost} credits`
+                      : ''}
+                  </div>
                 </div>
-              </div>
+              ) : null}
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
-                className="group relative inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-[16px] px-8 text-[13px] font-bold tracking-widest uppercase text-white transition-all overflow-hidden disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-0"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }}
+                className="group relative inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-8 text-[13px] font-semibold text-black bg-white transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
               >
                 {/* Content */}
                 <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-white/90" /> : <Wand2 className="h-4 w-4 text-white/90" />}
-                  {submittingCount ? 'STARTING' : 'GENERATE'}
+                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/90" /> : <Wand2 className="h-4 w-4 text-black/90" />}
+                  {submittingCount ? 'Starting' : 'Generate'}
                 </span>
               </button>
             </div>
           </div>
 
-          {/* Feedback row */}
-          {(createError || improveState === 'done' || improveState === 'fallback' || selectedModelCreditGuide) ? (
+          {/* Feedback row — only errors, no technical billing info */}
+          {createError ? (
             <div className="border-t border-white/[0.04] px-5 py-3">
-              {createError ? <div className="text-sm text-rose-300">{createError}</div> : null}
-              {!createError && selectedModelCreditGuide ? (
-                <div className={`text-xs ${blockedByCurrentCredits ? 'text-amber-300' : 'text-zinc-400'}`}>
-                  {formatGenerationGuideSummary(selectedModelCreditGuide)}
-                </div>
-              ) : null}
-              {!createError && selectedLaneTrustLabel ? (
-                <div className="mt-1 text-[11px] text-zinc-500">{selectedLaneTrustLabel}</div>
-              ) : null}
-              {improveState === 'done' ? <div className="text-xs text-emerald-300">✓ Prompt improved by AI</div> : null}
-              {improveState === 'fallback' ? <div className="text-xs text-zinc-400">Prompt tightened (offline mode)</div> : null}
+              <div className="text-sm text-amber-200/80">{createError}</div>
+            </div>
+          ) : null}
+          {improveState === 'done' ? (
+            <div className="border-t border-white/[0.04] px-5 py-3">
+              <div className="text-xs text-emerald-300">✓ Prompt improved</div>
             </div>
           ) : null}
         </div>
 
         {/* ── Shortcut hint ──────────────────────── */}
-        <div className="mt-4 flex items-center justify-between text-[11px] text-zinc-600">
-          <span>{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'} + Enter to generate{prompt.length > 0 ? ` · ${prompt.length} chars` : ''}</span>
+        <div className="mt-4 flex items-center justify-end text-[11px] text-zinc-600">
           <Link to="/library/images" className="flex items-center gap-1.5 text-zinc-400 transition hover:text-white">
             <ImageIcon className="h-3.5 w-3.5" />
-            Open My Images
+            My Images
           </Link>
         </div>
 

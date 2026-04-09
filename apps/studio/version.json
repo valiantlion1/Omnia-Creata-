@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.08.30",
+  "build": "2026.04.09.32",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-08",
-  "notes": "Sprint 9 visible-trust surfaces now share calmer blocked and degraded wording too: Create, Billing, Project, and Library all read from the same lane-truth phrasing for hold, settle, provider route, and estimate provenance instead of drifting into page-specific jargon. The current-build smoke report also fully masks query-string provider keys now instead of leaving trailing key fragments behind."
+  "releaseDate": "2026-04-09",
+  "notes": "Sprint 9 backend now publishes a fuller frontend-safe experience contract. Settings model payloads expose `creative_profile`, `render_experience`, and `route_preview`; generation and billing forecast payloads now expose `render_experience`; chat assistant metadata now exposes `chat_experience`. Raw provider/model fields remain for compatibility, but signed-in UI work no longer has to infer trust language from internal routing jargon."
 }

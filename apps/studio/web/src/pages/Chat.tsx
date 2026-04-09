@@ -265,7 +265,7 @@ function resolveLatestConversationVisualReferenceAssetId(
 }
 
 function formatChatVisualModelName(model: string | null, mode: ComposeMode) {
-  if (!model) return mode === 'Vision' ? 'Flux Schnell' : 'Omnia'
+  if (!model) return mode === 'Vision' ? 'Fast Render' : 'Omnia'
   return model
     .split(/[-_]/g)
     .filter(Boolean)
@@ -274,37 +274,37 @@ function formatChatVisualModelName(model: string | null, mode: ComposeMode) {
 }
 
 function summarizeGenerationFailure(error: string | null) {
-  if (!error) return 'Studio could not finish this run, so no final image was returned.'
+  if (!error) return "I wasn't able to create that image. Want to try again with a different description?"
 
   const lower = error.toLowerCase()
   if (lower.includes('no real image provider')) {
-    return 'No real image provider is available for this workflow right now.'
+    return "The image engine is momentarily unavailable. Give it a moment and try again."
   }
   if (lower.includes('401') || lower.includes('expired') || lower.includes('token')) {
-    return 'The image provider rejected this run before a final image could be returned.'
+    return "There was an access issue with the image engine. Please try again shortly."
   }
   if (lower.includes('429') || lower.includes('rate limit')) {
-    return 'The image provider is rate-limited right now, so this run could not finish.'
+    return "We're experiencing high demand right now. Try again in a few seconds."
   }
   if (lower.includes('timed out') || lower.includes('timeout')) {
-    return 'This run took too long and timed out before a final image was ready.'
+    return "This one took too long to render. Try simplifying your description a bit."
   }
   if (lower.includes('cancel')) {
-    return 'This run was cancelled before a final image was returned.'
+    return 'This generation was cancelled.'
   }
-  return error
+  return "Something went wrong while creating your image. Want to try a different prompt?"
 }
 
 function resolveGenerationFailureLabel(status: JobStatus) {
   switch (normalizeJobStatus(status)) {
     case 'retryable_failed':
-      return 'Retry needed'
+      return 'Could not complete'
     case 'timed_out':
-      return 'Timed out'
+      return 'Took too long'
     case 'cancelled':
       return 'Cancelled'
     default:
-      return 'Generation blocked'
+      return 'Could not create image'
   }
 }
 
@@ -472,20 +472,27 @@ function ProgressiveImage({ src, alt, onOpen }: { src: string; alt: string; onOp
   )
 }
 
-/** Pending generation: blur + pulse placeholder */
+/** Pending generation: warm conversational loading state */
 function GenerationPending({ title }: { title: string }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" style={{ boxShadow: '0 0 10px rgb(var(--primary-light))' }} />
-        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[rgb(var(--primary-light))] animate-pulse">Generating...</div>
+    <div className="max-w-[360px]">
+      <div className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex h-8 w-8 items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" style={{ animationDuration: '2s' }} />
+            <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+          </div>
+          <div className="text-[14px] font-medium text-zinc-300">Painting your vision…</div>
+        </div>
+        <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] border border-white/[0.04]">
+          <div className="aspect-[4/5] w-full" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.06)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-white/[0.08] to-transparent animate-[shimmer_2.5s_ease-in-out_infinite]" style={{ transform: 'translateY(-100%)' }} />
+          </div>
+        </div>
+        <div className="mt-3 text-[13px] text-zinc-500 truncate">{title}</div>
       </div>
-      <div className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
-        <div className="aspect-[4/5] w-full max-w-[360px] bg-gradient-to-br from-white/[0.05] via-transparent to-[rgb(var(--primary-light)/0.03)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(var(--primary-light)/0.15),transparent_60%)] opacity-50 animate-[oc-pulse_3s_ease-in-out_infinite]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.1),transparent_70%)] animate-[oc-pulse_4s_ease-in-out_infinite_reverse]" />
-      </div>
-      <div className="text-sm font-medium text-zinc-400 pl-1">{title}</div>
     </div>
   )
 }
@@ -505,54 +512,24 @@ function GenerationBlocked({
   aspectRatio: string | null
   mode: ComposeMode
 }) {
-  const statusLabel = resolveGenerationFailureLabel(status)
   const summary = summarizeGenerationFailure(error)
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="rounded-full border border-rose-400/25 bg-rose-400/12 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-rose-200">
-          {statusLabel}
-        </div>
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
-          No final image
-        </div>
-      </div>
-
-      <div className="relative overflow-hidden rounded-[26px] border border-white/[0.06] bg-[#111216] shadow-[0_8px_30px_rgba(0,0,0,0.42)]">
-        <div className="aspect-[4/5] w-full max-w-[360px] bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_80%_10%,rgba(244,63,94,0.18),transparent_32%),radial-gradient(circle_at_50%_80%,rgba(139,92,246,0.18),transparent_40%),linear-gradient(135deg,#111216,#1a1c23)] blur-[1px]" />
-        <div className="absolute inset-0 bg-black/35 backdrop-blur-xl" />
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(244,63,94,0.18),transparent_45%,rgba(255,255,255,0.04))]" />
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-black/35 text-rose-100 shadow-[0_0_40px_rgba(244,63,94,0.2)]">
-            <ImageOff className="h-6 w-6" />
+    <div className="max-w-[400px]">
+      <div className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] p-5">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
+            <ImageOff className="h-4 w-4 text-amber-300/80" />
           </div>
-          <div className="mt-4 text-lg font-semibold text-white">
-            Studio did not get a real image back
+          <div className="min-w-0">
+            <p className="text-[14px] leading-relaxed text-zinc-300">
+              {summary}
+            </p>
+            <p className="mt-2 text-[12px] text-zinc-500">
+              {title}
+            </p>
           </div>
-          <p className="mt-2 max-w-[18rem] text-sm leading-relaxed text-zinc-200">
-            {summary}
-          </p>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 pl-1">
-        <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-medium text-zinc-200">
-          {title}
-        </div>
-        <div className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-xs text-zinc-400">
-          {formatChatVisualModelName(model, mode)}
-        </div>
-        {aspectRatio ? (
-          <div className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-xs text-zinc-400">
-            {aspectRatio}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-zinc-300">
-        Studio is showing a blocked placeholder instead of pretending this run succeeded.
       </div>
     </div>
   )
@@ -561,44 +538,35 @@ function GenerationBlocked({
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
-    { title: 'Create starter', description: 'Start from a cinematic portrait prompt', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
-    { title: 'Edit starter', description: 'Prepare the chat for a photo edit flow', value: 'I want to edit a photo - let me upload it first' },
-    { title: 'Prompt help', description: 'Ask for stronger prompt direction', value: 'Help me write a prompt for a futuristic city skyline at night' },
-    { title: 'Image analysis', description: 'Ask Studio to read an uploaded image', value: 'Analyze this image and tell me what you see' },
+    { emoji: '🎨', label: 'Create an image', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
+    { emoji: '✏️', label: 'Edit a photo', value: 'I want to edit a photo - let me upload it first' },
+    { emoji: '💡', label: 'Help me with a prompt', value: 'Help me write a prompt for a futuristic city skyline at night' },
+    { emoji: '🔍', label: 'Analyze an image', value: 'Analyze this image and tell me what you see' },
   ]
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 relative">
-      {/* Background Ambience */}
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 relative">
+      {/* Subtle ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
-        <div className="h-[40rem] w-[40rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.04),transparent_60%)] blur-[80px]" />
+        <div className="h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.03),transparent_60%)] blur-[80px]" />
       </div>
 
-      <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-[28px] ring-1 ring-white/10 shadow-[0_0_60px_rgb(var(--primary-light)/0.15)] bg-gradient-to-br from-[#1c1e26] to-[#0b0c10] overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light)/0.2)] to-[rgb(var(--accent)/0.05)] opacity-50" />
-        <MessageCircle className="relative z-10 h-8 w-8 text-[rgb(var(--primary-light))] drop-shadow-[0_0_15px_rgb(var(--primary-light)/0.5)]" />
-      </div>
-      <h2 className="relative z-10 mt-8 text-3xl font-bold tracking-tight text-white md:text-5xl drop-shadow-sm">
-        What would you like to
-        <span className="ml-3 bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>create</span>?
+      <h2 className="relative z-10 text-3xl font-semibold tracking-tight text-white md:text-[2.75rem] md:leading-[1.15]">
+        What would you like to create?
       </h2>
-      <p className="relative z-10 mt-4 max-w-xl text-center text-[15px] leading-relaxed text-zinc-400">
-        Describe an image, upload a photo to edit, or ask for creative guidance.
-        Images are generated organically right here.
+      <p className="relative z-10 mt-4 max-w-md text-center text-[15px] leading-relaxed text-zinc-400">
+        Describe what you imagine, upload a photo to transform, or just ask for ideas.
       </p>
-      <div className="relative z-10 mt-5 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2 text-[11px] font-medium tracking-[0.02em] text-zinc-400">
-        Quick starts below are static starter prompts, not live AI replies.
-      </div>
       
-      <div className="relative z-10 mt-10 grid max-w-2xl gap-3 sm:grid-cols-2 w-full">
+      <div className="relative z-10 mt-10 flex flex-wrap justify-center gap-2.5 max-w-lg">
         {suggestions.map((s) => (
           <button
-            key={s.title}
+            key={s.label}
             onClick={() => onHint(s.value)}
-            className="group rounded-[20px] border border-white/[0.04] bg-[#111216]/60 backdrop-blur-xl px-5 py-4 text-left text-sm transition-all duration-300 hover:bg-[#1a1b23]/80 hover:border-[rgb(var(--primary-light)/0.3)] hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgb(var(--primary-light)/0.1)]"
+            className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-[13px] font-medium text-zinc-300 transition-all duration-200 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.12] active:scale-[0.97]"
           >
-            <div className="mb-1 font-semibold text-white/90 transition-colors drop-shadow-sm group-hover:text-[rgb(var(--primary-light))]">{s.title}</div>
-            <div className="leading-relaxed text-zinc-500 transition-colors group-hover:text-zinc-300">{s.description}</div>
+            <span>{s.emoji}</span>
+            <span>{s.label}</span>
           </button>
         ))}
       </div>
@@ -846,11 +814,11 @@ export default function ChatPage() {
   const composerHint = useMemo(() => {
     if (composeMode === 'Think') {
       return pendingAttachments.some((attachment) => attachment.kind === 'image')
-        ? 'Inspecting attachments in chat'
-        : 'Text-only conversation'
+        ? 'Photo attached'
+        : 'Chat'
     }
-    if (composeMode === 'Vision') return 'Vision mode is ready for visual generation'
-    return 'Edit mode is ready for image changes'
+    if (composeMode === 'Vision') return 'Image generation ready'
+    return 'Photo editing ready'
   }, [composeMode, pendingAttachments])
 
   const focusComposer = useCallback(() => {
@@ -1372,12 +1340,12 @@ export default function ChatPage() {
 
           {/* Error toast */}
           {(sendMessageMutation.error || createConversationMutation.error) ? (
-            <div className="mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+            <div className="mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-amber-400/15 bg-amber-400/5 px-4 py-3 text-sm text-amber-200/80">
               {sendMessageMutation.error instanceof Error
-                ? sendMessageMutation.error.message
+                ? 'Something went wrong sending your message. Please try again.'
                 : createConversationMutation.error instanceof Error
-                  ? createConversationMutation.error.message
-                  : 'Unable to send message.'}
+                  ? 'Could not start a new conversation. Please try again.'
+                  : 'Something went wrong. Please try again.'}
             </div>
           ) : null}
         </div>

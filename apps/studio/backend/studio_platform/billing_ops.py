@@ -57,6 +57,7 @@ class BillingStateSnapshot:
     def credits_dict(self) -> Dict[str, Any]:
         return {
             "remaining": self.gross_remaining,
+            "credits_remaining": self.gross_remaining,
             "gross_remaining": self.gross_remaining,
             "monthly_remaining": self.monthly_remaining,
             "monthly_allowance": self.monthly_allowance,
