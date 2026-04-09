@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -305,53 +307,58 @@ fun FirstRunOnboardingFlow(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                BrandWordmarkBadge()
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                BrandWordmarkBadge(compact = true)
                 OnboardingProgress(page = page, steps = lastPageIndex + 1)
-                when (page) {
-                    0 -> OnboardingPage(
-                        eyebrow = "Welcome",
-                        title = "A calmer file manager for your phone",
-                        body = "Omnia Organizer is built to help you browse, search, sort, and recover files without throwing desktop complexity at a mobile screen.",
-                        points = listOf(
-                            "Browse folders without losing your place",
-                            "Search by real file context, not vague guesses",
-                            "Keep deleted files recoverable through Recycle Bin"
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    when (page) {
+                        0 -> OnboardingPage(
+                            eyebrow = "Welcome",
+                            title = "A calmer file manager for your phone",
+                            body = "Browse, search, sort, and recover files without desktop chaos squeezed onto a small screen.",
+                            points = listOf(
+                                "Browse folders without losing your place",
+                                "Recover mistakes through Recycle Bin"
+                            )
                         )
-                    )
 
-                    1 -> OnboardingPage(
-                        eyebrow = "What you get",
-                        title = "Fast paths into the files people actually need",
-                        body = "The app focuses on recent work, new files, storage categories, downloads, screenshots, and document-heavy phone usage.",
-                        points = listOf(
-                            "Pinned jumps for Downloads, Screenshots, Documents, and Recycle Bin",
-                            "Explorer-style Browse with list/grid, sort, filters, and detail sheets",
-                            "Storage category views that lead back into the explorer"
+                        1 -> OnboardingPage(
+                            eyebrow = "What you get",
+                            title = "Fast paths into the files people actually need",
+                            body = "OOFM keeps Downloads, Screenshots, Documents, new files, and storage categories within a few taps.",
+                            points = listOf(
+                                "Pinned jumps for everyday folders",
+                                "Explorer-style Browse with filters and detail sheets"
+                            )
                         )
-                    )
 
-                    2 -> OnboardingPage(
-                        eyebrow = "Trust",
-                        title = "No forced account. No hidden signup wall.",
-                        body = "OOFM starts as a file utility, not a funnel. You are not blocked by account creation, and storage access exists to power file management flows only.",
-                        points = listOf(
-                            "No account required to start browsing your files",
-                            "Permission requests are explained before Android opens its system sheet",
-                            "Privacy and data-use summaries stay reachable in Settings"
+                        2 -> OnboardingPage(
+                            eyebrow = "Trust",
+                            title = "No account wall before the app becomes useful",
+                            body = "OOFM starts as a device utility first. Storage access powers file management, not a hidden signup funnel.",
+                            points = listOf(
+                                "No forced account to start using core file tools",
+                                "Privacy and data-use explanations stay visible in Settings"
+                            )
                         )
-                    )
 
-                    3 -> PermissionEducationPage(
-                        permissionState = permissionState,
-                        onRequestAccess = onRequestAccess
-                    )
+                        3 -> PermissionEducationPage(
+                            permissionState = permissionState,
+                            onRequestAccess = onRequestAccess
+                        )
 
-                    else -> DisclosurePage()
+                        else -> DisclosurePage()
+                    }
                 }
             }
 
@@ -420,7 +427,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(screenBackgroundBrush()),
         contentPadding = PaddingValues(bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             WorkspaceHeroCard(
@@ -449,6 +456,7 @@ fun HomeScreen(
                 )
             }
         }
+        item { SectionTitle("Quick actions", "Jump into the core file tools without extra chrome.") }
         item {
             Row(
                 modifier = Modifier
@@ -456,8 +464,8 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ShortcutCard("Browse", "Open folders fast", onOpenBrowse, Modifier.weight(1f))
-                ShortcutCard("Search", "Find by file name", onOpenSearch, Modifier.weight(1f))
+                ShortcutCard("Browse", "Open folders", Icons.Default.Folder, onOpenBrowse, Modifier.weight(1f))
+                ShortcutCard("Search", "Find by name", Icons.Default.Search, onOpenSearch, Modifier.weight(1f))
             }
         }
         item {
@@ -467,11 +475,11 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ShortcutCard("Storage", "See size and categories", onOpenStorage, Modifier.weight(1f))
-                ShortcutCard("Recycle Bin", "Restore deleted items", onOpenTrash, Modifier.weight(1f))
+                ShortcutCard("Storage", "See categories", Icons.Default.Storage, onOpenStorage, Modifier.weight(1f))
+                ShortcutCard("Recycle Bin", "Restore items", Icons.Default.Delete, onOpenTrash, Modifier.weight(1f))
             }
         }
-        item { SectionTitle("Pinned entry points", "Jump straight into the phone folders people use most.") }
+        item { SectionTitle("Pinned entry points", "Jump into the phone folders people use most.") }
         item {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -483,7 +491,7 @@ fun HomeScreen(
                 item { PinnedEntryCard(title = "Recycle Bin", subtitle = "Restore files you removed earlier", onClick = onOpenTrash) }
             }
         }
-        item { SectionTitle("New files", "The latest items that probably still need sorting or sharing.") }
+        item { SectionTitle("New files", "Latest items that may still need sorting or sharing.") }
         if (state.newFiles.isEmpty()) {
             item { SectionHint("No new files have been surfaced yet from the current storage root.") }
         } else {
@@ -491,7 +499,7 @@ fun HomeScreen(
                 FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
             }
         }
-        item { SectionTitle("Recent files", "Fast jump back into what you touched last.") }
+        item { SectionTitle("Recent files", "Jump back into what you touched last.") }
         if (state.recentFiles.isEmpty()) {
             item { SectionHint("No recent files yet in the current storage root.") }
         } else {
@@ -499,7 +507,7 @@ fun HomeScreen(
                 FileRow(item = item, onClick = { onOpenFile(item) }, onOpenParent = { onOpenParent(item) })
             }
         }
-        item { SectionTitle("Large files", "Good first place to free up space without digging around.") }
+        item { SectionTitle("Large files", "The fastest place to clear space without digging around.") }
         if (state.largeFiles.isEmpty()) {
             item { SectionHint("No large files found yet.") }
         } else {
@@ -582,20 +590,18 @@ fun BrowseScreen(
             .fillMaxSize()
             .background(screenBackgroundBrush())
     ) {
-        WorkspaceContextStrip(
-            title = state.root.displayName,
-            subtitle = "Browse stays grounded in the current folder, with sorting, filters, and quick actions that behave like a real mobile file explorer.",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
         BrowseExplorerCard(
             state = state,
             visibleItemCount = visibleItems.size,
             folderCount = folderCount,
             fileCount = fileCount,
             controlsSummary = browseControlsSummary,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            breadcrumb = state.breadcrumb,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             onBrowseLayoutChange = onBrowseLayoutChange,
-            onShowBrowseControls = onShowBrowseControls
+            onShowBrowseControls = onShowBrowseControls,
+            onNavigateToBreadcrumb = onNavigateToBreadcrumb,
+            onCreateFolder = onCreateFolder
         )
         if (state.isSelectionMode) {
             BrowseActionModeCard(
@@ -610,12 +616,6 @@ fun BrowseScreen(
                 onDeleteSelection = onDeleteSelection
             )
         }
-        BreadcrumbTrail(
-            breadcrumb = state.breadcrumb,
-            onNavigateToBreadcrumb = onNavigateToBreadcrumb,
-            onCreateFolder = onCreateFolder,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
         DestinationPickerDialog(
             state = state,
             onDismiss = onDismissDestinationPicker,
@@ -666,84 +666,90 @@ fun BrowseScreen(
                 }
             )
         }
-        if (state.isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            when {
-                state.items.isEmpty() -> BrowseEmptyState(
-                    title = "This folder is empty",
-                    subtitle = "Create a folder here or move files in when you want this part of the explorer to grow.",
-                    resetLabel = null,
-                    onReset = null
-                )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            if (state.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                when {
+                    state.items.isEmpty() -> BrowseEmptyState(
+                        title = "This folder is empty",
+                        subtitle = "Create a folder here or move files in when you want this part of the explorer to grow.",
+                        resetLabel = null,
+                        onReset = null
+                    )
 
-                visibleItems.isEmpty() -> BrowseEmptyState(
-                    title = "Nothing matches the current filter",
-                    subtitle = "The folder still has content, but your current folder/type filter is hiding everything shown here.",
-                    resetLabel = if (hasActiveBrowseFilters) "Reset filters" else null,
-                    onReset = if (hasActiveBrowseFilters) onResetBrowseControls else null
-                )
+                    visibleItems.isEmpty() -> BrowseEmptyState(
+                        title = "Nothing matches the current filter",
+                        subtitle = "The folder still has content, but your current folder or type filter is hiding everything here.",
+                        resetLabel = if (hasActiveBrowseFilters) "Reset filters" else null,
+                        onReset = if (hasActiveBrowseFilters) onResetBrowseControls else null
+                    )
 
-                state.browseLayoutMode == BrowseLayoutMode.GRID -> {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 148.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        gridItems(visibleItems, key = { it.documentId }) { item ->
-                            FileGridCard(
-                                item = item,
-                                selected = state.selectedDocumentIds.contains(item.documentId),
-                                selectionMode = state.isSelectionMode,
-                                onClick = {
-                                    if (state.isSelectionMode) {
-                                        onToggleSelection(item)
-                                    } else if (item.isDirectory) {
-                                        onOpenFolder(item)
-                                    } else {
-                                        onOpenFileDetail(item)
-                                    }
-                                },
-                                onLongPress = { onEnterSelectionMode(item) },
-                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
-                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
-                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
-                            )
+                    state.browseLayoutMode == BrowseLayoutMode.GRID -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 148.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            gridItems(visibleItems, key = { it.documentId }) { item ->
+                                FileGridCard(
+                                    item = item,
+                                    selected = state.selectedDocumentIds.contains(item.documentId),
+                                    selectionMode = state.isSelectionMode,
+                                    onClick = {
+                                        if (state.isSelectionMode) {
+                                            onToggleSelection(item)
+                                        } else if (item.isDirectory) {
+                                            onOpenFolder(item)
+                                        } else {
+                                            onOpenFileDetail(item)
+                                        }
+                                    },
+                                    onLongPress = { onEnterSelectionMode(item) },
+                                    onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                    onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                    onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                                )
+                            }
                         }
                     }
-                }
 
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 28.dp, top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(visibleItems, key = { it.documentId }) { item ->
-                            FileRow(
-                                item = item,
-                                selected = state.selectedDocumentIds.contains(item.documentId),
-                                selectionMode = state.isSelectionMode,
-                                onClick = {
-                                    if (state.isSelectionMode) {
-                                        onToggleSelection(item)
-                                    } else if (item.isDirectory) {
-                                        onOpenFolder(item)
-                                    } else {
-                                        onOpenFileDetail(item)
-                                    }
-                                },
-                                onLongPress = { onEnterSelectionMode(item) },
-                                onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
-                                onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
-                                onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
-                            )
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 28.dp, top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(visibleItems, key = { it.documentId }) { item ->
+                                FileRow(
+                                    item = item,
+                                    selected = state.selectedDocumentIds.contains(item.documentId),
+                                    selectionMode = state.isSelectionMode,
+                                    onClick = {
+                                        if (state.isSelectionMode) {
+                                            onToggleSelection(item)
+                                        } else if (item.isDirectory) {
+                                            onOpenFolder(item)
+                                        } else {
+                                            onOpenFileDetail(item)
+                                        }
+                                    },
+                                    onLongPress = { onEnterSelectionMode(item) },
+                                    onShare = if (!state.isSelectionMode && !item.isDirectory) { { onShareFile(item) } } else null,
+                                    onRename = if (!state.isSelectionMode && item.canRename) { { onRequestRename(item) } } else null,
+                                    onDelete = if (!state.isSelectionMode && item.canDelete) { { onMoveToTrash(item) } } else null
+                                )
+                            }
+                            item { Spacer(modifier = Modifier.height(12.dp)) }
                         }
-                        item { Spacer(modifier = Modifier.height(12.dp)) }
                     }
                 }
             }
@@ -853,12 +859,14 @@ private fun OnboardingPage(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(eyebrow, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
             Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             BrandChecklist(points)
         }
     }
@@ -899,12 +907,14 @@ private fun PermissionEducationPage(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Permission", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
             Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             BrandChecklist(
                 listOf(
                     "Used for browsing, searching, sharing, moving, and restoring files on your phone",
@@ -929,14 +939,17 @@ private fun DisclosurePage() {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Transparency", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
             Text("What OOFM does and does not do", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 "Before you continue, the product should be clear about its boundaries. This is a mobile file manager first. Store release legal copy can tighten later, but the core promise should already be understandable.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
             BrandChecklist(
                 listOf(
@@ -963,9 +976,9 @@ private fun PinnedEntryCard(
     ) {
         Column(
             modifier = Modifier
-                .width(184.dp)
+                .width(170.dp)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
@@ -978,21 +991,13 @@ private fun PinnedEntryCard(
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
-            Text(
-                "Quick access",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.tertiary
-            )
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                "Open now",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1019,56 +1024,58 @@ fun SearchScreen(
             .fillMaxSize()
             .background(screenBackgroundBrush())
     ) {
-        WorkspaceContextStrip(
-            title = state.root.displayName,
-            subtitle = "Search stays scoped to the connected device view, so results can show where a file lives before you jump into Browse.",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
         SearchExplorerPanel(
             state = state,
             onQueryChange = onQueryChange,
             onKindFilter = onKindFilter,
             onDateFilter = onDateFilter,
-            onSizeFilter = onSizeFilter
+            onSizeFilter = onSizeFilter,
+            modifier = Modifier.padding(top = 12.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))
-        when {
-            state.searchQuery.isBlank() -> SectionHint("Type a file name to search inside the connected storage view.")
-            state.isSearchLoading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator()
-                        Text("Scanning files inside the current storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            when {
+                state.searchQuery.isBlank() -> SectionHint("Type a file name to search inside the connected storage view.")
+                state.isSearchLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator()
+                            Text("Scanning files inside the current storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
-            }
-            state.searchResults.isEmpty() -> SearchEmptyState(
-                query = state.searchQuery,
-                hasFilters = state.searchFilters.kind != null ||
-                    state.searchFilters.dateFilter != SearchDateFilter.ANYTIME ||
-                    state.searchFilters.sizeFilter != SearchSizeFilter.ANY
-            )
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
-                        SectionTitle(
-                            "Search results",
-                            "${state.searchResults.size} match(es) in ${state.root.displayName}."
-                        )
+                state.searchResults.isEmpty() -> SearchEmptyState(
+                    query = state.searchQuery,
+                    hasFilters = state.searchFilters.kind != null ||
+                        state.searchFilters.dateFilter != SearchDateFilter.ANYTIME ||
+                        state.searchFilters.sizeFilter != SearchSizeFilter.ANY
+                )
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            SectionTitle(
+                                "Search results",
+                                "${state.searchResults.size} match(es) in ${state.root.displayName}."
+                            )
+                        }
+                        items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
+                            SearchResultCard(
+                                item = item,
+                                rootDocumentId = state.root.rootDocumentId,
+                                onOpen = { if (item.isDirectory) onShowInBrowse(item) else onOpenFile(item) },
+                                onShowInBrowse = { onShowInBrowse(item) }
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(12.dp)) }
                     }
-                    items(state.searchResults, key = { "search-${it.documentId}" }) { item ->
-                        SearchResultCard(
-                            item = item,
-                            rootDocumentId = state.root.rootDocumentId,
-                            onOpen = { if (item.isDirectory) onShowInBrowse(item) else onOpenFile(item) },
-                            onShowInBrowse = { onShowInBrowse(item) }
-                        )
-                    }
-                    item { Spacer(modifier = Modifier.height(12.dp)) }
                 }
             }
         }
@@ -1281,46 +1288,41 @@ private fun SearchExplorerPanel(
     onQueryChange: (String) -> Unit,
     onKindFilter: (FileKind?) -> Unit,
     onDateFilter: (SearchDateFilter) -> Unit,
-    onSizeFilter: (SearchSizeFilter) -> Unit
+    onSizeFilter: (SearchSizeFilter) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Search utility",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary
-            )
-            Text(
-                "Look across the connected workspace",
+                "Search",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Search stays grounded in real file context, so the result cards can still tell you where each match actually lives.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "Connected to ${state.root?.displayName.orEmpty()}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Search files") },
-                supportingText = { Text("Try invoice, screenshot, download, pdf, or a project name.") },
                 singleLine = true
             )
             Text(
-                "Type",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "Type filters",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
             )
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterChip(selected = state.searchFilters.kind == null, onClick = { onKindFilter(null) }, label = { Text("All types") }) }
@@ -1331,8 +1333,8 @@ private fun SearchExplorerPanel(
             }
             Text(
                 "Time and size",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
             )
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterChip(selected = state.searchFilters.dateFilter == SearchDateFilter.ANYTIME, onClick = { onDateFilter(SearchDateFilter.ANYTIME) }, label = { Text("Any time") }) }
@@ -1370,11 +1372,11 @@ private fun SearchResultCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f))
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1392,15 +1394,15 @@ private fun SearchResultCard(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (item.isDirectory) "Folder result" else "${kindLabel(item.kind)} | ${formatBytes(item.sizeBytes ?: 0L)}",
-                        style = MaterialTheme.typography.bodySmall,
+                        if (item.isDirectory) "Folder result" else "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)}",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Text(
                 locationSummary(item, rootDocumentId),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.tertiary
             )
             Text(
@@ -1685,7 +1687,7 @@ private fun BrandWordmarkBadge(compact: Boolean = false) {
                 painter = painterResource(id = R.drawable.omnia_creata_logo),
                 contentDescription = "Omnia Creata",
                 modifier = Modifier
-                    .size(if (compact) 34.dp else 42.dp)
+                    .size(if (compact) 32.dp else 38.dp)
                     .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
@@ -1697,7 +1699,7 @@ private fun BrandWordmarkBadge(compact: Boolean = false) {
                 )
                 Text(
                     "Premium file clarity for mobile",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondary
                 )
             }
@@ -1707,7 +1709,7 @@ private fun BrandWordmarkBadge(compact: Boolean = false) {
 
 @Composable
 private fun BrandChecklist(points: List<String>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         points.forEach { point ->
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1727,7 +1729,8 @@ private fun BrandChecklist(points: List<String>) {
                 Text(
                     point,
                     modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -1742,55 +1745,34 @@ private fun WorkspaceHeroCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary)
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            BrandWordmarkBadge(compact = true)
             Text(
-                "Omnia Organizer",
+                "Connected workspace",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Text(
+                state.root?.displayName.orEmpty(),
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondary
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                "A calmer mobile file manager for everyday control, recovery, and storage clarity.",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodyLarge
+                "Browse, search, storage, and recovery all stay inside this connected device view.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.06f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "Connected workspace",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        state.root?.displayName.orEmpty(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondary
-                    )
-                    Text(
-                        "OOFM is still alpha. This connected storage becomes the main phone-wide entry point for browse, search, and storage insight.",
-                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.82f)
-                    )
-                }
-            }
             if (state.isStorageRefreshing) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.18f)
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1801,9 +1783,6 @@ private fun WorkspaceHeroCard(
                 if (state.storageSummary != null) {
                     StatPill(label = formatBytes(state.storageSummary.totalBytes))
                 }
-            }
-            state.storageSummary?.let { summary ->
-                CategoryPills(summary = summary)
             }
         }
     }
@@ -1828,17 +1807,17 @@ private fun StorageOverviewCard(
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Storage command center",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary
+                "Storage overview",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
-                "Storage overview",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
+                state.root?.displayName.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -1846,21 +1825,16 @@ private fun StorageOverviewCard(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        state.root?.displayName.orEmpty(),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontWeight = FontWeight.Medium
-                    )
                     Text(
                         "Used ${formatBytes(summary.totalBytes)}${summary.freeBytes?.let { " | Free ${formatBytes(it)}" }.orEmpty()}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Storage stays utility-first here: categories for drill-down, large files for cleanup, and a fresh scan timestamp when available.",
-                        style = MaterialTheme.typography.bodySmall,
+                        "Tap a category to drill in or use the largest files list for cleanup.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -1925,33 +1899,25 @@ private fun WorkspaceContextStrip(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                "Current workspace",
+                "Workspace",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.tertiary
             )
             Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Surface(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .fillMaxWidth(0.2f)
-                    .height(3.dp),
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.primary
-            ) {}
         }
     }
 }
@@ -2018,84 +1984,98 @@ private fun BrowseExplorerCard(
     folderCount: Int,
     fileCount: Int,
     controlsSummary: String,
+    breadcrumb: List<FolderHandle>,
     onBrowseLayoutChange: (BrowseLayoutMode) -> Unit,
     onShowBrowseControls: () -> Unit,
+    onNavigateToBreadcrumb: (Int) -> Unit,
+    onCreateFolder: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val breadcrumbScrollState = rememberScrollState()
+    val actionScrollState = rememberScrollState()
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
-                        text = "Explorer controls",
+                        text = "Current folder",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
-                        text = "Browse",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = breadcrumb.lastOrNull()?.name ?: state.root?.displayName.orEmpty(),
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        text = "Current folder: ${state.breadcrumb.lastOrNull()?.name ?: state.root?.displayName.orEmpty()}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-                StatPill(label = "$visibleItemCount shown")
-            }
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.68f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        StatPill(label = "$folderCount folders")
-                        StatPill(label = "$fileCount files")
-                    }
-                    Text(
-                        text = controlsSummary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                StatPill(label = "$visibleItemCount items")
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                StatPill(label = "$folderCount folders")
+                StatPill(label = "$fileCount files")
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(breadcrumbScrollState),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                breadcrumb.forEachIndexed { index, handle ->
+                    if (index > 0) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    AssistChip(
+                        onClick = { onNavigateToBreadcrumb(index) },
+                        label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    )
+                }
+            }
+            Text(
+                text = controlsSummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(actionScrollState),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 FilterChip(
                     selected = state.browseLayoutMode == BrowseLayoutMode.LIST,
                     onClick = { onBrowseLayoutChange(BrowseLayoutMode.LIST) },
-                    label = { Text("List view") }
+                    label = { Text("List") }
                 )
                 FilterChip(
                     selected = state.browseLayoutMode == BrowseLayoutMode.GRID,
                     onClick = { onBrowseLayoutChange(BrowseLayoutMode.GRID) },
-                    label = { Text("Grid view") }
+                    label = { Text("Grid") }
                 )
-                OutlinedButton(onClick = onShowBrowseControls, modifier = Modifier.weight(1f)) {
-                    Text("Sort & filter")
-                }
+                AssistChip(onClick = onCreateFolder, label = { Text("New folder") })
+                AssistChip(onClick = onShowBrowseControls, label = { Text("Sort & filter") })
             }
         }
     }
@@ -2777,21 +2757,33 @@ private fun FileGridCard(
 }
 
 @Composable
-private fun ShortcutCard(title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ShortcutCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
         modifier = modifier,
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
     ) {
-        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "Open",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary
-            )
         }
     }
 }
@@ -2825,6 +2817,11 @@ private fun FileRow(
     onDelete: (() -> Unit)? = null
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val secondaryLine = if (item.isDirectory) {
+        "Folder • Updated ${formatDate(item.lastModified)}"
+    } else {
+        "${kindLabel(item.kind)} • ${formatBytes(item.sizeBytes ?: 0L)} • ${formatDate(item.lastModified)}"
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2833,6 +2830,7 @@ private fun FileRow(
                 onClick = onClick,
                 onLongClick = onLongPress
             ),
+        shape = RoundedCornerShape(20.dp),
         border = if (selected) {
             BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
         } else {
@@ -2842,14 +2840,14 @@ private fun FileRow(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
             } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
             }
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -2873,21 +2871,20 @@ private fun FileRow(
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    if (item.isDirectory) {
-                        "Folder"
-                    } else {
-                        "${kindLabel(item.kind)} | ${formatBytes(item.sizeBytes ?: 0L)}"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    item.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    formatDate(item.lastModified),
+                    secondaryLine,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (!selectionMode && (onShare != null || onRename != null || onDelete != null || onOpenParent != null)) {
@@ -2970,13 +2967,8 @@ private fun EmptyRootState(onPickFolder: () -> Unit) {
 private fun SectionTitle(title: String, subtitle: String? = null) {
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text(
-            text = "Explorer section",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.tertiary
-        )
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
@@ -2985,18 +2977,10 @@ private fun SectionTitle(title: String, subtitle: String? = null) {
         if (!subtitle.isNullOrBlank()) {
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Surface(
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .fillMaxWidth(0.18f)
-                .height(3.dp),
-            shape = RoundedCornerShape(999.dp),
-            color = MaterialTheme.colorScheme.primary
-        ) {}
     }
 }
 
@@ -3005,7 +2989,6 @@ private fun screenBackgroundBrush(): Brush {
     return Brush.verticalGradient(
         colors = listOf(
             MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
             MaterialTheme.colorScheme.surface,
             MaterialTheme.colorScheme.background
         )
@@ -3026,13 +3009,14 @@ private fun SectionHint(text: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

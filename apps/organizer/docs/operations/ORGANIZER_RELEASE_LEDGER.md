@@ -8,9 +8,28 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha17](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha17)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha18](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha18)
 
 ## Entries
+
+### 2026-04-09 - Alpha 18 readability and explorer density pass
+- Version target: `1.0.0-alpha18`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha18](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha18)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - typography was enlarged across body and label styles so UI copy is easier to read on a phone
+  - Browse now spends less vertical space on chrome: the explorer card is slimmer, actions are chip-based, and the file list gets more of the screen
+  - Home, Search, and Storage were rewritten in a more utility-first tone with shorter copy and less decorative surface stacking
+  - file rows now scan faster thanks to tighter hierarchy and a single clean metadata line instead of cramped stacked text
+  - pinned entry points and quick actions were simplified so the app feels less like a promo layer and more like a real mobile file explorer
+- Known gaps:
+  - the top app shell still needs one more pass to feel fully premium and Play-store-ready
+  - grid cards and detail sheets can still be polished further after another phone test round
+  - final store icon, screenshots, listing copy, and legal hosting still need to be completed before Play submission
 
 ### 2026-04-09 - Alpha 17 interface shell and explorer UI pass
 - Version target: `1.0.0-alpha17`
