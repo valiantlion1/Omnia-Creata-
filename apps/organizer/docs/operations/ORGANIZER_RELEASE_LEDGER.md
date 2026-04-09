@@ -8,9 +8,28 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha16](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha16)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha17](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha17)
 
 ## Entries
+
+### 2026-04-09 - Alpha 17 interface shell and explorer UI pass
+- Version target: `1.0.0-alpha17`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha17](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha17)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - the app shell now reads more like an OmniaCreata product, with a stronger top app bar identity, a floating bottom navigation surface, and a calmer full-screen background treatment
+  - Home, Browse, Search, Storage, Trash, and Settings now share the same background language instead of feeling like separate unfinished screens
+  - Browse explorer controls were upgraded with a cleaner control card, better current-folder framing, and a more deliberate list or grid toggle area
+  - Search and Storage overview surfaces were redesigned to feel less like generic utilities and more like a polished mobile explorer companion
+  - pinned entry points now use clearer icons and section hierarchy, making the dashboard easier to scan on a phone
+- Known gaps:
+  - final Play launch icon, store screenshots, and full listing art direction still need a dedicated store-assets pass
+  - row-level and detail-level micro polish can still be improved after another phone testing round
+  - legal URLs and final public privacy policy hosting still need to be completed before Play submission
 
 ### 2026-04-09 - Alpha 16 store readiness and safety pass
 - Version target: `1.0.0-alpha16`

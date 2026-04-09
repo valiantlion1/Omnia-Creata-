@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +71,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -346,110 +348,142 @@ private fun AppRoot(
         return
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.primary
-                ),
-                title = {
-                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                        Text(
-                            when {
-                                currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
-                                    "${state.selectedDocumentIds.size} selected"
-
-                                else -> when (currentRoute) {
-                                OrganizerRoute.Home.route -> "Omnia Organizer"
-                                OrganizerRoute.Browse.route -> "Browse"
-                                OrganizerRoute.Search.route -> "Search"
-                                OrganizerRoute.Storage.route -> "Storage"
-                                OrganizerRoute.Trash.route -> "Recycle Bin"
-                                OrganizerRoute.Settings.route -> "Settings"
-                                else -> "Omnia Organizer"
-                            }
-                            }
-                        )
-                        state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.06f),
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                CenterAlignedTopAppBar(
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    title = {
+                        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                             Text(
-                                text = rootName,
+                                text = "OmniaCreata / OOFM",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            Text(
+                                when {
+                                    currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
+                                        "${state.selectedDocumentIds.size} selected"
+
+                                    else -> when (currentRoute) {
+                                        OrganizerRoute.Home.route -> "Omnia Organizer"
+                                        OrganizerRoute.Browse.route -> "Browse"
+                                        OrganizerRoute.Search.route -> "Search"
+                                        OrganizerRoute.Storage.route -> "Storage"
+                                        OrganizerRoute.Trash.route -> "Recycle Bin"
+                                        OrganizerRoute.Settings.route -> "Settings"
+                                        else -> "Omnia Organizer"
+                                    }
+                                }
+                            )
+                            state.root?.displayName?.takeIf { it.isNotBlank() }?.let { rootName ->
+                                Text(
+                                    text = rootName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = handleStorageAction) {
+                            Icon(
+                                Icons.Default.UploadFile,
+                                contentDescription = if (hasStorageAccess) "Reconnect storage" else "Grant storage access"
                             )
                         }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = handleStorageAction) {
-                        Icon(
-                            Icons.Default.UploadFile,
-                            contentDescription = if (hasStorageAccess) "Reconnect storage" else "Grant storage access"
-                        )
-                    }
-                    IconButton(onClick = { viewModel.refreshActiveRoute(currentRoute) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Recycle Bin") },
-                            onClick = {
-                                currentRoute = OrganizerRoute.Trash.route
-                                menuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            onClick = {
-                                currentRoute = OrganizerRoute.Settings.route
-                                menuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (hasStorageAccess) "Reconnect device storage" else "Grant device storage access") },
-                            onClick = {
-                                menuExpanded = false
-                                requestStorageAccess()
-                            }
-                        )
-                        if (state.root != null) {
+                        IconButton(onClick = { viewModel.refreshActiveRoute(currentRoute) }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                             DropdownMenuItem(
-                                text = { Text("Reset current root") },
+                                text = { Text("Recycle Bin") },
                                 onClick = {
-                                    currentRoute = OrganizerRoute.Home.route
-                                    viewModel.clearRoot()
+                                    currentRoute = OrganizerRoute.Trash.route
                                     menuExpanded = false
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Settings") },
+                                onClick = {
+                                    currentRoute = OrganizerRoute.Settings.route
+                                    menuExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (hasStorageAccess) "Reconnect device storage" else "Grant device storage access") },
+                                onClick = {
+                                    menuExpanded = false
+                                    requestStorageAccess()
+                                }
+                            )
+                            if (state.root != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Reset current root") },
+                                    onClick = {
+                                        currentRoute = OrganizerRoute.Home.route
+                                        viewModel.clearRoot()
+                                        menuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(30.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        tonalElevation = 6.dp
+                    ) {
+                        NavigationBar(containerColor = Color.Transparent) {
+                            primaryRoutes.forEach { route ->
+                                NavigationBarItem(
+                                    selected = currentRoute == route.route,
+                                    onClick = { currentRoute = route.route },
+                                    icon = { Icon(route.icon, contentDescription = route.label) },
+                                    label = { Text(route.label) }
+                                )
+                            }
                         }
                     }
                 }
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                primaryRoutes.forEach { route ->
-                    NavigationBarItem(
-                        selected = currentRoute == route.route,
-                        onClick = { currentRoute = route.route },
-                        icon = { Icon(route.icon, contentDescription = route.label) },
-                        label = { Text(route.label) }
-                    )
-                }
             }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
             if (!hasStorageAccess) {
                 StoragePermissionRequiredScreen(onGrantAccess = requestStorageAccessAction)
                 return@Scaffold
@@ -595,6 +629,7 @@ private fun AppRoot(
                     onClearRoot = viewModel::clearRoot,
                     onClearTrash = { confirmClearTrash = true }
                 )
+            }
             }
         }
     }
