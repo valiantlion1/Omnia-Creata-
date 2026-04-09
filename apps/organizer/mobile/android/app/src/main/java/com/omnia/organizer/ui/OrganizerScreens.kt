@@ -205,6 +205,79 @@ fun StoragePermissionRequiredScreen(onGrantAccess: () -> Unit) {
 }
 
 @Composable
+fun WorkspaceConnectingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.padding(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    "Connecting device workspace",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "OOFM already has storage permission. It is building the file-manager workspace so Browse, Search, and Storage can stay in sync.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WorkspaceUnavailableScreen(
+    onReconnect: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.padding(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    "Storage access is granted, but the workspace is not ready",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "This usually means Android kept the permission but OOFM needs to rebuild its live view of phone storage. Reconnect once and the explorer should come back cleanly.",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "What to expect",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "- Reconnect refreshes the current device view\n- Browse, Search, and Storage stay device-first\n- No account is required to recover access",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = onReconnect) {
+                        Text("Reconnect storage")
+                    }
+                    OutlinedButton(onClick = onOpenSettings) {
+                        Text("Open Settings")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun FirstRunOnboardingFlow(
     permissionState: OnboardingPermissionState,
     startAtDisclosure: Boolean,
@@ -958,6 +1031,7 @@ fun SearchScreen(
 fun StorageScreen(
     state: OrganizerUiState,
     onPickFolder: () -> Unit,
+    onRetrySummary: () -> Unit,
     onOpenStorageCategory: (StorageCategoryKey) -> Unit,
     onClearStorageCategory: () -> Unit,
     onOpenCategoryFolder: () -> Unit,
@@ -970,11 +1044,20 @@ fun StorageScreen(
     }
     val summary = state.storageSummary
     if (summary == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator()
-                Text("Scanning storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.isStorageRefreshing) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator()
+                    Text("Scanning storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
+        } else {
+            BrowseEmptyState(
+                title = "Storage insight is not ready yet",
+                subtitle = "The explorer is connected, but the summary scan did not finish. Retry when you want a fresh storage breakdown.",
+                resetLabel = "Retry storage scan",
+                onReset = onRetrySummary
+            )
         }
         return
     }
@@ -1384,6 +1467,11 @@ fun SettingsScreen(
                         "The app is built to organize files on your device without forcing sign-in first. Storage access is requested so browse, search, open, share, and recycle flows can work like a proper mobile file manager.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text(
+                        "Current launch posture: device-first behavior, no forced account wall, and trust disclosures reachable in-product before Play rollout.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(onClick = { infoSheet = SettingsInfoSheet.PRIVACY }) { Text("Privacy summary") }
                         OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.DATA_USE }) { Text("Data use") }
@@ -1392,6 +1480,11 @@ fun SettingsScreen(
                         OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.TERMS }) { Text("Terms & policy") }
                         OutlinedButton(onClick = { infoSheet = SettingsInfoSheet.ABOUT }) { Text("About OOFM") }
                     }
+                    Text(
+                        "Launch contact: omnia.organizer.app@gmail.com",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -1873,16 +1966,16 @@ private fun SettingsInfoDialog(
     }
     val body = when (sheet) {
         SettingsInfoSheet.PRIVACY ->
-            "Omnia Organizer is built around on-device file management.\n\nStorage access exists so Browse, Search, Storage, sharing, move, rename, and Recycle Bin flows can work.\n\nThe app is not designed to force account creation before core use."
+            "Omnia Organizer is built around on-device file management.\n\nStorage access exists so Browse, Search, Storage, sharing, move, rename, and Recycle Bin flows can work.\n\nCore file-management use does not require an account.\n\nCurrent trust posture:\n- device-first storage handling\n- no forced signup wall\n- reconnectable access states shown in product"
 
         SettingsInfoSheet.DATA_USE ->
-            "At this alpha stage, OOFM keeps its file-management work on the device.\n\nThe current product promise is to use access for file-management features rather than hidden profiling.\n\nFuture Play declarations and legal copy can tighten this further, but the app already exposes its trust surfaces in product."
+            "At this alpha stage, OOFM keeps file-management work on the device.\n\nThe app does not need hidden profiling to browse, search, sort, move, share, or recover files.\n\nIf future versions add cloud sync, analytics, AI services, or account features, they should ship as explicit product changes with updated policy and disclosure."
 
         SettingsInfoSheet.TERMS ->
-            "Formal terms, privacy policy, and store-facing legal copy still need their final review before public launch.\n\nCurrent product boundaries:\n- no forced account wall for core use\n- storage access is asked for file-management flows\n- files stay device-first in the current alpha path"
+            "Formal terms, privacy policy, and store-facing legal copy still need their final review before public launch.\n\nCurrent product boundaries:\n- no forced account wall for core use\n- storage access is requested for file-management flows\n- files stay device-first in the current alpha path\n- support contact planned for launch: omnia.organizer.app@gmail.com"
 
         SettingsInfoSheet.ABOUT ->
-            "OOFM is the internal shorthand for Omnia Organizer: File Manager.\n\nIt is an OmniaCreata mobile utility focused on calm, premium file control instead of ad-heavy or desktop-style file browsers."
+            "OOFM is the internal shorthand for Omnia Organizer: File Manager.\n\nIt is an OmniaCreata mobile utility focused on calm, premium file control instead of ad-heavy or desktop-style file browsers.\n\nCurrent release goal: ship a trustworthy Android-first mobile file manager before broader automation or cloud layers."
     }
 
     AlertDialog(

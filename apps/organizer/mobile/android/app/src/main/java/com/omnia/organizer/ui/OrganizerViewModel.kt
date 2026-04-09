@@ -742,7 +742,9 @@ class OrganizerViewModel @Inject constructor(
         viewModelScope.launch {
             runTask("Restore failed.") {
                 val restored = withContext(Dispatchers.IO) { documentManager.restoreTrash(entry) }
-                if (!restored) error("The item could not be restored.")
+                if (!restored) {
+                    error("The item could not be restored. The original folder may be missing or the storage connection may have changed.")
+                }
                 trashRepository.delete(entry.id)
                 if (root != null) {
                     refreshCurrentFolder(root, keepSearchResults = true)
@@ -757,7 +759,9 @@ class OrganizerViewModel @Inject constructor(
         viewModelScope.launch {
             runTask("Delete forever failed.") {
                 val deleted = withContext(Dispatchers.IO) { documentManager.permanentlyDeleteTrash(entry) }
-                if (!deleted) error("The item could not be deleted permanently.")
+                if (!deleted) {
+                    error("The item could not be deleted forever. Refresh the Recycle Bin and try again.")
+                }
                 trashRepository.delete(entry.id)
                 postNotice("${entry.displayName} deleted forever.", NoticeTone.INFO)
             }
@@ -766,6 +770,10 @@ class OrganizerViewModel @Inject constructor(
 
     fun clearTrash() {
         viewModelScope.launch {
+            if (_uiState.value.trashEntries.isEmpty()) {
+                postNotice("Recycle Bin metadata is already clear.", NoticeTone.INFO)
+                return@launch
+            }
             trashRepository.clear()
             postNotice("Recycle Bin metadata cleared.", NoticeTone.INFO)
         }
@@ -832,6 +840,10 @@ class OrganizerViewModel @Inject constructor(
 
     fun clearNotice() {
         _uiState.update { it.copy(notice = null) }
+    }
+
+    fun reportActionFailure(message: String) {
+        _uiState.update { it.copy(errorMessage = message) }
     }
 
     fun documentUriFor(item: FileItem): Uri? {

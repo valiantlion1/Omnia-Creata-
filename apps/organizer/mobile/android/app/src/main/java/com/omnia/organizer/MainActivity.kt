@@ -34,19 +34,23 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -91,7 +95,11 @@ import com.omnia.organizer.ui.StorageCategoryKey
 import com.omnia.organizer.ui.StoragePermissionRequiredScreen
 import com.omnia.organizer.ui.StorageScreen
 import com.omnia.organizer.ui.TrashScreen
+import com.omnia.organizer.ui.WorkspaceConnectingScreen
+import com.omnia.organizer.ui.WorkspaceUnavailableScreen
 import com.omnia.organizer.ui.theme.OmniaTheme
+import com.omnia.organizer.core.domain.model.FileItem
+import com.omnia.organizer.core.domain.model.TrashEntry
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 
@@ -155,6 +163,10 @@ private fun AppRoot(
     var splashVisible by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var splashStartedAt by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    var pendingMoveToTrashItem by remember { mutableStateOf<FileItem?>(null) }
+    var confirmDeleteSelection by remember { mutableStateOf(false) }
+    var pendingPermanentDeleteEntry by remember { mutableStateOf<TrashEntry?>(null) }
+    var confirmClearTrash by remember { mutableStateOf(false) }
     var hasCompletedIntro by rememberSaveable { mutableStateOf(startupPrefs.getBoolean(PrefIntroComplete, false)) }
     var acceptedDisclosureVersion by rememberSaveable {
         mutableIntStateOf(startupPrefs.getInt(PrefDisclosureVersion, 0))
@@ -240,6 +252,23 @@ private fun AppRoot(
         state.root == null -> "The first device handshake is happening in the background so the phone stays responsive."
         state.isStorageRefreshing -> "Heavy storage summaries stay behind the curtain while the app gets ready."
         else -> "OmniaCreata clarity for the files that actually matter on your phone."
+    }
+    val openFileRequest: (FileItem) -> Unit = { item ->
+        openDocument(
+            context = context,
+            uri = viewModel.documentUriFor(item),
+            mimeType = item.mimeType,
+            onFailure = viewModel::reportActionFailure
+        )
+    }
+    val shareFileRequest: (FileItem) -> Unit = { item ->
+        shareDocument(
+            context = context,
+            uri = viewModel.documentUriFor(item),
+            mimeType = item.mimeType,
+            displayName = item.name,
+            onFailure = viewModel::reportActionFailure
+        )
     }
 
     LaunchedEffect(hasStorageAccess) {
@@ -432,6 +461,17 @@ private fun AppRoot(
             if (state.notice != null) {
                 NoticeBanner(notice = state.notice!!, onDismiss = viewModel::clearNotice)
             }
+            if (state.root == null) {
+                if (state.isLoading) {
+                    WorkspaceConnectingScreen()
+                } else {
+                    WorkspaceUnavailableScreen(
+                        onReconnect = handleStorageAction,
+                        onOpenSettings = { currentRoute = OrganizerRoute.Settings.route }
+                    )
+                }
+                return@Scaffold
+            }
 
             when (currentRoute) {
                 OrganizerRoute.Home.route -> HomeScreen(
@@ -453,7 +493,7 @@ private fun AppRoot(
                         currentRoute = OrganizerRoute.Browse.route
                     },
                     onPickFolder = requestStorageAccessAction,
-                    onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
+                    onOpenFile = openFileRequest,
                     onOpenParent = { item ->
                         viewModel.openParentOf(item)
                         currentRoute = OrganizerRoute.Browse.route
@@ -475,10 +515,10 @@ private fun AppRoot(
                     onResetBrowseControls = viewModel::resetBrowseExplorerControls,
                     onOpenFileDetail = viewModel::openFileDetail,
                     onDismissFileDetail = viewModel::dismissFileDetail,
-                    onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
-                    onShareFile = { item -> shareDocument(context, viewModel.documentUriFor(item), item.mimeType, item.name) },
+                    onOpenFile = openFileRequest,
+                    onShareFile = shareFileRequest,
                     onRequestRename = viewModel::requestRename,
-                    onMoveToTrash = viewModel::moveToTrash,
+                    onMoveToTrash = { item -> pendingMoveToTrashItem = item },
                     onCreateFolder = viewModel::requestCreateFolder,
                     onEnterSelectionMode = viewModel::enterSelectionMode,
                     onToggleSelection = viewModel::toggleSelection,
@@ -489,14 +529,19 @@ private fun AppRoot(
                     onRequestShareSelection = {
                         val targets = viewModel.selectedShareTargets()
                         val uris = viewModel.documentUrisFor(targets)
-                        shareDocuments(context, uris, targets)
+                        shareDocuments(
+                            context = context,
+                            uris = uris,
+                            items = targets,
+                            onFailure = viewModel::reportActionFailure
+                        )
                         viewModel.completeShareSelection(
                             sharedCount = uris.size,
                             skippedCount = (state.selectedDocumentIds.size - uris.size).coerceAtLeast(0)
                         )
                     },
                     onRequestRenameSelection = viewModel::requestRenameSelection,
-                    onDeleteSelection = viewModel::deleteSelection,
+                    onDeleteSelection = { confirmDeleteSelection = true },
                     onDismissDestinationPicker = viewModel::dismissDestinationPicker,
                     onOpenDestinationFolder = viewModel::openDestinationFolder,
                     onNavigateDestinationBreadcrumb = viewModel::navigateDestinationBreadcrumb,
@@ -514,7 +559,7 @@ private fun AppRoot(
                     onKindFilter = viewModel::updateKindFilter,
                     onDateFilter = viewModel::updateDateFilter,
                     onSizeFilter = viewModel::updateSizeFilter,
-                    onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
+                    onOpenFile = openFileRequest,
                     onShowInBrowse = { item ->
                         viewModel.showInBrowse(item)
                         currentRoute = OrganizerRoute.Browse.route
@@ -524,13 +569,14 @@ private fun AppRoot(
                 OrganizerRoute.Storage.route -> StorageScreen(
                     state = state,
                     onPickFolder = requestStorageAccessAction,
+                    onRetrySummary = { viewModel.refreshActiveRoute(OrganizerRoute.Storage.route) },
                     onOpenStorageCategory = viewModel::openStorageCategory,
                     onClearStorageCategory = viewModel::clearStorageCategoryView,
                     onOpenCategoryFolder = {
                         state.storageCategoryView?.folderPath?.let(viewModel::openFolderPath)
                         currentRoute = OrganizerRoute.Browse.route
                     },
-                    onOpenFile = { item -> openDocument(context, viewModel.documentUriFor(item), item.mimeType) },
+                    onOpenFile = openFileRequest,
                     onOpenParent = { item ->
                         viewModel.openParentOf(item)
                         currentRoute = OrganizerRoute.Browse.route
@@ -540,19 +586,67 @@ private fun AppRoot(
                 OrganizerRoute.Trash.route -> TrashScreen(
                     state = state,
                     onRestore = viewModel::restoreFromTrash,
-                    onDeletePermanently = viewModel::deletePermanentlyFromTrash
+                    onDeletePermanently = { entry -> pendingPermanentDeleteEntry = entry }
                 )
 
                 OrganizerRoute.Settings.route -> SettingsScreen(
                     state = state,
                     onPickFolder = requestStorageAccessAction,
                     onClearRoot = viewModel::clearRoot,
-                    onClearTrash = viewModel::clearTrash
+                    onClearTrash = { confirmClearTrash = true }
                 )
             }
         }
     }
 
+    pendingMoveToTrashItem?.let { item ->
+        ActionConfirmationDialog(
+            title = "Move to Recycle Bin?",
+            body = "You can restore ${item.name} later from Recycle Bin.",
+            confirmLabel = "Move to bin",
+            onDismiss = { pendingMoveToTrashItem = null },
+            onConfirm = {
+                pendingMoveToTrashItem = null
+                viewModel.moveToTrash(item)
+            }
+        )
+    }
+    if (confirmDeleteSelection) {
+        ActionConfirmationDialog(
+            title = "Move selected items to Recycle Bin?",
+            body = "Selected files will leave the current folder, but they stay recoverable until you delete them forever.",
+            confirmLabel = "Move selected items",
+            onDismiss = { confirmDeleteSelection = false },
+            onConfirm = {
+                confirmDeleteSelection = false
+                viewModel.deleteSelection()
+            }
+        )
+    }
+    pendingPermanentDeleteEntry?.let { entry ->
+        ActionConfirmationDialog(
+            title = "Delete forever?",
+            body = "${entry.displayName} will be removed permanently and cannot be restored from Recycle Bin.",
+            confirmLabel = "Delete forever",
+            onDismiss = { pendingPermanentDeleteEntry = null },
+            onConfirm = {
+                pendingPermanentDeleteEntry = null
+                viewModel.deletePermanentlyFromTrash(entry)
+            }
+        )
+    }
+    if (confirmClearTrash) {
+        ActionConfirmationDialog(
+            title = "Clear Recycle Bin metadata?",
+            body = "This only clears OOFM's saved Recycle Bin list. Files that were already moved on disk are not deleted by this action.",
+            confirmLabel = "Clear metadata",
+            onDismiss = { confirmClearTrash = false },
+            onConfirm = {
+                confirmClearTrash = false
+                viewModel.clearTrash()
+            }
+        )
+    }
     RenameDialog(state = state, onDismiss = viewModel::dismissRename, onConfirm = viewModel::renameRequestedItem)
     CreateFolderDialog(state = state, onDismiss = viewModel::dismissCreateFolder, onConfirm = viewModel::createFolder)
 }
@@ -657,17 +751,37 @@ private fun shouldUseReducedEffects(context: Context): Boolean {
     return activityManager.isLowRamDevice || activityManager.memoryClass <= 192 || totalMemMb <= 4096L
 }
 
-private fun openDocument(context: Context, uri: Uri?, mimeType: String) {
-    if (uri == null) return
+private fun openDocument(
+    context: Context,
+    uri: Uri?,
+    mimeType: String,
+    onFailure: (String) -> Unit
+) {
+    if (uri == null) {
+        onFailure("This file is no longer available. Refresh the folder and try again.")
+        return
+    }
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, if (mimeType.isBlank()) "*/*" else mimeType)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Open with")) }
+        .onFailure {
+            onFailure("Android could not open this file with the available apps.")
+        }
 }
 
-private fun shareDocument(context: Context, uri: Uri?, mimeType: String, displayName: String) {
-    if (uri == null) return
+private fun shareDocument(
+    context: Context,
+    uri: Uri?,
+    mimeType: String,
+    displayName: String,
+    onFailure: (String) -> Unit
+) {
+    if (uri == null) {
+        onFailure("This file cannot be shared right now because the underlying item is unavailable.")
+        return
+    }
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = if (mimeType.isBlank()) "*/*" else mimeType
         putExtra(Intent.EXTRA_STREAM, uri)
@@ -675,10 +789,21 @@ private fun shareDocument(context: Context, uri: Uri?, mimeType: String, display
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Share file")) }
+        .onFailure {
+            onFailure("Android could not open a share target for this file.")
+        }
 }
 
-private fun shareDocuments(context: Context, uris: List<Uri>, items: List<com.omnia.organizer.core.domain.model.FileItem>) {
-    if (uris.isEmpty()) return
+private fun shareDocuments(
+    context: Context,
+    uris: List<Uri>,
+    items: List<com.omnia.organizer.core.domain.model.FileItem>,
+    onFailure: (String) -> Unit
+) {
+    if (uris.isEmpty()) {
+        onFailure("No shareable files were available in the current selection.")
+        return
+    }
     val resolvedType = items
         .map { item -> item.mimeType.ifBlank { "*/*" } }
         .distinct()
@@ -699,6 +824,34 @@ private fun shareDocuments(context: Context, uris: List<Uri>, items: List<com.om
         }
     }
     runCatching { context.startActivity(Intent.createChooser(intent, "Share files")) }
+        .onFailure {
+            onFailure("Android could not open a share target for the selected files.")
+        }
+}
+
+@Composable
+private fun ActionConfirmationDialog(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            FilledTonalButton(onClick = onConfirm) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private fun hasFullStorageAccess(context: Context): Boolean {

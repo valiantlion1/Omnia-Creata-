@@ -498,19 +498,17 @@ export default function CreatePage() {
           </div>
         </div>
 
-        {/* ── Prompt card: Holographic Console ────────────────────────── */}
-          <div className="overflow-visible rounded-[24px] border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_16px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl ring-1 ring-white/[0.02]">
+        {/* ── Prompt Area ────────────────────────── */}
+        <div className="glass-card overflow-visible p-[2px]">
           
-          {/* Prompt Matrix Area */}
-          <div className="relative flex flex-col bg-[#090a0d] p-6 pb-14 shadow-inner transition-all duration-500 focus-within:shadow-[0_0_80px_rgb(var(--primary-light)/0.06)_inset]">
+          {/* Prompt Box */}
+          <div className="relative flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80">
             
             {/* Subtle bottom border line */}
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
 
-            {/* Telemetry info */}
-            <div className="mb-4 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              <span className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-[rgb(var(--primary-light))]" /> OPTICAL MATRIX</span>
-              <span>CHAR_COUNT: {prompt.length.toString().padStart(4, '0')}</span>
+            <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
+              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-zinc-400" /> Direction</span>
             </div>
 
             <textarea
@@ -540,7 +538,7 @@ export default function CreatePage() {
           </div>
 
           {/* Controls bar */}
-          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-white/[0.01]">
+          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
 
             {/* Left: aspect ratio + model */}
             <div className="flex flex-wrap items-center gap-2">
@@ -579,14 +577,14 @@ export default function CreatePage() {
                     <div className="truncate text-[13px] font-semibold text-white">
                       {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
                     </div>
-                    <div className="mt-0.5 text-[10px] font-mono uppercase tracking-widest text-[#666a7a]">
+                    <div className="mt-0.5 text-[11px] font-medium text-zinc-500">
                       {selectedModel
                         ? (
                             selectedModel.runtime === 'local'
-                              ? 'LOCAL ENGINE'
+                              ? 'Running locally'
                               : selectedModelCreditGuide
-                                ? `${selectedModelCreditGuide.reserved_credit_cost} CR_HOLD`
-                                : `${selectedModel.credit_cost} CR_COST`
+                                ? `${selectedModelCreditGuide.reserved_credit_cost} credits reserved`
+                                : `${selectedModel.credit_cost} credits`
                           )
                         : ''}
                     </div>
@@ -614,12 +612,12 @@ export default function CreatePage() {
                             </div>
                             <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
                           </div>
-                          <div className="shrink-0 text-right text-[11px] font-mono uppercase tracking-widest text-[#666a7a]">
+                          <div className="shrink-0 text-right text-[11px] font-medium text-zinc-500">
                             {entry.runtime === 'local'
-                              ? 'LCL'
+                              ? 'Local'
                               : entryGuide
-                                ? `${entryGuide.reserved_credit_cost} HOLD`
-                                : `${entry.credit_cost} CR`}
+                                ? `${entryGuide.reserved_credit_cost} rsv`
+                                : `${entry.credit_cost} cr`}
                           </div>
                         </button>
                       )
@@ -631,26 +629,25 @@ export default function CreatePage() {
 
             {/* Right: generate button */}
             <div className="flex items-center gap-4">
-              <div className="text-right text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                <div className="mb-0.5">{selectedModel ? `${activeAspect.width}×${activeAspect.height}` : ''}</div>
+              <div className="text-right text-[11px] font-medium text-zinc-500">
+                <div className="mb-0.5">{selectedModel ? `${activeAspect.width} × ${activeAspect.height}` : ''}</div>
                 <div>
                   {selectedModel && selectedModel.runtime !== 'local'
                     ? selectedModelCreditGuide
-                      ? `${selectedModelCreditGuide.reserved_credit_cost} HOLD`
-                      : `${selectedModel.credit_cost} CREDITS`
+                      ? `${selectedModelCreditGuide.reserved_credit_cost} credits held`
+                      : `${selectedModel.credit_cost} credits`
                     : ''}
                 </div>
               </div>
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
-                className="group relative inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-[16px] px-8 text-[13px] font-bold tracking-widest uppercase text-white transition-all overflow-hidden disabled:cursor-not-allowed disabled:opacity-50 disabled:saturate-0"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }}
+                className="group relative inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-8 text-[13px] font-semibold text-black bg-white transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
               >
                 {/* Content */}
                 <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-white/90" /> : <Wand2 className="h-4 w-4 text-white/90" />}
-                  {submittingCount ? 'STARTING' : 'GENERATE'}
+                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/90" /> : <Wand2 className="h-4 w-4 text-black/90" />}
+                  {submittingCount ? 'Starting' : 'Generate'}
                 </span>
               </button>
             </div>

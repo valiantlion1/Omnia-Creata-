@@ -8,9 +8,29 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha15](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha15)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha16](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha16)
 
 ## Entries
+
+### 2026-04-09 - Alpha 16 store readiness and safety pass
+- Version target: `1.0.0-alpha16`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha16](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha16)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - permission-granted but workspace-missing states now read clearly instead of falling back to the wrong "grant access" language
+  - destructive actions now ask for confirmation before moving files to Recycle Bin, deleting forever, or clearing saved trash metadata
+  - file open/share failures now report explicit errors instead of failing silently when Android cannot resolve the item or action
+  - Storage no longer gets stuck on an endless spinner when the summary is unavailable; it now offers a retry path
+  - Settings trust surfaces now read more like a real product launch center, including current trust posture and support contact
+  - cleartext network traffic is explicitly disabled in the Android manifest as a safer default posture
+- Known gaps:
+  - final public privacy policy URL and store-reviewed legal text still need to be published before Play submission
+  - store iconography, screenshots, listing copy, and Play Console metadata still need a dedicated launch pack
+  - broader multi-device QA is still required before calling the build Play-ready
 
 ### 2026-04-08 - Alpha 15 production polish and trust surfacing
 - Version target: `1.0.0-alpha15`

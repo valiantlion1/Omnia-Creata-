@@ -265,7 +265,7 @@ function resolveLatestConversationVisualReferenceAssetId(
 }
 
 function formatChatVisualModelName(model: string | null, mode: ComposeMode) {
-  if (!model) return mode === 'Vision' ? 'Flux Schnell' : 'Omnia'
+  if (!model) return mode === 'Vision' ? 'Fast Render' : 'Omnia'
   return model
     .split(/[-_]/g)
     .filter(Boolean)
@@ -515,7 +515,7 @@ function GenerationBlocked({
           {statusLabel}
         </div>
         <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
-          No final image
+          Generation failed
         </div>
       </div>
 
@@ -529,7 +529,7 @@ function GenerationBlocked({
             <ImageOff className="h-6 w-6" />
           </div>
           <div className="mt-4 text-lg font-semibold text-white">
-            Studio did not get a real image back
+            Studio could not complete this render
           </div>
           <p className="mt-2 max-w-[18rem] text-sm leading-relaxed text-zinc-200">
             {summary}
@@ -586,7 +586,7 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
         Describe an image, upload a photo to edit, or ask for creative guidance.
         Images are generated organically right here.
       </p>
-      <div className="relative z-10 mt-5 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2 text-[11px] font-medium tracking-[0.02em] text-zinc-400">
+      <div className="relative z-10 mt-5 rounded-[12px] border border-white/[0.04] bg-white/[0.01] px-4 py-2 text-[12px] font-medium text-zinc-500">
         Quick starts below are static starter prompts, not live AI replies.
       </div>
       
