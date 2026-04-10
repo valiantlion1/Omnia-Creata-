@@ -1133,9 +1133,28 @@ fun StorageScreen(
     if (summary == null) {
         if (state.isStorageRefreshing) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator()
-                    Text("Scanning storage root...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Card(
+                    modifier = Modifier.padding(24.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            "Scanning storage root...",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "OOFM is preparing the category view without blocking Browse.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         } else {
@@ -1785,23 +1804,23 @@ private fun WorkspaceHeroCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                "Connected workspace",
+                "WORKSPACE",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 state.root?.displayName.orEmpty(),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 "Browse, search, storage, and recovery stay inside this device view.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (state.isStorageRefreshing) {
@@ -1816,9 +1835,6 @@ private fun WorkspaceHeroCard(
                     Text("Reconnect")
                 }
                 StatPill(label = "${state.recentFiles.size} recents")
-                if (state.storageSummary != null) {
-                    StatPill(label = formatCompactBytes(state.storageSummary.totalBytes))
-                }
             }
         }
     }
@@ -2021,58 +2037,55 @@ private fun BrowseExplorerCard(
     onCreateFolder: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val breadcrumbScrollState = rememberScrollState()
     val actionScrollState = rememberScrollState()
+    val currentFolderName = breadcrumb
+        .lastOrNull()
+        ?.name
+        ?.takeUnless { it.isBlank() || it == "0" }
+        ?: (state.root?.displayName ?: "Device storage")
+    val pathSummary = breadcrumb
+        .dropLast(1)
+        .mapNotNull { handle -> handle.name.takeUnless { it.isBlank() || it == "0" } }
+        .joinToString(" / ")
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = state.root?.displayName ?: "Internal storage",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(breadcrumbScrollState),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                breadcrumb.forEachIndexed { index, handle ->
-                    if (index > 0) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    AssistChip(
-                        onClick = { onNavigateToBreadcrumb(index) },
-                        label = { Text(handle.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    )
-                }
-            }
             Text(
-                text = "Browse",
-                style = MaterialTheme.typography.headlineLarge,
+                text = currentFolderName,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
+            if (pathSummary.isNotBlank()) {
+                Text(
+                    text = pathSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Surface(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(actionScrollState)
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
@@ -2085,6 +2098,12 @@ private fun BrowseExplorerCard(
                         onClick = { onBrowseLayoutChange(BrowseLayoutMode.GRID) },
                         label = { Text("Grid") }
                     )
+                    if (breadcrumb.size > 1) {
+                        AssistChip(
+                            onClick = { onNavigateToBreadcrumb(breadcrumb.lastIndex - 1) },
+                            label = { Text("Up") }
+                        )
+                    }
                     AssistChip(onClick = onCreateFolder, label = { Text("New folder") })
                     AssistChip(onClick = onShowBrowseControls, label = { Text("Sort & filter") })
                 }
@@ -2098,21 +2117,6 @@ private fun BrowseExplorerCard(
                 StatPill(label = "$visibleItemCount items")
                 StatPill(label = "$folderCount folders")
                 StatPill(label = "$fileCount files")
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    "NAME",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "LAST MODIFIED",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -2862,9 +2866,9 @@ private fun ShortcutCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 16.dp),
+                .padding(horizontal = 12.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(999.dp),
@@ -2873,7 +2877,7 @@ private fun ShortcutCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(10.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }

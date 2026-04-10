@@ -2,7 +2,6 @@ package com.omnia.organizer.ui.theme
 
 import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -70,7 +69,7 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun OmniaTheme(
-    useDarkTheme: Boolean = isSystemInDarkTheme(),
+    useDarkTheme: Boolean = false,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
