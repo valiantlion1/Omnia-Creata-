@@ -316,6 +316,51 @@ def test_plan_generation_route_prefers_huggingface_for_free_stylized_prompts() -
     assert decision.prompt_profile == "stylized_illustration"
 
 
+def test_plan_generation_route_prefers_openai_for_free_prompts_in_development_when_managed_lane_is_available() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    try:
+        settings.environment = provider_module.Environment.DEVELOPMENT
+        registry = _registry_with(
+            _FakeProvider(
+                name="openai",
+                rollout_tier="primary",
+                capabilities=ProviderCapabilities(
+                    workflows=("text_to_image", "image_to_image", "edit"),
+                    supports_reference_image=True,
+                ),
+            ),
+            _FakeProvider(
+                name="pollinations",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="huggingface",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="demo",
+                rollout_tier="degraded",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+        )
+
+        decision = registry.plan_generation_route(
+            plan=IdentityPlan.FREE,
+            prompt="anime warrior princess illustration with dramatic lighting",
+            model_id="flux-schnell",
+            workflow="text_to_image",
+        )
+
+        assert decision.provider_candidates[:4] == ("openai", "huggingface", "pollinations", "demo")
+        assert decision.selected_provider == "openai"
+        assert decision.routing_reason == "free_standard_managed_override"
+    finally:
+        settings.environment = original_environment
+
+
 def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
     registry = _registry_with(
         _FakeProvider(

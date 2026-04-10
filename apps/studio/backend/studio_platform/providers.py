@@ -16,7 +16,7 @@ from urllib.parse import quote
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
-from config.env import get_settings
+from config.env import Environment, get_settings
 from security.redaction import redact_sensitive_text
 
 from .models import IdentityPlan
@@ -1705,9 +1705,29 @@ class ProviderRegistry:
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
                 return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
             return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
+        if self._should_prefer_managed_free_lanes(workflow=workflow):
+            if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
+                return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
+            return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")
+
+    def _should_prefer_managed_free_lanes(self, *, workflow: str) -> bool:
+        settings = get_settings()
+        if settings.environment != Environment.DEVELOPMENT:
+            return False
+        normalized_workflow = normalize_generation_workflow(workflow)
+        return any(
+            provider is not None
+            and provider.is_configured()
+            and provider.supports_generation(normalized_workflow, has_reference_image=False)
+            for provider in (
+                self.get_provider("openai"),
+                self.get_provider("fal"),
+                self.get_provider("runware"),
+            )
+        )
 
     def _routing_reason(
         self,
@@ -1731,6 +1751,8 @@ class ProviderRegistry:
                 return "premium_intent_managed_preferred"
             if routing_strategy == "balanced":
                 return "managed_unavailable_fallback_standard"
+        if routing_strategy == "free-first" and normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
+            return "free_standard_managed_override"
         if routing_strategy == "balanced":
             return "pro_balanced_standard_default"
         return "free_standard_default"

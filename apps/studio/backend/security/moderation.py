@@ -91,17 +91,3 @@ async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[s
             return (ModerationResult.SOFT_BLOCK, term)
             
     return (ModerationResult.SAFE, None)
-    if not prompt:
-        return (ModerationResult.SAFE, None)
-        
-    normalized = prompt.lower()
-    
-    for term in HARD_BLOCK_TERMS:
-        if term in normalized:
-            return (ModerationResult.HARD_BLOCK, term)
-            
-    for term in SOFT_BLOCK_TERMS:
-        if term in normalized:
-            return (ModerationResult.SOFT_BLOCK, term)
-            
-    return (ModerationResult.SAFE, None)

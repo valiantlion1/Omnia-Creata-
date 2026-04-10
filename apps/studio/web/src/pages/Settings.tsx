@@ -40,14 +40,14 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${
-        checked ? 'bg-[rgb(var(--primary))] shadow-[0_0_12px_rgba(var(--primary),0.4)]' : 'bg-white/10'
+      className={`relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none ${
+        checked ? 'bg-[rgb(var(--primary-light))] shadow-[0_0_16px_rgb(var(--primary)/0.6)]' : 'bg-white/10 hover:bg-white/[0.15]'
       }`}
     >
       <span className="sr-only">Toggle</span>
       <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-300 ease-in-out ${
-          checked ? 'translate-x-[20px]' : 'translate-x-0'
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] ring-0 transition-transform duration-300 cubic-bezier(0.34,1.56,0.64,1) ${
+          checked ? 'translate-x-[20px] scale-105' : 'translate-x-0'
         }`}
       />
     </button>
@@ -56,27 +56,30 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
 
 function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?: any, title: string, description?: string, action?: ReactNode, danger?: boolean }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 p-5">
+    <div className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 p-5 transition-all duration-500 hover:bg-white/[0.02]`}>
       <div className="flex items-start sm:items-center gap-4">
         {Icon && (
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] ${danger ? 'bg-red-500/10 text-red-400' : 'bg-white/[0.04] text-zinc-400'}`}>
-            <Icon className="h-5 w-5" />
+          <div className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[14px] transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${danger ? 'bg-red-500/10 text-red-400 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-white/[0.03] text-zinc-400 group-hover:bg-white/[0.06] group-hover:text-white group-hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]'}`}>
+            <Icon className="h-5 w-5 relative z-10" />
+            <div className={`absolute inset-0 rounded-[14px] opacity-0 transition-opacity duration-500 group-hover:opacity-100 ${danger ? 'ring-1 ring-red-500/30' : 'ring-1 ring-white/10'}`} />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className={`text-[14px] sm:text-[15px] font-semibold tracking-tight ${danger ? 'text-red-400' : 'text-zinc-100'}`}>{title}</div>
-          {description && <div className="mt-1 text-[13px] leading-relaxed text-zinc-500 max-w-xl">{description}</div>}
+          <div className={`text-[14px] sm:text-[15px] font-bold tracking-wide ${danger ? 'text-red-400' : 'text-zinc-100 transition-colors duration-300 group-hover:text-white'}`}>{title}</div>
+          {description && <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-500 max-w-xl transition-colors duration-300 group-hover:text-zinc-400">{description}</div>}
         </div>
       </div>
-      {action && <div className="shrink-0 pt-2 sm:pt-0 w-full sm:w-auto">{action}</div>}
+      {action && <div className="shrink-0 pt-2 sm:pt-0 w-full sm:w-auto opacity-90 transition-opacity duration-300 group-hover:opacity-100">{action}</div>}
     </div>
   )
 }
 
 function SettingsCard({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   return (
-    <div className={`overflow-hidden rounded-[20px] ring-1 ring-white/[0.05] bg-white/[0.01] backdrop-blur-xl shadow-xl shadow-black/20 ${compact ? '' : 'divide-y divide-white/[0.04]'}`}>
-      {children}
+    <div className={`relative overflow-hidden rounded-[24px] ring-1 ring-white/[0.06] bg-[#0c0d12]/60 backdrop-blur-3xl shadow-[0_32px_80px_-12px_rgba(0,0,0,0.8)] before:absolute before:inset-0 before:rounded-[24px] before:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] before:pointer-events-none ${compact ? '' : 'divide-y divide-white/[0.04]'}`}>
+      <div className="relative z-10 w-full h-full">
+        {children}
+      </div>
     </div>
   )
 }
@@ -152,18 +155,21 @@ export default function SettingsPage() {
           ].map((tab) => {
             const isActive = activeTab === tab.id
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex whitespace-nowrap md:whitespace-normal items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-300 ${
-                  isActive 
-                    ? 'bg-white/[0.08] text-white shadow-sm ring-1 ring-white/10' 
-                    : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300'
-                }`}
-              >
-                <tab.icon className={`h-[18px] w-[18px] ${isActive ? 'text-[rgb(var(--primary-light))] drop-shadow-md' : 'opacity-80'}`} />
-                {tab.label}
-              </button>
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  className={`group relative flex whitespace-nowrap md:whitespace-normal items-center gap-3 rounded-[16px] px-5 py-3.5 text-[14px] font-bold tracking-wide transition-all duration-400 ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-[rgb(var(--primary-light)/0.1)] to-transparent text-white' 
+                      : 'text-zinc-500 hover:bg-white/[0.02] hover:text-zinc-300'
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 h-2/3 w-[3px] -translate-y-1/2 rounded-r-full bg-[rgb(var(--primary-light))] shadow-[0_0_12px_rgb(var(--primary-light))]" />
+                  )}
+                  <tab.icon className={`relative z-10 h-5 w-5 transition-transform duration-400 ${isActive ? 'text-[rgb(var(--primary-light))] drop-shadow-[0_0_8px_rgba(var(--primary-light),0.5)] scale-110' : 'opacity-80 group-hover:scale-105'}`} />
+                  <span className="relative z-10">{tab.label}</span>
+                </button>
             )
           })}
         </aside>
@@ -176,12 +182,17 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
               
               {/* Hero Account Card */}
-              <div className="relative overflow-hidden rounded-[24px] bg-[#111216] ring-1 ring-white/[0.08] shadow-[0_24px_50px_rgba(0,0,0,0.5)] p-6 md:p-8">
-                <div className="absolute inset-0 opacity-[0.15] mix-blend-overlay [background-image:radial-gradient(ellipse_at_top_right,rgba(124,58,237,0.4)_0,transparent_60%)] pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                  <div className="flex items-center gap-5">
-                    <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-2xl font-black text-white shadow-lg shadow-[rgb(var(--primary))/20] ring-1 ring-white/20">
-                      {(auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()}
+              <div className="group relative overflow-hidden rounded-[28px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] p-8 md:p-10 isolation-auto">
+                <div className="absolute inset-0 opacity-[0.25] mix-blend-screen bg-gradient-to-br from-[rgb(var(--primary))/0.5] via-transparent to-[rgb(var(--accent))/0.5] transition-opacity duration-1000 group-hover:opacity-[0.35]" />
+                <div className="absolute -top-[50%] -right-[20%] w-[100%] h-[150%] bg-[radial-gradient(ellipse_at_center,rgba(var(--primary-light),0.15)_0%,transparent_50%)] animate-pulse-slow pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-[rgb(var(--primary-light)/0.5)] to-transparent opacity-50" />
+                
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                    <div className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-3xl font-black text-white shadow-[0_0_40px_rgba(var(--primary),0.3)] ring-1 ring-white/20 isolate">
+                      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+                      <span className="relative z-10 drop-shadow-md">{(auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()}</span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>
                     <div>
                         <div className="flex items-center gap-3">
@@ -195,16 +206,16 @@ export default function SettingsPage() {
                         </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 mt-2 md:mt-0">
-                    <Link to="/account" className="flex items-center justify-center rounded-xl bg-white text-black px-6 py-2.5 text-[13px] font-bold shadow-md transition hover:bg-zinc-200">
-                      Edit Profile
-                    </Link>
-                    {!auth?.guest && (
-                      <button onClick={signOut} className="flex items-center justify-center gap-2 rounded-xl bg-transparent px-6 py-2.5 text-[13px] font-semibold text-zinc-400 hover:text-white hover:bg-white/[0.04] transition">
-                        <LogOut className="h-[14px] w-[14px]" /> Sign Out
-                      </button>
-                    )}
-                  </div>
+                    <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0 w-full md:w-auto">
+                      <Link to="/account" className="relative overflow-hidden flex items-center justify-center rounded-xl bg-white px-8 py-3.5 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]">
+                        Edit Profile
+                      </Link>
+                      {!auth?.guest && (
+                        <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] px-6 py-3.5 text-[14px] font-bold text-zinc-400 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.1] hover:shadow-lg">
+                          <LogOut className="h-[16px] w-[16px]" /> Sign Out
+                        </button>
+                      )}
+                    </div>
                 </div>
               </div>
 
@@ -217,8 +228,8 @@ export default function SettingsPage() {
                     title="Plan & Billing"
                     description="View active plan details, manage your payment methods, and purchase more credits."
                     action={
-                      <Link to="/subscription" className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-white/[0.05] border border-white/[0.05] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-white/[0.1]">
-                        Manage Plan <ChevronRight className="h-4 w-4 opacity-50" />
+                      <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                        Manage Plan <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
                       </Link>
                     }
                   />
@@ -267,7 +278,7 @@ export default function SettingsPage() {
                     title="Restore Dismissed Guidance"
                     description="Lost track? Reactivate all the onboarding guides and walkthroughs you've dismissed."
                     action={
-                      <button onClick={resetTips} className="flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/10 bg-transparent px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-white/5">
+                      <button onClick={resetTips} className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.04] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                         Reset Guides
                       </button>
                     }
@@ -300,7 +311,7 @@ export default function SettingsPage() {
                     title="Download Archive"
                     description="Extract a compiled JSON package of your complete history, assets, and metadata limits."
                     action={
-                      <button onClick={handleExport} className="flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.05] border border-white/[0.05] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-white/[0.1]">
+                      <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                         Export Archive
                       </button>
                     }
@@ -315,13 +326,13 @@ export default function SettingsPage() {
                     icon={Key}
                     title="Credentials"
                     description="Update the password used to access this workspace."
-                    action={<button className="flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.05] border border-white/[0.05] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-white/[0.1]">Update</button>}
+                    action={<button className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">Update</button>}
                   />
                   <SettingsRow 
                     icon={MonitorSmartphone}
                     title="Active Sessions"
                     description="Remotely disconnect unrecognized web or app instances."
-                    action={<button className="flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.05] bg-transparent px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition hover:bg-white/[0.05]">Manage Devices</button>}
+                    action={<button className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.04] hover:text-white">Manage Devices</button>}
                   />
                 </SettingsCard>
               </div>
@@ -334,8 +345,8 @@ export default function SettingsPage() {
                       <h4 className="text-[16px] font-bold text-red-400">Permanently Delete Workspace</h4>
                       <p className="mt-1.5 text-[13px] leading-relaxed text-red-400/80 max-w-sm">Wiping your account is a terminal action. You will instantly lose your active subscription and your visual history can never be recovered.</p>
                     </div>
-                    <button onClick={handleDelete} className="shrink-0 flex items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-6 py-3 text-[13px] font-bold text-red-400 transition hover:bg-red-500/20 hover:text-red-300 shadow-lg shadow-red-500/10">
-                      <AlertTriangle className="h-4 w-4" /> Erase Account
+                    <button onClick={handleDelete} className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:scale-105">
+                      <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" /> Erase Account
                     </button>
                   </div>
                 </SettingsCard>
@@ -358,11 +369,11 @@ export default function SettingsPage() {
                   />
                   <SettingsRow 
                     icon={Database}
-                    title="Provider Telemetry"
-                    description="Evaluate real-time queue depths and downstream engine status."
+                    title="System Health"
+                    description="Core platform router and balancing logic."
                     action={
-                      <button onClick={() => healthQuery.refetch()} className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-white/[0.05] border border-white/[0.05] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-white/[0.1]">
-                        <RefreshCw className={`h-3.5 w-3.5 ${healthQuery.isFetching ? 'animate-spin' : ''}`} /> Run Check
+                      <button onClick={() => healthQuery.refetch()} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                        <RefreshCw className={`h-4 w-4 transition-transform duration-500 ${healthQuery.isFetching ? 'animate-spin' : 'group-hover:rotate-180'}`} /> Run Check
                       </button>
                     }
                   />
@@ -374,13 +385,18 @@ export default function SettingsPage() {
                           const isDegraded = provider.status === 'degraded' || provider.status === 'not_configured'
                           const isDisabled = provider.status === 'disabled'
                           return (
-                            <div key={provider.name} className="flex items-center gap-3.5 rounded-[14px] border border-white/[0.04] bg-white/[0.02] px-4 py-3.5 transition hover:bg-white/[0.04]">
-                              <div className={`relative h-2.5 w-2.5 rounded-full ${isHealthy ? 'bg-emerald-400' : isDegraded ? 'bg-amber-400' : isDisabled ? 'bg-zinc-600' : 'bg-red-400'}`}>
-                                {isHealthy && <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />}
+                            <div key={provider.name} className="group relative flex items-center gap-4 rounded-[16px] border border-white/[0.04] bg-black/40 px-5 py-4 transition-all duration-400 hover:bg-white/[0.04] hover:shadow-[0_0_30px_rgba(255,255,255,0.03)] hover:-translate-y-0.5">
+                              <div className="absolute inset-0 overflow-hidden rounded-[16px] opacity-0 transition-opacity duration-500 group-hover:opacity-100 mix-blend-overlay pointer-events-none">
+                                <div className="absolute -inset-1/2 w-[200%] h-[200%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.2)_0%,transparent_50%)]" />
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[13px] font-bold capitalize text-zinc-200">{provider.name}</div>
-                                <div className="truncate text-[11px] font-medium text-zinc-500 mt-0.5">{provider.detail ?? provider.status.replace('_', ' ')}</div>
+                              <div className={`relative flex h-3 w-3 shrink-0 items-center justify-center rounded-full shadow-lg ${isHealthy ? 'bg-emerald-400 shadow-emerald-400/40' : isDegraded ? 'bg-amber-400 shadow-amber-400/40' : isDisabled ? 'bg-zinc-600' : 'bg-red-400 shadow-red-400/40'}`}>
+                                {isHealthy && <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />}
+                                {isDegraded && <div className="absolute inset-0 rounded-full bg-amber-400 animate-pulse opacity-80" />}
+                                {(!isHealthy && !isDegraded && !isDisabled) && <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-80 duration-700" />}
+                              </div>
+                              <div className="min-w-0 flex-1 relative z-10">
+                                <div className="text-[13px] font-bold capitalize text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{provider.name}</div>
+                                <div className="truncate text-[11px] font-medium text-zinc-500 mt-1 transition-colors duration-300 group-hover:text-zinc-400 uppercase tracking-widest">{provider.detail ?? provider.status.replace('_', ' ')}</div>
                               </div>
                             </div>
                           )

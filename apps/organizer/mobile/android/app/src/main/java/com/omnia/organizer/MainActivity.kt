@@ -47,6 +47,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -193,14 +194,17 @@ private fun AppRoot(
             else -> "Omnia Organizer"
         }
     }
-    val topBarSubtitle = when {
+    val chromeSubtitle = when {
         currentRoute == OrganizerRoute.Browse.route && state.isSelectionMode ->
             "Bulk actions are ready"
 
-        currentRoute == OrganizerRoute.Browse.route ||
-            currentRoute == OrganizerRoute.Search.route ||
-            currentRoute == OrganizerRoute.Storage.route ->
-            state.root?.displayName ?: ""
+        currentRoute == OrganizerRoute.Search.route ||
+            currentRoute == OrganizerRoute.Storage.route ||
+            currentRoute == OrganizerRoute.Trash.route ||
+            currentRoute == OrganizerRoute.Settings.route ->
+            topBarTitle
+
+        currentRoute == OrganizerRoute.Browse.route -> state.root?.displayName ?: ""
 
         else -> ""
     }
@@ -398,13 +402,13 @@ private fun AppRoot(
                     title = {
                         Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                             Text(
-                                text = "OOFM / $topBarTitle",
+                                text = "Omnia Organizer",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (topBarSubtitle.isNotBlank()) {
+                            if (chromeSubtitle.isNotBlank()) {
                                 Text(
-                                    text = topBarSubtitle,
+                                    text = chromeSubtitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -468,15 +472,24 @@ private fun AppRoot(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(26.dp),
+                        shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        tonalElevation = 4.dp
+                        tonalElevation = 6.dp
                     ) {
-                        NavigationBar(containerColor = Color.Transparent) {
+                        NavigationBar(
+                            containerColor = Color.Transparent
+                        ) {
                             primaryRoutes.forEach { route ->
                                 NavigationBarItem(
                                     selected = currentRoute == route.route,
                                     onClick = { currentRoute = route.route },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                        selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                        indicatorColor = MaterialTheme.colorScheme.primary,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
                                     icon = { Icon(route.icon, contentDescription = route.label) },
                                     label = { Text(route.label) }
                                 )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { ChevronLeft } from 'lucide-react'
 
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -73,6 +74,15 @@ export default function ProjectPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-6">
+      {/* Breadcrumb */}
+      <Link
+        to="/library/collections"
+        className="group flex w-fit items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 py-1.5 text-[12px] font-semibold text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 hover:bg-white/[0.06] hover:text-white hover:ring-white/[0.1]"
+      >
+        <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-x-0.5" />
+        Collections
+      </Link>
+
       <PageIntro
         eyebrow={isChatSurface ? 'Chat Session' : 'Project'}
         title={project.title}

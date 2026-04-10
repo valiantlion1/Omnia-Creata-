@@ -43,6 +43,34 @@ if ($env:STUDIO_LOG_DIRECTORY) {
 }
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
+function Import-UserEnvironmentVariable {
+  param([string]$Name)
+
+  $processValue = [Environment]::GetEnvironmentVariable($Name, "Process")
+  if (-not [string]::IsNullOrWhiteSpace($processValue)) {
+    return
+  }
+
+  $userValue = [Environment]::GetEnvironmentVariable($Name, "User")
+  if (-not [string]::IsNullOrWhiteSpace($userValue)) {
+    Set-Item -Path "Env:$Name" -Value $userValue
+  }
+}
+
+foreach ($secretName in @(
+  "OPENAI_API_KEY",
+  "OPENAI_IMAGE_DRAFT_MODEL",
+  "OPENAI_IMAGE_MODEL",
+  "OPENAI_SERVICE_TIER",
+  "OPENROUTER_API_KEY",
+  "HUGGINGFACE_TOKEN",
+  "FAL_API_KEY",
+  "RUNWARE_API_KEY",
+  "GEMINI_API_KEY"
+)) {
+  Import-UserEnvironmentVariable -Name $secretName
+}
+
 $backendOut = Join-Path $logDir "backend.stdout.log"
 $backendErr = Join-Path $logDir "backend.stderr.log"
 $frontendOut = Join-Path $logDir "frontend.stdout.log"

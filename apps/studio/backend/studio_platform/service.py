@@ -250,8 +250,8 @@ PLAN_CATALOG: Dict[IdentityPlan, PlanCatalogEntry] = {
 MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
     "flux-schnell": ModelCatalogEntry(
         id="flux-schnell",
-        label="Flux Schnell",
-        description="Fast ideation model for everyday concept work.",
+        label="Fast",
+        description="High-speed model for rapid ideation and layout testing.",
         min_plan=IdentityPlan.FREE,
         credit_cost=6,
         estimated_cost=0.003,
@@ -263,8 +263,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
     ),
     "sdxl-base": ModelCatalogEntry(
         id="sdxl-base",
-        label="SDXL Base",
-        description="Balanced baseline image model for clean compositions.",
+        label="Standard",
+        description="Balanced generation engine for standard high-quality compositions.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
         estimated_cost=0.008,
@@ -275,8 +275,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
     ),
     "realvis-xl": ModelCatalogEntry(
         id="realvis-xl",
-        label="RealVis XL",
-        description="Cinematic realism tuned for polished renders.",
+        label="Premium",
+        description="Advanced engine tuned for photorealism and cinematic renders.",
         min_plan=IdentityPlan.PRO,
         credit_cost=12,
         estimated_cost=0.015,
@@ -288,8 +288,8 @@ MODEL_CATALOG: Dict[str, ModelCatalogEntry] = {
     ),
     "juggernaut-xl": ModelCatalogEntry(
         id="juggernaut-xl",
-        label="Juggernaut XL",
-        description="Sharper detail and stylized realism for hero shots.",
+        label="Pro",
+        description="Powerful engine delivering extreme detail for stylized hero shots.",
         min_plan=IdentityPlan.PRO,
         credit_cost=14,
         estimated_cost=0.02,
@@ -2159,6 +2159,52 @@ class StudioService:
         await self.store.save_model("projects", project)
         return project
 
+    async def _resolve_generation_project(
+        self,
+        *,
+        identity: OmniaIdentity,
+        requested_project_id: str,
+        reference_asset: MediaAsset | None,
+    ) -> Project:
+        try:
+            return await self.require_owned_model("projects", requested_project_id, Project, identity.id)
+        except KeyError:
+            if reference_asset is not None:
+                fallback_project = await self.store.get_project(reference_asset.project_id)
+                if fallback_project is not None and fallback_project.identity_id == identity.id:
+                    logger.warning(
+                        "Recovered missing generation project %s for identity %s using reference asset project %s",
+                        requested_project_id,
+                        identity.id,
+                        fallback_project.id,
+                    )
+                    return fallback_project
+
+            compose_projects = await self.list_projects(identity.id, surface="compose")
+            if compose_projects:
+                fallback_project = compose_projects[0]
+                logger.warning(
+                    "Recovered missing generation project %s for identity %s using latest compose project %s",
+                    requested_project_id,
+                    identity.id,
+                    fallback_project.id,
+                )
+                return fallback_project
+
+            fallback_project = await self.create_project(
+                identity.id,
+                "New image set",
+                "Recovered after a stale project reference",
+                "compose",
+            )
+            logger.warning(
+                "Recovered missing generation project %s for identity %s by creating compose project %s",
+                requested_project_id,
+                identity.id,
+                fallback_project.id,
+            )
+            return fallback_project
+
     async def get_project(self, identity_id: str, project_id: str) -> Dict[str, Any]:
         project = await self.require_owned_model("projects", project_id, Project, identity_id)
         generations = await self.list_generations(identity_id, project_id=project_id)
@@ -2701,7 +2747,6 @@ class StudioService:
             asset
             for asset in assets
             if asset.identity_id == identity_id
-            and not self._is_demo_placeholder_asset(asset)
             and (include_deleted or asset.deleted_at is None)
         ]
         if project_id:
@@ -3272,10 +3317,14 @@ class StudioService:
             action_code="generation",
             action_label="creating generations",
         )
-        project = await self.require_owned_model("projects", project_id, Project, identity_id)
         reference_asset = None
         if reference_asset_id:
             reference_asset = await self.require_owned_model("assets", reference_asset_id, MediaAsset, identity_id)
+        project = await self._resolve_generation_project(
+            identity=identity,
+            requested_project_id=project_id,
+            reference_asset=reference_asset,
+        )
         model = await self.get_model(model_id)
         plan_config = PLAN_CATALOG[identity.plan]
         if not plan_config.can_generate:
@@ -3571,6 +3620,7 @@ class StudioService:
         if share.project_id:
             project = await self.store.get_project(share.project_id)
             assets = await self.list_assets(share.identity_id, project_id=share.project_id)
+            assets = [asset for asset in assets if not self._is_demo_placeholder_asset(asset)]
             return build_public_share_payload(share=share, project=project, assets=assets)
         elif share.asset_id:
             asset = await self.store.get_asset(share.asset_id)

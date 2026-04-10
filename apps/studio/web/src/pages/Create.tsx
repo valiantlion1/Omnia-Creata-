@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Dices, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, Dices, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, SlidersHorizontal, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import {
@@ -29,10 +29,10 @@ const PLACEHOLDER_PROMPTS = [
 /* ─── Aspect presets ───────────────────────────────── */
 
 const aspectPresets = {
-  '1:1':  { width: 1024, height: 1024, label: 'Square',    icon: Square },
-  '16:9': { width: 1280, height: 720,  label: 'Landscape', icon: Monitor },
-  '4:5':  { width: 1024, height: 1280, label: 'Portrait',  icon: Smartphone },
-  '3:4':  { width: 960,  height: 1280, label: 'Vertical',  icon: RectangleVertical },
+  '1:1':  { width: 1024, height: 1024, label: 'Square',    aspect: 'aspect-square' },
+  '16:9': { width: 1280, height: 720,  label: 'Landscape', aspect: 'aspect-video' },
+  '4:5':  { width: 1024, height: 1280, label: 'Portrait',  aspect: 'aspect-[4/5]' },
+  '3:4':  { width: 960,  height: 1280, label: 'Vertical',  aspect: 'aspect-[3/4]' },
 } as const
 
 /* ─── Toast types ──────────────────────────────────── */
@@ -99,26 +99,15 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
 
 function getProprietaryModelName(id: string, originalLabel: string): string {
   const lower = id.toLowerCase()
-  
-  // Consumer-friendly names — no one outside of AI Twitter knows what "FLUX.1 Schnell" means
   if (lower.includes('flux-schnell') || lower.includes('flux.1-schnell')) return 'Fast'
+  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl') || lower.includes('base')) return 'Standard'
+  if (lower.includes('realvis')) return 'Premium'
+  if (lower.includes('juggernaut')) return 'Pro'
+  
   if (lower.includes('flux-dev') || lower.includes('flux.1-dev')) return 'Standard'
   if (lower.includes('flux-pro') || lower.includes('flux.1-pro')) return 'Pro'
-  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl')) return 'Classic'
   if (lower.includes('stable-diffusion-3') || lower.includes('sd3')) return 'HD'
-  if (lower.includes('kandinsky')) return 'Artistic'
-  if (lower.includes('playground')) return 'Creative'
-  
-  const withoutProvider = originalLabel.split('/').pop() || originalLabel
-  
-  return withoutProvider
-    .split(/[-_ ]/)
-    .filter(Boolean)
-    .map(word => {
-      if (word.toUpperCase() === 'SDXL') return 'SDXL'
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    })
-    .join(' ')
+  return originalLabel
 }
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
@@ -163,6 +152,7 @@ export default function CreatePage() {
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [seed, setSeed] = useState<number | null>(null)
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
@@ -486,7 +476,7 @@ export default function CreatePage() {
         <div className="glass-card overflow-visible p-[2px]">
           
           {/* Prompt Box */}
-          <div className="relative flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80">
+          <div className="relative z-10 flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80">
             
             {/* Subtle bottom border line */}
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
@@ -504,8 +494,9 @@ export default function CreatePage() {
               }}
               onKeyDown={handleKeyDown}
               rows={1}
+              disabled={runningJobs > 0}
               placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
-              className="w-full resize-none bg-transparent text-[1.1rem] font-medium leading-[1.8] text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:text-white"
+              className={`w-full resize-none bg-transparent text-[1.1rem] font-medium leading-[1.8] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               style={{ minHeight: '120px' }}
             />
 
@@ -526,33 +517,151 @@ export default function CreatePage() {
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
                 title="Improve prompt with AI"
-                className="flex h-8 items-center gap-1.5 rounded-full bg-white/[0.02] px-4 text-[11px] font-semibold tracking-wide text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.04] px-4 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.1] shadow-lg transition hover:bg-white/[0.08] hover:text-white hover:ring-white/[0.15] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {improveState === 'working' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Improved' : 'Improve'}
+                {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Dices className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
+                {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Improved' : 'Improve Prompt'}
               </button>
             </div>
           </div>
 
+          {/* ── Advanced Drawer ──────────────────── */}
+          <div className="relative z-10 border-t border-white/[0.04]">
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex w-full items-center justify-end gap-2 px-6 py-3 text-[12px] font-semibold uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              <span className="relative flex items-center gap-1.5">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Advanced
+                {(negativePrompt || steps !== 28 || cfgScale !== 6.5) && (
+                  <span className="absolute -right-2.5 -top-0.5 h-[6px] w-[6px] rounded-full bg-[rgb(var(--primary-light))] shadow-[0_0_6px_rgb(var(--primary-light))]" />
+                )}
+              </span>
+            </button>
+
+            {showAdvanced && (
+              <div className="animate-in fade-in slide-in-from-top-1 duration-300 px-6 pb-5">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  {/* Negative Prompt */}
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Negative Prompt</label>
+                    <textarea
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      rows={2}
+                      placeholder="Things to avoid: blurry, low quality, deformed hands..."
+                      className="w-full resize-none rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04]"
+                      style={{ maxHeight: '80px' }}
+                    />
+                  </div>
+
+                  {/* Seed */}
+                  <div>
+                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Seed</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={seed ?? ''}
+                        onChange={(e) => setSeed(e.target.value ? Number(e.target.value) : null)}
+                        placeholder="Random"
+                        className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={() => setSeed(Math.floor(Math.random() * 1_000_000_000))}
+                        title="Randomize seed"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                      >
+                        🎲
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Steps */}
+                  <div>
+                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>Steps</span>
+                      <span className="tabular-nums text-zinc-300">{steps}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={50}
+                      step={1}
+                      value={steps}
+                      onChange={(e) => setSteps(Number(e.target.value))}
+                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
+                    />
+                  </div>
+
+                  {/* CFG Scale */}
+                  <div>
+                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>CFG Scale</span>
+                      <span className="tabular-nums text-zinc-300">{cfgScale}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={15}
+                      step={0.5}
+                      value={cfgScale}
+                      onChange={(e) => setCfgScale(Number(e.target.value))}
+                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
+                    />
+                  </div>
+
+                  {/* Output Count */}
+                  <div>
+                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>Output Count</span>
+                      <span className="tabular-nums text-zinc-300">{outputCount}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={4}
+                      step={1}
+                      value={outputCount}
+                      onChange={(e) => setOutputCount(Number(e.target.value))}
+                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Credit Warning */}
+          {runtimeCredits < 10 && (
+            <div className="mx-6 mb-2 flex items-center gap-2 rounded-xl bg-amber-400/10 px-4 py-2.5 text-[12px] font-semibold text-amber-400 ring-1 ring-amber-400/20">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Only {runtimeCredits} credits remaining.
+              <Link to="/subscription" className="ml-auto whitespace-nowrap text-amber-300 underline underline-offset-2 transition hover:text-white">Upgrade Plan →</Link>
+            </div>
+          )}
+
           {/* Controls bar */}
-          <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
+          <div className="relative z-20 flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
             {/* Left: aspect ratio buttons and model picker */}
             <div className="flex flex-wrap items-center gap-2">
               {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => {
-                const Icon = config.icon
                 const active = aspectRatio === ratio
                 return (
                   <button
                     key={ratio}
                     onClick={() => setAspectRatio(ratio)}
                     title={`${ratio} — ${config.label}`}
-                    className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] transition-all duration-300 ${
+                    className={`group relative flex h-14 w-12 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl transition-all duration-300 ${
                       active
-                        ? 'bg-[rgb(var(--primary-light)/0.1)] text-white shadow-[0_0_15px_rgb(var(--primary-light)/0.1)] ring-1 ring-[rgb(var(--primary-light)/0.2)]'
-                        : 'bg-white/[0.03] text-zinc-500 ring-1 ring-white/[0.04] hover:bg-white/[0.06] hover:text-zinc-300'
+                        ? 'bg-[rgb(var(--primary-light)/0.15)] shadow-[0_0_20px_rgb(var(--primary-light)/0.15)] ring-1 ring-[rgb(var(--primary-light)/0.4)]'
+                        : 'bg-white/[0.03] ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:ring-white/[0.1]'
                     }`}
                   >
-                    <Icon className={`h-[22px] w-[22px] ${active ? 'opacity-100 drop-shadow-sm' : 'opacity-60 transition-opacity group-hover:opacity-100'}`} />
+                    <div className="flex h-[22px] w-[22px] items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className={`border-2 ${config.aspect} ${active ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.2)]' : 'border-zinc-400'} w-full rounded-sm`} />
+                    </div>
+                    <span className={`text-[9px] font-bold tracking-wider ${active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'}`}>{ratio}</span>
                   </button>
                 )
               })}
@@ -574,7 +683,7 @@ export default function CreatePage() {
                 </button>
 
                 {modelPickerOpen ? (
-                  <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-30 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#111216]/98 p-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
+                  <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
                     {models.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
                       return (
@@ -601,25 +710,25 @@ export default function CreatePage() {
             </div>
 
             {/* Right: generate button + credit cost */}
-            <div className="flex items-center justify-end gap-4 mt-2 sm:mt-0">
-              <div className="text-right text-[11px] font-medium text-zinc-500">
-                <div className="mb-0.5">{selectedModel ? `${activeAspect.width} × ${activeAspect.height}` : ''}</div>
-                <div>
-                  {selectedModel && selectedModel.runtime !== 'local'
-                    ? selectedModelCreditGuide
-                      ? `${selectedModelCreditGuide.reserved_credit_cost} credits per image`
-                      : `${selectedModel.credit_cost} credits per image`
-                    : ''}
+            <div className="flex w-full sm:w-auto items-center justify-end gap-3 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t border-white/[0.04] sm:border-t-0">
+              {selectedModel && selectedModel.runtime !== 'local' && (
+                <div className="flex flex-col items-end mr-2">
+                  <div className="text-[12px] font-bold text-white tracking-wide flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3 text-[rgb(var(--baseline))]" style={{ color: 'rgb(var(--primary-light))' }} />
+                    {selectedModelCreditGuide ? selectedModelCreditGuide.reserved_credit_cost : selectedModel.credit_cost} Credits
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Per Image</div>
                 </div>
-              </div>
+              )}
+              
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
-                className="group relative inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-8 text-[13px] font-semibold text-black bg-white transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                className="group relative flex h-12 w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-xl px-8 text-[14px] font-bold text-black bg-white transition hover:scale-[1.02] hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 shadow-[0_0_24px_rgba(255,255,255,0.2)]"
               >
-                <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/90" /> : <Wand2 className="h-4 w-4 text-black/90" />}
-                  {submittingCount ? 'Creating...' : 'Generate'}
+                <span className="relative z-10 flex items-center gap-2">
+                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/80" /> : <Wand2 className="h-4.5 w-4.5 text-black" />}
+                  {submittingCount ? 'Creating...' : 'Generate Image'}
                 </span>
               </button>
             </div>

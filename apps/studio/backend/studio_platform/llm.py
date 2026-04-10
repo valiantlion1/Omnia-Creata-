@@ -9,7 +9,7 @@ from typing import Any, Optional, Sequence
 
 import httpx
 
-from config.env import get_settings
+from config.env import Environment, get_settings
 
 from .models import ChatAttachment, ChatMessage, ChatRole
 from .prompt_engineering import analyze_generation_prompt_profile, improve_prompt_candidate
@@ -530,15 +530,26 @@ class StudioLLMGateway:
             provider_plan=provider_plan,
         )
 
-    def _default_model_for_provider(self, provider: str, quality_tier: str = "standard") -> str:
+    def _resolve_provider_model_and_quality(
+        self,
+        provider: str,
+        quality_tier: str = "standard",
+    ) -> tuple[str, str]:
         settings = get_settings()
         if provider == "gemini":
-            return settings.gemini_premium_model if quality_tier == "premium" else settings.gemini_model
+            model = settings.gemini_premium_model if quality_tier == "premium" else settings.gemini_model
+            return model, quality_tier
         if provider == "openrouter":
-            return settings.openrouter_premium_model if quality_tier == "premium" else settings.openrouter_model
+            model = settings.openrouter_premium_model if quality_tier == "premium" else settings.openrouter_model
+            return model, quality_tier
         if provider == "openai":
-            return settings.openai_premium_model if quality_tier == "premium" else settings.openai_model
-        return "heuristic"
+            if quality_tier == "premium" and settings.environment == Environment.DEVELOPMENT:
+                # Keep local/dev fallback inexpensive unless premium is requested explicitly.
+                model = settings.openai_model
+                return model, self._infer_quality_tier_from_model(model)
+            model = settings.openai_premium_model if quality_tier == "premium" else settings.openai_model
+            return model, quality_tier
+        return "heuristic", "degraded"
 
     def _ordered_chat_providers(self, *, multimodal_request: bool) -> list[str]:
         settings = get_settings()
@@ -573,12 +584,15 @@ class StudioLLMGateway:
             return
         if not self._provider_is_configured(normalized_provider):
             return
-        model = self._default_model_for_provider(normalized_provider, quality_tier)
+        model, effective_quality_tier = self._resolve_provider_model_and_quality(
+            normalized_provider,
+            quality_tier,
+        )
         key = (normalized_provider, model)
         if key in seen:
             return
         seen.add(key)
-        candidates.append((normalized_provider, model, quality_tier))
+        candidates.append((normalized_provider, model, effective_quality_tier))
 
     def _provider_is_configured(self, provider: str) -> bool:
         settings = get_settings()

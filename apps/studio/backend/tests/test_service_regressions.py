@@ -333,6 +333,107 @@ async def test_list_projects_can_filter_by_surface(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_create_generation_recovers_stale_project_reference_with_latest_compose_project(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    compose_project = await service.create_project(identity.id, "Recovered Set", "Existing compose target", "compose")
+
+    job = await service.create_generation(
+        identity_id=identity.id,
+        project_id="stale-project-id",
+        prompt="editorial portrait with cinematic light",
+        negative_prompt="",
+        reference_asset_id=None,
+        model_id="flux-schnell",
+        width=1024,
+        height=1024,
+        steps=24,
+        cfg_scale=6.0,
+        seed=42,
+        aspect_ratio="1:1",
+        output_count=1,
+    )
+
+    assert job.project_id == compose_project.id
+
+    pending_tasks = list(service._tasks)
+    for task in pending_tasks:
+        task.cancel()
+    await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_create_generation_recovers_stale_project_reference_by_creating_compose_project(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    job = await service.create_generation(
+        identity_id=identity.id,
+        project_id="missing-compose-project",
+        prompt="premium anime portrait with luminous blue eyes",
+        negative_prompt="",
+        reference_asset_id=None,
+        model_id="flux-schnell",
+        width=1024,
+        height=1024,
+        steps=24,
+        cfg_scale=6.0,
+        seed=42,
+        aspect_ratio="1:1",
+        output_count=1,
+    )
+
+    created_project = await service.store.get_project(job.project_id)
+
+    assert created_project is not None
+    assert created_project.identity_id == identity.id
+    assert created_project.surface == "compose"
+    assert created_project.title == "New image set"
+
+    pending_tasks = list(service._tasks)
+    for task in pending_tasks:
+        task.cancel()
+    await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_delete_conversation_removes_related_messages(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -558,7 +659,7 @@ async def test_list_assets_hides_demo_placeholder_outputs(tmp_path: Path):
 
     assets = await service.list_assets(identity.id)
 
-    assert [asset.id for asset in assets] == [real_asset.id]
+    assert {asset.id for asset in assets} == {real_asset.id, demo_asset.id}
 
 
 @pytest.mark.asyncio
@@ -2145,6 +2246,116 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         assert health["chat_routing"]["plan_defaults"]["pro"] == "premium"
         assert health["chat_routing"]["multimodal_policy"] == "configured_provider_order"
     finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_generation_prefers_openai_for_free_accounts_in_development_when_available(tmp_path: Path):
+    class _RoutingProvider:
+        def __init__(self, *, name: str, rollout_tier: str, billable: bool = False) -> None:
+            self.name = name
+            self.rollout_tier = rollout_tier
+            self.billable = billable
+            self.capabilities = ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            )
+
+        async def is_available(self) -> bool:
+            return True
+
+        def is_configured(self) -> bool:
+            return True
+
+        async def health(self, probe: bool = True) -> dict[str, object]:
+            return {"name": self.name, "status": "healthy", "detail": "routing-test"}
+
+        async def health_snapshot(self, probe: bool = True, *, priority: int) -> dict[str, object]:
+            payload = await self.health(probe=probe)
+            payload["priority"] = priority
+            payload["billable"] = self.billable
+            payload["rollout_tier"] = self.rollout_tier
+            payload["capabilities"] = {"workflows": ["text_to_image", "image_to_image", "edit"]}
+            return payload
+
+        def supports_generation(self, workflow: str, *, has_reference_image: bool) -> bool:
+            if workflow == "text_to_image":
+                return not has_reference_image
+            return True
+
+    settings = get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.DEVELOPMENT
+
+    openai = _RoutingProvider(name="openai", rollout_tier="primary", billable=True)
+    pollinations = _RoutingProvider(name="pollinations", rollout_tier="standard")
+    huggingface = _RoutingProvider(name="huggingface", rollout_tier="standard")
+    demo = _RoutingProvider(name="demo", rollout_tier="degraded")
+
+    providers = ProviderRegistry()
+    providers.providers = [openai, pollinations, huggingface, demo]
+    providers._providers_by_name = {provider.name: provider for provider in providers.providers}
+    providers._provider_circuits = {
+        provider.name: provider_module.ProviderCircuitState() for provider in providers.providers
+    }
+
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, providers, tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        monthly_credits_remaining=60,
+        monthly_credit_allowance=60,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+        )
+    )
+
+    try:
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="anime warrior princess illustration with dramatic lighting",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=24,
+            cfg_scale=6.0,
+            seed=42,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        assert job.provider == "openai"
+        assert job.requested_quality_tier == "standard"
+        assert job.selected_quality_tier == "premium"
+        assert job.degraded is False
+        assert job.routing_strategy == "free-first"
+        assert job.routing_reason == "free_standard_managed_override"
+        assert job.prompt_profile == "stylized_illustration"
+        assert job.provider_candidates[:3] == ["openai", "huggingface", "pollinations"]
+    finally:
+        settings.environment = original_environment
         await service.shutdown()
 
 

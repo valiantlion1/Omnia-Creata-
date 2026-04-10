@@ -627,7 +627,7 @@ async def test_improve_prompt_can_fall_back_to_openai_when_openrouter_is_unavail
 
         assert result is not None
         assert result.provider == "openai"
-        assert calls == [("openrouter", "google/gemini-2.5-pro"), ("openai", "gpt-5.4")]
+        assert calls == [("openrouter", "google/gemini-2.5-pro"), ("openai", settings.openai_model)]
     finally:
         settings.openrouter_api_key = original["openrouter_api_key"]
         settings.openai_api_key = original["openai_api_key"]

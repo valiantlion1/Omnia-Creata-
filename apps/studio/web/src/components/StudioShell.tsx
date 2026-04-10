@@ -49,13 +49,13 @@ type NavChild = {
 
 const primaryNav: NavItem[] = [
   { to: '/explore', label: 'Explore', icon: Compass, aliases: ['/community'] },
-  { to: '/create', label: 'Create', icon: Sparkles, aliases: ['/projects'] },
+  { to: '/create', label: 'Create', icon: Sparkles },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
 const libraryNav: NavItem[] = [
   { to: '/library/images', label: 'My images', icon: ImageIcon, aliases: ['/media', '/history'], exactAliases: ['/library'] },
-  { to: '/library/collections', label: 'Collections', icon: Folder },
+  { to: '/library/collections', label: 'Collections', icon: Folder, aliases: ['/projects'] },
   { to: '/library/likes', label: 'Favorites', icon: Heart },
   { to: '/library/trash', label: 'Trash', icon: Trash2 },
 ]
@@ -445,8 +445,12 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             className={`min-w-0 flex-1 rounded-xl px-2 py-1.5 transition hover:bg-white/[0.04] ${collapsed ? 'flex h-10 w-10 items-center justify-center bg-white/[0.05] rounded-full' : 'flex items-center gap-2.5'}`}
             title={isGuestShell ? 'Create an account' : 'Open profile'}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-sm font-semibold text-white ring-1 ring-white/[0.08]">
-              {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[rgb(var(--primary-light)/0.2)] to-[rgb(var(--accent)/0.2)] text-sm font-bold text-white ring-1 ring-white/[0.12] shadow-sm">
+              {auth?.identity?.avatar_url ? (
+                <img src={auth.identity.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                (auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()
+              )}
             </div>
             {!collapsed ? (
               <div className="min-w-0">
@@ -614,8 +618,12 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                   onClick={() => setMobileOpen(false)}
                   className="flex flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-white/[0.04]"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-sm font-semibold text-white">
-                    {(auth?.identity.display_name ?? 'Guest').slice(0, 1).toUpperCase()}
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.08] text-sm font-bold text-white ring-1 ring-white/[0.1]">
+                    {auth?.identity?.avatar_url ? (
+                      <img src={auth.identity.avatar_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      (auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center truncate text-[13px] font-medium text-white">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>

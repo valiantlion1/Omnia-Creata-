@@ -8,9 +8,45 @@ Track every meaningful Organizer build, release decision, and release gate.
 - Package: `com.omnia.organizer`
 - Active platform: Android
 - Current manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
-- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha18](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha18)
+- Latest live GitHub prerelease: [Omnia Organizer 1.0.0-alpha20](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha20)
 
 ## Entries
+
+### 2026-04-10 - Alpha 20 light theme rescue and browse compression pass
+- Version target: `1.0.0-alpha20`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha20](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha20)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - the app is now forced onto the intended warm light theme so the Stitch-inspired UI no longer collapses into unreadable dark-on-dark screens on phones using system dark mode
+  - Browse header chrome was compressed: the giant static heading is gone, the table-like row labels were removed, path handling is cleaner, and list content gets more of the screen
+  - workspace and quick-action surfaces were tightened so Home feels less oversized and more like a real mobile utility
+  - Storage loading now uses a proper card-based waiting state instead of a mostly empty black screen
+- Known gaps:
+  - the visual system is now usable again, but some layouts still need another phone-driven polish pass to feel premium instead of merely fixed
+  - onboarding, splash, and some secondary sheets still need consistency work after the core screens settle
+  - Play Store icon, screenshots, listing copy, and public legal URLs still need completion before submission
+
+### 2026-04-10 - Alpha 19 Figma-driven UI master pass
+- Version target: `1.0.0-alpha19`
+- Track target: GitHub prerelease testing
+- Status: shipped on GitHub
+- Release page: [Omnia Organizer 1.0.0-alpha19](https://github.com/valiantlion1/Omnia-Creata-/releases/tag/organizer-v1.0.0-alpha19)
+- Artifact expectation:
+  - APK for direct phone install
+  - AAB for Play handoff
+- What changed:
+  - Browse now follows the stronger Stitch/Figma explorer direction, with a calmer header, more deliberate list or grid controls, visible item counts, and cleaner explorer chrome
+  - Home and Storage surfaces were redesigned around lighter premium utility cards, making storage usage, quick actions, pinned entries, and category shortcuts easier to scan on a phone
+  - Search, file detail, and supporting sheets now share the same softer neutral palette and card language, reducing the old mixed-quality feeling across core screens
+  - file rows, grid cards, stat pills, and the bottom navigation shell were refined to feel more like one OmniaCreata product instead of separate unfinished layers
+- Known gaps:
+  - onboarding, splash, and some permission-state screens still need one more visual pass to fully match the new Browse/Home direction
+  - some secondary dialogs and banners can still be refined after another real-device review round
+  - store icon, final screenshots, listing copy, and public legal URLs still need to be finished before Play submission
 
 ### 2026-04-09 - Alpha 18 readability and explorer density pass
 - Version target: `1.0.0-alpha18`

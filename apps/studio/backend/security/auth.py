@@ -443,7 +443,7 @@ async def get_current_user(
             )
         except SupabaseAuthError as supabase_exc:
             token_preview = f"{token[:12]}..." if token else "missing"
-            logger.warning(
+            logger.debug(
                 "auth_supabase_token_rejected",
                 extra={
                     "path": str(request.url.path),

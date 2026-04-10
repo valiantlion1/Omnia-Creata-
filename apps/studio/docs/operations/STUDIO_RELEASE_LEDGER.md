@@ -18,6 +18,60 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.5.1-alpha` / build `2026.04.10.40`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  local OpenAI fallback protected Studio continuity, but when OpenRouter premium chat hiccupped the fallback could still land on an expensive premium OpenAI model during development
+- What:
+  development/local chat and prompt-improvement fallback now cap OpenAI to the standard configured lane instead of silently jumping to the premium OpenAI tier
+  explicit OpenAI premium model requests still remain possible when intentionally asked for, but normal Studio fallback behavior is now much less likely to burn prepaid credits by surprise
+  this keeps local product work resilient while matching the current pre-revenue cost discipline more closely
+
+### `0.5.1-alpha` / build `2026.04.10.39`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  after the free-plan routing fix, local backend restarts could still miss user-scoped provider secrets because new Python processes only inherited the current shell environment
+- What:
+  the local Studio launcher now hydrates user-scoped provider secrets like `OPENAI_API_KEY` into the process environment before starting backend/frontend services
+  this keeps Windows user-environment secrets usable without checking them into `.env`, while making the OpenAI-backed local generation fix survive normal local restarts
+  local free-plan image routing continues to prefer managed OpenAI lanes when they are available, so Create no longer gets stranded on broken fallback-only providers during development
+
+### `0.5.1-alpha` / build `2026.04.10.38`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  local free-plan image generation could still route into broken fallback-only providers, which left Create jobs failing even after a working OpenAI image lane had already been connected
+- What:
+  development/local free-plan image routing now prefers available managed lanes such as OpenAI before falling back to Pollinations or HuggingFace
+  this keeps local product testing honest and usable while leaving the stricter public launch economics decision separate from the development routing policy
+  stale fallback-only providers can still exist as later candidates, but they no longer block the first real generation path when OpenAI is already healthy
+
+### `0.5.1-alpha` / build `2026.04.10.37`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Create could still hold onto a stale image-set id after aggressive account/project cleanup, which made generation fail with `Project not found` even though the user was otherwise ready to create
+- What:
+  image generation now recovers missing compose-project references on the backend by reusing the latest owned compose project when one already exists
+  when no owned compose project exists, Studio creates a fresh `New image set` automatically and continues the generation instead of blocking on the stale reference
+  this keeps Create resilient after account cleanup or broken local page state without changing the stricter ownership rules for real existing projects
+
+### `0.5.1-alpha` / build `2026.04.10.36`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  private Studio history was hiding legacy demo-generated renders too aggressively
+- What:
+  `My Images`, project collections, and other owned asset surfaces now keep the user's own demo-generated history visible again
+  public share payloads still filter demo placeholder outputs so external/public surfaces keep the stricter truth policy
+
 ### `0.5.1-alpha` / build `2026.04.09.35`
 - Date: `2026-04-09`
 - Codename: `Foundation`

@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImageOff, Loader2, MessageCircle, Paperclip, Send, X } from 'lucide-react'
+import { Brain, Eye, ImageOff, Loader2, MessageCircle, Paperclip, Pencil, Send, Wand2, X } from 'lucide-react'
 
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
@@ -1333,13 +1333,36 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Mode hint */}
-            <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-zinc-600" title={composerHint}>
-              <span>{composerHint}</span>
-              <span className="hidden">
-                {composeMode === 'Think' ? '💭 Text-only conversation' : composeMode === 'Vision' ? '🎨 Will generate images' : '✏️ Will edit/refine images'}
-              </span>
-              <span>Enter to send · Shift+Enter for new line</span>
+            {/* Mode Switcher + hint row */}
+            <div className="mt-2 flex items-center justify-between gap-3 px-1">
+              {/* Mode Switcher Pills */}
+              <div className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] p-1">
+                {([
+                  { mode: 'Think' as ComposeMode, icon: Brain, tip: 'Prompt help & creative suggestions' },
+                  { mode: 'Vision' as ComposeMode, icon: Eye, tip: 'Generate or analyze images' },
+                  { mode: 'Edit' as ComposeMode, icon: Wand2, tip: 'Edit & refine existing images' },
+                ] as const).map(({ mode, icon: Icon, tip }) => {
+                  const isActive = composeMode === mode
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setComposeMode(mode)}
+                      title={tip}
+                      className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-bold tracking-wide transition-all duration-300 ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-white shadow-[0_0_16px_rgb(var(--primary-light)/0.3)]'
+                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{mode}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Submit hint */}
+              <span className="text-[11px] text-zinc-600">Enter to send · Shift+Enter for new line</span>
             </div>
           </div>
 

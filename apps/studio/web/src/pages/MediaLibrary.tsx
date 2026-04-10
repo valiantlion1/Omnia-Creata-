@@ -727,14 +727,31 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
   }
 
   return (
-    <div className="flex items-center gap-4 py-3">
-      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05]">
+    <div className="group flex items-center gap-4 py-3 transition-all duration-300 hover:bg-white/[0.02] rounded-xl px-2 -mx-2">
+      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
         {isFailed ? (
-           <div className="absolute inset-0 flex items-center justify-center bg-rose-500/5 backdrop-blur-md">
-             <ImageOff className="h-4 w-4 text-rose-400/70" />
-           </div>
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.2),transparent_70%)]" />
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20 shadow-lg">
+                <ImageOff className="h-3.5 w-3.5 text-rose-400/80" />
+              </div>
+            </div>
+          </>
         ) : (
-           <div className="h-full w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+          <>
+            <div className="h-full w-full bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.08)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-full animate-[shimmer_2.5s_ease-in-out_infinite] bg-gradient-to-b from-white/[0.1] to-transparent" style={{ transform: 'translateY(-100%)' }} />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative flex h-6 w-6 items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="relative h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 10px rgb(var(--primary-light)/0.6)' }} />
+              </div>
+            </div>
+          </>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -1317,25 +1334,34 @@ export default function MediaLibraryPage() {
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
                     return (
-                      <div key={project.id} className="space-y-2.5">
+                      <div key={project.id} className="group space-y-3">
                         <div className="relative" data-library-menu-root="true">
-                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[20px] bg-white/[0.03]">
+                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.06] shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:ring-white/[0.12] group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)] group-hover:-translate-y-1">
                             {cover ? (
-                              <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="aspect-[16/10] w-full object-cover transition duration-300 hover:scale-[1.02]" />
+                              <div className="relative overflow-hidden">
+                                <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-md ring-1 ring-white/10 opacity-0 translate-y-2 transition-all duration-500 group-hover:opacity-100 group-hover:translate-y-0">
+                                  <ImageIcon className="h-3 w-3" />
+                                  {projectAssets.length}
+                                </div>
+                              </div>
                             ) : (
-                              <div className="flex aspect-[16/10] items-center justify-center bg-white/[0.02] text-zinc-600">
-                                <Folder className="h-5 w-5" />
+                              <div className="relative flex aspect-[16/10] items-center justify-center bg-gradient-to-br from-white/[0.02] to-transparent">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white/[0.03] ring-1 ring-white/[0.06] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3">
+                                  <Folder className="h-6 w-6 text-zinc-600 transition-colors duration-300 group-hover:text-zinc-400" />
+                                </div>
                               </div>
                             )}
                           </Link>
                           <button
                             onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
-                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
+                            className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100"
                             title="Collection actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -1380,10 +1406,10 @@ export default function MediaLibraryPage() {
                             </InlineActionMenu>
                           ) : null}
                         </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">{project.title}</div>
-                          <div className="mt-1 text-[11px] text-zinc-500">
-                            {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} / {formatDate(project.updated_at)}
+                        <div className="min-w-0 px-1">
+                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{project.title}</div>
+                          <div className="mt-1.5 text-[11px] text-zinc-500 font-medium">
+                            {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} · {formatDate(project.updated_at)}
                           </div>
                         </div>
                       </div>
@@ -1391,23 +1417,37 @@ export default function MediaLibraryPage() {
                   })}
                 </section>
               ) : (
-                <section className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+                <section className="space-y-1 pt-2">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
+                    const cover = projectAssets[0]
                     return (
-                      <div key={project.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
-                        <Link to={`/projects/${project.id}`} className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-white">{project.title}</div>
-                          <div className="mt-1 text-xs text-zinc-500">{project.description || 'No description yet.'}</div>
+                      <div key={project.id} className="group flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-all duration-300 hover:bg-white/[0.03]">
+                        <Link to={`/projects/${project.id}`} className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[14px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md">
+                          {cover ? (
+                            <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-white/[0.02]">
+                              <Folder className="h-4 w-4 text-zinc-600" />
+                            </div>
+                          )}
                         </Link>
-                        <div className="flex items-center gap-3">
-                          <div className="text-xs text-zinc-500">
-                            {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} / {formatDate(project.updated_at)}
+                        <Link to={`/projects/${project.id}`} className="min-w-0 flex-1">
+                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{project.title}</div>
+                          <div className="mt-1 truncate text-[12px] text-zinc-500">{project.description || 'No description yet.'}</div>
+                        </Link>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-white/[0.03] px-2.5 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-white/[0.06]">
+                            <ImageIcon className="h-3 w-3" />
+                            {projectAssets.length}
+                          </div>
+                          <div className="hidden sm:block text-[11px] text-zinc-600">
+                            {formatDate(project.updated_at)}
                           </div>
                           <div className="relative" data-library-menu-root="true">
                             <button
                               onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
-                              className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition-all duration-300 hover:bg-white/[0.06] hover:text-white"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
@@ -1458,7 +1498,22 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <EmptyInline compact icon={<Folder className="h-4 w-4" />} title="No collections yet." description="Collections appear as your projects start holding real work." />
+              <section className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(255,255,255,0.04)] backdrop-blur-md mb-5">
+                  <Folder className="h-7 w-7" />
+                </div>
+                <h3 className="text-lg font-bold text-white tracking-tight">No collections yet</h3>
+                <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-zinc-500">
+                  Collections organize your creative work into projects. Generate your first image and a collection will appear automatically.
+                </p>
+                <Link
+                  to="/create"
+                  className="mt-6 flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Start Creating
+                </Link>
+              </section>
             )}
           </>
         ) : null}

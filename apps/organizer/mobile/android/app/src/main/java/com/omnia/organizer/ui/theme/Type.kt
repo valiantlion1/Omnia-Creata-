@@ -26,8 +26,8 @@ val AppTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = BrandDisplayFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 32.sp,
-        lineHeight = 38.sp
+        fontSize = 34.sp,
+        lineHeight = 40.sp
     ),
     headlineMedium = TextStyle(
         fontFamily = BrandDisplayFamily,
@@ -38,8 +38,8 @@ val AppTypography = Typography(
     titleLarge = TextStyle(
         fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp
+        fontSize = 22.sp,
+        lineHeight = 28.sp
     ),
     titleMedium = TextStyle(
         fontFamily = BrandBodyFamily,
@@ -63,7 +63,7 @@ val AppTypography = Typography(
         fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
-        lineHeight = 22.sp
+        lineHeight = 21.sp
     ),
     bodySmall = TextStyle(
         fontFamily = BrandBodyFamily,
@@ -74,9 +74,9 @@ val AppTypography = Typography(
     labelLarge = TextStyle(
         fontFamily = BrandBodyFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.2.sp
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.6.sp
     ),
     labelMedium = TextStyle(
         fontFamily = BrandBodyFamily,

@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-09
+Last updated: 2026-04-10
 
 ## Current baseline
 
@@ -14,6 +14,9 @@ Last updated: 2026-04-09
 
 ## Recent stabilization wins
 
+- Local OpenAI fallback is now cost-safer during development: when premium chat or Improve has to fall back from OpenRouter to OpenAI, Studio now caps that fallback to the standard OpenAI lane instead of silently escalating into the premium OpenAI tier.
+- Create now recovers stale or deleted compose-project references during generation admission, so aggressive account cleanup or broken local page state no longer leaves image creation stuck on `Project not found`.
+- When that stale project id cannot be resolved, backend generation now reuses the latest owned compose project when available or creates a fresh `New image set`, which keeps Create usable without any frontend-only repair.
 - Sprint 9 chat defaults now respect the configured provider order across all chat modes, with OpenRouter first and OpenAI next by default, which removes the old Gemini-first multimodal surprise and makes the main chat lane more predictable.
 - Sprint 9 prompt improvement can now fall back to OpenAI as a live LLM path when OpenRouter is temporarily unavailable, so the Create Improve action does not silently lose AI assistance when one provider hiccups.
 - Sprint 9 backend model payloads and generation credit forecasts now emit product-safe display labels and descriptions from `creative_profile`, which gives frontend consumers a cleaner global naming contract without requiring them to reverse-engineer internal model ids.
@@ -296,3 +299,6 @@ Last updated: 2026-04-09
 - The repo wiki should now be treated as the strategic memory layer; if product direction, planning rules, or architecture boundaries change, update `docs/wiki` instead of leaving that knowledge only in chat history.
 - Shell route aliases must stay aligned with router gating too; if the UI advertises `/billing` or `/plan` as Subscription aliases, guest and signed-in navigation should resolve to Subscription rather than falling through login confusion or wildcard redirects.
 - Sprint 9 generation surfaces should expose estimate provenance, not only estimate numbers; if Billing, Create, Project, or Library show a USD estimate, users should be able to tell whether it came from a live provider quote or the legacy catalog fallback.
+- Private Studio library/history should not hide a user's own legacy demo-generated renders; keep strict provider-truth filtering on public/showcase/share surfaces, but let owned archive surfaces remain complete.
+- Local development free-plan image routing should prefer a healthy managed lane when one is configured; do not strand everyday Create testing on expired HuggingFace credentials or broken Pollinations responses when OpenAI is already available.
+- Local launcher scripts should hydrate provider secrets from the Windows user environment into the spawned process environment; storing a key in User env is not enough if restart flows only inherit the stale shell state.

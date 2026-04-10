@@ -3,9 +3,9 @@ package com.omnia.organizer.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // OmniaCreata-inspired palette: warm ivory surfaces, ink blacks, and gold accents.
-val PrimaryLight = Color(0xFFC7A557)
+val PrimaryLight = Color(0xFFB98B23)
 val OnPrimaryLight = Color(0xFF1D1406)
-val PrimaryContainerLight = Color(0xFFF3E6C7)
+val PrimaryContainerLight = Color(0xFFF5E8C8)
 val OnPrimaryContainerLight = Color(0xFF3A2A0A)
 
 val SecondaryLight = Color(0xFF2C2217)
@@ -23,13 +23,13 @@ val OnErrorLight = Color(0xFFFFFFFF)
 val ErrorContainerLight = Color(0xFFFAD9D6)
 val OnErrorContainerLight = Color(0xFF3E0907)
 
-val BackgroundLight = Color(0xFFF3EEE5)
+val BackgroundLight = Color(0xFFF8F4ED)
 val OnBackgroundLight = Color(0xFF1C1711)
-val SurfaceLight = Color(0xFFFCF8F1)
+val SurfaceLight = Color(0xFFFFFBF5)
 val OnSurfaceLight = Color(0xFF1C1711)
-val SurfaceVariantLight = Color(0xFFE8DED0)
+val SurfaceVariantLight = Color(0xFFF1E9DD)
 val OnSurfaceVariantLight = Color(0xFF5A4D3E)
-val OutlineLight = Color(0xFFB8A892)
+val OutlineLight = Color(0xFFD8C9B1)
 
 val PrimaryDark = Color(0xFFE4C57E)
 val OnPrimaryDark = Color(0xFF251805)

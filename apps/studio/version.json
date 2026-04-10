@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.5.1-alpha",
   "channel": "alpha",
-  "build": "2026.04.09.35",
+  "build": "2026.04.10.40",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-09",
-  "notes": "Sprint 9 chat defaults now favor the proven OpenRouter lane first with OpenAI as fallback, prompt improvement can fall back to OpenAI if OpenRouter is unavailable, and backend model payloads now ship product-safe display labels and descriptions instead of raw internal model names."
+  "releaseDate": "2026-04-10",
+  "notes": "Local Studio now caps expensive OpenAI premium chat fallback to the standard OpenAI lane during development, while free-plan image generations still prefer working managed OpenAI lanes."
 }
