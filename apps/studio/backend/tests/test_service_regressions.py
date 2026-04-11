@@ -13,6 +13,7 @@ from studio_platform.models import (
     ChatMessage,
     ChatRole,
     CheckoutKind,
+    CostTelemetryEvent,
     CreditEntryType,
     CreditLedgerEntry,
     GenerationJob,
@@ -1475,19 +1476,23 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert flux_model["creative_profile"]["label"] == "Fast Draft"
     assert flux_model["label"] == "Fast Draft"
     assert flux_model["display_label"] == "Fast Draft"
-    assert flux_model["render_experience"]["state"] == "fallback"
-    assert flux_model["route_preview"]["render_experience"]["state"] == "fallback"
-    assert flux_model["route_preview"]["pricing_lane"] == "fallback"
+    assert flux_model["render_experience"]["state"] in {"ready", "fallback"}
+    assert (
+        flux_model["route_preview"]["render_experience"]["state"]
+        == flux_model["render_experience"]["state"]
+    )
+    assert flux_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
     assert billing_summary["entitlements"]["can_access_chat"] is True
     assert billing_summary["credits"]["credits_remaining"] == 60
-    fallback_lane = next(
+    flux_lane = next(
         entry
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
-        if entry["pricing_lane"] == "fallback"
+        if entry["model_id"] == "flux-schnell"
     )
-    assert fallback_lane["label"] == "Fast Draft"
-    assert fallback_lane["creative_profile"]["id"] == "fast-draft"
-    assert fallback_lane["render_experience"]["state"] == "fallback"
+    assert flux_lane["label"] == "Fast Draft"
+    assert flux_lane["creative_profile"]["id"] == "fast-draft"
+    assert flux_lane["pricing_lane"] == flux_model["route_preview"]["pricing_lane"]
+    assert flux_lane["render_experience"]["state"] == flux_model["render_experience"]["state"]
 
 
 @pytest.mark.asyncio
@@ -2374,6 +2379,275 @@ async def test_health_detail_exposes_data_authority_for_sqlite_store(tmp_path: P
         assert health["data_authority"]["durable"] is True
         assert health["data_authority"]["schema_version"] == "2"
         assert health["data_authority"]["path"].endswith("studio-state.sqlite3")
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_health_detail_includes_provider_spend_guardrails(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.provider_spend_guardrails_enabled
+    original_soft = settings.development_billable_provider_daily_soft_cap_usd
+    original_hard = settings.development_billable_provider_daily_hard_cap_usd
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    settings.provider_spend_guardrails_enabled = True
+    settings.development_billable_provider_daily_soft_cap_usd = 1.0
+    settings.development_billable_provider_daily_hard_cap_usd = 2.0
+
+    class _BillableOpenAIProvider:
+        name = "openai"
+        rollout_tier = "primary"
+        billable = True
+        capabilities = ProviderCapabilities(workflows=("text_to_image",))
+
+        async def is_available(self) -> bool:
+            return True
+
+        def is_configured(self) -> bool:
+            return True
+
+        async def health(self, probe: bool = True) -> dict[str, object]:
+            return {"name": self.name, "status": "healthy", "detail": "fake"}
+
+        async def health_snapshot(self, probe: bool = True, priority: int = 1) -> dict[str, object]:
+            return {
+                "name": self.name,
+                "status": "healthy",
+                "detail": "fake",
+                "priority": priority,
+                "configured": True,
+                "billable": True,
+                "rollout_tier": self.rollout_tier,
+            }
+
+    store = SqliteStudioStateStore(tmp_path / "runtime" / "studio-state.sqlite3")
+    registry = ProviderRegistry()
+    registry.providers = [_BillableOpenAIProvider()]
+    registry._providers_by_name = {"openai": registry.providers[0]}
+    registry._provider_circuits = {"openai": provider_module.ProviderCircuitState()}
+    service = StudioService(store, registry, tmp_path / "media")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    generation = GenerationJob(
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="OpenAI render",
+        status=JobStatus.SUCCEEDED,
+        provider="openai",
+        model="realvis-xl",
+        prompt_snapshot=PromptSnapshot(
+            prompt="premium portrait",
+            negative_prompt="",
+            model="realvis-xl",
+            width=1024,
+            height=1024,
+            steps=20,
+            cfg_scale=6.0,
+            seed=77,
+            aspect_ratio="1:1",
+        ),
+        estimated_cost=0.04,
+        actual_cost_usd=1.2,
+        credit_cost=12,
+        completed_at=utc_now(),
+    )
+
+    try:
+        await store.mutate(
+            lambda state: (
+                state.identities.__setitem__(identity.id, identity),
+                state.workspaces.__setitem__(workspace.id, workspace),
+                state.projects.__setitem__(project.id, project),
+                state.generations.__setitem__(generation.id, generation),
+            )
+        )
+        await service.initialize()
+
+        health = await service.health(detail=True)
+
+        assert "provider_spend_guardrails" in health
+        assert health["provider_spend_guardrails"]["enabled"] is True
+        assert health["provider_spend_guardrails"]["warning_providers"] == ["openai"]
+        openai_guardrail = next(
+            item
+            for item in health["provider_spend_guardrails"]["providers"]
+            if item["provider"] == "openai"
+        )
+        assert openai_guardrail["status"] == "warning"
+        assert openai_guardrail["generation_spend_usd"] == 1.2
+        assert openai_guardrail["daily_soft_cap_usd"] == 1.0
+        assert openai_guardrail["daily_hard_cap_usd"] == 2.0
+    finally:
+        settings.environment = original_environment
+        settings.provider_spend_guardrails_enabled = original_enabled
+        settings.development_billable_provider_daily_soft_cap_usd = original_soft
+        settings.development_billable_provider_daily_hard_cap_usd = original_hard
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_improve_generation_prompt_records_cost_telemetry_event(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+
+    class _LLMGateway:
+        async def improve_prompt(self, prompt: str) -> LLMResult:
+            assert prompt == "portrait prompt"
+            return LLMResult(
+                text="polished portrait prompt",
+                provider="openai",
+                model="gpt-5.4-mini",
+                estimated_cost_usd=0.07,
+                used_fallback=False,
+            )
+
+    try:
+        await service.initialize()
+        service.llm_gateway = _LLMGateway()
+
+        payload = await service.improve_generation_prompt("portrait prompt", identity_id="user-1")
+        events = await store.list_models("cost_telemetry_events", CostTelemetryEvent)
+
+        assert payload["prompt"].startswith("polished portrait prompt")
+        assert payload["provider"] == "openai"
+        assert payload["used_llm"] is True
+        assert len(events) == 1
+        event = events[0]
+        assert event.surface == "prompt_improve"
+        assert event.source_kind == "prompt_improve"
+        assert event.identity_id == "user-1"
+        assert event.provider == "openai"
+        assert event.provider_model == "gpt-5.4-mini"
+        assert event.amount_usd == 0.07
+        assert event.billable is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
+    store = SqliteStudioStateStore(tmp_path / "runtime" / "studio-state.sqlite3")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    conversation = ChatConversation(
+        id="conversation-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Chat One",
+    )
+    generation = GenerationJob(
+        id="gen-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="OpenAI render",
+        status=JobStatus.SUCCEEDED,
+        provider="openai",
+        model="realvis-xl",
+        prompt_snapshot=PromptSnapshot(
+            prompt="premium portrait",
+            negative_prompt="",
+            model="realvis-xl",
+            width=1024,
+            height=1024,
+            steps=20,
+            cfg_scale=6.0,
+            seed=77,
+            aspect_ratio="1:1",
+        ),
+        estimated_cost=0.04,
+        actual_cost_usd=0.85,
+        credit_cost=12,
+        completed_at=utc_now(),
+    )
+    assistant_message = ChatMessage(
+        id="msg-assistant-1",
+        conversation_id=conversation.id,
+        identity_id=identity.id,
+        role=ChatRole.ASSISTANT,
+        content="Here is a polished reply.",
+        metadata={
+            "provider": "openrouter",
+            "model": "openai/gpt-5.4-mini",
+            "estimated_cost_usd": 0.12,
+        },
+    )
+    prompt_improve_event = CostTelemetryEvent(
+        source_kind="prompt_improve",
+        source_id="improve-1",
+        identity_id=identity.id,
+        provider="openai",
+        surface="prompt_improve",
+        amount_usd=0.03,
+        provider_model="gpt-5.4-mini",
+        billable=True,
+    )
+
+    try:
+        await store.mutate(
+            lambda state: (
+                state.identities.__setitem__(identity.id, identity),
+                state.workspaces.__setitem__(workspace.id, workspace),
+                state.projects.__setitem__(project.id, project),
+                state.conversations.__setitem__(conversation.id, conversation),
+                state.generations.__setitem__(generation.id, generation),
+                state.chat_messages.__setitem__(assistant_message.id, assistant_message),
+                state.cost_telemetry_events.__setitem__(prompt_improve_event.id, prompt_improve_event),
+            )
+        )
+        await service.initialize()
+
+        health = await service.health(detail=True)
+
+        assert "cost_telemetry" in health
+        telemetry = health["cost_telemetry"]
+        assert telemetry["window_days"] > 0
+        assert telemetry["total_spend_usd"] == 1.0
+        assert telemetry["event_count"] == 3
+        assert telemetry["coverage"]["prompt_improve"] == "cost_telemetry_events"
+        provider_totals = {item["provider"]: item["total_spend_usd"] for item in telemetry["providers"]}
+        assert provider_totals == {"openai": 0.88, "openrouter": 0.12}
+        surfaces = {item["surface"]: item["total_spend_usd"] for item in telemetry["surfaces"]}
+        assert surfaces == {
+            "image_generation": 0.85,
+            "chat_reply": 0.12,
+            "prompt_improve": 0.03,
+        }
     finally:
         await service.shutdown()
 

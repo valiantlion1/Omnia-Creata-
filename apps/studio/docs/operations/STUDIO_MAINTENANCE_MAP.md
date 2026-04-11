@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-10
+Last updated: 2026-04-11
 
 ## Current baseline
 
@@ -14,6 +14,32 @@ Last updated: 2026-04-10
 
 ## Recent stabilization wins
 
+- Local frontend runtime is materially lighter now: development runs no longer pay React StrictMode double-mount cost, which reduces unnecessary CPU/RAM churn while we are still iterating locally.
+- The Studio shell also front-loads less code now because PostHog and low-frequency utility overlays are lazy-loaded instead of being hard-bundled into the main entry path.
+- Create and Chat background activity are calmer too: polling waits longer, pauses when the tab is hidden, and cache invalidation now happens in parallel instead of serial bursts.
+- Chat image presentation stopped double-rendering the same source as both a blur placeholder and the final image, which cuts unnecessary browser memory and GPU texture pressure during longer conversations.
+- Frontend production chunking is healthier now; the main entry bundle dropped sharply after splitting analytics, React, query, UI, and general vendor code into separate chunks.
+- Backend extraction fallout is now materially calmer again: generation, billing, auth/profile, and asset flows now resolve their shared helpers through the correct service seams instead of depending on methods/imports that moved during the extraction sweep.
+- Full backend verification is green again at `298 passed`, which matters because the login path is no longer sitting on top of a half-fixed service graph that only worked for the first auth request and then collapsed in adjacent runtime paths.
+- Local sqlite/json development now defaults to local asset storage even when Supabase asset config exists, which keeps local verification and auth-adjacent asset flows from quietly depending on remote upload credentials.
+- OpenAI Improve fallback is now cost-safer during development after the extraction cleanup: if OpenRouter is unavailable, prompt refinement falls back to the standard OpenAI lane instead of silently promoting itself into the premium tier.
+- Signed-in auth recovery is stronger again: `/v1/profiles/me` no longer crashes right after login because backend identity/profile helpers now delegate missing billing, asset, post, and moderation behavior through the main Studio service instead of assuming those methods still lived directly on `IdentityService`.
+- Local auth verification is less noisy now too: the root `test_jwt.py` probe no longer executes during pytest collection, so repo-wide verification can fail on real regressions instead of tripping over an old manual JWT script.
+- Provider smoke now has a cheaper `refresh` profile for current-build truth, so operators can refresh smoke coverage with required success-path cases only instead of always paying for optional edit probes and failure-mapping runs.
+- OpenAI refresh smoke now keeps only the draft and final image lanes, which preserves current-build launch truth while reducing unnecessary image spend during local Sprint 9 closure prep.
+- Auth-broken image providers are now treated as truly unavailable instead of “configured but maybe okay”: Pollinations auth rejection and rejected HuggingFace tokens no longer masquerade as healthy lanes in backend/provider truth.
+- Image route planning, preview-provider selection, and configured-provider checks now skip providers whose circuit is already open, which keeps broken free lanes from re-poisoning local routing after the first hard auth failure.
+- Auth-like provider failures now short-circuit provider-internal retries and suppress generation job requeue, so local image testing fails fast on expired credentials instead of quietly grinding through useless retry churn.
+- Owner/debug backend truth now exposes a `truth_sync` summary, so operators can see in one place whether provider smoke, startup verification, and deployment verification are current, stale, or missing for the active Studio build.
+- `/v1/healthz/detail` now lifts that current-build artefact sync summary to top-level owner truth, which reduces guesswork when the app build, verify report, and smoke artefacts drift apart during Sprint 9 closure prep.
+- Deployment verification can now mirror `truth_sync`, so staging/operator reports carry the same build-drift view as owner health detail without pushing any of that language into the user-facing product.
+- Owner-side backend truth now includes structured cost telemetry: `/v1/healthz/detail` can summarize real spend by provider, provider model, Studio model, day, and surface across image generation, assistant replies, and prompt improvement instead of forcing operators to reconstruct cost from mixed logs and CSV exports.
+- Prompt improvement now persists its own billable telemetry events, so OpenAI-backed refine calls no longer disappear from backend cost truth while provider spend guardrails only count chat replies and completed generations.
+- Deployment verification reports can now round-trip the same owner `cost_telemetry` payload when owner health detail is available, which keeps staging/closure operator reports aligned with the backend cost summary instead of leaving spending visibility on only one surface.
+- Provider spend guardrails now exist for local billable image work: daily soft caps warn, daily hard caps block new billable image admission, and an emergency-disable list can shut off specific providers without touching frontend code.
+- Owner health detail now exposes per-provider spend guardrail status, so backend/operator truth can show current daily spend, projected spend, cap thresholds, and whether a provider is currently blocked or only warned.
+- Development image retries are now cost-hardened: when a billable image provider fails temporarily during local work, Studio no longer stacks provider-internal retries, billable-to-billable failover, and automatic job requeue on top of each other.
+- Local/development image defaults are now cost-safe too: once OpenAI Image is configured, ordinary Studio image requests stay on the draft OpenAI lane unless premium image QA is explicitly enabled, which sharply reduces the chance of burning prepaid credits through routine local Create testing.
 - Local OpenAI fallback is now cost-safer during development: when premium chat or Improve has to fall back from OpenRouter to OpenAI, Studio now caps that fallback to the standard OpenAI lane instead of silently escalating into the premium OpenAI tier.
 - Create now recovers stale or deleted compose-project references during generation admission, so aggressive account cleanup or broken local page state no longer leaves image creation stuck on `Project not found`.
 - When that stale project id cannot be resolved, backend generation now reuses the latest owned compose project when available or creates a fresh `New image set`, which keeps Create usable without any frontend-only repair.

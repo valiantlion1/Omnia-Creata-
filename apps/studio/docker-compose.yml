@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  # ─── Backend API ───────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: omnia-studio-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379
+      - RUNTIME_ROOT_PATH=/runtime
+    volumes:
+      - api-runtime:/runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - studio-net
+
+  # ─── Frontend (Nginx) ─────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.omniacreata.com}
+    container_name: omnia-studio-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - studio-net
+
+  # ─── Redis (Rate Limiting + Queue) ────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: omnia-studio-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    networks:
+      - studio-net
+
+volumes:
+  api-runtime:
+  redis-data:
+
+networks:
+  studio-net:
+    driver: bridge

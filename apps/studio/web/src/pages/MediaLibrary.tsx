@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, Lock, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { LightboxTrigger } from '@/components/ImageLightbox'
@@ -57,12 +57,17 @@ type AssetGroup = {
   title: string
   prompt: string
   model: string
+  modelLabel: string
+  derivedTags: string[]
   createdAt: string
   projectId: string
   projectTitle: string
   isChatOrigin: boolean
+  libraryState: 'generating' | 'ready' | 'failed' | 'blocked'
   items: MediaAsset[]
 }
+
+type LibraryState = 'generating' | 'ready' | 'failed' | 'blocked'
 
 const imageFilters: Array<{ id: ImageFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -81,6 +86,29 @@ const trashFilters: Array<{ id: TrashFilter; label: string }> = [
   { id: 'recent', label: 'Recent' },
 ]
 
+function assetLibraryState(asset: MediaAsset): LibraryState {
+  return asset.library_state ?? (asset.protection_state === 'blocked' ? 'blocked' : 'ready')
+}
+
+function generationLibraryState(generation: Generation): LibraryState {
+  if (generation.library_state) return generation.library_state
+  const normalized = normalizeJobStatus(generation.status)
+  if (normalized === 'queued' || normalized === 'running') return 'generating'
+  if ((generation.error ?? '').toLowerCase().includes('policy')) return 'blocked'
+  return 'failed'
+}
+
+function assetDisplayTitle(asset: MediaAsset) {
+  return asset.display_title?.trim() || asset.title
+}
+
+function assetPreviewUrl(asset: MediaAsset) {
+  if (assetLibraryState(asset) === 'blocked') {
+    return asset.blocked_preview_url ?? asset.preview_url ?? asset.thumbnail_url ?? asset.url
+  }
+  return asset.preview_url ?? asset.thumbnail_url ?? asset.url
+}
+
 function matchesQuery(query: string, ...parts: Array<string | null | undefined>) {
   if (!query.trim()) return true
   const normalized = query.trim().toLowerCase()
@@ -89,6 +117,17 @@ function matchesQuery(query: string, ...parts: Array<string | null | undefined>)
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString()
+}
+
+async function downloadBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 function metadataString(metadata: Record<string, unknown>, key: string) {
@@ -130,9 +169,9 @@ function ConfirmDialog({
     state.kind === 'empty-trash'
       ? `This will permanently remove ${state.count} item${state.count > 1 ? 's' : ''} from Trash. This cannot be undone.`
       : state.kind === 'delete-project'
-        ? `Delete "${state.title}" permanently? Empty collections can be removed and this cannot be undone.`
+        ? `Delete "${state.title}" permanently? Empty projects can be removed and this cannot be undone.`
         : `"${state.asset.title}" will be removed permanently. This cannot be undone.`
-  const resolvedTitle = state.kind === 'empty-trash' ? 'Empty trash?' : state.kind === 'delete-project' ? 'Delete collection?' : 'Delete forever?'
+  const resolvedTitle = state.kind === 'empty-trash' ? 'Empty trash?' : state.kind === 'delete-project' ? 'Delete project?' : 'Delete forever?'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
@@ -221,7 +260,7 @@ function RenameDialog({
 
   if (!state) return null
 
-  const heading = state.kind === 'post' ? 'Rename image set' : 'Rename collection'
+  const heading = state.kind === 'post' ? 'Rename image set' : 'Rename project'
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
@@ -229,7 +268,7 @@ function RenameDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{heading}</div>
-            <p className="mt-2 text-sm leading-7 text-zinc-400">Give this {state.kind === 'post' ? 'image set' : 'collection'} a cleaner name.</p>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">Give this {state.kind === 'post' ? 'image set' : 'project'} a cleaner name.</p>
           </div>
           <button
             onClick={onCancel}
@@ -324,6 +363,8 @@ function AssetLightbox({
 
   const asset = state.group.items[state.index]
   const canStep = state.group.items.length > 1
+  const previewSrc = assetPreviewUrl(asset)
+  const canOpenPreview = asset.can_open !== false && state.group.libraryState !== 'blocked'
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(4,6,10,0.82)] px-4 py-6 backdrop-blur-[10px]">
@@ -358,26 +399,33 @@ function AssetLightbox({
       <div className="relative z-[1] grid w-full max-w-[1380px] gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
         <div className="group relative flex min-h-0 items-center justify-center">
           <img
-            src={asset.url}
-            alt={asset.title}
+            src={previewSrc}
+            alt={assetDisplayTitle(asset)}
+            draggable={false}
+            onContextMenu={(event) => event.preventDefault()}
             className="max-h-[78vh] w-auto max-w-full cursor-zoom-in rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
-            onClick={() => openLightbox(asset.url, asset.title, {
-              title: state.group.title,
-              prompt: state.group.prompt,
-              authorName: "You",
-              authorUsername: "creator",
-              aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
-              likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
-            })}
+            onClick={() => {
+              if (!canOpenPreview) return
+              openLightbox(previewSrc, assetDisplayTitle(asset), {
+                title: state.group.title,
+                prompt: state.group.prompt,
+                authorName: 'You',
+                authorUsername: 'creator',
+                aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
+                likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
+              })
+            }}
           />
-          <LightboxTrigger onClick={() => openLightbox(asset.url, asset.title, {
-              title: state.group.title,
-              prompt: state.group.prompt,
-              authorName: "You",
-              authorUsername: "creator",
-              aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
-              likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
-          })} />
+          {canOpenPreview ? (
+            <LightboxTrigger onClick={() => openLightbox(previewSrc, assetDisplayTitle(asset), {
+                title: state.group.title,
+                prompt: state.group.prompt,
+                authorName: 'You',
+                authorUsername: 'creator',
+                aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
+                likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
+            })} />
+          ) : null}
         </div>
 
         <div className="space-y-4 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md">
@@ -386,7 +434,7 @@ function AssetLightbox({
           <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
             <span>{formatDate(asset.created_at)}</span>
             <span>/</span>
-            <span>{state.group.model}</span>
+            <span>{state.group.modelLabel}</span>
             <span>/</span>
             <span>
               Variation {state.index + 1} of {state.group.items.length}
@@ -468,7 +516,13 @@ function AssetLightbox({
                     state.index === index ? 'ring-white/40' : 'ring-white/6 hover:ring-white/20'
                   }`}
                 >
-                  <img src={item.thumbnail_url ?? item.url} alt={item.title} className="aspect-square h-full w-full object-cover" />
+                  <img
+                    src={assetPreviewUrl(item)}
+                    alt={assetDisplayTitle(item)}
+                    className="aspect-square h-full w-full object-cover"
+                    draggable={false}
+                    onContextMenu={(event) => event.preventDefault()}
+                  />
                 </button>
               ))}
             </div>
@@ -685,22 +739,33 @@ function EmptyInline({
   )
 }
 
-function PendingPreview({ generation, view }: { generation: Generation; view: ViewMode }) {
-  const normalized = normalizeJobStatus(generation.status)
-  const isFailed = ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalized)
+function PendingPreview({
+  generation,
+  view,
+  state,
+}: {
+  generation: Generation
+  view: ViewMode
+  state: LibraryState
+}) {
+  const isBlocked = state === 'blocked'
+  const isFailed = state === 'failed'
+  const title = generation.display_title || generation.title
+  const subtitle = isBlocked ? 'Blocked for safety review' : isFailed ? 'Could not create image' : 'Painting your vision...'
+  const badge = isBlocked ? 'Blocked' : isFailed ? 'Failed' : 'Running'
 
   if (view === 'grid') {
     return (
       <div className="space-y-3">
         <div className="relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-          {isFailed ? (
+          {isBlocked || isFailed ? (
             <>
-              <div className="aspect-[4/5] w-full bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)] opacity-50" />
+              <div className={`aspect-[4/5] w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
-                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20 mb-3 shadow-lg">
-                   <ImageOff className="h-5 w-5 text-rose-400/80" />
+                 <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
+                   {isBlocked ? <Lock className="h-5 w-5 text-amber-300/90" /> : <ImageOff className="h-5 w-5 text-rose-400/80" />}
                  </div>
-                 <span className="text-[11px] font-bold tracking-wider text-rose-400/80 uppercase">Blocked / Failed</span>
+                 <span className={`text-[11px] font-bold tracking-wider uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}>{badge}</span>
               </div>
             </>
           ) : (
@@ -717,9 +782,9 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
           )}
         </div>
         <div className="min-w-0 px-1">
-          <div className="truncate text-[13px] font-semibold text-white">{generation.title}</div>
-          <div className={`mt-0.5 text-[11px] font-medium ${isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
-            {isFailed ? 'Could not create image' : 'Painting your vision...'}
+          <div className="truncate text-[13px] font-semibold text-white">{title}</div>
+          <div className={`mt-0.5 text-[11px] font-medium ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+            {subtitle}
           </div>
         </div>
       </div>
@@ -729,12 +794,12 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
   return (
     <div className="group flex items-center gap-4 py-3 transition-all duration-300 hover:bg-white/[0.02] rounded-xl px-2 -mx-2">
       <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
-        {isFailed ? (
+        {isBlocked || isFailed ? (
           <>
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.2),transparent_70%)]" />
+            <div className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.18),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.2),transparent_70%)]'}`} />
             <div className="absolute inset-0 flex items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/20 shadow-lg">
-                <ImageOff className="h-3.5 w-3.5 text-rose-400/80" />
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
+                {isBlocked ? <Lock className="h-3.5 w-3.5 text-amber-300/90" /> : <ImageOff className="h-3.5 w-3.5 text-rose-400/80" />}
               </div>
             </div>
           </>
@@ -755,9 +820,9 @@ function PendingPreview({ generation, view }: { generation: Generation; view: Vi
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-white">{generation.title}</div>
-        <div className={`mt-1 text-xs font-medium ${isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
-          {isFailed ? 'Could not create image' : 'Painting your vision...'}
+        <div className="truncate text-sm font-semibold text-white">{title}</div>
+        <div className={`mt-1 text-xs font-medium ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+          {subtitle}
         </div>
       </div>
     </div>
@@ -811,7 +876,6 @@ export default function MediaLibraryPage() {
     queryKey: ['generations', 'library', 'all'],
     queryFn: () => studioApi.listGenerations(),
     enabled: canLoadPrivate,
-    refetchInterval: 2000,
   })
 
   async function invalidateLibrary() {
@@ -880,6 +944,12 @@ export default function MediaLibraryPage() {
       await invalidateLibrary()
     },
   })
+  const exportProjectMutation = useMutation({
+    mutationFn: async ({ projectId, title }: { projectId: string; title: string }) => {
+      const blob = await studioApi.exportProject(projectId)
+      await downloadBlob(blob, `${title.replace(/[^a-z0-9._-]+/gi, '-').toLowerCase() || 'project'}.zip`)
+    },
+  })
 
   const menuBusy =
     permanentDeleteMutation.isPending ||
@@ -888,7 +958,8 @@ export default function MediaLibraryPage() {
     movePostMutation.isPending ||
     trashPostMutation.isPending ||
     updateProjectMutation.isPending ||
-    deleteProjectMutation.isPending
+    deleteProjectMutation.isPending ||
+    exportProjectMutation.isPending
 
   const assets = assetsQuery.data?.assets ?? []
   const projects = projectsQuery.data?.projects ?? []
@@ -926,13 +997,15 @@ export default function MediaLibraryPage() {
 
       groups.set(groupId, {
         id: groupId,
-        title: String(metadata.generation_title ?? asset.title ?? 'Untitled set'),
+        title: assetDisplayTitle(asset),
         prompt: asset.prompt || 'Saved Studio result',
         model: String(metadata.model ?? 'Image'),
+        modelLabel: String(metadata.display_model_label ?? metadata.model ?? 'Studio profile'),
         createdAt: asset.created_at,
         projectId: asset.project_id,
         projectTitle: isChatOrigin ? 'Chat session' : project?.title ?? 'Project',
         isChatOrigin,
+        libraryState: assetLibraryState(asset),
         items: [asset],
       })
     }
@@ -946,18 +1019,28 @@ export default function MediaLibraryPage() {
   const pendingGenerations = useMemo(
     () =>
       generations
-        .filter((generation) => {
-          const normalized = normalizeJobStatus(generation.status)
-          const isPending = normalized === 'queued' || normalized === 'running'
-          const isFailed = ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalized)
-          
-          if (isPending) return true
-          // Display failed images if they are relatively recent (last 7 days) to act as visual feedback
-          if (isFailed && Date.now() - new Date(generation.created_at).getTime() < 1000 * 60 * 60 * 24 * 7) return true
-          return false
-        })
+        .filter((generation) => generationLibraryState(generation) === 'generating')
         .filter((generation) => matchesQuery(search, generation.title, generation.prompt_snapshot.prompt, generation.model)),
     [generations, search],
+  )
+
+  const failedGenerations = useMemo(
+    () =>
+      generations
+        .filter((generation) => generationLibraryState(generation) === 'failed')
+        .filter((generation) => Date.now() - new Date(generation.created_at).getTime() <= 1000 * 60 * 60 * 24 * 7)
+        .filter((generation) => matchesQuery(search, generation.display_title, generation.prompt_snapshot.prompt, generation.model)),
+    [generations, search],
+  )
+
+  const blockedGroups = useMemo(
+    () => groupedAssets.filter((group) => group.libraryState === 'blocked'),
+    [groupedAssets],
+  )
+
+  const readyGroups = useMemo(
+    () => groupedAssets.filter((group) => group.libraryState === 'ready'),
+    [groupedAssets],
   )
 
   const composeProjects = useMemo(
@@ -967,13 +1050,13 @@ export default function MediaLibraryPage() {
 
   const filteredImageGroups = useMemo(
     () =>
-      groupedAssets.filter((group) => {
+      readyGroups.filter((group) => {
         if (!matchesQuery(search, group.title, group.prompt, group.model, group.projectTitle)) return false
         if (imageFilter === 'recent') return Date.now() - new Date(group.createdAt).getTime() <= 1000 * 60 * 60 * 24 * 3
         if (imageFilter === 'processing') return false
         return true
       }),
-    [groupedAssets, imageFilter, search],
+    [imageFilter, readyGroups, search],
   )
 
   const filteredProjects = useMemo(
@@ -1069,7 +1152,59 @@ export default function MediaLibraryPage() {
                 </div>
                 <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {pendingGenerations.map((generation) => (
-                    <PendingPreview key={generation.job_id} generation={generation} view={activeView} />
+                    <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="generating" />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {blockedGroups.length ? (
+              <section className="border-b border-white/[0.06] pb-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="text-sm font-medium text-white">Blocked</div>
+                  <StatusPill tone="warning">{blockedGroups.length} locked</StatusPill>
+                </div>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                  {blockedGroups.map((group) => {
+                    const asset = group.items[0]
+                    return (
+                      <div key={group.id} className={activeView === 'grid' ? 'space-y-3' : 'group flex items-center gap-4 py-3'}>
+                        <div className={`relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] ${activeView === 'grid' ? '' : 'h-20 w-16 shrink-0'}`}>
+                          <img
+                            src={assetPreviewUrl(asset)}
+                            alt={group.title}
+                            draggable={false}
+                            onContextMenu={(event) => event.preventDefault()}
+                            className={`${activeView === 'grid' ? 'aspect-[4/5] w-full' : 'h-full w-full'} object-cover blur-[12px] saturate-50`}
+                          />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/35 backdrop-blur-md">
+                            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-500/20">
+                              <Lock className="h-4 w-4 text-amber-300/90" />
+                            </div>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/90">Blocked</span>
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-semibold text-white">{group.title}</div>
+                          <div className="mt-1 text-[11px] text-amber-300/90">Protected preview only</div>
+                          <div className="mt-1 truncate text-[11px] text-zinc-500">{group.projectTitle}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {failedGenerations.length ? (
+              <section className="border-b border-white/[0.06] pb-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="text-sm font-medium text-white">Failed</div>
+                  <StatusPill tone="danger">{failedGenerations.length} recent</StatusPill>
+                </div>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                  {failedGenerations.map((generation) => (
+                    <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="failed" />
                   ))}
                 </div>
               </section>
@@ -1093,7 +1228,7 @@ export default function MediaLibraryPage() {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
                           <span>{formatDate(group.createdAt)}</span>
                           <span>/</span>
-                          <span>{group.model}</span>
+                          <span>{group.modelLabel}</span>
                           <span>/</span>
                           <span>{group.items.length} variation{group.items.length > 1 ? 's' : ''}</span>
                         </div>
@@ -1278,14 +1413,16 @@ export default function MediaLibraryPage() {
                               className="block w-full overflow-hidden rounded-[20px] bg-white/[0.03] text-left"
                             >
                               <img
-                                src={asset.thumbnail_url ?? asset.url}
-                                alt={asset.title}
+                                src={assetPreviewUrl(asset)}
+                                alt={assetDisplayTitle(asset)}
+                                draggable={false}
+                                onContextMenu={(event) => event.preventDefault()}
                                 className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
                               />
                             </button>
                             <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
                               <span>V{variantOrder(asset) + 1}</span>
-                              <span className="truncate">{asset.title}</span>
+                              <span className="truncate">{assetDisplayTitle(asset)}</span>
                             </div>
                           </div>
                         ))}
@@ -1298,10 +1435,10 @@ export default function MediaLibraryPage() {
                               onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
                               className="block h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03] text-left"
                             >
-                              <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="h-full w-full object-cover" />
+                              <img src={assetPreviewUrl(asset)} alt={assetDisplayTitle(asset)} draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-full w-full object-cover" />
                             </button>
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-white">{asset.title}</div>
+                              <div className="truncate text-sm font-medium text-white">{assetDisplayTitle(asset)}</div>
                               <div className="mt-1 text-xs text-zinc-500">Variation {variantOrder(asset) + 1}</div>
                             </div>
                             <Link to={`/projects/${asset.project_id}`} className="text-sm text-white transition hover:text-zinc-200">

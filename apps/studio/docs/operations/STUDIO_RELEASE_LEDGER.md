@@ -18,6 +18,119 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.11.52`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the local Studio app was feeling heavier than it needed to, especially during long signed-in sessions where the browser kept paying for oversized startup code, frequent polling, and development-only double-render pressure
+- What:
+  PostHog bootstrap now loads lazily instead of bloating the main entry chunk
+  command palette and shortcut modal now load on demand instead of front-loading their code on every visit
+  development runs now skip React StrictMode double-mount overhead, which makes local CPU and memory usage calmer without changing production behavior
+  Create and Chat polling now wait longer between checks, stop polling when the tab is hidden, and invalidate cache in parallel instead of serial bursts
+  Chat image rendering no longer paints the same image twice just to fake a blur placeholder, which reduces browser memory and GPU texture churn
+  the production build is now chunked more intelligently, shrinking the main entry bundle dramatically so the browser has less startup work
+
+### `0.6.0-alpha` / build `2026.04.11.51`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  backend extraction cleanup had restored the main auth crash, but several secondary runtime seams were still fragile enough to break billing, generation, asset import, or Improve fallback behavior once the refreshed login path touched them in real life
+- What:
+  backend service wiring is now stable again: generation, billing, auth/profile, and asset flows resolve their shared helpers correctly after the extraction work instead of crashing on missing imports or misplaced service references
+  local sqlite/json development now defaults to safe local asset storage even when Supabase asset settings exist, which prevents local verification from accidentally depending on remote upload credentials
+  OpenAI Improve fallback is now cost-safer too: when OpenRouter is unavailable during development, fallback refinement uses the standard OpenAI lane instead of silently escalating into the premium tier
+  full backend verification is green again, so the signed-in login path now sits on top of a stable runtime instead of a partially repaired service graph
+
+### `0.6.0-alpha` / build `2026.04.11.50`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  recent backend service extraction left the signed-in login path fragile, and `/v1/profiles/me` could crash immediately after auth because `IdentityService` no longer exposed the billing/profile helpers the route chain expected
+- What:
+  backend identity/profile auth now delegates the missing billing, profile-post, asset, and moderation helpers back through the main Studio service, which restores the signed-in `/auth/me` plus `/profiles/me` chain without touching frontend code
+  full local auth verification is cleaner too: the stray root `test_jwt.py` probe no longer executes at pytest import time, so repo-wide verification can run without a fake collection crash hiding real auth regressions
+
+### `0.5.1-alpha` / build `2026.04.10.47`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  current-build smoke truth kept going stale because the only obvious smoke path still ran optional edit probes and expected-failure cases, which is overkill when operators just need a fresh low-cost proof for the active build
+- What:
+  provider smoke now supports a cheaper `refresh` profile that keeps required current-build lane proof while skipping optional edit and failure-probe cases
+  OpenAI refresh smoke keeps only the draft and final image lanes, and fal refresh smoke keeps the required primary text-to-image path, which lowers the cost of updating current-build smoke truth
+  the smoke CLI now exposes that profile directly, so operators can intentionally refresh build truth without pretending they ran the full diagnostic suite
+
+### `0.5.1-alpha` / build `2026.04.10.46`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  broken or expired free-provider auth could still look healthy enough to stay in the image routing graph, which meant local Create runs could keep touching bad providers, open retry loops, and muddy backend truth even after Sprint 9 cost hardening
+- What:
+  backend provider health now treats rejected Pollinations and HuggingFace auth probes as unavailable instead of healthy, so owner truth and routing stop pretending those lanes are usable
+  image routing, preview selection, and generation-provider availability checks now skip providers with an open circuit, which reduces repeated contact with recently broken lanes
+  auth-like provider failures now break out of provider-internal retry loops and suppress generation job requeue, so local image runs fail fast instead of churning on expired or rejected credentials
+
+### `0.5.1-alpha` / build `2026.04.10.45`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  owner health detail already exposed launch truth and cost truth, but operators still had to manually compare smoke, startup verification, deployment verification, and manifest build numbers to tell whether the current build had actually been proven end to end
+- What:
+  owner/debug backend truth now exposes a structured `truth_sync` summary that marks operator artefacts as current, stale, or missing against the current Studio build
+  `/v1/healthz/detail` now surfaces that same artefact-sync truth at top level, so owner reads no longer need to infer build drift from separate payload sections
+  deployment verification reports can now mirror `truth_sync`, which keeps staging/closure prep aligned with the same current-build view without rerunning live smoke automatically
+
+### `0.5.1-alpha` / build `2026.04.10.44`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  provider spend guardrails now existed, but owner-side backend truth still could not answer the basic question of where real USD spend had gone by provider, model, day, and surface
+- What:
+  owner/debug health detail now exposes a structured `cost_telemetry` summary that rolls up real spend across generations, assistant chat replies, and prompt improvement events
+  prompt improvement calls now persist their own billable telemetry events, which closes a visibility gap where OpenAI or fallback LLM refinement cost could exist without showing up in owner-side cost truth
+  deployment verification reports can now mirror that same owner `cost_telemetry` payload, so backend operator reports and owner health detail describe the same spending picture during staging and closure work
+
+### `0.5.1-alpha` / build `2026.04.10.43`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  local Studio had become cheaper and less retry-happy, but there was still no hard backend stop once a billable provider crossed a daily safety budget
+- What:
+  provider spend guardrails now track daily provider spend from completed generations and persisted assistant cost metadata, so owner health can show per-provider soft-cap, hard-cap, and emergency-disable status
+  development generation admission now blocks new billable image jobs when a provider has already hit its daily hard cap or has been emergency-disabled
+  generation execution now re-checks that same guardrail before making a billable provider call, which prevents queued work from spending again after the daily budget has already been exhausted
+
+### `0.5.1-alpha` / build `2026.04.10.42`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  local Studio had become cost-safer by default, but temporary failures on billable image providers could still trigger layered retries and billable-to-billable failover chains during development
+- What:
+  development/local billable image providers now skip provider-internal retry loops, so transient OpenAI/fal/Runware failures do not multiply charges before the job layer reacts
+  generation maintenance now suppresses automatic requeue for billable temporary failures during development, releasing the hold and surfacing a final failure instead of silently retrying later
+  development failover now avoids chaining one failed billable provider into another billable lane, while still allowing a non-billable fallback route when one exists
+
+### `0.5.1-alpha` / build `2026.04.10.41`
+- Date: `2026-04-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  local Studio could already use OpenAI Image successfully, but balanced/final legacy model selections still defaulted into the more expensive `gpt-image-1.5` lane during ordinary development work
+- What:
+  development/local image generation is now cost-safe by default and uses the configured OpenAI draft lane unless premium image QA is explicitly enabled
+  explicit raw premium OpenAI image model requests still remain possible for intentional QA, so production-oriented checks are not blocked
+  this keeps everyday local Create testing aligned with pre-revenue budget discipline without changing the intended production routing contract
+
 ### `0.5.1-alpha` / build `2026.04.10.40`
 - Date: `2026-04-10`
 - Codename: `Foundation`

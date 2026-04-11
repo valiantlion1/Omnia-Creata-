@@ -18,10 +18,11 @@ from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 import jwt
+import zipfile
 
-from config.env import get_settings
+from config.env import Environment, get_settings
 
 from .asset_import_ops import parse_data_url_image
 from .asset_ops import (
@@ -72,6 +73,7 @@ from .conversation_ops import (
     push_message_revision,
     remove_conversation_from_state,
 )
+from .cost_telemetry_ops import build_cost_telemetry_summary
 from .creative_profile_ops import attach_creative_profile, resolve_creative_profile
 from .entitlement_ops import (
     ensure_chat_request_allowed,
@@ -116,6 +118,7 @@ from .models import (
     ChatMessage,
     ChatRole,
     CheckoutKind,
+    CostTelemetryEvent,
     CreditEntryType,
     CreditLedgerEntry,
     GenerationJob,
@@ -127,9 +130,11 @@ from .models import (
     ModelCatalogEntry,
     OmniaIdentity,
     PlanCatalogEntry,
+    PromptMemoryProfile,
     PublicPost,
     Project,
     ShareLink,
+    StudioStyle,
     StudioState,
     StudioWorkspace,
     SubscriptionStatus,
@@ -143,12 +148,25 @@ from .project_ops import (
     remove_project_from_state,
 )
 from .profile_ops import build_identity_export, purge_identity_state
+from .provider_spend_guardrails import (
+    ProviderSpendGuardrailStatus,
+    evaluate_provider_spend_guardrail,
+    summarize_provider_daily_spend,
+)
 from .prompt_engineering import compile_generation_request, improve_prompt_candidate
+from .prompt_memory_ops import (
+    build_prompt_memory_context,
+    derive_display_title,
+    derive_prompt_tags,
+    update_prompt_memory_profile,
+)
 from .providers import (
     GenerationRoutingDecision,
+    ProviderFatalError,
     ProviderReferenceImage,
     ProviderRegistry,
     ProviderTemporaryError,
+    is_provider_auth_failure,
 )
 from .repository import StudioPersistence, StudioRepository
 from .share_ops import (
@@ -156,6 +174,10 @@ from .share_ops import (
     build_share_token_preview,
     create_share_record,
 )
+from .services.billing_service import BillingService
+from .services.chat_service import ChatService
+from .services.generation_service import GenerationService
+from .services.identity_service import IdentityService
 from .services.asset_protection import GeneratedAssetProtectionPipeline
 from .services.generation_broker import GenerationBroker, build_generation_broker
 from .services.generation_runtime import GenerationRuntime, initial_generation_provider_label
@@ -166,15 +188,19 @@ from .services.launch_readiness import (
     load_provider_smoke_report,
     load_startup_verification_report,
 )
+from .style_library import STYLE_CATALOG, get_style_catalog_entry, serialize_style_catalog_entry
 from .services.generation_dispatcher import GenerationDispatcher
 from security.moderation import ModerationResult
 
 logger = logging.getLogger(__name__)
 _GENERATION_TEXT_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_FOUNDER_EMAILS = frozenset({"founder@omniacreata.com", "help@omniacreata.com"})
+_FOUNDER_EMAILS = frozenset({"founder@omniacreata.com", "valiantlion@omniacreata.com", "ghostsofter12@gmail.com", "alierdincyigitaslan@gmail.com"})
 _MODERATION_RESET_WINDOW = timedelta(hours=24)
 _TEMP_BLOCK_AFTER_THREE_STRIKES = timedelta(minutes=15)
 _TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)
+_PROVIDER_SPEND_GUARDRAIL_USER_MESSAGE = (
+    "Image generation is temporarily unavailable right now. Please try again later."
+)
 
 
 class GenerationCapacityError(ValueError):
@@ -358,6 +384,8 @@ class StudioService:
         self.media_url_prefix = media_url_prefix.rstrip("/")
         settings = get_settings()
         self.settings = settings
+        self.plan_catalog = PLAN_CATALOG
+        self.checkout_catalog = CHECKOUT_CATALOG
         self._generation_runtime_mode = settings.generation_runtime_mode
         minimum_claim_lease = max(30, settings.generation_maintenance_interval_seconds * 3)
         self._generation_claim_lease_seconds = min(
@@ -367,8 +395,8 @@ class StudioService:
         self._worker_id = (
             f"{socket.gethostname()}:{os.getpid()}:{self._generation_runtime_mode}:{uuid4().hex[:8]}"
         )
-        self._asset_token_secret = settings.jwt_secret or "dev-asset-secret"
-        self._asset_token_ttl_seconds = 60 * 20
+        self._asset_token_secret = settings.jwt_secret.get_secret_value() if settings.jwt_secret else "omnia-creata-local-dev-secret-2026"
+        self._asset_token_ttl_seconds = 3600
         self.asset_protection = GeneratedAssetProtectionPipeline(secret=self._asset_token_secret)
         self.asset_storage = build_asset_storage_registry(settings, media_dir)
         self.llm_gateway = StudioLLMGateway()
@@ -438,15 +466,22 @@ class StudioService:
         )
         self._internal_public_email_suffixes = ("@omnia.local",)
         self._internal_public_email_prefixes = ("codex.", "security-check")
+        self.billing = BillingService(self)
+        self.chat = ChatService(self)
+        self.generation = GenerationService(self)
+        self.identity = IdentityService(self)
 
     def _can_process_generations(self) -> bool:
-        return self._generation_runtime_mode in {"all", "worker"} or self._uses_local_generation_fallback()
+        return self.generation._can_process_generations()
+
 
     def _uses_shared_generation_broker(self) -> bool:
-        return self.generation_broker is not None
+        return self.generation._uses_shared_generation_broker()
+
 
     def _uses_local_generation_fallback(self) -> bool:
-        return self._generation_runtime_mode == "web" and self.generation_broker is None
+        return self.generation._uses_local_generation_fallback()
+
 
     async def initialize(self) -> None:
         await self.store.load()
@@ -519,255 +554,28 @@ class StudioService:
         return tasks
 
     def _ensure_generation_maintenance_task(self) -> None:
-        if not self._can_process_generations():
-            return
-        if self._generation_maintenance_task is None or self._generation_maintenance_task.done():
-            self._generation_maintenance_task = asyncio.create_task(
-                self._generation_maintenance_loop()
-            )
+        return self.generation._ensure_generation_maintenance_task()
+
 
     def _ensure_orphan_cleanup_task(self) -> None:
-        if not self._can_process_generations():
-            return
-        if self._orphan_cleanup_task is None or self._orphan_cleanup_task.done():
-            self._orphan_cleanup_task = asyncio.create_task(
-                self._orphan_cleanup_loop()
-            )
+        return self.generation._ensure_orphan_cleanup_task()
+
 
     async def _generation_maintenance_loop(self) -> None:
-        interval_seconds = max(1, self.settings.generation_maintenance_interval_seconds)
-        while True:
-            try:
-                keep_running = await self._run_generation_maintenance_pass()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("Generation maintenance pass failed")
-                keep_running = True
+        return await self.generation._generation_maintenance_loop()
 
-            if not keep_running:
-                break
-
-            await asyncio.sleep(interval_seconds)
 
     async def _orphan_cleanup_loop(self) -> None:
-        while True:
-            try:
-                await self._run_scheduled_orphan_cleanup_if_due()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("Scheduled orphan generation cleanup failed")
+        return await self.generation._orphan_cleanup_loop()
 
-            await asyncio.sleep(60)
 
     async def _run_generation_maintenance_pass(self) -> bool:
-        now = utc_now()
-        retry_cutoff = now - timedelta(seconds=self.settings.generation_retry_delay_seconds)
-        stale_cutoff = now - timedelta(seconds=self.settings.generation_stale_running_seconds)
-        retry_limit = self.settings.generation_retry_attempt_limit
-        claimed_jobs = 0
-        broker_metrics = {"priority": 0, "standard": 0, "browse-only": 0}
-        if self._can_process_generations() and self.generation_broker is not None:
-            await self._reconcile_generation_broker_state()
-            recovered_claims = await self.generation_broker.requeue_stale_claims(
-                stale_after_seconds=self.settings.generation_stale_running_seconds,
-            )
-            claimed_jobs = await self._drain_generation_broker_into_dispatcher()
-            broker_metrics = await self.generation_broker.metrics()
-            if recovered_claims:
-                claimed_jobs += len(recovered_claims)
-        tracked_jobs = await self.store.list_generations_with_statuses(
-            {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.RETRYABLE_FAILED}
-        )
-        tracked_job_map = {job.id: job for job in tracked_jobs}
-        metrics = self.generation_dispatcher.metrics()
-        keep_running = (
-            bool(tracked_jobs)
-            or bool(metrics["queued"])
-            or bool(metrics["running"])
-            or bool(claimed_jobs)
-            or any(count > 0 for count in broker_metrics.values())
-        )
+        return await self.generation._run_generation_maintenance_pass()
 
-        heartbeat_job_ids: list[str] = []
-        queue_entries: list[tuple[str, str]] = []
-        retry_job_ids: list[str] = []
-        failed_job_ids: list[str] = []
-        timed_out_job_ids: list[str] = []
-
-        for job in tracked_jobs:
-            if job.status == JobStatus.QUEUED:
-                if not self.generation_dispatcher.is_tracked(job.id):
-                    queue_entries.append((job.id, job.queue_priority))
-                continue
-
-            if job.status == JobStatus.RUNNING:
-                if self.generation_dispatcher.is_running(job.id):
-                    heartbeat_job_ids.append(job.id)
-                    continue
-
-                if job.claim_token:
-                    claim_still_fresh = (
-                        job.claim_expires_at is not None and job.claim_expires_at > now
-                    )
-                    if claim_still_fresh:
-                        keep_running = True
-                        continue
-
-                    claim_heartbeat_at = (
-                        job.last_claim_heartbeat_at
-                        or job.last_heartbeat_at
-                        or job.updated_at
-                        or job.started_at
-                        or job.created_at
-                    )
-                    if job.claim_expires_at is None and claim_heartbeat_at > stale_cutoff:
-                        keep_running = True
-                        continue
-
-                    if job.attempt_count < retry_limit:
-                        retry_job_ids.append(job.id)
-                    else:
-                        timed_out_job_ids.append(job.id)
-                    continue
-
-                heartbeat_at = (
-                    job.last_heartbeat_at
-                    or job.updated_at
-                    or job.started_at
-                    or job.created_at
-                )
-                if heartbeat_at <= stale_cutoff:
-                    if job.attempt_count < retry_limit:
-                        retry_job_ids.append(job.id)
-                    else:
-                        timed_out_job_ids.append(job.id)
-                continue
-
-            if job.status == JobStatus.RETRYABLE_FAILED:
-                if job.attempt_count >= retry_limit:
-                    failed_job_ids.append(job.id)
-                    continue
-                if job.updated_at <= retry_cutoff and not self.generation_dispatcher.is_tracked(job.id):
-                    retry_job_ids.append(job.id)
-
-        if heartbeat_job_ids:
-            def heartbeat_mutation(state: StudioState) -> None:
-                for job_id in heartbeat_job_ids:
-                    claim_token = self._active_generation_claims.get(job_id)
-                    if claim_token:
-                        refreshed = refresh_generation_claim_locked(
-                            state=state,
-                            job_id=job_id,
-                            claim_token=claim_token,
-                            lease_seconds=self._generation_claim_lease_seconds,
-                            now=now,
-                        )
-                        if refreshed:
-                            continue
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.RUNNING,
-                        now=now,
-                    )
-
-            await self.store.mutate(heartbeat_mutation)
-            if self.generation_broker is not None:
-                for job_id in heartbeat_job_ids:
-                    await self.generation_broker.heartbeat_claim(job_id)
-
-        if retry_job_ids:
-            retry_job_id_set = set(retry_job_ids)
-
-            def retry_mutation(state: StudioState) -> None:
-                for job_id in retry_job_ids:
-                    requeue_generation_job_locked(
-                        state=state,
-                        job_id=job_id,
-                        now=now,
-                    )
-
-            await self.store.mutate(retry_mutation)
-            for job in tracked_jobs:
-                if job.id in retry_job_id_set:
-                    queue_entries.append((job.id, job.queue_priority))
-
-        if timed_out_job_ids:
-            def timeout_mutation(state: StudioState) -> None:
-                for job_id in timed_out_job_ids:
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.TIMED_OUT,
-                        now=now,
-                        error="Generation timed out after losing its worker and exhausting retry budget.",
-                        error_code="generation_timed_out",
-                    )
-
-            await self.store.mutate(timeout_mutation)
-            for job_id in timed_out_job_ids:
-                job = await self._get_generation_job_snapshot(job_id)
-                if job is None:
-                    job = tracked_job_map.get(job_id)
-                if job is not None:
-                    self._log_generation_event(
-                        "generation_maintenance_timeout",
-                        job=job,
-                        status=JobStatus.TIMED_OUT,
-                        provider=job.provider,
-                        error="Generation timed out after losing its worker and exhausting retry budget.",
-                        error_code="generation_timed_out",
-                        started_at=job.started_at or job.created_at,
-                        finished_at=now,
-                        level=logging.WARNING,
-                    )
-
-        if failed_job_ids:
-            def failed_mutation(state: StudioState) -> None:
-                for job_id in failed_job_ids:
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.FAILED,
-                        now=now,
-                        error="Generation retry budget exhausted after repeated temporary failures.",
-                        error_code="retry_budget_exhausted",
-                    )
-
-            await self.store.mutate(failed_mutation)
-            for job_id in failed_job_ids:
-                job = await self._get_generation_job_snapshot(job_id)
-                if job is None:
-                    job = tracked_job_map.get(job_id)
-                if job is not None:
-                    self._log_generation_event(
-                        "generation_retry_exhausted",
-                        job=job,
-                        status=JobStatus.FAILED,
-                        provider=job.provider,
-                        error="Generation retry budget exhausted after repeated temporary failures.",
-                        error_code="retry_budget_exhausted",
-                        started_at=job.started_at or job.created_at,
-                        finished_at=now,
-                        level=logging.ERROR,
-                    )
-
-        queued_once: set[str] = set()
-        for job_id, queue_priority in queue_entries:
-            if job_id in queued_once:
-                continue
-            queued_once.add(job_id)
-            await self._enqueue_generation_job(job_id, priority=queue_priority)
-            keep_running = True
-
-        return keep_running
 
     async def _enqueue_generation_job(self, job_id: str, *, priority: str) -> bool:
-        if self.generation_broker is not None:
-            return await self.generation_broker.enqueue(job_id, priority=priority)
-        return await self.generation_dispatcher.enqueue(job_id, priority=priority)
+        return await self.generation._enqueue_generation_job(job_id=job_id, priority=priority)
+
 
     async def _claim_generation_job(
         self,
@@ -776,27 +584,8 @@ class StudioService:
         provider: str | None = None,
         claim_token: str | None = None,
     ) -> str | None:
-        token = claim_token or uuid4().hex
-        claimed_holder = {"claimed": False}
-        now = utc_now()
+        return await self.generation._claim_generation_job(job_id=job_id, provider=provider, claim_token=claim_token)
 
-        def mutation(state: StudioState) -> None:
-            claimed_holder["claimed"] = claim_generation_job_locked(
-                state=state,
-                job_id=job_id,
-                worker_id=self._worker_id,
-                claim_token=token,
-                lease_seconds=self._generation_claim_lease_seconds,
-                now=now,
-                provider=provider,
-            )
-
-        await self.store.mutate(mutation)
-        if not claimed_holder["claimed"]:
-            self._active_generation_claims.pop(job_id, None)
-            return None
-        self._active_generation_claims[job_id] = token
-        return token
 
     async def _refresh_generation_claim(
         self,
@@ -805,208 +594,28 @@ class StudioService:
         claim_token: str,
         provider: str | None = None,
     ) -> bool:
-        refreshed_holder = {"refreshed": False}
-        now = utc_now()
+        return await self.generation._refresh_generation_claim(job_id=job_id, claim_token=claim_token, provider=provider)
 
-        def mutation(state: StudioState) -> None:
-            refreshed_holder["refreshed"] = refresh_generation_claim_locked(
-                state=state,
-                job_id=job_id,
-                claim_token=claim_token,
-                lease_seconds=self._generation_claim_lease_seconds,
-                now=now,
-                provider=provider,
-            )
-
-        await self.store.mutate(mutation)
-        if not refreshed_holder["refreshed"]:
-            self._active_generation_claims.pop(job_id, None)
-        return bool(refreshed_holder["refreshed"])
 
     async def _drain_generation_broker_into_dispatcher(self) -> int:
-        if self.generation_broker is None:
-            return 0
+        return await self.generation._drain_generation_broker_into_dispatcher()
 
-        claimed = 0
-        while self.generation_dispatcher.available_capacity() > 0:
-            job_id, queue_priority, next_streak = await self.generation_broker.dequeue_next(
-                priority_streak=self._broker_priority_streak,
-                priority_burst_limit=self.generation_dispatcher._PRIORITY_BURST_LIMIT,
-                priority_order=self.generation_dispatcher._PRIORITY_ORDER,
-            )
-            self._broker_priority_streak = next_streak
-            if job_id is None:
-                break
-            if self.generation_dispatcher.is_tracked(job_id):
-                await self.generation_broker.complete(job_id)
-                continue
-            claim_token = await self._claim_generation_job(job_id)
-            if claim_token is None:
-                await self.generation_broker.complete(job_id)
-                continue
-            enqueued = await self.generation_dispatcher.enqueue(job_id, priority=queue_priority or "standard")
-            if not enqueued:
-                self._active_generation_claims.pop(job_id, None)
-
-                def mutation(state: StudioState) -> None:
-                    requeue_generation_job_locked(
-                        state=state,
-                        job_id=job_id,
-                        now=utc_now(),
-                    )
-
-                await self.store.mutate(mutation)
-                await self.generation_broker.complete(job_id)
-                await self._enqueue_generation_job(job_id, priority=queue_priority or "standard")
-                continue
-            claimed += 1
-        return claimed
 
     async def _reconcile_generation_broker_state(self) -> int:
-        if self.generation_broker is None:
-            return 0
+        return await self.generation._reconcile_generation_broker_state()
 
-        snapshot = await self.generation_broker.inspect()
-        queued = snapshot.get("queued", {})
-        claimed = snapshot.get("claimed", {})
-        discarded = 0
-
-        for priority, job_ids in dict(queued).items():
-            for job_id in list(job_ids):
-                job = await self.store.get_generation(str(job_id))
-                if job is None:
-                    await self.generation_broker.discard(str(job_id))
-                    discarded += 1
-                    continue
-                if job.status in JobStatus.terminal_statuses() or job.status == JobStatus.RUNNING:
-                    await self.generation_broker.discard(str(job_id))
-                    discarded += 1
-                    continue
-                if job.status == JobStatus.RETRYABLE_FAILED:
-                    await self.generation_broker.discard(str(job_id))
-                    discarded += 1
-
-        for job_id, priority in dict(claimed).items():
-            job = await self.store.get_generation(str(job_id))
-            if job is None or job.status in JobStatus.terminal_statuses():
-                await self.generation_broker.discard(str(job_id))
-                discarded += 1
-                continue
-            if job.status == JobStatus.QUEUED:
-                await self.generation_broker.discard(str(job_id))
-                discarded += 1
-                await self._enqueue_generation_job(
-                    str(job_id),
-                    priority=job.queue_priority or str(priority) or "standard",
-                )
-                continue
-            if job.status == JobStatus.RETRYABLE_FAILED:
-                await self.generation_broker.discard(str(job_id))
-                discarded += 1
-
-        return discarded
 
     async def _run_scheduled_orphan_cleanup_if_due(self) -> None:
-        now_local = datetime.now().astimezone()
-        if now_local.hour < 3:
-            return
+        return await self.generation._run_scheduled_orphan_cleanup_if_due()
 
-        local_day = now_local.date().isoformat()
-        if self._last_orphan_cleanup_local_day == local_day:
-            return
-
-        await self._run_orphan_cleanup_pass(now=utc_now())
-        self._last_orphan_cleanup_local_day = local_day
 
     async def _run_orphan_cleanup_pass(self, *, now: datetime) -> int:
-        orphanable_statuses = {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.RETRYABLE_FAILED}
-        cutoff = now - timedelta(hours=24)
-        tracked_jobs = await self.store.list_generations_with_statuses(orphanable_statuses)
-        orphaned_jobs = [job for job in tracked_jobs if job.created_at <= cutoff]
-        if not orphaned_jobs:
-            logger.info(
-                "generation_orphan_cleanup %s",
-                json.dumps(
-                    {
-                        "event": "generation_orphan_cleanup",
-                        "orphaned_jobs": 0,
-                        "cutoff": cutoff.isoformat(),
-                    },
-                    ensure_ascii=True,
-                    sort_keys=True,
-                ),
-            )
-            return 0
+        return await self.generation._run_orphan_cleanup_pass(now=now)
 
-        orphaned_job_ids = [job.id for job in orphaned_jobs]
-
-        def mutation(state: StudioState) -> None:
-            for job_id in orphaned_job_ids:
-                apply_generation_status_update(
-                    state=state,
-                    job_id=job_id,
-                    status=JobStatus.TIMED_OUT,
-                    now=now,
-                    error="Generation timed out during nightly orphan cleanup after exceeding the 24 hour safety window.",
-                    error_code="orphaned_job_timeout",
-                )
-
-        await self.store.mutate(mutation)
-        for job in orphaned_jobs:
-            updated_job = await self._get_generation_job_snapshot(job.id)
-            self._log_generation_event(
-                "generation_orphan_cleanup",
-                job=updated_job or job,
-                status=JobStatus.TIMED_OUT,
-                provider=(updated_job or job).provider,
-                error="Generation timed out during nightly orphan cleanup after exceeding the 24 hour safety window.",
-                error_code="orphaned_job_timeout",
-                started_at=(updated_job or job).started_at or (updated_job or job).created_at,
-                finished_at=now,
-                level=logging.WARNING,
-            )
-
-        logger.warning(
-            "generation_orphan_cleanup %s",
-            json.dumps(
-                {
-                    "event": "generation_orphan_cleanup_summary",
-                    "orphaned_jobs": len(orphaned_jobs),
-                    "cutoff": cutoff.isoformat(),
-                },
-                ensure_ascii=True,
-                sort_keys=True,
-            ),
-        )
-        return len(orphaned_jobs)
 
     async def get_public_identity(self, auth_user: Any | None) -> Dict[str, Any]:
-        if auth_user is None:
-            return {
-                "guest": True,
-                "identity": self._serialize_guest_identity_payload(),
-                "credits": {"remaining": 0, "monthly_remaining": 0, "extra_credits": 0},
-                "plan": PLAN_CATALOG[IdentityPlan.GUEST].model_dump(mode="json"),
-                "entitlements": resolve_guest_entitlements(plan_catalog=PLAN_CATALOG),
-            }
+        return await self.identity.get_public_identity(auth_user=auth_user)
 
-        identity = await self.ensure_identity(
-            user_id=auth_user.id,
-            email=auth_user.email or f"{auth_user.id}@omnia.local",
-            display_name=getattr(auth_user, "username", None) or "Creator",
-            username=(getattr(auth_user, "metadata", {}) or {}).get("username")
-            or getattr(auth_user, "email", "").split("@")[0]
-            or "creator",
-            owner_mode=bool(getattr(auth_user, "metadata", {}).get("owner_mode")),
-            root_admin=bool(getattr(auth_user, "metadata", {}).get("root_admin")),
-            local_access=bool(getattr(auth_user, "metadata", {}).get("local_access")),
-            accepted_terms=bool(getattr(auth_user, "metadata", {}).get("accepted_terms")),
-            accepted_privacy=bool(getattr(auth_user, "metadata", {}).get("accepted_privacy")),
-            accepted_usage_policy=bool(getattr(auth_user, "metadata", {}).get("accepted_usage_policy")),
-            marketing_opt_in=bool(getattr(auth_user, "metadata", {}).get("marketing_opt_in")),
-        )
-        billing_state = await self._resolve_billing_state_for_identity(identity)
-        return self.serialize_identity(identity, billing_state=billing_state)
 
     async def ensure_identity(
         self,
@@ -1026,177 +635,39 @@ class StudioService:
         avatar_url: str | None = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
-        holder: Dict[str, OmniaIdentity] = {}
+        return await self.identity.ensure_identity(user_id=user_id, email=email, display_name=display_name, username=username, desired_plan=desired_plan, owner_mode=owner_mode, root_admin=root_admin, local_access=local_access, accepted_terms=accepted_terms, accepted_privacy=accepted_privacy, accepted_usage_policy=accepted_usage_policy, marketing_opt_in=marketing_opt_in, bio=bio, avatar_url=avatar_url, default_visibility=default_visibility)
 
-        def mutation(state: StudioState) -> None:
-            identity = state.identities.get(user_id)
-            now = utc_now()
-
-            normalized_email = (email or "").strip().lower()
-            privileged_flags = self._resolve_privileged_email_flags(normalized_email)
-            if privileged_flags["is_owner"]:
-                nonlocal desired_plan, owner_mode, root_admin, local_access
-                desired_plan = IdentityPlan.PRO
-                owner_mode = True
-                local_access = True
-                if privileged_flags["is_root_admin"]:
-                    root_admin = True
-
-            if identity is None:
-                plan = desired_plan or IdentityPlan.FREE
-                plan_config = PLAN_CATALOG[plan]
-                identity = OmniaIdentity(
-                    id=user_id,
-                    email=email,
-                    display_name=display_name or "Creator",
-                    username=(username or email.split("@")[0] or "creator").strip().lower(),
-                    plan=plan,
-                    workspace_id=f"ws_{user_id}",
-                    guest=False,
-                    owner_mode=owner_mode,
-                    root_admin=root_admin,
-                    local_access=local_access,
-                    accepted_terms=accepted_terms,
-                    accepted_privacy=accepted_privacy,
-                    accepted_usage_policy=accepted_usage_policy,
-                    marketing_opt_in=marketing_opt_in,
-                    bio=bio.strip(),
-                    avatar_url=avatar_url,
-                    default_visibility=default_visibility or Visibility.PRIVATE,
-                    subscription_status=SubscriptionStatus.ACTIVE if plan == IdentityPlan.PRO else SubscriptionStatus.NONE,
-                    monthly_credits_remaining=plan_config.monthly_credits,
-                    monthly_credit_allowance=plan_config.monthly_credits,
-                    extra_credits=0,
-                    last_credit_refresh_at=now,
-                    created_at=now,
-                    updated_at=now,
-                )
-                if privileged_flags["is_owner"]:
-                    self._apply_privileged_identity_overrides(identity)
-                state.identities[identity.id] = identity
-                state.workspaces[identity.workspace_id] = StudioWorkspace(
-                    id=identity.workspace_id,
-                    identity_id=identity.id,
-                    name=f"{identity.display_name}'s Studio",
-                )
-                state.credit_ledger[f"grant_{identity.id}_{int(now.timestamp())}"] = CreditLedgerEntry(
-                    identity_id=identity.id,
-                    amount=plan_config.monthly_credits,
-                    entry_type=CreditEntryType.MONTHLY_GRANT,
-                    description=f"{plan_config.label} welcome credits",
-                )
-            else:
-                if desired_plan and desired_plan != identity.plan:
-                    identity.plan = desired_plan
-                    identity.subscription_status = SubscriptionStatus.ACTIVE if desired_plan == IdentityPlan.PRO else SubscriptionStatus.NONE
-                    upgraded_plan = PLAN_CATALOG[desired_plan]
-                    identity.monthly_credit_allowance = upgraded_plan.monthly_credits
-                    identity.monthly_credits_remaining = max(identity.monthly_credits_remaining, upgraded_plan.monthly_credits)
-                identity.email = email or identity.email
-                identity.display_name = display_name or identity.display_name
-                identity.username = (username or identity.username or identity.email.split("@")[0] or "creator").strip().lower()
-                identity.owner_mode = identity.owner_mode or owner_mode
-                identity.root_admin = identity.root_admin or root_admin
-                identity.local_access = identity.local_access or local_access
-                identity.accepted_terms = identity.accepted_terms or accepted_terms
-                identity.accepted_privacy = identity.accepted_privacy or accepted_privacy
-                identity.accepted_usage_policy = identity.accepted_usage_policy or accepted_usage_policy
-                identity.marketing_opt_in = identity.marketing_opt_in or marketing_opt_in
-                identity.bio = bio or identity.bio
-                identity.avatar_url = avatar_url or identity.avatar_url
-                if default_visibility is not None:
-                    identity.default_visibility = default_visibility
-                self._refresh_monthly_credits_locked(state, identity)
-
-                if privileged_flags["is_owner"]:
-                    self._apply_privileged_identity_overrides(identity)
-
-                identity.updated_at = now
-                state.identities[identity.id] = identity
-
-                if identity.workspace_id not in state.workspaces:
-                    state.workspaces[identity.workspace_id] = StudioWorkspace(
-                        id=identity.workspace_id,
-                        identity_id=identity.id,
-                        name=f"{identity.display_name}'s Studio",
-                    )
-
-            holder["identity"] = identity.model_copy(deep=True)
-
-        await self.store.mutate(mutation)
-        return holder["identity"]
 
     def _resolve_privileged_email_flags(self, email: str) -> Dict[str, bool]:
-        normalized_email = (email or "").strip().lower()
-        owner_emails = set(self.settings.owner_emails_list) | _FOUNDER_EMAILS
-        root_admin_emails = set(self.settings.root_admin_emails_list) | _FOUNDER_EMAILS
-        is_root_admin = normalized_email in root_admin_emails or normalized_email in owner_emails
-        is_owner = normalized_email in owner_emails or is_root_admin
-        return {
-            "is_owner": is_owner,
-            "is_root_admin": is_root_admin,
-        }
+        return self.identity._resolve_privileged_email_flags(email=email)
+
 
     def _apply_privileged_identity_overrides(self, identity: OmniaIdentity) -> None:
-        identity.plan = IdentityPlan.PRO
-        identity.owner_mode = True
-        identity.root_admin = True
-        identity.local_access = True
-        identity.subscription_status = SubscriptionStatus.ACTIVE
-        identity.monthly_credits_remaining = 999999999
-        identity.monthly_credit_allowance = 999999999
-        identity.extra_credits = 999999999
+        return self.identity._apply_privileged_identity_overrides(identity=identity)
+
 
     def _has_unlimited_generation_access(self, identity: OmniaIdentity) -> bool:
         return identity.owner_mode or identity.root_admin or identity.local_access
 
     async def _resolve_billing_state_for_identity(self, identity: OmniaIdentity) -> BillingStateSnapshot:
-        def query(state: StudioState) -> BillingStateSnapshot:
-            return self._resolve_billing_state_locked(state, identity)
+        return await self.billing._resolve_billing_state_for_identity(identity=identity)
 
-        return await self.store.read(query)
 
     def _resolve_billing_state_locked(self, state: StudioState, identity: OmniaIdentity) -> BillingStateSnapshot:
-        jobs = [
-            job
-            for job in state.generations.values()
-            if job.identity_id == identity.id
-        ]
-        return resolve_billing_state(
-            identity=identity,
-            generation_jobs=jobs,
-            plan_catalog=PLAN_CATALOG,
-        )
+        return self.billing._resolve_billing_state_locked(state=state, identity=identity)
+
 
     def _serialize_credit_snapshot(self, billing_state: BillingStateSnapshot) -> Dict[str, Any]:
-        return billing_state.credits_dict()
+        return self.billing._serialize_credit_snapshot(billing_state=billing_state)
+
 
     def _serialize_identity_payload(self, identity: OmniaIdentity) -> Dict[str, Any]:
-        payload = identity.model_dump(
-            mode="json",
-            exclude={"flag_count", "last_flagged_at", "last_flagged_reason"},
-        )
-        payload["manual_review_state"] = identity.manual_review_state.value
-        return payload
+        return self.identity._serialize_identity_payload(identity=identity)
+
 
     def _serialize_guest_identity_payload(self) -> Dict[str, Any]:
-        return {
-            "id": "guest",
-            "email": "",
-            "display_name": "Guest",
-            "username": None,
-            "plan": IdentityPlan.GUEST.value,
-            "owner_mode": False,
-            "root_admin": False,
-            "local_access": False,
-            "accepted_terms": False,
-            "accepted_privacy": False,
-            "accepted_usage_policy": False,
-            "marketing_opt_in": False,
-            "workspace_id": None,
-            "temp_block_until": None,
-            "manual_review_state": ManualReviewState.NONE.value,
-        }
+        return self.identity._serialize_guest_identity_payload()
+
 
     def _normalize_reason_code(self, value: str | None, *, fallback: str) -> str:
         normalized = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
@@ -1216,8 +687,8 @@ class StudioService:
         level: int = logging.INFO,
         **fields: Any,
     ) -> None:
-        payload = {"event": event, **fields}
-        logger.log(level, "security_event %s", json.dumps(payload, ensure_ascii=True, sort_keys=True))
+        return self.identity._log_security_event(event=event, level=level)
+
 
     def _apply_identity_moderation_flag_locked(
         self,
@@ -1226,90 +697,25 @@ class StudioService:
         moderation_result: ModerationResult,
         reason_code: str,
     ) -> Dict[str, Any]:
-        now = utc_now()
-        strike_delta = 2 if moderation_result == ModerationResult.HARD_BLOCK else 1
-        if identity.last_flagged_at is None or (now - identity.last_flagged_at) > _MODERATION_RESET_WINDOW:
-            next_count = strike_delta
-        else:
-            next_count = max(identity.flag_count, 0) + strike_delta
+        return self.identity._apply_identity_moderation_flag_locked(identity=identity, moderation_result=moderation_result, reason_code=reason_code)
 
-        identity.flag_count = next_count
-        identity.last_flagged_at = now
-        identity.last_flagged_reason = reason_code
-
-        temp_block_applied = False
-        manual_review_applied = False
-        block_until: datetime | None = None
-
-        if next_count >= 5:
-            block_until = now + _TEMP_BLOCK_AFTER_FIVE_STRIKES
-            manual_review_applied = identity.manual_review_state != ManualReviewState.REQUIRED
-            identity.manual_review_state = ManualReviewState.REQUIRED
-        elif next_count >= 3:
-            block_until = now + _TEMP_BLOCK_AFTER_THREE_STRIKES
-
-        if block_until is not None and (
-            identity.temp_block_until is None or identity.temp_block_until < block_until
-        ):
-            identity.temp_block_until = block_until
-            temp_block_applied = True
-
-        return {
-            "strike_delta": strike_delta,
-            "flag_count": next_count,
-            "reason_code": reason_code,
-            "temp_block_until": identity.temp_block_until,
-            "temp_block_applied": temp_block_applied,
-            "manual_review_applied": manual_review_applied,
-            "manual_review_state": identity.manual_review_state.value,
-        }
 
     async def record_generation_moderation_block(
         self,
         identity_id: str,
         moderation_result: ModerationResult,
         reason: str | None,
+        *,
+        prompt: str | None = None,
     ) -> None:
-        reason_code = self._normalize_moderation_reason(reason, moderation_result)
-        holder: Dict[str, Any] = {}
-
-        def mutation(state: StudioState) -> None:
-            identity = state.identities.get(identity_id)
-            if identity is None:
-                return
-            result = self._apply_identity_moderation_flag_locked(
-                identity,
-                moderation_result=moderation_result,
-                reason_code=reason_code,
-            )
-            state.identities[identity.id] = identity
-            holder.update(result)
-
-        await self.store.mutate(mutation)
-        self._log_security_event(
-            "generation_moderation_block",
-            level=logging.WARNING,
+        await self.identity.record_generation_moderation_block(identity_id=identity_id, moderation_result=moderation_result, reason=reason)
+        await self._record_prompt_memory_signal(
             identity_id=identity_id,
-            moderation_result=moderation_result.value,
-            reason_code=reason_code,
-            strike_delta=holder.get("strike_delta", 0),
-            flag_count=holder.get("flag_count", 0),
+            prompt=(prompt or reason or moderation_result.value),
+            improved=False,
+            flagged=True,
         )
-        if holder.get("temp_block_applied"):
-            self._log_security_event(
-                "identity_temp_blocked",
-                level=logging.WARNING,
-                identity_id=identity_id,
-                reason_code=reason_code,
-                temp_block_until=holder["temp_block_until"].isoformat() if holder.get("temp_block_until") else None,
-            )
-        if holder.get("manual_review_applied"):
-            self._log_security_event(
-                "identity_manual_review_required",
-                level=logging.WARNING,
-                identity_id=identity_id,
-                reason_code=reason_code,
-            )
+
 
     def _assert_identity_action_allowed(
         self,
@@ -1318,23 +724,8 @@ class StudioService:
         action_code: str,
         action_label: str,
     ) -> None:
-        if identity.manual_review_state == ManualReviewState.REQUIRED:
-            self._log_security_event(
-                "identity_manual_review_required",
-                level=logging.WARNING,
-                identity_id=identity.id,
-                action=action_code,
-            )
-            raise PermissionError(f"Account is pending manual review before {action_label}.")
-        if identity.temp_block_until and identity.temp_block_until > utc_now():
-            self._log_security_event(
-                "identity_temp_blocked",
-                level=logging.WARNING,
-                identity_id=identity.id,
-                action=action_code,
-                temp_block_until=identity.temp_block_until.isoformat(),
-            )
-            raise PermissionError(f"Account is temporarily blocked from {action_label}.")
+        return self.identity._assert_identity_action_allowed(identity=identity, action_code=action_code, action_label=action_label)
+
 
     def serialize_identity(
         self,
@@ -1342,18 +733,8 @@ class StudioService:
         *,
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
-        resolved_billing_state = billing_state or resolve_billing_state(
-            identity=identity,
-            generation_jobs=(),
-            plan_catalog=PLAN_CATALOG,
-        )
-        return {
-            "guest": False,
-            "identity": self._serialize_identity_payload(identity),
-            "credits": self._serialize_credit_snapshot(resolved_billing_state),
-            "plan": PLAN_CATALOG[resolved_billing_state.effective_plan].model_dump(mode="json"),
-            "entitlements": self.serialize_entitlements(identity, billing_state=resolved_billing_state),
-        }
+        return self.identity.serialize_identity(identity=identity, billing_state=billing_state)
+
 
     def serialize_entitlements(
         self,
@@ -1361,11 +742,8 @@ class StudioService:
         *,
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
-        return resolve_entitlements(
-            identity=identity,
-            plan_catalog=PLAN_CATALOG,
-            billing_state=billing_state,
-        ).to_dict()
+        return self.identity.serialize_entitlements(identity=identity, billing_state=billing_state)
+
 
     def serialize_usage_summary(
         self,
@@ -1373,45 +751,16 @@ class StudioService:
         *,
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
-        resolved_billing_state = billing_state or resolve_billing_state(
-            identity=identity,
-            generation_jobs=(),
-            plan_catalog=PLAN_CATALOG,
-        )
-        allowance = max(resolved_billing_state.monthly_allowance, 1)
-        remaining = resolved_billing_state.gross_remaining
-        consumed = max(allowance - resolved_billing_state.monthly_remaining, 0)
-        progress = max(0, min(100, round((consumed / allowance) * 100)))
-        next_reset = (
-            identity.last_credit_refresh_at.astimezone(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            + timedelta(days=32)
-        ).replace(day=1)
-        return {
-            "plan_label": PLAN_CATALOG[resolved_billing_state.effective_plan].label,
-            "credits_remaining": remaining,
-            "allowance": allowance,
-            "reset_at": next_reset.isoformat(),
-            "progress_percent": progress,
-            "gross_remaining": resolved_billing_state.gross_remaining,
-            "reserved_total": resolved_billing_state.reserved_total,
-            "available_to_spend": resolved_billing_state.available_to_spend,
-            "monthly_remaining": resolved_billing_state.monthly_remaining,
-            "extra_credits": resolved_billing_state.extra_credits,
-            "spend_order": resolved_billing_state.spend_order,
-            "unlimited": resolved_billing_state.unlimited,
-        }
+        return self.identity.serialize_usage_summary(identity=identity, billing_state=billing_state)
+
 
     def _initialize_state_locked(self, state: StudioState) -> None:
-        self._migrate_identity_visibility_defaults_locked(state)
-        self._backfill_posts_locked(state)
-        self._normalize_public_posts_locked(state)
+        return self.identity._initialize_state_locked(state=state)
+
 
     def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
-        now = utc_now()
-        for identity in state.identities.values():
-            if identity.default_visibility == Visibility.PUBLIC:
-                identity.default_visibility = Visibility.PRIVATE
-                identity.updated_at = now
+        return self.identity._migrate_identity_visibility_defaults_locked(state=state)
+
 
     def _backfill_posts_locked(self, state: StudioState) -> None:
         for generation in state.generations.values():
@@ -1487,15 +836,8 @@ class StudioService:
                 post.updated_at = now
 
     def get_public_plan_payload(self) -> Dict[str, Any]:
-        return {
-            "plans": [plan.model_dump(mode="json") for plan in PLAN_CATALOG.values() if plan.id != IdentityPlan.GUEST],
-            "top_ups": [
-                {"kind": kind.value, **meta}
-                for kind, meta in CHECKOUT_CATALOG.items()
-                if meta["plan"] is None
-            ],
-            "featured_plan": IdentityPlan.PRO.value,
-        }
+        return self.identity.get_public_plan_payload()
+
 
     def _post_preview_assets(
         self,
@@ -1564,7 +906,18 @@ class StudioService:
         share_id: Optional[str] = None,
         share_token: Optional[str] = None,
         public_preview: bool = False,
+        allow_clean_export: bool = False,
     ) -> Dict[str, Any]:
+        protection_state = self._asset_protection_state(asset)
+        library_state = self._asset_library_state(asset)
+        preview_url = self.build_asset_delivery_url(
+            asset.id,
+            variant="preview",
+            identity_id=identity_id,
+            share_id=share_id,
+            share_token=share_token,
+            public_preview=public_preview,
+        )
         payload = asset.model_dump(
             mode="json",
             exclude={"local_path"},
@@ -1580,6 +933,8 @@ class StudioService:
                 "clean_storage_key",
                 "clean_path",
                 "clean_mime_type",
+                "blocked_preview_storage_key",
+                "blocked_preview_path",
                 "protection_signature",
             }
         }
@@ -1599,6 +954,26 @@ class StudioService:
             share_token=share_token,
             public_preview=public_preview,
         ) if self._asset_variant_exists(asset, "thumbnail") else None
+        payload["preview_url"] = preview_url
+        payload["blocked_preview_url"] = self.build_asset_delivery_url(
+            asset.id,
+            variant="blocked",
+            identity_id=identity_id,
+            share_id=share_id,
+            share_token=share_token,
+            public_preview=public_preview,
+        ) if protection_state == "blocked" else None
+        payload["display_title"] = self._asset_display_title(asset)
+        payload["derived_tags"] = self._asset_derived_tags(asset)
+        payload["library_state"] = library_state
+        payload["protection_state"] = protection_state
+        payload["can_open"] = library_state != "blocked" and self._asset_has_renderable_variant(asset)
+        payload["can_export_clean"] = bool(
+            allow_clean_export
+            and identity_id == asset.identity_id
+            and protection_state != "blocked"
+            and self._asset_variant_exists(asset, "clean")
+        )
         return payload
 
     def serialize_assets(
@@ -1609,6 +984,7 @@ class StudioService:
         share_id: Optional[str] = None,
         share_token: Optional[str] = None,
         public_preview: bool = False,
+        allow_clean_export: bool = False,
     ) -> List[Dict[str, Any]]:
         return [
             self.serialize_asset(
@@ -1617,9 +993,50 @@ class StudioService:
                 share_id=share_id,
                 share_token=share_token,
                 public_preview=public_preview,
+                allow_clean_export=allow_clean_export,
             )
             for asset in assets
         ]
+
+    def _asset_display_title(self, asset: MediaAsset) -> str:
+        stored = asset.metadata.get("display_title")
+        if isinstance(stored, str) and stored.strip():
+            return stored.strip()[:72]
+        generated = asset.metadata.get("generation_title")
+        if isinstance(generated, str) and generated.strip():
+            return generated.strip()[:72]
+        return derive_display_title(asset.prompt, fallback=asset.title or "Untitled image set")
+
+    def _asset_derived_tags(self, asset: MediaAsset) -> list[str]:
+        stored = asset.metadata.get("derived_tags")
+        if isinstance(stored, list):
+            return [str(tag).strip() for tag in stored if str(tag).strip()][:8]
+        negative_prompt = str(asset.metadata.get("negative_prompt") or "")
+        return derive_prompt_tags(asset.prompt, negative_prompt)
+
+    def _asset_protection_state(self, asset: MediaAsset) -> str:
+        raw = str(asset.metadata.get("protection_state") or "").strip().lower()
+        if raw in {"protected", "blocked"}:
+            return raw
+        return "protected"
+
+    def _asset_library_state(self, asset: MediaAsset) -> str:
+        raw = str(asset.metadata.get("library_state") or "").strip().lower()
+        if raw in {"ready", "blocked", "failed", "generating"}:
+            return raw
+        if self._asset_protection_state(asset) == "blocked":
+            return "blocked"
+        return "ready"
+
+    def _generation_library_state(self, job: GenerationJob) -> str:
+        normalized = JobStatus.coerce(job.status)
+        if normalized in {JobStatus.QUEUED, JobStatus.RUNNING}:
+            return "generating"
+        if normalized == JobStatus.SUCCEEDED:
+            return "ready"
+        if (job.error_code or "").strip().lower() in {"policy_blocked", "safety_block", "policy_review"}:
+            return "blocked"
+        return "failed"
 
     def serialize_health_payload(self, payload: Dict[str, Any], detail: bool) -> Dict[str, Any]:
         if detail:
@@ -1698,7 +1115,14 @@ class StudioService:
             share_token=share_token,
             public_preview=public_preview,
         )
-        endpoint = "thumbnail" if variant == "thumbnail" else "content"
+        if variant == "thumbnail":
+            endpoint = "thumbnail"
+        elif variant == "preview":
+            endpoint = "preview"
+        elif variant == "blocked":
+            endpoint = "blocked-preview"
+        else:
+            endpoint = "content"
         return f"/v1/assets/{asset_id}/{endpoint}?token={token}"
 
     def serialize_generation_for_identity(self, job: GenerationJob, identity_id: str) -> Dict[str, Any]:
@@ -1745,7 +1169,9 @@ class StudioService:
         return {
             "job_id": job.id,
             "title": job.title,
+            "display_title": derive_display_title(job.prompt_snapshot.prompt, fallback=job.title),
             "status": job.status.value,
+            "library_state": self._generation_library_state(job),
             "project_id": job.project_id,
             "provider": job.provider,
             "provider_rollout_tier": job.provider_rollout_tier,
@@ -1758,6 +1184,7 @@ class StudioService:
             "prompt_profile": job.prompt_profile,
             "queue_priority": job.queue_priority,
             "model": job.model,
+            "display_model_label": creative_profile.label,
             "creative_profile": creative_profile.model_dump(mode="json"),
             "render_experience": render_experience,
             "prompt_snapshot": job.prompt_snapshot.model_dump(mode="json"),
@@ -1854,9 +1281,21 @@ class StudioService:
         if not self._asset_variant_exists(asset, "clean"):
             raise FileNotFoundError("Clean export is not available for this asset")
 
-        return await self._resolve_asset_variant_delivery(asset, "clean")
+        return await self._resolve_stored_asset_variant_delivery(asset, "clean")
 
     async def _resolve_asset_variant_delivery(self, asset: MediaAsset, variant: str) -> ResolvedAssetDelivery:
+        if variant == "preview":
+            if self._asset_library_state(asset) == "blocked":
+                return await self._resolve_blocked_asset_preview_delivery(asset)
+            fallback_variant = "thumbnail" if self._asset_variant_exists(asset, "thumbnail") else "content"
+            return await self._resolve_stored_asset_variant_delivery(asset, fallback_variant)
+        if variant == "blocked":
+            return await self._resolve_blocked_asset_preview_delivery(asset)
+        if self._asset_library_state(asset) == "blocked":
+            raise PermissionError("Blocked assets can only be viewed through protected preview")
+        return await self._resolve_stored_asset_variant_delivery(asset, variant)
+
+    async def _resolve_stored_asset_variant_delivery(self, asset: MediaAsset, variant: str) -> ResolvedAssetDelivery:
         storage_key = self._resolve_asset_variant_storage_key(asset, variant)
         storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
         if storage_key and storage_kind:
@@ -1877,6 +1316,51 @@ class StudioService:
             media_type=self._resolve_asset_variant_mime_type(asset, variant, path.name),
             local_path=path,
         )
+
+    async def _resolve_blocked_asset_preview_delivery(self, asset: MediaAsset) -> ResolvedAssetDelivery:
+        if not self._asset_has_renderable_variant(asset):
+            raise FileNotFoundError("Blocked preview is not available for this asset")
+
+        source_variant = "thumbnail" if self._asset_variant_exists(asset, "thumbnail") else "content"
+        source_delivery = await self._resolve_stored_asset_variant_delivery(asset, source_variant)
+        if source_delivery.local_path is not None:
+            source_bytes = await asyncio.to_thread(source_delivery.local_path.read_bytes)
+        else:
+            source_bytes = source_delivery.content or b""
+        if not source_bytes:
+            raise FileNotFoundError("Blocked preview is not available for this asset")
+
+        blocked_bytes = await asyncio.to_thread(self._build_blocked_preview_bytes, source_bytes)
+        return ResolvedAssetDelivery(
+            filename=f"{asset.id}_blocked_preview.jpg",
+            media_type="image/jpeg",
+            content=blocked_bytes,
+        )
+
+    def _build_blocked_preview_bytes(self, source_bytes: bytes) -> bytes:
+        with Image.open(io.BytesIO(source_bytes)) as image:
+            preview = image.convert("RGB")
+            preview = preview.filter(ImageFilter.GaussianBlur(radius=18))
+            overlay = Image.new("RGBA", preview.size, (9, 10, 16, 0))
+            draw = ImageDraw.Draw(overlay)
+            width, height = preview.size
+            panel_height = max(58, int(height * 0.18))
+            draw.rectangle((0, height - panel_height, width, height), fill=(6, 7, 11, 170))
+            text = "BLOCKED PREVIEW"
+            font_size = max(20, min(38, int(min(width, height) * 0.05)))
+            try:
+                from PIL import ImageFont
+
+                font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+            except Exception:
+                from PIL import ImageFont
+
+                font = ImageFont.load_default()
+            draw.text((24, height - panel_height + 16), text, fill=(255, 255, 255, 220), font=font)
+            composed = Image.alpha_composite(preview.convert("RGBA"), overlay).convert("RGB")
+            buffer = io.BytesIO()
+            composed.save(buffer, format="JPEG", quality=88)
+            return buffer.getvalue()
 
     def _assert_share_record_matches_asset(self, asset: MediaAsset, share: ShareLink) -> None:
         if share.revoked_at is not None:
@@ -1957,6 +1441,11 @@ class StudioService:
             if clean_path:
                 return Path(str(clean_path))
             return None
+        if variant == "blocked":
+            blocked_path = asset.metadata.get("blocked_preview_path")
+            if blocked_path:
+                return Path(str(blocked_path))
+            return None
 
         thumb_path = asset.metadata.get("thumbnail_path")
         if thumb_path:
@@ -1974,9 +1463,13 @@ class StudioService:
             return asset.metadata.get("storage_key")
         if variant == "clean":
             return asset.metadata.get("clean_storage_key")
+        if variant == "blocked":
+            return asset.metadata.get("blocked_preview_storage_key")
         return asset.metadata.get("thumbnail_storage_key")
 
     def _resolve_asset_variant_mime_type(self, asset: MediaAsset, variant: str, name: str) -> str:
+        if variant == "blocked":
+            return "image/jpeg"
         if variant == "clean":
             explicit_clean = asset.metadata.get("clean_mime_type")
             if explicit_clean:
@@ -1993,6 +1486,10 @@ class StudioService:
         return "image/png"
 
     def _asset_variant_exists(self, asset: MediaAsset, variant: str) -> bool:
+        if variant == "preview":
+            return self._asset_has_renderable_variant(asset)
+        if variant == "blocked":
+            return self._asset_has_renderable_variant(asset)
         if self._resolve_asset_variant_storage_key(asset, variant):
             return True
         path = self._resolve_asset_variant_path(asset, variant)
@@ -2138,8 +1635,18 @@ class StudioService:
         if self._asset_variant_exists(asset, "thumbnail"):
             await self._delete_asset_variant(asset, "thumbnail")
 
-    async def list_projects(self, identity_id: str, surface: Optional[Literal["compose", "chat"]] = None) -> List[Project]:
-        return await self.store.list_projects_for_identity(identity_id, surface=surface)
+    async def list_projects(
+        self,
+        identity_id: str,
+        surface: Optional[Literal["compose", "chat"]] = None,
+        *,
+        include_system_managed: bool = False,
+    ) -> List[Project]:
+        return await self.store.list_projects_for_identity(
+            identity_id,
+            surface=surface,
+            include_system_managed=include_system_managed,
+        )
 
     async def create_project(
         self,
@@ -2147,6 +1654,8 @@ class StudioService:
         title: str,
         description: str = "",
         surface: str = "compose",
+        *,
+        system_managed: bool = False,
     ) -> Project:
         identity = await self.get_identity(identity_id)
         project = create_project_record(
@@ -2155,9 +1664,27 @@ class StudioService:
             title=title,
             description=description,
             surface=surface,
+            system_managed=system_managed,
         )
         await self.store.save_model("projects", project)
         return project
+
+    async def _get_or_create_draft_project(self, identity_id: str, *, surface: str = "compose") -> Project:
+        projects = await self.list_projects(
+            identity_id,
+            surface=surface,
+            include_system_managed=True,
+        )
+        for project in projects:
+            if project.system_managed and project.surface == surface:
+                return project
+        return await self.create_project(
+            identity_id,
+            title="Draft project",
+            description="System-managed draft project",
+            surface=surface,
+            system_managed=True,
+        )
 
     async def _resolve_generation_project(
         self,
@@ -2191,14 +1718,9 @@ class StudioService:
                 )
                 return fallback_project
 
-            fallback_project = await self.create_project(
-                identity.id,
-                "New image set",
-                "Recovered after a stale project reference",
-                "compose",
-            )
+            fallback_project = await self._get_or_create_draft_project(identity.id, surface="compose")
             logger.warning(
-                "Recovered missing generation project %s for identity %s by creating compose project %s",
+                "Recovered missing generation project %s for identity %s using draft compose project %s",
                 requested_project_id,
                 identity.id,
                 fallback_project.id,
@@ -2209,48 +1731,34 @@ class StudioService:
         project = await self.require_owned_model("projects", project_id, Project, identity_id)
         generations = await self.list_generations(identity_id, project_id=project_id)
         assets = await self.list_assets(identity_id, project_id=project_id)
+        allow_clean_export = await self.can_identity_clean_export(identity_id)
         return build_project_detail_payload(
             project=project,
             generations=generations,
             assets=assets,
             identity_id=identity_id,
             serialize_generation=self.serialize_generation_for_identity,
-            serialize_assets=self.serialize_assets,
+            serialize_assets=lambda values, **kwargs: self.serialize_assets(
+                values,
+                allow_clean_export=allow_clean_export,
+                **kwargs,
+            ),
         )
 
     async def list_conversations(self, identity_id: str) -> List[ChatConversation]:
-        return await self.store.list_conversations_for_identity(identity_id)
+        return await self.chat.list_conversations(identity_id=identity_id)
 
     async def create_conversation(self, identity_id: str, title: str = "", model: str = "studio-assist") -> ChatConversation:
-        identity = await self.get_identity(identity_id)
-        conversation = create_conversation_record(
-            workspace_id=identity.workspace_id,
-            identity_id=identity_id,
-            title=title,
-            model=model,
-        )
-        await self.store.save_model("conversations", conversation)
-        return conversation
+        return await self.chat.create_conversation(identity_id=identity_id, title=title, model=model)
 
     async def get_conversation(self, identity_id: str, conversation_id: str) -> Dict[str, Any]:
-        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-        messages = await self.list_conversation_messages(identity_id, conversation_id)
-        return build_conversation_detail_payload(conversation=conversation, messages=messages)
+        return await self.chat.get_conversation(identity_id=identity_id, conversation_id=conversation_id)
 
     async def list_conversation_messages(self, identity_id: str, conversation_id: str) -> List[ChatMessage]:
-        await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-        return await self.store.list_chat_messages_for_conversation(
-            identity_id=identity_id,
-            conversation_id=conversation_id,
-        )
+        return await self.chat.list_conversation_messages(identity_id=identity_id, conversation_id=conversation_id)
 
     async def delete_conversation(self, identity_id: str, conversation_id: str) -> None:
-        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-
-        def mutation(state: StudioState) -> None:
-            remove_conversation_from_state(state=state, conversation_id=conversation.id)
-
-        await self.store.mutate(mutation)
+        return await self.chat.delete_conversation(identity_id=identity_id, conversation_id=conversation_id)
 
     async def set_chat_message_feedback(
         self,
@@ -2259,25 +1767,7 @@ class StudioService:
         message_id: str,
         feedback: ChatFeedback | None,
     ) -> ChatMessage:
-        await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-        message = await self.require_owned_model("chat_messages", message_id, ChatMessage, identity_id)
-        if message.conversation_id != conversation_id:
-            raise KeyError("Message not found")
-        if message.role != ChatRole.ASSISTANT:
-            raise ValueError("Feedback can only be applied to assistant messages")
-
-        def mutation(state: StudioState) -> None:
-            apply_message_feedback_to_state(
-                state=state,
-                message_id=message.id,
-                feedback=feedback,
-            )
-
-        await self.store.mutate(mutation)
-        updated = await self.store.get_model("chat_messages", message.id, ChatMessage)
-        if updated is None:
-            raise KeyError("Message not found")
-        return updated
+        return await self.chat.set_chat_message_feedback(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id, feedback=feedback)
 
     async def edit_chat_message(
         self,
@@ -2289,72 +1779,7 @@ class StudioService:
         model: str | None = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        conversation, messages, user_message, assistant_message = await self._resolve_latest_editable_turn(
-            identity_id=identity_id,
-            conversation_id=conversation_id,
-            user_message_id=message_id,
-        )
-        identity = await self.get_identity(identity_id)
-        attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
-        resolved_mode = resolve_chat_mode(model or conversation.model)
-        billing_state = await self._resolve_billing_state_for_identity(identity)
-        entitlements = ensure_chat_request_allowed(
-            identity=identity,
-            mode=resolved_mode,
-            attachments=attachment_models,
-            plan_catalog=PLAN_CATALOG,
-            billing_state=billing_state,
-        )
-        sanitized_content = content.strip()
-        if not sanitized_content and not attachment_models:
-            raise ValueError("Message content or an attachment is required")
-
-        history = self._messages_before_turn(messages, user_message.id)
-        rebuilt_assistant = await self._build_assistant_message(
-            identity=identity,
-            conversation=conversation,
-            history=history,
-            content=sanitized_content,
-            attachments=attachment_models,
-            requested_model=model,
-            parent_message_id=user_message.id,
-            premium_chat=entitlements.premium_chat,
-        )
-
-        def mutation(state: StudioState) -> None:
-            now = utc_now()
-            current_user = state.chat_messages[user_message.id]
-            current_assistant = state.chat_messages[assistant_message.id]
-            push_message_revision(message=current_user, now=now)
-            push_message_revision(message=current_assistant, now=now)
-            current_user.content = sanitized_content
-            current_user.attachments = attachment_models
-            current_assistant.content = rebuilt_assistant.content
-            current_assistant.attachments = rebuilt_assistant.attachments
-            current_assistant.suggested_actions = rebuilt_assistant.suggested_actions
-            current_assistant.metadata = {
-                **rebuilt_assistant.metadata,
-                "revision_history": current_assistant.metadata.get("revision_history", []),
-            }
-            current_assistant.parent_message_id = user_message.id
-            apply_message_pair_edit_to_state(
-                state=state,
-                conversation_id=conversation.id,
-                user_message=current_user,
-                assistant_message=current_assistant,
-                now=now,
-                model=model,
-            )
-
-        await self.store.mutate(mutation)
-        updated_conversation = await self.require_owned_model("conversations", conversation.id, ChatConversation, identity_id)
-        updated_user = await self.require_owned_model("chat_messages", user_message.id, ChatMessage, identity_id)
-        updated_assistant = await self.require_owned_model("chat_messages", assistant_message.id, ChatMessage, identity_id)
-        return build_message_action_payload(
-            conversation=updated_conversation,
-            user_message=updated_user,
-            assistant_message=updated_assistant,
-        )
+        return await self.chat.edit_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id, content=content)
 
     async def regenerate_chat_message(
         self,
@@ -2362,63 +1787,7 @@ class StudioService:
         conversation_id: str,
         message_id: str,
     ) -> Dict[str, Any]:
-        conversation, messages, user_message, assistant_message = await self._resolve_latest_editable_turn(
-            identity_id=identity_id,
-            conversation_id=conversation_id,
-            assistant_message_id=message_id,
-        )
-        identity = await self.get_identity(identity_id)
-        resolved_mode = resolve_chat_mode(conversation.model)
-        billing_state = await self._resolve_billing_state_for_identity(identity)
-        entitlements = ensure_chat_request_allowed(
-            identity=identity,
-            mode=resolved_mode,
-            attachments=user_message.attachments,
-            plan_catalog=PLAN_CATALOG,
-            billing_state=billing_state,
-        )
-        history = self._messages_before_turn(messages, user_message.id)
-        rebuilt_assistant = await self._build_assistant_message(
-            identity=identity,
-            conversation=conversation,
-            history=history,
-            content=user_message.content,
-            attachments=user_message.attachments,
-            requested_model=conversation.model,
-            parent_message_id=user_message.id,
-            premium_chat=entitlements.premium_chat,
-        )
-
-        def mutation(state: StudioState) -> None:
-            now = utc_now()
-            current_user = state.chat_messages[user_message.id]
-            current_assistant = state.chat_messages[assistant_message.id]
-            push_message_revision(message=current_assistant, now=now)
-            current_assistant.content = rebuilt_assistant.content
-            current_assistant.attachments = rebuilt_assistant.attachments
-            current_assistant.suggested_actions = rebuilt_assistant.suggested_actions
-            current_assistant.metadata = {
-                **rebuilt_assistant.metadata,
-                "revision_history": current_assistant.metadata.get("revision_history", []),
-            }
-            current_assistant.parent_message_id = user_message.id
-            apply_message_pair_edit_to_state(
-                state=state,
-                conversation_id=conversation.id,
-                user_message=current_user,
-                assistant_message=current_assistant,
-                now=now,
-            )
-
-        await self.store.mutate(mutation)
-        updated_conversation = await self.require_owned_model("conversations", conversation.id, ChatConversation, identity_id)
-        updated_user = await self.require_owned_model("chat_messages", user_message.id, ChatMessage, identity_id)
-        updated_assistant = await self.require_owned_model("chat_messages", assistant_message.id, ChatMessage, identity_id)
-        return build_message_action_payload(
-            conversation=updated_conversation,
-            user_message=updated_user,
-            assistant_message=updated_assistant,
-        )
+        return await self.chat.regenerate_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id)
 
     async def revert_chat_message(
         self,
@@ -2426,43 +1795,7 @@ class StudioService:
         conversation_id: str,
         message_id: str,
     ) -> Dict[str, Any]:
-        conversation, _, user_message, assistant_message = await self._resolve_latest_editable_turn(
-            identity_id=identity_id,
-            conversation_id=conversation_id,
-            user_message_id=message_id,
-        )
-
-        def mutation(state: StudioState) -> None:
-            now = utc_now()
-            current_user = state.chat_messages[user_message.id]
-            current_assistant = state.chat_messages[assistant_message.id]
-            user_revision = pop_message_revision(message=current_user)
-            if user_revision is None:
-                raise ValueError("No previous revision is available for this turn")
-            assistant_revision = pop_message_revision(message=current_assistant)
-            if assistant_revision is None:
-                raise ValueError("No previous revision is available for this turn")
-            target_history_depth = len(current_user.metadata.get("revision_history", []))
-            while len(current_assistant.metadata.get("revision_history", [])) > target_history_depth:
-                if pop_message_revision(message=current_assistant) is None:
-                    break
-            apply_message_pair_edit_to_state(
-                state=state,
-                conversation_id=conversation.id,
-                user_message=current_user,
-                assistant_message=current_assistant,
-                now=now,
-            )
-
-        await self.store.mutate(mutation)
-        updated_conversation = await self.require_owned_model("conversations", conversation.id, ChatConversation, identity_id)
-        updated_user = await self.require_owned_model("chat_messages", user_message.id, ChatMessage, identity_id)
-        updated_assistant = await self.require_owned_model("chat_messages", assistant_message.id, ChatMessage, identity_id)
-        return build_message_action_payload(
-            conversation=updated_conversation,
-            user_message=updated_user,
-            assistant_message=updated_assistant,
-        )
+        return await self.chat.revert_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id)
 
     async def send_chat_message(
         self,
@@ -2472,65 +1805,7 @@ class StudioService:
         model: str | None = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        identity = await self.get_identity(identity_id)
-        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-        messages = await self.list_conversation_messages(identity_id, conversation_id)
-        attachment_models = [ChatAttachment.model_validate(item) for item in (attachments or [])]
-        resolved_mode = resolve_chat_mode(model or conversation.model)
-        billing_state = await self._resolve_billing_state_for_identity(identity)
-        entitlements = ensure_chat_request_allowed(
-            identity=identity,
-            mode=resolved_mode,
-            attachments=attachment_models,
-            plan_catalog=PLAN_CATALOG,
-            billing_state=billing_state,
-        )
-        user_turn_count = count_user_turns(messages)
-        message_limit = entitlements.chat_message_limit
-        if message_limit and user_turn_count >= message_limit:
-            raise PermissionError(f"{PLAN_CATALOG[identity.plan].label} plan chat limit reached")
-        sanitized_content = content.strip()
-        if not sanitized_content and not attachment_models:
-            raise ValueError("Message content or an attachment is required")
-
-        user_message = ChatMessage(
-            conversation_id=conversation.id,
-            identity_id=identity.id,
-            role=ChatRole.USER,
-            content=sanitized_content,
-            attachments=attachment_models,
-        )
-        assistant_message = await self._build_assistant_message(
-            identity=identity,
-            conversation=conversation,
-            history=messages,
-            content=sanitized_content,
-            attachments=attachment_models,
-            requested_model=model,
-            parent_message_id=user_message.id,
-            premium_chat=entitlements.premium_chat,
-        )
-
-        def mutation(state: StudioState) -> None:
-            title = title_from_message(sanitized_content or conversation_seed_from_attachments(attachment_models))
-            apply_chat_exchange_to_state(
-                state=state,
-                conversation_id=conversation.id,
-                user_message=user_message,
-                assistant_message=assistant_message,
-                now=utc_now(),
-                title=title,
-                model=model,
-            )
-
-        await self.store.mutate(mutation)
-
-        updated_conversation = await self.require_owned_model("conversations", conversation.id, ChatConversation, identity_id)
-        return build_chat_exchange_payload(
-            conversation=updated_conversation,
-            user_message=user_message,
-            assistant_message=assistant_message,
-        )
+        return await self.chat.send_chat_message(identity_id=identity_id, conversation_id=conversation_id, content=content, model=model, attachments=attachments)
 
     async def _build_assistant_message(
         self,
@@ -2544,163 +1819,13 @@ class StudioService:
         parent_message_id: str,
         premium_chat: bool,
     ) -> ChatMessage:
-        resolved_mode = resolve_chat_mode(requested_model or conversation.model)
-        llm_input_content = content.strip() or build_attachment_only_request(attachments, mode=resolved_mode)
-        context = build_chat_context(
-            history=history,
-            content=llm_input_content,
-            attachments=attachments,
-        )
-        intent = detect_chat_intent(
-            content=llm_input_content,
-            attachments=attachments,
-            mode=resolved_mode,
-            context=context,
-        )
-        generation_bridge = build_chat_generation_bridge(
-            intent=intent,
-            content=llm_input_content,
-            attachments=attachments,
-            premium_chat=premium_chat,
-            context=context,
-        )
-        continuity_summary = build_chat_continuity_summary(
-            intent=intent,
-            context=context,
-            generation_bridge=generation_bridge,
-        )
-        llm_reply = await self.llm_gateway.generate_chat_reply(
-            requested_model=requested_model or conversation.model,
-            mode=resolved_mode,
-            history=history,
-            content=llm_input_content,
-            attachments=attachments,
-            premium_chat=premium_chat,
-            intent_kind=intent.kind,
-            prompt_profile=intent.prompt_profile,
-            detail_score=intent.detail_score,
-            premium_intent=intent.premium_intent,
-            recommended_workflow=intent.recommended_workflow,
-            continuity_summary=continuity_summary,
-        )
-        if llm_reply:
-            response_body = llm_reply.text
-            suggested_actions = build_chat_suggested_actions(
-                content=llm_input_content,
-                attachments=attachments,
-                mode=resolved_mode,
-                premium_chat=premium_chat,
-                context=context,
-            )
-            premium_lane_unavailable = bool(premium_chat and llm_reply.degraded)
-            response_mode = (
-                "premium_lane_unavailable"
-                if premium_lane_unavailable
-                else "live_provider_reply"
-            )
-            metadata = {
-                "provider": llm_reply.provider,
-                "model": llm_reply.model,
-                "mode": resolved_mode,
-                "prompt_tokens": llm_reply.prompt_tokens,
-                "completion_tokens": llm_reply.completion_tokens,
-                "estimated_cost_usd": llm_reply.estimated_cost_usd,
-                "used_fallback": llm_reply.used_fallback,
-                "used_llm": True,
-                "premium_chat": premium_chat,
-                "requested_quality_tier": llm_reply.requested_quality_tier,
-                "selected_quality_tier": llm_reply.selected_quality_tier,
-                "degraded": llm_reply.degraded,
-                "provider_status": "degraded" if premium_lane_unavailable else "healthy",
-                "fallback_reason": "premium_lane_unavailable" if premium_lane_unavailable else None,
-                "premium_lane_unavailable": premium_lane_unavailable,
-                "response_mode": response_mode,
-                "routing_strategy": llm_reply.routing_strategy,
-                "routing_reason": llm_reply.routing_reason,
-                "generation_bridge": generation_bridge,
-                **build_chat_metadata(intent, context=context),
-            }
-            metadata = attach_chat_experience(metadata)
-        else:
-            response_body, suggested_actions = build_chat_reply(
-                intent=intent,
-                content=llm_input_content,
-                attachments=attachments,
-                provider_unavailable=True,
-                premium_chat=premium_chat,
-                context=context,
-            )
-            suggested_actions = build_chat_suggested_actions(
-                content=llm_input_content,
-                attachments=attachments,
-                mode=resolved_mode,
-                premium_chat=premium_chat,
-                context=context,
-            )
-            logger.warning(
-                "chat_heuristic_fallback %s",
-                {
-                    "event": "chat_heuristic_fallback",
-                    "conversation_id": conversation.id,
-                    "identity_id": identity.id,
-                    "mode": resolved_mode,
-                    "intent_kind": intent.kind,
-                    "prompt_profile": intent.prompt_profile,
-                    "premium_chat": premium_chat,
-                    "routing_reason": "provider_unavailable_or_empty",
-                },
-            )
-            metadata = {
-                "provider": "heuristic",
-                "model": "studio-assist",
-                "mode": resolved_mode,
-                "estimated_cost_usd": 0.0,
-                "used_fallback": True,
-                "used_llm": False,
-                "premium_chat": premium_chat,
-                "requested_quality_tier": "premium" if premium_chat else "standard",
-                "selected_quality_tier": "degraded",
-                "degraded": True,
-                "routing_strategy": "heuristic-fallback",
-                "routing_reason": "provider_unavailable_or_empty",
-                "provider_status": "degraded",
-                "fallback_reason": "all_provider_candidates_failed",
-                "premium_lane_unavailable": premium_chat,
-                "response_mode": "degraded_fallback_reply",
-                "generation_bridge": generation_bridge,
-                **build_chat_metadata(intent, context=context),
-            }
-            metadata = attach_chat_experience(metadata)
-        return ChatMessage(
-            conversation_id=conversation.id,
-            identity_id=identity.id,
-            role=ChatRole.ASSISTANT,
-            content=response_body,
-            parent_message_id=parent_message_id,
-            suggested_actions=suggested_actions,
-            metadata=metadata,
-        )
+        return await self.chat._build_assistant_message()
 
     def _messages_before_turn(self, messages: List[ChatMessage], user_message_id: str) -> List[ChatMessage]:
-        ordered = sorted(messages, key=lambda item: item.created_at)
-        for index, message in enumerate(ordered):
-            if message.id == user_message_id:
-                return ordered[:index]
-        raise KeyError("Message not found")
+        return self.chat._messages_before_turn(messages=messages, user_message_id=user_message_id)
 
     def _find_assistant_reply_for_user(self, messages: List[ChatMessage], user_message_id: str) -> ChatMessage | None:
-        ordered = sorted(messages, key=lambda item: item.created_at)
-        for message in ordered:
-            if message.role == ChatRole.ASSISTANT and message.parent_message_id == user_message_id:
-                return message
-        for index, message in enumerate(ordered):
-            if message.id != user_message_id:
-                continue
-            for candidate in ordered[index + 1:]:
-                if candidate.role == ChatRole.ASSISTANT:
-                    return candidate
-            return None
-        return None
+        return self.chat._find_assistant_reply_for_user(messages=messages, user_message_id=user_message_id)
 
     async def _resolve_latest_editable_turn(
         self,
@@ -2710,36 +1835,16 @@ class StudioService:
         user_message_id: str | None = None,
         assistant_message_id: str | None = None,
     ) -> tuple[ChatConversation, List[ChatMessage], ChatMessage, ChatMessage]:
-        conversation = await self.require_owned_model("conversations", conversation_id, ChatConversation, identity_id)
-        messages = await self.list_conversation_messages(identity_id, conversation_id)
-        latest_user = next((message for message in reversed(messages) if message.role == ChatRole.USER), None)
-        if latest_user is None:
-            raise KeyError("Conversation has no user turns")
+        return await self.chat._resolve_latest_editable_turn()
 
-        if user_message_id is not None:
-            user_message = next((message for message in messages if message.id == user_message_id), None)
-            if user_message is None or user_message.role != ChatRole.USER:
-                raise KeyError("Message not found")
-            if user_message.id != latest_user.id:
-                raise ValueError("Only the latest user message can be edited or reverted right now")
-            assistant_message = self._find_assistant_reply_for_user(messages, user_message.id)
-            if assistant_message is None:
-                raise KeyError("Assistant reply not found")
-            return conversation, messages, user_message, assistant_message
-
-        assistant_message = next((message for message in messages if message.id == assistant_message_id), None)
-        if assistant_message is None or assistant_message.role != ChatRole.ASSISTANT:
-            raise KeyError("Message not found")
-        paired_assistant = self._find_assistant_reply_for_user(messages, latest_user.id)
-        if paired_assistant is None or paired_assistant.id != assistant_message.id:
-            raise ValueError("Only the latest assistant reply can be regenerated right now")
-        return conversation, messages, latest_user, assistant_message
 
     async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
-        return await self.store.list_generations_for_identity(identity_id, project_id=project_id)
+        return await self.generation.list_generations(identity_id=identity_id, project_id=project_id)
+
 
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
-        return await self.require_owned_model("generations", generation_id, GenerationJob, identity_id)
+        return await self.generation.get_generation(identity_id=identity_id, generation_id=generation_id)
+
 
     async def list_assets(self, identity_id: str, project_id: Optional[str] = None, include_deleted: bool = False) -> List[MediaAsset]:
         assets = await self.store.list_assets()
@@ -2752,6 +1857,199 @@ class StudioService:
         if project_id:
             filtered = [asset for asset in filtered if asset.project_id == project_id]
         return sorted(filtered, key=lambda item: item.created_at, reverse=True)
+
+    async def can_identity_clean_export(self, identity_id: str) -> bool:
+        identity = await self.get_identity(identity_id)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
+        entitlements = resolve_entitlements(
+            identity=identity,
+            plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
+        )
+        return bool(entitlements.can_clean_exports)
+
+    async def list_styles(self, identity_id: str) -> Dict[str, Any]:
+        await self.get_identity(identity_id)
+        saved_styles = await self.store.list_styles_for_identity(identity_id)
+        saved_by_source = {
+            style.source_style_id: style
+            for style in saved_styles
+            if style.source_style_id
+        }
+        catalog = [
+            serialize_style_catalog_entry(entry, saved_style=saved_by_source.get(str(entry["id"])))
+            for entry in STYLE_CATALOG
+        ]
+        my_styles = [self._serialize_style(style) for style in saved_styles]
+        return {
+            "catalog": catalog,
+            "my_styles": my_styles,
+            "favorites": [style["id"] for style in my_styles if style["favorite"]],
+        }
+
+    async def save_style(
+        self,
+        identity_id: str,
+        *,
+        title: str,
+        prompt_modifier: str,
+        description: str = "",
+        category: str = "custom",
+        preview_image_url: str | None = None,
+        source_kind: str = "saved",
+        source_style_id: str | None = None,
+        favorite: bool = False,
+    ) -> StudioStyle:
+        await self.get_identity(identity_id)
+        normalized_title = title.strip()[:72]
+        normalized_modifier = " ".join(prompt_modifier.strip().split())
+        if not normalized_title:
+            raise ValueError("Style title is required")
+        if not normalized_modifier:
+            raise ValueError("Style modifier is required")
+
+        existing_styles = await self.store.list_styles_for_identity(identity_id)
+        for existing in existing_styles:
+            if existing.source_style_id and source_style_id and existing.source_style_id == source_style_id:
+                if favorite != existing.favorite:
+                    existing.favorite = favorite
+                    existing.updated_at = utc_now()
+                    await self.store.save_model("styles", existing)
+                return existing
+
+        style = StudioStyle(
+            identity_id=identity_id,
+            title=normalized_title,
+            prompt_modifier=normalized_modifier,
+            description=description.strip(),
+            category=category.strip() or "custom",
+            preview_image_url=preview_image_url,
+            source_kind=source_kind if source_kind in {"catalog", "saved", "prompt"} else "saved",
+            source_style_id=source_style_id,
+            favorite=favorite,
+        )
+        await self.store.save_model("styles", style)
+        return style
+
+    async def update_style(
+        self,
+        identity_id: str,
+        style_id: str,
+        *,
+        favorite: bool | None = None,
+    ) -> StudioStyle:
+        style = await self.store.get_style(style_id)
+        if style is None or style.identity_id != identity_id:
+            raise KeyError("Style not found")
+        if favorite is not None:
+            style.favorite = favorite
+        style.updated_at = utc_now()
+        await self.store.save_model("styles", style)
+        return style
+
+    async def save_style_from_prompt(
+        self,
+        identity_id: str,
+        *,
+        prompt: str,
+        title: str | None = None,
+        category: str = "custom",
+    ) -> StudioStyle:
+        return await self.save_style(
+            identity_id,
+            title=title or derive_display_title(prompt, fallback="Saved Style"),
+            prompt_modifier=prompt,
+            description="Saved from Studio prompt",
+            category=category,
+            source_kind="prompt",
+            favorite=False,
+        )
+
+    def _serialize_style(self, style: StudioStyle) -> Dict[str, Any]:
+        return style.model_dump(mode="json")
+
+    async def get_prompt_memory_profile_payload(self, identity_id: str) -> Dict[str, Any]:
+        await self.get_identity(identity_id)
+        profile = await self.store.get_prompt_memory_for_identity(identity_id)
+        if profile is None:
+            profile = PromptMemoryProfile(identity_id=identity_id)
+        payload = profile.model_dump(mode="json")
+        payload["context_summary"] = build_prompt_memory_context(profile)
+        return payload
+
+    async def _record_prompt_memory_signal(
+        self,
+        *,
+        identity_id: str,
+        prompt: str,
+        negative_prompt: str = "",
+        model_id: str | None = None,
+        aspect_ratio: str | None = None,
+        improved: bool = False,
+        flagged: bool = False,
+    ) -> PromptMemoryProfile:
+        now = utc_now()
+        existing = await self.store.get_prompt_memory_for_identity(identity_id)
+        recent_hourly_generation_count = 0
+        if not improved:
+            recent_hourly_generation_count = (
+                await self.store.count_recent_generation_requests_for_identity(
+                    identity_id,
+                    since=now - timedelta(hours=1),
+                )
+            ) + 1
+        profile = update_prompt_memory_profile(
+            existing,
+            identity_id=identity_id,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            model_id=model_id,
+            aspect_ratio=aspect_ratio,
+            improved=improved,
+            flagged=flagged,
+            recent_hourly_generation_count=recent_hourly_generation_count,
+            now=now,
+        )
+        await self.store.save_model("prompt_memories", profile)
+        return profile
+
+    async def export_project(self, identity_id: str, project_id: str) -> ResolvedAssetDelivery:
+        project = await self.require_owned_model("projects", project_id, Project, identity_id)
+        assets = [
+            asset
+            for asset in await self.list_assets(identity_id, project_id=project_id, include_deleted=False)
+            if self._asset_library_state(asset) == "ready"
+        ]
+        if not assets:
+            raise ValueError("Project has no exportable images yet")
+
+        identity = await self.get_identity(identity_id)
+        billing_state = await self._resolve_billing_state_for_identity(identity)
+        ensure_clean_export_allowed(
+            identity=identity,
+            plan_catalog=PLAN_CATALOG,
+            billing_state=billing_state,
+        )
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for index, asset in enumerate(assets, start=1):
+                if not self._asset_variant_exists(asset, "clean"):
+                    continue
+                delivery = await self.resolve_clean_asset_export(asset.id, identity_id)
+                if delivery.local_path is not None:
+                    content = await asyncio.to_thread(delivery.local_path.read_bytes)
+                else:
+                    content = delivery.content or b""
+                extension = Path(delivery.filename).suffix or ".png"
+                safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", self._asset_display_title(asset).strip().lower()).strip("-")
+                archive.writestr(f"{index:02d}-{safe_name or asset.id}{extension}", content)
+
+        return ResolvedAssetDelivery(
+            filename=f"{re.sub(r'[^a-zA-Z0-9._-]+', '-', project.title.strip().lower()).strip('-') or project.id}.zip",
+            media_type="application/zip",
+            content=buffer.getvalue(),
+        )
 
     async def import_asset_from_data_url(
         self,
@@ -2892,94 +2190,8 @@ class StudioService:
         identity_id: Optional[str] = None,
         viewer_identity_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if username:
-            identity = await self.get_identity_by_username(username)
-        elif identity_id:
-            identity = await self.get_identity(identity_id)
-        else:
-            raise KeyError("Profile not found")
+        return await self.identity.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id)
 
-        posts = await self.store.list_posts()
-        assets = await self.store.list_assets()
-        generations = await self.store.list_generations()
-        assets_by_id = {asset.id: asset for asset in assets}
-        generations_by_id = {generation.id: generation for generation in generations}
-        own_profile = bool(viewer_identity_id and viewer_identity_id == identity.id)
-
-        visible_posts = []
-        for post in posts:
-            if post.identity_id != identity.id:
-                continue
-            if not own_profile and post.visibility != Visibility.PUBLIC:
-                continue
-            if (
-                not own_profile
-                and self._should_hide_post_from_public(
-                    post,
-                    identity=identity,
-                    generations_by_id=generations_by_id,
-                )
-            ):
-                continue
-            if not own_profile and not self._is_publicly_showcase_ready_post(post):
-                continue
-            if not any(
-                asset_id in assets_by_id
-                and assets_by_id[asset_id].deleted_at is None
-                and self._is_truthful_surface_asset(assets_by_id[asset_id])
-                for asset_id in post.asset_ids
-            ):
-                continue
-            visible_posts.append(post)
-
-        visible_posts.sort(key=lambda item: item.created_at, reverse=True)
-        public_post_count = len(
-            [
-                post
-                for post in posts
-                if post.identity_id == identity.id
-                and post.visibility == Visibility.PUBLIC
-                and not self._should_hide_post_from_public(
-                    post,
-                    identity=identity,
-                    generations_by_id=generations_by_id,
-                )
-                and self._is_publicly_showcase_ready_post(post)
-                and any(
-                    asset_id in assets_by_id
-                    and assets_by_id[asset_id].deleted_at is None
-                    and self._is_truthful_surface_asset(assets_by_id[asset_id])
-                    for asset_id in post.asset_ids
-                )
-            ]
-        )
-
-        billing_state = await self._resolve_billing_state_for_identity(identity) if own_profile else None
-
-        return {
-            "profile": {
-                "display_name": identity.display_name,
-                "username": identity.username or identity.email.split("@")[0],
-                "avatar_url": identity.avatar_url,
-                "bio": identity.bio,
-                "plan": identity.plan.value,
-                "default_visibility": identity.default_visibility.value,
-                "usage_summary": self.serialize_usage_summary(identity, billing_state=billing_state) if own_profile else None,
-                "public_post_count": public_post_count,
-            },
-            "posts": [
-                self.serialize_post(
-                    post,
-                    assets_by_id=assets_by_id,
-                    identities_by_id={identity.id: identity},
-                    viewer_identity_id=viewer_identity_id,
-                    public_preview=not own_profile,
-                )
-                for post in visible_posts
-            ],
-            "own_profile": own_profile,
-            "can_edit": own_profile,
-        }
 
     async def update_profile(
         self,
@@ -2989,33 +2201,8 @@ class StudioService:
         bio: Optional[str] = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
-        identity = await self.get_identity(identity_id)
+        return await self.identity.update_profile(identity_id=identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility)
 
-        def mutation(state: StudioState) -> None:
-            current = state.identities[identity.id]
-            if display_name is not None:
-                cleaned_name = display_name.strip()[:120]
-                if cleaned_name:
-                    current.display_name = cleaned_name
-            if bio is not None:
-                current.bio = bio.strip()[:220]
-            if default_visibility is not None:
-                current.default_visibility = default_visibility
-            current.updated_at = utc_now()
-            state.identities[current.id] = current
-
-            for post in state.posts.values():
-                if post.identity_id != current.id:
-                    continue
-                post.owner_display_name = current.display_name
-                post.owner_username = current.username or current.email.split("@")[0]
-                post.updated_at = utc_now()
-
-        await self.store.mutate(mutation)
-        refreshed = await self.store.get_model("identities", identity.id, OmniaIdentity)
-        if refreshed is None:
-            raise KeyError("Identity not found")
-        return refreshed
 
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
         post = await self._get_post(post_id)
@@ -3255,45 +2442,12 @@ class StudioService:
         return {"status": "deleted", "deleted_count": len(trashed_assets)}
 
     async def get_identity(self, identity_id: str) -> OmniaIdentity:
-        identity = await self.store.get_model("identities", identity_id, OmniaIdentity)
-        if identity is None:
-            raise KeyError("Identity not found")
-        await self.ensure_identity(
-            user_id=identity.id,
-            email=identity.email,
-            display_name=identity.display_name,
-            username=identity.username,
-            desired_plan=identity.plan,
-            owner_mode=identity.owner_mode,
-            root_admin=identity.root_admin,
-            local_access=identity.local_access,
-            accepted_terms=identity.accepted_terms,
-            accepted_privacy=identity.accepted_privacy,
-            accepted_usage_policy=identity.accepted_usage_policy,
-            marketing_opt_in=identity.marketing_opt_in,
-            bio=identity.bio,
-            avatar_url=identity.avatar_url,
-            default_visibility=identity.default_visibility,
-        )
-        refreshed = await self.store.get_model("identities", identity_id, OmniaIdentity)
-        if refreshed is None:
-            raise KeyError("Identity not found after refresh")
-        return refreshed
+        return await self.identity.get_identity(identity_id=identity_id)
+
 
     async def get_identity_by_username(self, username: str) -> OmniaIdentity:
-        normalized = username.strip().lower()
-        identities = await self.store.list_identities()
-        for identity in identities:
-            if (identity.username or "").strip().lower() == normalized:
-                return identity
-        posts = await self.store.list_posts()
-        for post in posts:
-            if post.owner_username.strip().lower() != normalized:
-                continue
-            for identity in identities:
-                if identity.id == post.identity_id:
-                    return identity
-        raise KeyError("Identity not found")
+        return await self.identity.get_identity_by_username(username=username)
+
 
     async def create_generation(
         self,
@@ -3311,147 +2465,8 @@ class StudioService:
         aspect_ratio: str,
         output_count: int = 1,
     ) -> GenerationJob:
-        identity = await self.get_identity(identity_id)
-        self._assert_identity_action_allowed(
-            identity,
-            action_code="generation",
-            action_label="creating generations",
-        )
-        reference_asset = None
-        if reference_asset_id:
-            reference_asset = await self.require_owned_model("assets", reference_asset_id, MediaAsset, identity_id)
-        project = await self._resolve_generation_project(
-            identity=identity,
-            requested_project_id=project_id,
-            reference_asset=reference_asset,
-        )
-        model = await self.get_model(model_id)
-        plan_config = PLAN_CATALOG[identity.plan]
-        if not plan_config.can_generate:
-            raise PermissionError("Guests cannot generate images")
+        return await self.generation.create_generation(identity_id=identity_id, project_id=project_id, prompt=prompt, negative_prompt=negative_prompt, reference_asset_id=reference_asset_id, model_id=model_id, width=width, height=height, steps=steps, cfg_scale=cfg_scale, seed=seed, aspect_ratio=aspect_ratio, output_count=output_count)
 
-        self._validate_model_for_identity(identity, model)
-        self._validate_dimensions_for_model(width, height, model)
-
-        cleaned_prompt = self._sanitize_generation_text(
-            prompt,
-            field_name="prompt",
-            max_length=2000,
-        )
-        if not cleaned_prompt:
-            raise ValueError("Prompt cannot be empty")
-        cleaned_negative_prompt = self._sanitize_generation_text(
-            negative_prompt,
-            field_name="negative_prompt",
-            max_length=500,
-        )
-        admission_prompt_snapshot = build_prompt_snapshot(
-            prompt=cleaned_prompt,
-            negative_prompt=cleaned_negative_prompt,
-            source_prompt=cleaned_prompt,
-            source_negative_prompt=cleaned_negative_prompt,
-            model_id=model.id,
-            reference_asset_id=reference_asset.id if reference_asset else None,
-            width=width,
-            height=height,
-            steps=steps,
-            cfg_scale=cfg_scale,
-            seed=seed,
-            aspect_ratio=aspect_ratio,
-        )
-        routing_decision = self.providers.plan_generation_route(
-            plan=identity.plan,
-            prompt=cleaned_prompt,
-            model_id=model.id,
-            workflow=admission_prompt_snapshot.workflow,
-            has_reference_image=reference_asset is not None,
-        )
-        compiled_request = compile_generation_request(
-            prompt=cleaned_prompt,
-            negative_prompt=cleaned_negative_prompt,
-            provider_name=routing_decision.selected_provider or "cloud",
-            model_id=model.id,
-            workflow=admission_prompt_snapshot.workflow,
-            prompt_profile=routing_decision.prompt_profile,
-        )
-        prompt_snapshot = build_prompt_snapshot(
-            prompt=compiled_request.prompt,
-            negative_prompt=compiled_request.negative_prompt,
-            source_prompt=cleaned_prompt,
-            source_negative_prompt=cleaned_negative_prompt,
-            model_id=model.id,
-            reference_asset_id=reference_asset.id if reference_asset else None,
-            width=width,
-            height=height,
-            steps=steps,
-            cfg_scale=cfg_scale,
-            seed=seed,
-            aspect_ratio=aspect_ratio,
-        )
-        if not routing_decision.provider_candidates:
-            raise ValueError(
-                "No real image provider is available for this workflow right now. "
-                "Studio will not replace it with a fake demo render."
-            )
-        provider_estimated_cost = self.providers.estimate_generation_cost(
-            provider_name=routing_decision.selected_provider,
-            width=width,
-            height=height,
-            model_id=model.id,
-            workflow=routing_decision.workflow,
-            has_reference_image=reference_asset is not None,
-        )
-        pricing_quote = build_generation_pricing_quote(
-            selected_provider=routing_decision.selected_provider,
-            routing_decision=routing_decision,
-            requested_model_id=model.id,
-            workflow=routing_decision.workflow,
-            width=width,
-            height=height,
-            output_count=output_count,
-            provider_estimated_cost=provider_estimated_cost,
-            legacy_model=model,
-            unlimited_generation_access=self._has_unlimited_generation_access(identity),
-        )
-        job = create_generation_job_record(
-            workspace_id=identity.workspace_id,
-            project_id=project.id,
-            identity_id=identity.id,
-            title=build_generation_title(cleaned_prompt),
-            model_id=model.id,
-            prompt_snapshot=prompt_snapshot,
-            estimated_cost=pricing_quote.estimated_cost,
-            estimated_cost_source=pricing_quote.estimated_cost_source,
-            pricing_lane=pricing_quote.pricing_lane,
-            credit_cost=pricing_quote.credit_cost,
-            output_count=output_count,
-            queue_priority=plan_config.queue_priority,
-            provider=routing_decision.selected_provider or "pending",
-            provider_rollout_tier=self.providers.provider_rollout_tier(routing_decision.selected_provider),
-            provider_billable=self.providers.provider_billable(routing_decision.selected_provider),
-            requested_quality_tier=routing_decision.requested_quality_tier,
-            selected_quality_tier=routing_decision.selected_quality_tier,
-            degraded=routing_decision.degraded,
-            routing_strategy=routing_decision.routing_strategy,
-            routing_reason=routing_decision.routing_reason,
-            prompt_profile=routing_decision.prompt_profile,
-            provider_candidates=list(routing_decision.provider_candidates),
-            reserved_credit_cost=pricing_quote.reserved_credit_cost,
-            credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",
-        )
-        job = await self._persist_generation_job_with_reservation(
-            identity=identity,
-            job=job,
-            project_id=project.id,
-            model_id=model.id,
-            prompt_snapshot=admission_prompt_snapshot,
-            plan_config=plan_config,
-        )
-        if self._can_process_generations() or self._uses_shared_generation_broker():
-            await self._enqueue_generation_job(job.id, priority=job.queue_priority)
-        if self._can_process_generations():
-            self._ensure_generation_maintenance_task()
-        return job
 
     async def _persist_generation_job_with_reservation(
         self,
@@ -3463,75 +2478,8 @@ class StudioService:
         prompt_snapshot: PromptSnapshot,
         plan_config: PlanCatalogEntry,
     ) -> GenerationJob:
-        holder: Dict[str, GenerationJob] = {}
+        return await self.generation._persist_generation_job_with_reservation(identity=identity, job=job, project_id=project_id, model_id=model_id, prompt_snapshot=prompt_snapshot, plan_config=plan_config)
 
-        def mutation(state: StudioState) -> None:
-            current_identity = state.identities.get(identity.id)
-            if current_identity is None:
-                raise KeyError("Identity not found")
-
-            self._refresh_monthly_credits_locked(state, current_identity)
-            unlimited_access = self._has_unlimited_generation_access(current_identity)
-            if unlimited_access:
-                self._apply_privileged_identity_overrides(current_identity)
-
-            if not unlimited_access:
-                queued_jobs = sum(1 for current_job in state.generations.values() if current_job.status == JobStatus.QUEUED)
-                queue_limit = min(self.settings.max_queue_size, 50)
-                if queued_jobs >= queue_limit:
-                    raise GenerationCapacityError(
-                        "Generation queue is currently full. Please try again shortly.",
-                        queue_full=True,
-                        estimated_wait_seconds=self._estimate_queue_wait_seconds(queued_jobs),
-                    )
-
-                incomplete_jobs = count_incomplete_generations(state)
-                if incomplete_jobs >= self.settings.max_queue_size:
-                    raise GenerationCapacityError(
-                        "Generation queue is currently full. Please try again shortly.",
-                        queue_full=True,
-                        estimated_wait_seconds=self._estimate_queue_wait_seconds(incomplete_jobs),
-                    )
-
-                if (
-                    plan_config.max_incomplete_generations > 0
-                    and count_incomplete_generations_for_identity(state, identity.id) >= plan_config.max_incomplete_generations
-                ):
-                    raise ValueError(
-                        f"{plan_config.label} plan has reached its active generation limit. Please wait for current jobs to finish."
-                    )
-
-                if plan_config.generation_submit_limit > 0:
-                    window_start = utc_now() - timedelta(seconds=plan_config.generation_submit_window_seconds)
-                    recent_requests = count_recent_generation_requests_for_identity(
-                        state=state,
-                        identity_id=identity.id,
-                        since=window_start,
-                    )
-                    if recent_requests >= plan_config.generation_submit_limit:
-                        raise ValueError(
-                            f"{plan_config.label} plan has reached its recent generation burst limit. Please wait a moment and try again."
-                        )
-
-                if has_duplicate_incomplete_generation(
-                    state=state,
-                    identity_id=identity.id,
-                    project_id=project_id,
-                    model_id=model_id,
-                    prompt_snapshot=prompt_snapshot,
-                ):
-                    raise ValueError("An identical generation is already queued or running for this project.")
-
-                billing_state = self._resolve_billing_state_locked(state, current_identity)
-                if billing_state.available_to_spend < job.reserved_credit_cost:
-                    raise ValueError("Not enough credits to run this generation")
-
-            state.identities[current_identity.id] = current_identity
-            state.generations[job.id] = job
-            holder["job"] = job.model_copy(deep=True)
-
-        await self.store.mutate(mutation)
-        return holder["job"]
 
     async def create_share(self, identity_id: str, project_id: Optional[str], asset_id: Optional[str]) -> tuple[ShareLink, str]:
         identity = await self.get_identity(identity_id)
@@ -3630,73 +2578,12 @@ class StudioService:
         return build_public_share_payload(share=share)
 
     async def billing_summary(self, identity_id: str) -> Dict[str, Any]:
-        identity = await self.get_identity(identity_id)
-        billing_state = await self._resolve_billing_state_for_identity(identity)
-        ledger = await self.store.list_credit_entries_for_identity(identity_id)
-        accessible_models = [
-            model
-            for model in await self.list_models_for_identity(identity)
-            if not (
-                identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO
-            )
-        ]
-        return build_billing_summary(
-            identity=identity,
-            identity_id=identity_id,
-            billing_state=billing_state,
-            ledger_entries=ledger,
-            plan_catalog=PLAN_CATALOG,
-            checkout_catalog=CHECKOUT_CATALOG,
-            entitlements=self.serialize_entitlements(identity, billing_state=billing_state),
-            generation_credit_guide=build_generation_credit_forecasts(
-                identity_plan=identity.plan,
-                billing_state=billing_state,
-                models=accessible_models,
-                providers=self.providers,
-            ),
-        )
+        return await self.billing.billing_summary(identity_id=identity_id)
+
 
     async def checkout(self, identity_id: str, kind: CheckoutKind) -> Dict[str, Any]:
-        identity = await self.get_identity(identity_id)
-        config = CHECKOUT_CATALOG[kind]
-        settings = get_settings()
+        return await self.billing.checkout(identity_id=identity_id, kind=kind)
 
-        if settings.lemonsqueezy_store_id:
-            return {
-                "status": "redirect",
-                "provider": "lemonsqueezy",
-                "kind": kind.value,
-                "checkout_url": build_lemonsqueezy_checkout_url(
-                    store_id=settings.lemonsqueezy_store_id,
-                    identity_id=identity_id,
-                    email=identity.email,
-                    kind=kind,
-                ),
-            }
-
-        # Fallback to demo local mutation if no Lemonsqueezy configured
-        updated_holder: Dict[str, OmniaIdentity] = {}
-
-        def mutation(state: StudioState) -> None:
-            now = utc_now()
-            updated_holder["identity"] = apply_demo_checkout(
-                state=state,
-                identity_id=identity.id,
-                kind=kind,
-                config=config,
-                plan_catalog=PLAN_CATALOG,
-                now=now,
-            )
-
-        await self.store.mutate(mutation)
-        updated = updated_holder["identity"]
-        billing_state = await self._resolve_billing_state_for_identity(updated)
-        return {
-            "status": "demo_activated",
-            "provider": "demo",
-            "kind": kind.value,
-            "identity": self.serialize_identity(updated, billing_state=billing_state),
-        }
 
     async def health(self, detail: bool = False) -> Dict[str, Any]:
         counts = await self.store.get_counts_summary()
@@ -3717,6 +2604,8 @@ class StudioService:
         deployment_verification_report: Dict[str, Any] | None = None
         runtime_logs: Dict[str, Any] | None = None
         launch_readiness: Dict[str, Any] | None = None
+        provider_spend_guardrails: Dict[str, Any] | None = None
+        cost_telemetry: Dict[str, Any] | None = None
         if detail:
             def query(state: StudioState) -> Dict[str, int]:
                 now = utc_now()
@@ -3744,6 +2633,8 @@ class StudioService:
             startup_verification_report = load_startup_verification_report(self.settings)
             deployment_verification_report = load_deployment_verification_report(self.settings)
             runtime_logs = build_runtime_log_snapshot(self.settings)
+            provider_spend_guardrails = await self._build_provider_spend_guardrails_summary()
+            cost_telemetry = await self._build_cost_telemetry_summary()
         if self._generation_broker_degraded_reason is not None:
             overall_status = "degraded"
         generation_broker_payload = {
@@ -3794,6 +2685,10 @@ class StudioService:
             payload["deployment_verification"] = deployment_verification_report
         if runtime_logs is not None:
             payload["runtime_logs"] = runtime_logs
+        if provider_spend_guardrails is not None:
+            payload["provider_spend_guardrails"] = provider_spend_guardrails
+        if cost_telemetry is not None:
+            payload["cost_telemetry"] = cost_telemetry
         if launch_readiness is not None:
             payload["launch_readiness"] = launch_readiness
             launch_gate = launch_readiness.get("launch_gate")
@@ -3805,11 +2700,51 @@ class StudioService:
             platform_readiness = launch_readiness.get("platform_readiness")
             if isinstance(platform_readiness, dict):
                 payload["platform_readiness"] = platform_readiness
+            truth_sync = launch_readiness.get("truth_sync")
+            if isinstance(truth_sync, dict):
+                payload["truth_sync"] = truth_sync
         return payload
+
+    async def _provider_spend_guardrail_for_provider(
+        self,
+        *,
+        provider_name: str | None,
+        provider_billable: bool | None,
+        projected_cost_usd: float = 0.0,
+    ) -> ProviderSpendGuardrailStatus | None:
+        return await self.billing._provider_spend_guardrail_for_provider(provider_name=provider_name, provider_billable=provider_billable, projected_cost_usd=projected_cost_usd)
+
+
+    async def _build_provider_spend_guardrails_summary(self) -> Dict[str, Any]:
+        return await self.billing._build_provider_spend_guardrails_summary()
+
+
+    async def _build_cost_telemetry_summary(self) -> Dict[str, Any]:
+        return await self.billing._build_cost_telemetry_summary()
+
+
+    async def _record_cost_telemetry_event(
+        self,
+        *,
+        source_kind: str,
+        surface: str,
+        provider: str | None,
+        amount_usd: float | None,
+        identity_id: str | None = None,
+        source_id: str | None = None,
+        provider_model: str | None = None,
+        studio_model: str | None = None,
+        billable: bool | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> CostTelemetryEvent | None:
+        return await self.billing._record_cost_telemetry_event(source_kind=source_kind, surface=surface, provider=provider, amount_usd=amount_usd, identity_id=identity_id, source_id=source_id, provider_model=provider_model, studio_model=studio_model, billable=billable, metadata=metadata)
+
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
         identity = await self.get_identity(identity_id)
         billing_state = await self._resolve_billing_state_for_identity(identity)
+        compose_draft = await self._get_or_create_draft_project(identity.id, surface="compose")
+        chat_draft = await self._get_or_create_draft_project(identity.id, surface="chat")
         return {
             "identity": self.serialize_identity(identity, billing_state=billing_state),
             "entitlements": self.serialize_entitlements(identity, billing_state=billing_state),
@@ -3819,6 +2754,12 @@ class StudioService:
                 for model in await self.list_models_for_identity(identity)
             ],
             "presets": PRESET_CATALOG,
+            "draft_projects": {
+                "compose": compose_draft.id,
+                "chat": chat_draft.id,
+            },
+            "styles": await self.list_styles(identity.id),
+            "prompt_memory": await self.get_prompt_memory_profile_payload(identity.id),
         }
 
     async def list_models_for_identity(
@@ -3877,46 +2818,16 @@ class StudioService:
             )
 
     def _refresh_monthly_credits_locked(self, state: StudioState, identity: OmniaIdentity) -> None:
-        plan_config = PLAN_CATALOG[identity.plan]
-        identity.monthly_credit_allowance = plan_config.monthly_credits
-        if identity.plan == IdentityPlan.GUEST:
-            identity.monthly_credits_remaining = 0
-            identity.last_credit_refresh_at = utc_now()
-            return
+        return self.billing._refresh_monthly_credits_locked(state=state, identity=identity)
 
-        last = identity.last_credit_refresh_at.astimezone(timezone.utc)
-        now = utc_now()
-        if (last.year, last.month) != (now.year, now.month):
-            identity.monthly_credits_remaining = plan_config.monthly_credits
-            identity.last_credit_refresh_at = now
-            state.credit_ledger[f"refresh_{identity.id}_{int(now.timestamp())}"] = CreditLedgerEntry(
-                identity_id=identity.id,
-                amount=plan_config.monthly_credits,
-                entry_type=CreditEntryType.MONTHLY_GRANT,
-                description=f"{plan_config.label} monthly refresh",
-            )
 
-    async def improve_generation_prompt(self, prompt: str) -> Dict[str, Any]:
-        cleaned = " ".join(prompt.strip().split())
-        if not cleaned:
-            raise ValueError("Prompt cannot be empty")
+    async def improve_generation_prompt(self, prompt: str, *, identity_id: str | None = None) -> Dict[str, Any]:
+        return await self.generation.improve_generation_prompt(prompt=prompt, identity_id=identity_id)
 
-        llm_result = await self.llm_gateway.improve_prompt(cleaned)
-        if llm_result:
-            return {
-                "prompt": improve_prompt_candidate(llm_result.text),
-                "provider": llm_result.provider,
-                "used_llm": True,
-            }
-
-        return {
-            "prompt": self._fallback_enhanced_prompt(cleaned),
-            "provider": "heuristic",
-            "used_llm": False,
-        }
 
     def _fallback_enhanced_prompt(self, prompt: str) -> str:
-        return improve_prompt_candidate(prompt.strip().strip(",."))
+        return self.generation._fallback_enhanced_prompt(prompt=prompt)
+
 
     def _sanitize_generation_text(
         self,
@@ -3925,13 +2836,8 @@ class StudioService:
         field_name: str,
         max_length: int,
     ) -> str:
-        sanitized = _GENERATION_TEXT_CONTROL_RE.sub(" ", value or "")
-        sanitized = re.sub(r"[ \t]+", " ", sanitized)
-        sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
-        sanitized = sanitized.strip()
-        if len(sanitized) > max_length:
-            raise ValueError(f"{field_name} exceeds {max_length} characters")
-        return sanitized
+        return self.generation._sanitize_generation_text(value=value, field_name=field_name, max_length=max_length)
+
 
     async def require_owned_model(self, collection: str, model_id: str, model_type, identity_id: str):
         model = await self.store.get_model(collection, model_id, model_type)
@@ -3940,228 +2846,41 @@ class StudioService:
         return model
 
     async def _process_generation(self, job_id: str) -> None:
-        job = await self.store.get_model("generations", job_id, GenerationJob)
-        if job is None:
-            if self.generation_broker is not None:
-                await self.generation_broker.complete(job_id)
-            self._active_generation_claims.pop(job_id, None)
-            return
-        provider_label = (
-            job.provider_candidates[0]
-            if job.provider_candidates
-            else initial_generation_provider_label(
-                self.providers,
-                model_id=job.model,
-                workflow=job.prompt_snapshot.workflow,
-                has_reference_image=job.prompt_snapshot.reference_asset_id is not None,
-            )
-        )
-        started_at = utc_now()
-        claim_token = self._active_generation_claims.get(job_id)
-        if claim_token is None:
-            claim_token = await self._claim_generation_job(
-                job_id,
-                provider=provider_label,
-            )
-        else:
-            refreshed = await self._refresh_generation_claim(
-                job_id,
-                claim_token=claim_token,
-                provider=provider_label,
-            )
-            if not refreshed:
-                claim_token = await self._claim_generation_job(
-                    job_id,
-                    provider=provider_label,
-                )
-        if claim_token is None:
-            if self.generation_broker is not None:
-                await self.generation_broker.complete(job_id)
-            self._active_generation_claims.pop(job_id, None)
-            return
+        return await self.generation._process_generation(job_id=job_id)
 
-        release_broker_claim = True
-        try:
-            execution = await self.generation_runtime.execute_job(job)
-            finished_at = utc_now()
-            identity = await self.store.get_identity(job.identity_id)
-            unlimited_access = bool(identity and self._has_unlimited_generation_access(identity))
-            finalized_route = self.providers.finalize_generation_route(
-                GenerationRoutingDecision(
-                    workflow=job.prompt_snapshot.workflow,
-                    requested_quality_tier=job.requested_quality_tier,
-                    selected_quality_tier=job.selected_quality_tier,
-                    degraded=job.degraded,
-                    routing_strategy=job.routing_strategy,
-                    routing_reason=job.routing_reason,
-                    prompt_profile=job.prompt_profile,
-                    provider_candidates=tuple(job.provider_candidates),
-                    selected_provider=job.provider,
-                ),
-                provider_name=execution.provider_name or provider_label,
-            )
-            if unlimited_access:
-                credit_charge_policy = "none"
-                final_credit_cost = 0
-            else:
-                credit_charge_policy, final_credit_cost = calculate_generation_final_charge(
-                    base_credit_cost=job.credit_cost,
-                    provider_name=execution.provider_name or provider_label,
-                    provider_billable=execution.provider_billable,
-                    degraded=finalized_route.degraded,
-                )
-
-            def mutation(state: StudioState) -> None:
-                apply_completed_generation_to_state(
-                    state=state,
-                    job_id=job.id,
-                    provider_name=execution.provider_name,
-                    provider_rollout_tier=execution.provider_rollout_tier,
-                    provider_billable=execution.provider_billable,
-                    actual_cost_usd=execution.actual_cost_usd,
-                    final_credit_cost=final_credit_cost,
-                    credit_charge_policy=credit_charge_policy,
-                    selected_quality_tier=finalized_route.selected_quality_tier,
-                    degraded=finalized_route.degraded,
-                    routing_reason=finalized_route.routing_reason,
-                    generated_outputs=execution.generated_outputs,
-                    created_assets=execution.created_assets,
-                    style_tags=infer_style_tags(job),
-                    now=utc_now(),
-                )
-
-            await self.store.mutate(mutation)
-            completed_log_job = job.model_copy(
-                update={
-                    "provider": execution.provider_name or provider_label,
-                    "provider_rollout_tier": execution.provider_rollout_tier,
-                    "provider_billable": execution.provider_billable,
-                    "selected_quality_tier": finalized_route.selected_quality_tier,
-                    "degraded": finalized_route.degraded,
-                    "routing_reason": finalized_route.routing_reason,
-                    "final_credit_cost": final_credit_cost,
-                    "credit_charge_policy": credit_charge_policy,
-                    "credit_status": "settled" if final_credit_cost > 0 else "released",
-                }
-            )
-            self._log_generation_event(
-                "generation_completed",
-                job=completed_log_job,
-                status=JobStatus.SUCCEEDED,
-                provider=execution.provider_name or provider_label,
-                started_at=started_at,
-                finished_at=finished_at,
-            )
-        except ProviderTemporaryError as exc:
-            finished_at = utc_now()
-            error_code = self._classify_generation_error_code(exc)
-            error_message = self._normalize_generation_error_message(exc)
-            failure_provider = getattr(exc, "provider_name", None) or provider_label
-            updated_job = await self._update_job_status(
-                job_id,
-                JobStatus.RETRYABLE_FAILED,
-                provider=failure_provider,
-                error=error_message,
-                error_code=error_code,
-            )
-            self._log_generation_event(
-                "generation_retryable_failure",
-                job=updated_job or job,
-                status=JobStatus.RETRYABLE_FAILED,
-                provider=failure_provider,
-                error=error_message,
-                error_code=error_code,
-                started_at=started_at,
-                finished_at=finished_at,
-                level=logging.WARNING,
-            )
-        except asyncio.CancelledError:
-            release_broker_claim = False
-            self._log_generation_event(
-                "generation_worker_cancelled",
-                job=job,
-                status=JobStatus.RUNNING,
-                provider=provider_label,
-                error="Generation worker stopped before completion; broker claim left active for recovery.",
-                error_code="generation_worker_cancelled",
-                started_at=started_at,
-                finished_at=utc_now(),
-                level=logging.WARNING,
-            )
-            raise
-        except Exception as exc:
-            finished_at = utc_now()
-            error_code = self._classify_generation_error_code(exc)
-            error_message = self._normalize_generation_error_message(exc)
-            failure_provider = getattr(exc, "provider_name", None) or provider_label
-            updated_job = await self._update_job_status(
-                job_id,
-                JobStatus.FAILED,
-                provider=failure_provider,
-                error=error_message,
-                error_code=error_code,
-            )
-            self._log_generation_event(
-                "generation_failed",
-                job=updated_job or job,
-                status=JobStatus.FAILED,
-                provider=failure_provider,
-                error=error_message,
-                error_code=error_code,
-                started_at=started_at,
-                finished_at=finished_at,
-                level=logging.ERROR,
-            )
-        finally:
-            if self.generation_broker is not None and release_broker_claim:
-                await self.generation_broker.complete(job_id)
-            self._active_generation_claims.pop(job_id, None)
 
     async def _update_job_status(
         self,
         job_id: str,
         status: JobStatus,
         provider: Optional[str] = None,
+        provider_billable: Optional[bool] = None,
         error: Optional[str] = None,
         error_code: Optional[str] = None,
     ) -> Optional[GenerationJob]:
-        holder: Dict[str, GenerationJob] = {}
+        return await self.generation._update_job_status(job_id=job_id, status=status, provider=provider, provider_billable=provider_billable, error=error, error_code=error_code)
 
-        def mutation(state: StudioState) -> None:
-            apply_generation_status_update(
-                state=state,
-                job_id=job_id,
-                status=status,
-                provider=provider,
-                error=error,
-                error_code=error_code,
-                now=utc_now(),
-            )
-            updated_job = state.generations.get(job_id)
-            if updated_job is not None:
-                holder["job"] = updated_job.model_copy(deep=True)
-
-        await self.store.mutate(mutation)
-        return holder.get("job")
 
     async def _get_generation_job_snapshot(self, job_id: str) -> Optional[GenerationJob]:
-        return await self.store.get_model("generations", job_id, GenerationJob)
+        return await self.generation._get_generation_job_snapshot(job_id=job_id)
+
 
     def _normalize_generation_error_message(self, exc: Exception) -> str:
-        message = " ".join(str(exc).split())
-        return message[:500] if message else exc.__class__.__name__
+        return self.generation._normalize_generation_error_message(exc=exc)
+
 
     def _classify_generation_error_code(self, exc: Exception) -> str:
-        if isinstance(exc, ProviderTemporaryError):
-            message = str(exc).lower()
-            if "not configured" in message:
-                return "provider_not_configured"
-            if "timed out" in message or "timeout" in message:
-                return "provider_timeout"
-            if "network" in message or "connectivity" in message:
-                return "provider_network"
-            return "provider_temporary"
-        return "generation_failed"
+        return self.generation._classify_generation_error_code(exc=exc)
+
+
+    def _generation_retry_limit_for_job(
+        self,
+        job: GenerationJob,
+        *,
+        provider_billable: Optional[bool] = None,
+    ) -> int:
+        return self.generation._generation_retry_limit_for_job(job=job, provider_billable=provider_billable)
+
 
     def _log_generation_event(
         self,
@@ -4176,37 +2895,8 @@ class StudioService:
         finished_at: datetime | None = None,
         level: int = logging.INFO,
     ) -> None:
-        start = started_at or job.started_at or job.created_at
-        end = finished_at or utc_now()
-        duration_ms = max(0, int((end - start).total_seconds() * 1000))
-        payload = {
-            "event": event,
-            "generation_id": job.id,
-            "project_id": job.project_id,
-            "identity_id": job.identity_id,
-            "provider": provider or job.provider,
-            "model": job.model,
-            "workflow": job.prompt_snapshot.workflow,
-            "requested_quality_tier": job.requested_quality_tier,
-            "selected_quality_tier": job.selected_quality_tier,
-            "degraded": job.degraded,
-            "routing_strategy": job.routing_strategy,
-            "routing_reason": job.routing_reason,
-            "prompt_profile": job.prompt_profile,
-            "queue_priority": job.queue_priority,
-            "reserved_credit_cost": job.reserved_credit_cost,
-            "final_credit_cost": job.final_credit_cost,
-            "credit_charge_policy": job.credit_charge_policy,
-            "credit_status": job.credit_status,
-            "started_at": start.isoformat(),
-            "finished_at": end.isoformat(),
-            "duration_ms": duration_ms,
-            "status": JobStatus.coerce(status).value,
-            "error_code": error_code,
-        }
-        if error:
-            payload["error"] = error
-        logger.log(level, "generation_event %s", json.dumps(payload, ensure_ascii=True, sort_keys=True))
+        return self.generation._log_generation_event(event=event, job=job, status=status, provider=provider, error=error, error_code=error_code, started_at=started_at, finished_at=finished_at, level=level)
+
 
     async def _ensure_generation_capacity(
         self,
@@ -4217,52 +2907,12 @@ class StudioService:
         prompt_snapshot: PromptSnapshot,
         plan_config: PlanCatalogEntry,
     ) -> None:
-        if self._has_unlimited_generation_access(identity):
-            return
-        queued_jobs = len(await self.store.list_generations_with_statuses({JobStatus.QUEUED}))
-        queue_limit = min(self.settings.max_queue_size, 50)
-        if queued_jobs >= queue_limit:
-            raise GenerationCapacityError(
-                "Generation queue is currently full. Please try again shortly.",
-                queue_full=True,
-                estimated_wait_seconds=self._estimate_queue_wait_seconds(queued_jobs),
-            )
-        incomplete_jobs = await self.store.count_incomplete_generations()
-        if incomplete_jobs >= self.settings.max_queue_size:
-            raise GenerationCapacityError(
-                "Generation queue is currently full. Please try again shortly.",
-                queue_full=True,
-                estimated_wait_seconds=self._estimate_queue_wait_seconds(incomplete_jobs),
-            )
-        if (
-            plan_config.max_incomplete_generations > 0
-            and await self.store.count_incomplete_generations_for_identity(identity.id) >= plan_config.max_incomplete_generations
-        ):
-            raise ValueError(
-                f"{plan_config.label} plan has reached its active generation limit. Please wait for current jobs to finish."
-            )
-        if plan_config.generation_submit_limit > 0:
-            window_start = utc_now() - timedelta(seconds=plan_config.generation_submit_window_seconds)
-            recent_requests = await self.store.count_recent_generation_requests_for_identity(
-                identity.id,
-                since=window_start,
-            )
-            if recent_requests >= plan_config.generation_submit_limit:
-                raise ValueError(
-                    f"{plan_config.label} plan has reached its recent generation burst limit. Please wait a moment and try again."
-                )
-        if await self.store.has_duplicate_incomplete_generation(
-            identity_id=identity.id,
-            project_id=project_id,
-            model_id=model_id,
-            prompt_snapshot=prompt_snapshot,
-        ):
-            raise ValueError("An identical generation is already queued or running for this project.")
+        return await self.generation._ensure_generation_capacity(identity=identity, project_id=project_id, model_id=model_id, prompt_snapshot=prompt_snapshot, plan_config=plan_config)
+
 
     def _estimate_queue_wait_seconds(self, queued_jobs: int) -> int:
-        slots = max(1, self.settings.max_concurrent_generations)
-        batches = max(1, math.ceil(queued_jobs / slots))
-        return max(30, batches * 30)
+        return self.generation._estimate_queue_wait_seconds(queued_jobs=queued_jobs)
+
 
     async def _create_asset_from_result(
         self,
@@ -4274,68 +2924,16 @@ class StudioService:
         variation_count: int = 1,
         seed: Optional[int] = None,
     ) -> MediaAsset:
-        asset = MediaAsset(
-            workspace_id=job.workspace_id,
-            project_id=job.project_id,
-            identity_id=job.identity_id,
-            title=job.title or "Untitled asset",
-            prompt=job.prompt_snapshot.prompt,
-            url="",
-            local_path="",
-            metadata=build_generated_asset_metadata(
-                job=job,
-                provider=provider,
-                mime_type=mime_type,
-                variation_index=variation_index,
-                variation_count=variation_count,
-                seed=seed,
-            ),
-        )
-        identity = await self.store.get_identity(job.identity_id)
-        protected_payload = await asyncio.to_thread(
-            self.asset_protection.protect,
-            image_bytes,
-            mime_type=mime_type,
-            asset_id=asset.id,
-            job_id=job.id,
-            user_id=job.identity_id,
-            username=identity.username if identity else None,
-        )
-        asset.metadata["mime_type"] = protected_payload.mime_type
-        asset.metadata["clean_mime_type"] = protected_payload.mime_type
-        asset.metadata["protection_version"] = "oc-proof-v1"
-        asset.metadata["visible_watermark"] = True
-        asset.metadata["clean_export_available"] = True
-        asset.metadata["protection_signature"] = protected_payload.proof_signature
-        await self._store_asset_payload(
-            asset=asset,
-            image_bytes=protected_payload.delivery_bytes,
-            mime_type=protected_payload.mime_type,
-            clean_image_bytes=protected_payload.clean_bytes,
-            clean_mime_type=protected_payload.mime_type,
-            storage_prefix=f"generated/{job.workspace_id}/{job.project_id}/{job.id}",
-        )
-        return asset
+        return await self.generation._create_asset_from_result(job=job, provider=provider, image_bytes=image_bytes, mime_type=mime_type, variation_index=variation_index, variation_count=variation_count, seed=seed)
+
 
     async def _load_generation_reference_image(self, job: GenerationJob) -> Optional[ProviderReferenceImage]:
-        return await self.generation_runtime.load_reference_image(job)
+        return await self.generation._load_generation_reference_image(job=job)
+
 
     async def _read_asset_bytes(self, asset: MediaAsset, *, variant: str) -> tuple[bytes, str]:
-        storage_key = self._resolve_asset_variant_storage_key(asset, variant)
-        storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
-        if storage_key and storage_kind:
-            backend = self.asset_storage.get(storage_kind)
-            content = await backend.fetch_bytes(storage_key)
-            mime_type = self._resolve_asset_variant_mime_type(asset, variant, storage_key)
-            return content, mime_type
+        return await self.generation._read_asset_bytes(asset=asset, variant=variant)
 
-        path = self._resolve_asset_variant_path(asset, variant)
-        if path and path.exists():
-            content = await asyncio.to_thread(path.read_bytes)
-            mime_type = self._resolve_asset_variant_mime_type(asset, variant, path.name)
-            return content, mime_type
-
-        raise ProviderTemporaryError("Asset bytes are not available")
 
     async def _store_asset_payload(
         self,
@@ -4347,189 +2945,20 @@ class StudioService:
         clean_mime_type: Optional[str] = None,
         storage_prefix: str,
     ) -> None:
-        main_extension = self._extension_for_mime_type(mime_type)
-        storage_backend = self.asset_storage.default_kind
-        main_key = f"{storage_prefix}/{asset.id}{main_extension}"
-        clean_key: Optional[str] = None
-        if clean_image_bytes is not None:
-            clean_extension = self._extension_for_mime_type(clean_mime_type or mime_type)
-            clean_key = f"{storage_prefix}/{asset.id}_clean{clean_extension}"
-        thumbnail_key = f"{storage_prefix}/{asset.id}_thumb.jpg"
+        return await self.generation._store_asset_payload(asset=asset, image_bytes=image_bytes, mime_type=mime_type, clean_image_bytes=clean_image_bytes, clean_mime_type=clean_mime_type, storage_prefix=storage_prefix)
 
-        backend = self.asset_storage.get(storage_backend)
-        await backend.store_bytes(main_key, image_bytes, content_type=mime_type)
-        asset.metadata["storage_backend"] = storage_backend
-        asset.metadata["storage_key"] = main_key
-
-        if storage_backend == "local":
-            asset.local_path = str(self.asset_storage.local_backend.resolve_path(main_key))
-
-        if clean_key and clean_image_bytes is not None:
-            await backend.store_bytes(clean_key, clean_image_bytes, content_type=clean_mime_type or mime_type)
-            asset.metadata["clean_storage_key"] = clean_key
-            asset.metadata["clean_mime_type"] = clean_mime_type or mime_type
-            if storage_backend == "local":
-                asset.metadata["clean_path"] = str(self.asset_storage.local_backend.resolve_path(clean_key))
-
-        thumbnail_url = None
-        try:
-            image = await asyncio.to_thread(Image.open, io.BytesIO(image_bytes))
-            thumb = image.copy()
-            thumb.thumbnail((480, 480))
-            thumb_buffer = io.BytesIO()
-            await asyncio.to_thread(thumb.save, thumb_buffer, format="JPEG", quality=88)
-            thumb_bytes = thumb_buffer.getvalue()
-            await backend.store_bytes(thumbnail_key, thumb_bytes, content_type="image/jpeg")
-            asset.metadata["thumbnail_storage_key"] = thumbnail_key
-            if storage_backend == "local":
-                asset.metadata["thumbnail_path"] = str(self.asset_storage.local_backend.resolve_path(thumbnail_key))
-            thumbnail_url = "stored"
-        except Exception:
-            thumbnail_url = None
-
-        asset.url = "stored"
-        asset.thumbnail_url = thumbnail_url
 
     def _extension_for_mime_type(self, mime_type: str) -> str:
-        explicit_map = {
-            "image/jpeg": ".jpg",
-            "image/png": ".png",
-            "image/webp": ".webp",
-        }
-        if mime_type in explicit_map:
-            return explicit_map[mime_type]
+        return self.generation._extension_for_mime_type(mime_type=mime_type)
 
-        guessed = mimetypes.guess_extension(mime_type) or ""
-        if guessed == ".jpe":
-            return ".jpg"
-        return guessed or ".bin"
 
     async def export_identity_data(self, identity_id: str) -> Dict[str, Any]:
-        """GDPR compliant export of all user data in JSON structure."""
-        identity = await self.get_identity(identity_id)
-        assets = await self.store.list_assets_for_identity(identity_id)
-        posts = await self.store.list_posts_for_identity(identity_id)
-        assets_by_id = await self.store.get_asset_map()
-        identities_by_id = await self.store.get_identity_map()
-        return build_identity_export(
-            identity=identity,
-            identity_id=identity_id,
-            assets=assets,
-            posts=posts,
-            assets_by_id=assets_by_id,
-            identities_by_id=identities_by_id,
-            serialize_asset=lambda asset, viewer_identity_id: self.serialize_asset(asset, identity_id=viewer_identity_id),
-            serialize_post=lambda post, assets_by_id, identities_by_id, viewer_identity_id: self.serialize_post(
-                post,
-                assets_by_id=assets_by_id,
-                identities_by_id=identities_by_id,
-                viewer_identity_id=viewer_identity_id,
-            ),
-        )
+        return await self.identity.export_identity_data(identity_id=identity_id)
+
 
     async def permanently_delete_identity(self, identity_id: str) -> bool:
-        """Deep purge an identity and all belonging assets from DB and Supabase Auth."""
-        await self.get_identity(identity_id)
-        assets_to_delete = await self.store.list_assets_for_identity(identity_id)
-        for asset in assets_to_delete:
-            await self._purge_asset_storage(asset)
+        return await self.identity.permanently_delete_identity(identity_id=identity_id)
 
-        def mutation(state: StudioState) -> None:
-            purge_identity_state(state, identity_id, assets_to_delete)
-
-        await self.store.mutate(mutation)
-
-        settings = get_settings()
-        if settings.supabase_url and settings.supabase_service_role_key:
-            try:
-                import httpx
-                # Make admin delete request to auth db
-                url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{identity_id}"
-                headers = {
-                    "apikey": settings.supabase_service_role_key,
-                    "Authorization": f"Bearer {settings.supabase_service_role_key}"
-                }
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    await client.delete(url, headers=headers)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning("Failed to delete user from Supabase auth: %s", e)
-                
-        return True
 
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
-        """Handle LemonSqueezy webhook events to update user subscription and credits."""
-        event_name = payload.get("meta", {}).get("event_name", "")
-        custom_data = payload.get("meta", {}).get("custom_data", {})
-        identity_id = custom_data.get("identity_id")
-        checkout_kind_raw = custom_data.get("checkout_kind")
-        checkout_kind = None
-        if isinstance(checkout_kind_raw, str):
-            try:
-                checkout_kind = CheckoutKind(checkout_kind_raw)
-            except ValueError:
-                checkout_kind = None
-        
-        if not identity_id:
-            # Maybe the user didn't have an account or it was a test hook
-            return
-
-        if not is_supported_lemonsqueezy_event(event_name):
-            return
-            
-        now = utc_now()
-        receipt = build_lemonsqueezy_webhook_receipt(
-            payload=payload,
-            identity_id=identity_id,
-            checkout_kind=checkout_kind,
-            now=now,
-        )
-        from .mailer import mailer
-        
-        if event_name in ("order_created", "subscription_created", "subscription_payment_success"):
-            upgraded_email = None
-            already_processed = False
-
-            def mutation(state: StudioState) -> None:
-                nonlocal already_processed, upgraded_email
-                if receipt.id in state.billing_webhook_receipts:
-                    already_processed = True
-                    return
-                result = apply_lemonsqueezy_webhook_event(
-                    state=state,
-                    identity_id=identity_id,
-                    event_name=event_name,
-                    now=now,
-                    plan_catalog=PLAN_CATALOG,
-                    checkout_catalog=CHECKOUT_CATALOG,
-                    checkout_kind=checkout_kind,
-                    receipt_id=receipt.id,
-                )
-                state.billing_webhook_receipts[receipt.id] = receipt
-                upgraded_email = result.upgraded_email
-
-            await self.store.mutate(mutation)
-            if upgraded_email and not already_processed:
-                await mailer.send_subscription_update(upgraded_email, "Pro")
-
-        elif event_name in ("subscription_cancelled", "subscription_expired"):
-            already_processed = False
-
-            def mutation(state: StudioState) -> None:
-                nonlocal already_processed
-                if receipt.id in state.billing_webhook_receipts:
-                    already_processed = True
-                    return
-                apply_lemonsqueezy_webhook_event(
-                    state=state,
-                    identity_id=identity_id,
-                    event_name=event_name,
-                    now=now,
-                    plan_catalog=PLAN_CATALOG,
-                    checkout_catalog=CHECKOUT_CATALOG,
-                    checkout_kind=checkout_kind,
-                    receipt_id=receipt.id,
-                )
-                state.billing_webhook_receipts[receipt.id] = receipt
-
-            await self.store.mutate(mutation)
+        return await self.billing.process_lemonsqueezy_webhook(payload=payload)

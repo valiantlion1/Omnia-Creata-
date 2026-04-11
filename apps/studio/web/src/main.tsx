@@ -8,8 +8,10 @@ import { StoreProvider } from './lib/store'
 import { queryClient } from './lib/queryClient'
 import { StudioAuthProvider } from './lib/studioAuth'
 
+const RootWrapper = import.meta.env.DEV ? React.Fragment : React.StrictMode
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+  <RootWrapper>
     <QueryClientProvider client={queryClient}>
       <StoreProvider>
         <StudioAuthProvider>
@@ -17,5 +19,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         </StudioAuthProvider>
       </StoreProvider>
     </QueryClientProvider>
-  </React.StrictMode>,
+  </RootWrapper>,
 )

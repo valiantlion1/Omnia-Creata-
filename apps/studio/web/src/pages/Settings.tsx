@@ -298,7 +298,7 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Globe}
                     title="Global Discoverability"
-                    description="Set whether new creations and collections are public out of the box."
+                    description="Set whether new creations and projects are public out of the box."
                     action={
                       <div className="flex items-center gap-1.5 rounded-[12px] bg-black/40 p-1 ring-1 ring-white/10 w-max">
                         <button disabled className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 ${auth?.identity.default_visibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}>Public</button>

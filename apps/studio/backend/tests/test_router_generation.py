@@ -184,6 +184,35 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
 
 
 @pytest.mark.asyncio
+async def test_profiles_me_returns_profile_payload_for_authenticated_user(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    await service.ensure_identity(
+        user_id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/profiles/me",
+            headers={"X-Test-User": "user-1", "X-Test-Email": "user@example.com"},
+        )
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["own_profile"] is True
+        assert payload["can_edit"] is True
+        assert payload["profile"]["username"] == "userone"
+        assert payload["profile"]["usage_summary"] is not None
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_generation_endpoint_enforces_per_user_rate_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

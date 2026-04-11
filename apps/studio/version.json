@@ -1,11 +1,11 @@
 {
   "product": "OmniaCreata Studio",
   "brand": "OmniaCreata",
-  "version": "0.5.1-alpha",
+  "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.10.40",
+  "build": "2026.04.11.52",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-10",
-  "notes": "Local Studio now caps expensive OpenAI premium chat fallback to the standard OpenAI lane during development, while free-plan image generations still prefer working managed OpenAI lanes."
+  "releaseDate": "2026-04-11",
+  "notes": "Local frontend runtime was lightened with dev-safe rendering, calmer polling, and smaller startup bundles."
 }

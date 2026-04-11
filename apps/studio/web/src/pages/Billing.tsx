@@ -1,353 +1,215 @@
-import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Sparkles, Zap, Crown } from 'lucide-react'
-
-import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { useState, useEffect } from 'react'
+import { CheckCircle2, Zap, ShieldCheck, Cpu, Loader2, ExternalLink, TrendingUp } from 'lucide-react'
 import { useStudioAuth } from '@/lib/studioAuth'
-import {
-  describeGenerationLaneTrust,
-  formatGenerationGuideSummary,
-  formatGenerationPricingLane,
-  formatGenerationStartCapacity,
-  studioApi,
-  type CheckoutKind,
-} from '@/lib/studioApi'
+import { studioApi, type BillingSummary } from '@/lib/studioApi'
+import { usePageMeta } from '@/lib/usePageMeta'
 
-/* ─── tier data ─── */
 const tiers = [
   {
-    id: 'free' as const,
-    label: 'Free',
-    icon: Sparkles,
-    monthlyPrice: 0,
-    annualPrice: 0,
-    credits: 60,
-    badge: null,
-    features: [
-      '60 monthly credits',
-      'Core generation models',
-      'Prompt improvement',
-      '1024 × 1024 max resolution',
-      'Standard queue',
-      'Library & collections',
-      'Public profile',
-    ],
-    cta: 'Get Started',
-    ctaStyle: 'outline' as const,
+    name: 'Free Creator',
+    price: '$0',
+    description: 'Perfect for exploring the Studio capabilities.',
+    features: ['150 Monthly Credits', 'Standard Processing', 'Community Access', 'Basic Output Resolution'],
+    cta: 'Current Plan',
+    checkoutKind: null as null,
+    highlighted: false,
   },
   {
-    id: 'pro' as const,
-    label: 'Pro',
-    icon: Zap,
-    monthlyPrice: 18,
-    annualPrice: 12,
-    credits: 1200,
-    badge: 'Most Popular',
-    features: [
-      '1,200 monthly credits',
-      'All generation models',
-      'Priority queue',
-      '2048 × 2048 max resolution',
-      'Share links enabled',
-      'Prompt history & analytics',
-      'Extended library storage',
-      'Commercial usage license',
-    ],
+    name: 'Pro Visionary',
+    price: '$15',
+    period: '/mo',
+    description: 'Unlock the full power of Omnia Creata models.',
+    features: ['2,500 Monthly Credits', 'Priority GPU Access', 'Commercial License', '4K Output Resolution', 'Custom Memory Personas'],
     cta: 'Upgrade to Pro',
-    ctaStyle: 'gradient' as const,
+    checkoutKind: 'pro_monthly' as const,
+    highlighted: true,
   },
   {
-    id: 'creator' as const,
-    label: 'Creator',
-    icon: Crown,
-    monthlyPrice: 35,
-    annualPrice: 28,
-    credits: 5000,
-    badge: null,
-    features: [
-      '5,000 monthly credits',
-      'All models + early access',
-      'Priority+ queue (fastest)',
-      '4096 × 4096 max resolution',
-      'API access (coming soon)',
-      'Dedicated support',
-      'Team workspace (coming soon)',
-      'Unlimited library storage',
-      'Full commercial rights',
-    ],
-    cta: 'Go Creator',
-    ctaStyle: 'white' as const,
+    name: 'Studio Enterprise',
+    price: '$45',
+    period: '/mo',
+    description: 'For power users and boutique creative teams.',
+    features: ['10,000 Monthly Credits', 'Dedicated H100 Queue', 'Team Collaboration', 'API Access', 'White-glove Support'],
+    cta: 'Contact Sales',
+    checkoutKind: null as null,
+    highlighted: false,
   },
 ]
-
-const topUpOptions = [
-  { kind: 'top_up_small' as CheckoutKind, label: 'Top-up 200', credits: 200, price: 8 },
-  { kind: 'top_up_large' as CheckoutKind, label: 'Top-up 800', credits: 800, price: 24 },
-]
-
-/* ─── comparison features ─── */
-const comparisonRows = [
-  { label: 'Monthly credits', free: '60', pro: '1,200', creator: '5,000' },
-  { label: 'Max resolution', free: '1024px', pro: '1536px', creator: '4096px' },
-  { label: 'Queue priority', free: 'Standard', pro: 'Priority', creator: 'Priority+' },
-  { label: 'Models', free: 'Core', pro: 'All', creator: 'All + Early Access' },
-  { label: 'Share links', free: '—', pro: '✓', creator: '✓' },
-  { label: 'Commercial license', free: '—', pro: '✓', creator: '✓' },
-  { label: 'API access', free: '—', pro: '—', creator: 'Coming soon' },
-  { label: 'Dedicated support', free: '—', pro: '—', creator: '✓' },
-]
-
-function formatPrice(price: number | null): string {
-  if (price === null) return 'Coming soon'
-  if (price === 0) return '$0'
-  return `$${price}`
-}
 
 export default function BillingPage() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
-  const welcomeMode = new URLSearchParams(location.search).get('welcome') === '1'
-  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const { auth, isAuthenticated } = useStudioAuth()
+  const isRoot = auth?.identity?.root_admin || auth?.identity?.owner_mode
+  const [billing, setBilling] = useState<BillingSummary | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+  usePageMeta('Plans & Billing', 'Choose the perfect plan for your creative workflow. Powered by LemonSqueezy.')
 
-  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly')
+  // Fetch live billing summary
+  useEffect(() => {
+    if (!isAuthenticated) return
+    setLoading(true)
+    studioApi.getBillingSummary()
+      .then(setBilling)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [isAuthenticated])
 
-  const billingQuery = useQuery({
-    queryKey: ['billing-summary', 'subscription'],
-    queryFn: () => studioApi.getBillingSummary(),
-    enabled: canLoadPrivate,
-  })
-
-  const checkoutMutation = useMutation({
-    mutationFn: (kind: CheckoutKind) => studioApi.checkout(kind),
-    onSuccess: async (data: any) => {
-      await queryClient.invalidateQueries()
-      
-      // Navigate to external checkout layout if provided
-      if (data && data.checkout_url) {
-        window.location.href = data.checkout_url
-        return
+  const handleCheckout = async (kind: string) => {
+    setCheckoutLoading(kind)
+    try {
+      const result = await studioApi.checkout(kind as any)
+      // If checkout returns a URL, redirect to LemonSqueezy
+      if ((result as any).checkout_url) {
+        window.location.href = (result as any).checkout_url
       }
-
-      navigate('/studio', { replace: true })
-    },
-  })
-
-  const currentPlanId = auth?.plan.id ?? 'guest'
+    } catch (err: any) {
+      console.error('Checkout failed:', err)
+    } finally {
+      setCheckoutLoading(null)
+    }
+  }
 
   return (
-    <AppPage className="max-w-[1280px] gap-8 py-6">
-      {/* ── Header ── */}
-      <section className="text-center">
-        <h1 className="text-4xl font-semibold tracking-[-0.05em] md:text-5xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-          {welcomeMode ? 'Welcome — choose a plan to get started.' : canLoadPrivate ? 'Your plan' : 'Simple, transparent pricing.'}
+    <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-12 px-4 py-12 md:px-6">
+      
+      {/* Header */}
+      <section className="flex flex-col items-center text-center space-y-4">
+        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-emerald-400 uppercase tracking-wider backdrop-blur-md">
+          <Zap className="h-3.5 w-3.5" />
+          <span>Scale Your Creativity</span>
+        </div>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-2">
+          Plans for Every Creator
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-zinc-400">
-          Start free, upgrade when you need more. All plans include Library, Collections, and your public profile.
+        <p className="text-zinc-400 max-w-2xl text-lg">
+          No hidden fees. No surprise api costs. Just pure creative firepower.
         </p>
+      </section>
 
-        {/* ── Monthly/Annual toggle ── */}
-        <div className="mt-8 inline-flex items-center gap-1 rounded-full bg-white/[0.04] p-1 ring-1 ring-white/[0.08]">
-          <button
-            onClick={() => setBilling('monthly')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'monthly' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'}`}
-            style={billing === 'monthly' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBilling('annual')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${billing === 'annual' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'}`}
-            style={billing === 'annual' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
-          >
-            Annual <span className="ml-1 text-[10px] font-semibold text-emerald-400">Save 20%</span>
-          </button>
-        </div>
+      {/* Root Admin Banner */}
+      {isRoot && (
+         <div className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-[#7c3aed]/20 to-fuchsia-500/20 border border-[#7c3aed]/30 shadow-[0_0_30px_rgba(124,58,237,0.15)] text-[#d8b4fe]">
+            <ShieldCheck className="h-6 w-6" />
+            <p className="font-semibold text-sm">System recognition: You are a Root Administrator. All limitations are lifted and your wallet has infinite credits.</p>
+         </div>
+      )}
 
-        {canLoadPrivate && billingQuery.data ? (
-          <div className="mx-auto mt-6 flex max-w-md items-center justify-center gap-6 text-sm text-zinc-400">
-            <span>Current: <span className="font-medium text-white">{billingQuery.data.plan.label}</span></span>
-            <span className="h-3 w-px bg-white/10" />
-            <span>Credits: <span className="font-medium text-white">{billingQuery.data.credits.remaining}</span></span>
+      {/* Live Credit Summary */}
+      {billing && !loading && (
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Credits Remaining</div>
+            <div className="text-3xl font-bold text-white">{billing.credits.remaining.toLocaleString()}</div>
+            <div className="mt-2 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] to-fuchsia-500 transition-all" style={{ width: `${Math.min(100, (billing.credits.remaining / Math.max(1, billing.credits.monthly_allowance)) * 100)}%` }} />
+            </div>
           </div>
-        ) : null}
-      </section>
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Current Plan</div>
+            <div className="text-3xl font-bold text-white">{billing.plan.label}</div>
+            <div className="mt-1 text-sm text-zinc-400">{billing.subscription_status}</div>
+          </div>
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monthly Allowance</div>
+            <div className="text-3xl font-bold text-white">{billing.credits.monthly_allowance.toLocaleString()}</div>
+            <div className="mt-1 flex items-center gap-1 text-sm text-emerald-400"><TrendingUp className="h-3.5 w-3.5" /> {billing.credits.extra_credits} bonus credits</div>
+          </div>
+        </section>
+      )}
 
-      {/* ── Tier Cards ── */}
+      {/* Pricing Cards */}
+      <section className="grid gap-8 md:grid-cols-3 pt-8">
+        {tiers.map((tier) => (
+          <div 
+            key={tier.name} 
+            className={`relative flex flex-col rounded-[32px] p-8 transition-all duration-300 ${
+              tier.highlighted 
+                ? 'bg-[#121318] border border-[#7c3aed]/50 shadow-[0_15px_60px_rgba(124,58,237,0.15)] scale-105 z-10' 
+                : 'bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] hover:bg-white/[0.04]'
+            }`}
+          >
+            {tier.highlighted && (
+               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#7c3aed] to-fuchsia-500 px-4 py-1 text-xs font-bold text-white shadow-lg">
+                 MOST POPULAR
+               </div>
+            )}
+            
+            <h3 className="text-xl font-bold text-white mb-2">{tier.name}</h3>
+            <p className="text-sm text-zinc-400 mb-6 h-10">{tier.description}</p>
+            
+            <div className="mb-8 flex items-baseline gap-1 text-white">
+              <span className="text-5xl font-extrabold tracking-tight">{tier.price}</span>
+              {tier.period && <span className="text-lg font-medium text-zinc-500">{tier.period}</span>}
+            </div>
 
-
-      <section className="grid gap-6 lg:grid-cols-3">
-        {tiers.map((tier) => {
-          const isCurrent = currentPlanId === tier.id
-          const price = billing === 'annual' ? tier.annualPrice : tier.monthlyPrice
-          const isPro = tier.id === 'pro'
-          const isCreator = tier.id === 'creator'
-          const ctaLabel = tier.cta
-
-          return (
-            <div
-              key={tier.id}
-              className={`relative overflow-hidden rounded-[28px] border p-6 transition-all duration-300 ${
-                isPro
-                  ? 'border-[rgba(124,58,237,0.18)] shadow-[0_0_40px_rgba(124,58,237,0.18)]'
-                  : 'border-white/[0.08] bg-white/[0.02] hover:border-[rgba(124,58,237,0.18)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]'
+            <button 
+              onClick={() => tier.checkoutKind && handleCheckout(tier.checkoutKind)}
+              disabled={!tier.checkoutKind || checkoutLoading === tier.checkoutKind}
+              className={`w-full rounded-full py-3.5 px-6 font-semibold transition-all flex items-center justify-center gap-2 ${
+                tier.highlighted
+                  ? 'bg-gradient-to-r from-[#7c3aed] to-fuchsia-500 text-white shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:shadow-[0_0_30px_rgba(124,58,237,0.6)] hover:scale-[1.02] disabled:opacity-60'
+                  : 'bg-white/[0.05] text-white hover:bg-white/[0.1] disabled:opacity-40'
               }`}
-              style={isPro ? { background: `linear-gradient(180deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.18) 40%, rgba(124,58,237,0.18) 100%)` } : undefined}
             >
-              {tier.badge ? (
-                <div className="absolute right-4 top-4">
-                  <StatusPill tone="brand">{tier.badge}</StatusPill>
-                </div>
-              ) : null}
-
-              <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${isPro ? '' : 'bg-white/[0.05]'}`} style={isPro ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.18), rgba(124,58,237,0.18))' } : undefined}>
-                <tier.icon className={`h-5 w-5 ${isPro ? '' : 'text-white'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined} />
-              </div>
-
-              <div className="mt-4">
-                <div className="text-xl font-semibold text-white">{tier.label}</div>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className={`text-3xl font-bold ${isPro ? '' : 'text-white'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined}>
-                    {formatPrice(price)}
-                  </span>
-                  {price !== null && price > 0 ? (
-                    <span className="text-sm text-zinc-500">/ {billing === 'annual' ? 'year' : 'month'}</span>
-                  ) : null}
-                </div>
-                <div className="mt-1 text-sm text-zinc-500">{tier.credits.toLocaleString()} credits / month</div>
-              </div>
-
-              <ul className="mt-6 space-y-3">
-                {tier.features.map((f) => (
-                  <li key={f} className="flex items-start gap-3 text-sm text-zinc-300">
-                    <Check className={`mt-0.5 h-4 w-4 shrink-0 ${isPro ? '' : 'text-zinc-600'}`} style={isPro ? { color: 'rgb(var(--primary-light))' } : undefined} />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-8">
-                {isCurrent ? (
-                  <div className="flex items-center justify-center rounded-full border border-white/[0.08] px-5 py-3 text-sm font-medium text-zinc-400">
-                    Current plan
-                  </div>
-                ) : tier.ctaStyle === 'gradient' ? (
-                  canLoadPrivate ? (
-                    <button
-                      onClick={() => checkoutMutation.mutate('pro_monthly')}
-                      disabled={checkoutMutation.isPending}
-                      className="w-full rounded-full px-5 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
-                    >
-                      {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
-                    </button>
-                  ) : (
-                    <Link to="/signup" className="block w-full rounded-full px-5 py-3 text-center text-sm font-semibold text-white transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}>
-                      {ctaLabel}
-                    </Link>
-                  )
-                ) : tier.ctaStyle === 'white' ? (
-                  isCreator ? (
-                    <button
-                      disabled
-                      className="w-full cursor-not-allowed rounded-full bg-white/[0.08] px-5 py-3 text-sm font-semibold text-zinc-500"
-                    >
-                      Coming soon
-                    </button>
-                  ) : canLoadPrivate ? (
-                    <button
-                      onClick={() => checkoutMutation.mutate('pro_monthly')}
-                      disabled={checkoutMutation.isPending}
-                      className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:opacity-60"
-                    >
-                      {checkoutMutation.isPending ? 'Processing...' : ctaLabel}
-                    </button>
-                  ) : (
-                    <Link to="/signup" className="block w-full rounded-full bg-white px-5 py-3 text-center text-sm font-semibold text-black transition hover:opacity-90">
-                      {ctaLabel}
-                    </Link>
-                  )
-                ) : (
-                  <Link
-                  to={canLoadPrivate ? '/create' : '/signup'}
-                  className="block w-full rounded-full border border-white/[0.12] px-5 py-3 text-center text-sm font-medium text-white transition hover:bg-white/[0.06]"
-                >
-                  {ctaLabel}
-                </Link>
-              )}
-              </div>
-            </div>
-          )
-        })}
-      </section>
-
-      {/* ── Feature Comparison Table ── */}
-      <section className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.02] transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]">
-        <div className="border-b border-white/[0.06] px-6 py-4">
-          <div className="text-lg font-semibold text-white">Feature comparison</div>
-          <div className="mt-1 text-sm text-zinc-500">Everything included in each plan at a glance.</div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-sm">
-            <thead>
-              <tr className="border-b border-white/[0.06] text-left">
-                <th className="px-6 py-3 font-medium text-zinc-400">Feature</th>
-                <th className="px-6 py-3 font-medium text-zinc-400">Free</th>
-                <th className="px-6 py-3 font-medium" style={{ color: 'rgb(var(--primary-light))' }}>Pro</th>
-                <th className="px-6 py-3 font-medium text-zinc-400">Creator</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comparisonRows.map((row) => (
-                <tr key={row.label} className="border-b border-white/[0.04] last:border-b-0">
-                  <td className="px-6 py-3 text-zinc-300">{row.label}</td>
-                  <td className="px-6 py-3 text-zinc-500">{row.free}</td>
-                  <td className="px-6 py-3 text-white">{row.pro}</td>
-                  <td className="px-6 py-3 text-zinc-300">{row.creator}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* ── Top-ups ── */}
-      <section className="rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-6">
-        <div className="text-lg font-semibold text-white">Credit top-ups</div>
-        <div className="mt-1 text-sm text-zinc-500">Need more credits mid-cycle? Grab a one-time boost.</div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {topUpOptions.map((option) => (
-            <div key={option.kind} className="flex items-center justify-between gap-4 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-5 py-4 transition-all duration-300 hover:border-[rgba(124,58,237,0.18)]">
-              <div>
-                <div className="text-sm font-medium text-white">{option.label}</div>
-                <div className="mt-1 text-sm text-zinc-500">
-                  {option.credits} credits · {option.price !== null ? `$${option.price}` : 'TBD'}
-                </div>
-              </div>
-              {canLoadPrivate ? (
-                <button
-                  onClick={() => checkoutMutation.mutate(option.kind)}
-                  disabled={checkoutMutation.isPending}
-                  className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-60"
-                >
-                  Buy
-                </button>
+              {checkoutLoading === tier.checkoutKind ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+              ) : tier.checkoutKind ? (
+                <><ExternalLink className="h-4 w-4" /> {tier.cta}</>
               ) : (
-                <Link to="/signup" className="rounded-full bg-white/[0.06] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.1]">
-                  Sign up
-                </Link>
+                tier.cta
               )}
+            </button>
+
+            <div className="mt-8 space-y-4 flex-1">
+              {tier.features.map((feature, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <CheckCircle2 className={`h-5 w-5 shrink-0 ${tier.highlighted ? 'text-fuchsia-400' : 'text-zinc-500'}`} />
+                  <span className="text-sm font-medium text-zinc-300">{feature}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </section>
 
-      {/* ── TBD Notice ── */}
-      <div className="text-center text-xs text-zinc-600">
-        Prices may change during alpha. Final pricing will be announced before launch.
-      </div>
-    </AppPage>
+      {/* Recent Activity */}
+      {billing && billing.recent_activity.length > 0 && (
+        <section className="pt-8">
+          <h2 className="text-xl font-bold text-white mb-4">Recent Activity</h2>
+          <div className="space-y-2">
+            {billing.recent_activity.slice(0, 8).map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded-xl border border-white/[0.04] bg-white/[0.02] px-5 py-3">
+                <div>
+                  <span className="text-sm font-medium text-zinc-200">{entry.description}</span>
+                  <span className="ml-3 text-xs text-zinc-500">{new Date(entry.created_at).toLocaleDateString()}</span>
+                </div>
+                <span className={`text-sm font-bold ${entry.amount > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {entry.amount > 0 ? '+' : ''}{entry.amount} credits
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      
+      {/* Footer Trust Markers */}
+      <section className="pt-12 mt-12 border-t border-white/[0.05] grid gap-8 md:grid-cols-2 text-zinc-400 text-sm">
+         <div className="flex gap-4 items-center">
+            <Cpu className="h-8 w-8 text-zinc-600" />
+            <div>
+               <p className="font-semibold text-zinc-200">Enterprise Grade Hardware</p>
+               <p>All generations are processed on private scalable A100 infrastructure ensuring maximum uptime and data privacy.</p>
+            </div>
+         </div>
+         <div className="flex gap-4 items-center">
+            <ShieldCheck className="h-8 w-8 text-zinc-600" />
+            <div>
+               <p className="font-semibold text-zinc-200">Powered by LemonSqueezy</p>
+               <p>Secure global payments with support for 100+ countries. Your financial data never touches our servers.</p>
+            </div>
+         </div>
+      </section>
+
+    </div>
   )
 }

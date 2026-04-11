@@ -114,6 +114,27 @@ def test_deployment_verification_passes_when_launch_truth_is_ready() -> None:
                 current_stage_status="ready",
                 summary="Protected beta gate is clear and public paid work is next.",
             ),
+            "cost_telemetry": {
+                "window_days": 30,
+                "total_spend_usd": 0.0,
+                "event_count": 0,
+                "providers": [],
+                "provider_models": [],
+                "studio_models": [],
+                "surfaces": [],
+                "days": [],
+                "recent_events": [],
+                "coverage": {},
+            },
+            "truth_sync": {
+                "current_build": "2026.04.07.26",
+                "summary": "Operator artefacts are synchronized to the current build.",
+                "all_present": True,
+                "all_current_build": True,
+                "blocking_artifacts": [],
+                "warning_artifacts": [],
+                "artifacts": [],
+            },
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -409,6 +430,27 @@ def test_deployment_verification_warning_report_can_still_round_trip_into_launch
                 current_stage_status="ready",
                 summary="Protected beta is clear and public paid readiness is next.",
             ),
+            "cost_telemetry": {
+                "window_days": 30,
+                "total_spend_usd": 0.0,
+                "event_count": 0,
+                "providers": [],
+                "provider_models": [],
+                "studio_models": [],
+                "surfaces": [],
+                "days": [],
+                "recent_events": [],
+                "coverage": {},
+            },
+            "truth_sync": {
+                "current_build": current_build,
+                "summary": "Operator artefacts are synchronized to the current build.",
+                "all_present": True,
+                "all_current_build": True,
+                "blocking_artifacts": [],
+                "warning_artifacts": [],
+                "artifacts": [],
+            },
         },
         login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
         owner_health_checked=True,
@@ -461,6 +503,113 @@ def test_deployment_verification_requires_platform_readiness_visibility_for_owne
     )
     assert visibility_check["status"] == "warning"
     assert any("platform_readiness" in gap for gap in report["closure_gaps"])
+
+
+def test_deployment_verification_includes_cost_telemetry_when_owner_truth_exposes_it() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.10.43",
+        version_payload={"build": "2026.04.10.43"},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Safe for protected launch.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": [],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.10.43",
+            },
+            "launch_readiness": {"status": "ready", "summary": "No blockers"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": "2026.04.10.43",
+            },
+            "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                current_stage_status="ready",
+                summary="Protected beta is clear and public paid readiness is next.",
+            ),
+            "cost_telemetry": {
+                "window_days": 30,
+                "window_start": "2026-03-11T00:00:00Z",
+                "window_end": "2026-04-10T23:59:59Z",
+                "total_spend_usd": 1.23,
+                "event_count": 3,
+                "providers": [{"provider": "openai", "total_spend_usd": 1.23, "event_count": 3}],
+                "provider_models": [],
+                "studio_models": [],
+                "surfaces": [],
+                "days": [],
+                "recent_events": [],
+                "coverage": {},
+            },
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build="2026.04.10.43",
+    )
+
+    visibility_check = next(check for check in report["checks"] if check["key"] == "cost_telemetry_visibility")
+    assert visibility_check["status"] == "pass"
+    assert report["cost_telemetry"]["total_spend_usd"] == 1.23
+    assert report["cost_telemetry"]["window_days"] == 30
+
+
+def test_deployment_verification_includes_truth_sync_when_owner_truth_exposes_it() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.10.44",
+        version_payload={"build": "2026.04.10.44"},
+        health_payload={"status": "healthy"},
+        health_detail_payload={
+            "launch_gate": {
+                "status": "ready",
+                "summary": "Safe for protected launch.",
+                "ready_for_protected_launch": True,
+                "blocking_keys": [],
+                "warning_keys": [],
+                "blocking_reasons": [],
+                "warning_reasons": [],
+                "last_verified_build": "2026.04.10.44",
+            },
+            "launch_readiness": {"status": "ready", "summary": "No blockers"},
+            "startup_verification": {"status": "pass"},
+            "deployment_verification": {
+                "label": "protected-staging",
+                "base_url": "https://staging-studio.omniacreata.com",
+                "actual_build": "2026.04.10.44",
+            },
+            "runtime_logs": {"outside_repo": True},
+            "platform_readiness": _platform_readiness_payload(
+                current_stage_status="ready",
+                summary="Protected beta is clear and public paid readiness is next.",
+            ),
+            "truth_sync": {
+                "current_build": "2026.04.10.44",
+                "summary": "Some operator artefacts still point at an older build.",
+                "all_present": True,
+                "all_current_build": False,
+                "blocking_artifacts": [],
+                "warning_artifacts": ["provider_smoke"],
+                "artifacts": [],
+            },
+        },
+        login_page_html="<html><head><title>OmniaCreata Studio</title></head><body>OmniaCreata Studio</body></html>",
+        owner_health_checked=True,
+        expected_report_label="protected-staging",
+        expected_report_base_url="https://staging-studio.omniacreata.com",
+        expected_report_build="2026.04.10.44",
+    )
+
+    assert report["truth_sync"]["current_build"] == "2026.04.10.44"
+    assert report["truth_sync"]["warning_artifacts"] == ["provider_smoke"]
 
 
 def test_deployment_verification_exit_code_requires_closure_ready_when_requested() -> None:

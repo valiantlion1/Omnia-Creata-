@@ -67,7 +67,7 @@ const useCaseTabs = [
 const steps = [
   { icon: Eye, title: 'Explore', description: 'Browse trending images and discover styles that inspire you.' },
   { icon: Sparkles, title: 'Create', description: 'Write a prompt, pick a model, and generate stunning visuals.' },
-  { icon: FolderHeart, title: 'Organize', description: 'Save to collections, build your library, find anything instantly.' },
+  { icon: FolderHeart, title: 'Organize', description: 'Save to projects, build your library, find anything instantly.' },
 ]
 
 /* ─── scroll hooks ─── */
@@ -185,7 +185,7 @@ export default function HomePage() {
                 <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>AI images</span> in seconds.
               </h1>
               <p className="mt-6 max-w-md text-base leading-7 text-zinc-300">
-                Write a prompt, choose a style, and generate. Save your favorites, organize them into collections, and share them with the world.
+                Write a prompt, choose a style, and generate. Save your favorites, organize them into projects, and share them with the world.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link to={cta} className="inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 4px 24px rgba(124,58,237,0.18)' }}>

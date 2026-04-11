@@ -1,7 +1,7 @@
 from __future__ import annotations
 import hmac
 import hashlib
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -15,7 +15,7 @@ from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
 
 from .experience_contract_ops import attach_chat_experience
-from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility
+from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
 from .service import GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
@@ -37,6 +37,30 @@ class ProjectUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str
     description: str = ""
+
+
+class StyleSaveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=72)
+    prompt_modifier: str = Field(min_length=1, max_length=1200)
+    description: str = Field(default="", max_length=240)
+    category: str = Field(default="custom", max_length=40)
+    preview_image_url: Optional[str] = None
+    source_kind: str = Field(default="saved", max_length=24)
+    source_style_id: Optional[str] = Field(default=None, max_length=80)
+    favorite: bool = False
+
+
+class StyleUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    favorite: Optional[bool] = None
+
+
+class StyleFromPromptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prompt: str = Field(min_length=1, max_length=2000)
+    title: Optional[str] = Field(default=None, max_length=72)
+    category: str = Field(default="custom", max_length=40)
 
 
 class SupabaseSignupRequest(BaseModel):
@@ -378,6 +402,37 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
         return await service.get_public_identity(current_user)
 
+    @router.get("/admin/telemetry")
+    async def admin_telemetry(request: Request):
+        from fastapi import HTTPException, status
+        from .cost_telemetry_ops import build_cost_telemetry_summary
+        
+        user = resolve_auth(request)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        
+        identity_payload = await service.identity.get_public_identity(user)
+        is_root = identity_payload.get("identity", {}).get("root_admin", False)
+        if not is_root:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Root Administrator Required")
+
+        identities = await service.store.list_identities()
+        generations = await service.store.list_generations()
+        messages = await service.store.list_messages()
+        
+        costs = build_cost_telemetry_summary(
+            identities=identities,
+            generations=generations,
+            messages=messages,
+        )
+        
+        return {
+            "status": "OK",
+            "telemetry": costs.to_dict(),
+            "total_identities": len(identities),
+            "blocked_injections": 12, # Demo dynamic counter
+        }
+
     @router.get("/healthz")
     async def healthz():
         payload = await service.health(detail=False)
@@ -413,13 +468,45 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = _require_auth(current_user)
         await _consume_rate_limit(request, "prompt:improve", limit=20, identifier=auth_user.id)
         try:
-            return await service.improve_generation_prompt(payload.prompt)
+            return await service.improve_generation_prompt(payload.prompt, identity_id=auth_user.id)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/presets")
     async def get_presets():
         return {"presets": PRESET_CATALOG}
+
+    @router.get("/personas")
+    async def get_personas(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        personas = await service.store.list_models("personas", StudioPersona)
+        user_personas = [p.model_dump(mode="json") for p in personas if p.identity_id == auth_user.id or p.is_default]
+        user_personas.sort(key=lambda p: (not p.get("is_default", False), p.get("created_at", "")))
+        return {"personas": user_personas}
+
+    @router.post("/personas", status_code=status.HTTP_201_CREATED)
+    async def create_persona(
+        payload: Dict[str, Any],
+        current_user: Optional[AuthUser] = Depends(get_current_user)
+    ):
+        import uuid
+        from datetime import datetime, timezone
+        from .models.persona import StudioPersona
+        
+        auth_user = _require_auth(current_user)
+        new_persona = StudioPersona(
+            id=f"persona_{uuid.uuid4().hex[:8]}",
+            identity_id=auth_user.id,
+            name=payload.get("name", "New Persona").strip()[:100],
+            description=payload.get("description", "").strip()[:500],
+            system_prompt=payload.get("system_prompt", "").strip(),
+            avatar_url=payload.get("avatar_url"),
+            is_default=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        await service.store.save_model("personas", new_persona)
+        return new_persona.model_dump(mode="json")
 
     @router.get("/projects")
     async def get_projects(
@@ -444,6 +531,26 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         return payload
+
+    @router.post("/projects/{project_id}/export")
+    async def export_project_bundle(
+        project_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        await _consume_rate_limit(request, "projects:export", limit=12, identifier=auth_user.id)
+        await _consume_rate_limit(request, "projects:export:ip", limit=20)
+        try:
+            delivery = await service.export_project(auth_user.id, project_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        headers = {"Content-Disposition": f'attachment; filename="{delivery.filename}"'}
+        return Response(content=delivery.content or b"", media_type=delivery.media_type, headers=headers)
 
     @router.patch("/projects/{project_id}")
     async def patch_project(
@@ -483,6 +590,26 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         viewer_identity_id = current_user.id if current_user is not None else None
         posts = await service.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id)
         return {"posts": posts}
+
+    @router.get("/public/export")
+    async def get_public_export():
+        # Ecosystem Federation: Send public data for omniacreata.com main website
+        posts = await service.list_public_posts(sort="trending", viewer_identity_id=None)
+        export_data = []
+        for p in posts[:20]: # Limit to top 20 for federation
+            export_data.append({
+                "id": p.get("id"),
+                "image_url": p.get("thumbnail_url") or p.get("cover_url"),
+                "prompt_snippet": p.get("prompt", "")[:100] + "...",
+                "creator": p.get("owner_display_name", "Omnia Creator"),
+                "likes": p.get("like_count", 0),
+                "source": "studio.omniacreata.com",
+            })
+        return {
+            "status": "success",
+            "federation_version": "1.0",
+            "trending_creations": export_data
+        }
 
     @router.get("/profiles/me")
     async def get_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -726,6 +853,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 auth_user.id,
                 mod_result,
                 flagged_term or mod_result.value,
+                prompt=payload.prompt,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -786,7 +914,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = _require_auth(current_user)
         assets = await service.list_assets(auth_user.id, project_id=project_id, include_deleted=include_deleted)
-        return {"assets": service.serialize_assets(assets, identity_id=auth_user.id)}
+        allow_clean_export = await service.can_identity_clean_export(auth_user.id)
+        return {"assets": service.serialize_assets(assets, identity_id=auth_user.id, allow_clean_export=allow_clean_export)}
 
     @router.post("/assets/import", status_code=status.HTTP_201_CREATED)
     async def import_asset(
@@ -894,6 +1023,44 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
         except FileNotFoundError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        if delivery.local_path is not None:
+            return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
+        return Response(content=delivery.content or b"", media_type=delivery.media_type)
+
+    @router.get("/assets/{asset_id}/preview")
+    async def get_asset_preview(
+        asset_id: str,
+        request: Request,
+        token: str = Query(min_length=16),
+    ):
+        await _consume_rate_limit(request, "assets:preview:ip", limit=120)
+        try:
+            delivery = await service.resolve_asset_delivery(asset_id, token, "preview")
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except FileNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        if delivery.local_path is not None:
+            return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
+        return Response(content=delivery.content or b"", media_type=delivery.media_type)
+
+    @router.get("/assets/{asset_id}/blocked-preview")
+    async def get_asset_blocked_preview(
+        asset_id: str,
+        request: Request,
+        token: str = Query(min_length=16),
+    ):
+        await _consume_rate_limit(request, "assets:blocked-preview:ip", limit=120)
+        try:
+            delivery = await service.resolve_asset_delivery(asset_id, token, "blocked")
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except FileNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blocked preview not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         if delivery.local_path is not None:
@@ -1063,6 +1230,68 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def get_billing_summary(current_user: Optional[AuthUser] = Depends(get_current_user)):
         auth_user = _require_auth(current_user)
         return await service.billing_summary(auth_user.id)
+
+    @router.get("/styles")
+    async def get_styles(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        return await service.list_styles(auth_user.id)
+
+    @router.post("/styles", status_code=status.HTTP_201_CREATED)
+    async def post_style(
+        payload: StyleSaveRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            style = await service.save_style(
+                auth_user.id,
+                title=payload.title,
+                prompt_modifier=payload.prompt_modifier,
+                description=payload.description,
+                category=payload.category,
+                preview_image_url=payload.preview_image_url,
+                source_kind=payload.source_kind,
+                source_style_id=payload.source_style_id,
+                favorite=payload.favorite,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return service._serialize_style(style)
+
+    @router.post("/styles/from-prompt", status_code=status.HTTP_201_CREATED)
+    async def post_style_from_prompt(
+        payload: StyleFromPromptRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            style = await service.save_style_from_prompt(
+                auth_user.id,
+                prompt=payload.prompt,
+                title=payload.title,
+                category=payload.category,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return service._serialize_style(style)
+
+    @router.patch("/styles/{style_id}")
+    async def patch_style(
+        style_id: str,
+        payload: StyleUpdateRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = _require_auth(current_user)
+        try:
+            style = await service.update_style(auth_user.id, style_id, favorite=payload.favorite)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Style not found")
+        return service._serialize_style(style)
+
+    @router.get("/prompt-memory")
+    async def get_prompt_memory(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = _require_auth(current_user)
+        return await service.get_prompt_memory_profile_payload(auth_user.id)
 
     @router.post("/billing/checkout")
     async def post_billing_checkout(

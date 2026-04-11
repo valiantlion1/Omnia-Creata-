@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: studio_postgres
+    environment:
+      POSTGRES_USER: studio_db_user
+      POSTGRES_PASSWORD: studio_db_password
+      POSTGRES_DB: omniacreata
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio_db_user -d omniacreata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: studio_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  studio-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: studio_backend
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  studio-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: studio_web
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: studio_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command: caddy reverse-proxy --from http://localhost:80 --to http://studio-web:3000
+    # To add backend proxy rule:
+    # We should mount a Caddyfile.
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - studio-web
+      - studio-backend
+
+volumes:
+  pgdata:
+  redisdata:

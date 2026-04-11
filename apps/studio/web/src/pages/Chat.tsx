@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Brain, Eye, ImageOff, Loader2, MessageCircle, Paperclip, Pencil, Send, Wand2, X } from 'lucide-react'
+import { Brain, Eye, ImageOff, Loader2, MessageCircle, Paperclip, Send, Wand2, X } from 'lucide-react'
 
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
@@ -17,6 +17,7 @@ import {
   resolveSuggestedDraft,
 } from '@/lib/chatActionBridge'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { usePageVisibility } from '@/lib/usePageVisibility'
 
 /* ─── Constants ────────────────────────────────────── */
 
@@ -295,19 +296,6 @@ function summarizeGenerationFailure(error: string | null) {
   return "Something went wrong while creating your image. Want to try a different prompt?"
 }
 
-function resolveGenerationFailureLabel(status: JobStatus) {
-  switch (normalizeJobStatus(status)) {
-    case 'retryable_failed':
-      return 'Could not complete'
-    case 'timed_out':
-      return 'Took too long'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'Could not create image'
-  }
-}
-
 function shouldStartAssistantVisualGeneration(
   message: ChatMessage | null | undefined,
   requestedMode: ComposeMode,
@@ -424,14 +412,10 @@ function isTerminalStatus(status: JobStatus) {
 /** ChatGPT-style progressive image reveal */
 function ProgressiveImage({ src, alt, onOpen }: { src: string; alt: string; onOpen?: () => void }) {
   const [loaded, setLoaded] = useState(false)
-  const [revealed, setRevealed] = useState(false)
 
-  useEffect(() => { setLoaded(false); setRevealed(false) }, [src])
   useEffect(() => {
-    if (!loaded) return
-    const timer = window.setTimeout(() => setRevealed(true), 100)
-    return () => window.clearTimeout(timer)
-  }, [loaded])
+    setLoaded(false)
+  }, [src])
 
   return (
     <div
@@ -446,27 +430,18 @@ function ProgressiveImage({ src, alt, onOpen }: { src: string; alt: string; onOp
         }
       } : undefined}
     >
-      {/* Blurred background placeholder */}
-      <img src={src} alt="" aria-hidden className="aspect-[4/5] w-full max-w-[360px] object-cover blur-xl saturate-110 scale-[1.08] opacity-40" />
-      {/* Actual image with reveal animation */}
+      <div className="aspect-[4/5] w-full max-w-[360px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.07),transparent_58%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]" />
+      {!loaded ? (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-white/[0.03] animate-pulse" />
+      ) : null}
       <img
         src={src}
         alt={alt}
         onLoad={() => setLoaded(true)}
-        className="absolute inset-0 h-full w-full object-cover transition-all duration-[1600ms] ease-out"
-        style={{
-          clipPath: revealed ? 'inset(0 0 0 0 round 16px)' : 'inset(0 0 100% 0 round 16px)',
-          filter: loaded ? 'none' : 'blur(16px)',
-          opacity: loaded ? 1 : 0.5,
-        }}
+        className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-500 ease-out ${
+          loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+        }`}
       />
-      {/* Shimmer sweep during reveal */}
-      {!revealed ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/20 to-transparent transition-transform duration-[1600ms] ease-out"
-          style={{ transform: revealed ? 'translateY(400px)' : 'translateY(0)' }}
-        />
-      ) : null}
       {onOpen ? <LightboxTrigger onClick={onOpen} /> : null}
     </div>
   )
@@ -499,18 +474,10 @@ function GenerationPending({ title }: { title: string }) {
 
 function GenerationBlocked({
   title,
-  status,
   error,
-  model,
-  aspectRatio,
-  mode,
 }: {
   title: string
-  status: JobStatus
   error: string | null
-  model: string | null
-  aspectRatio: string | null
-  mode: ComposeMode
 }) {
   const summary = summarizeGenerationFailure(error)
 
@@ -605,6 +572,7 @@ export default function ChatPage() {
   const [conversationProjects, setConversationProjects] = useState<Record<string, string>>({})
 
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const isPageVisible = usePageVisibility()
 
   /* ─── Lifecycle ───────────────────────────────── */
 
@@ -635,8 +603,18 @@ export default function ChatPage() {
     setConversationProjects(readStoredJson<Record<string, string>>(CHAT_PROJECT_STORAGE_KEY, {}))
   }, [])
 
-  useEffect(() => { window.localStorage.setItem(CHAT_VISUAL_STORAGE_KEY, JSON.stringify(visualMessages)) }, [visualMessages])
-  useEffect(() => { window.localStorage.setItem(CHAT_PROJECT_STORAGE_KEY, JSON.stringify(conversationProjects)) }, [conversationProjects])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      window.localStorage.setItem(CHAT_VISUAL_STORAGE_KEY, JSON.stringify(visualMessages))
+    }, 400)
+    return () => window.clearTimeout(timeout)
+  }, [visualMessages])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      window.localStorage.setItem(CHAT_PROJECT_STORAGE_KEY, JSON.stringify(conversationProjects))
+    }, 400)
+    return () => window.clearTimeout(timeout)
+  }, [conversationProjects])
   useEffect(() => {
     const previous = previousPendingAttachmentsRef.current
     const activeIds = new Set(pendingAttachments.map((attachment) => attachment.id))
@@ -816,16 +794,6 @@ export default function ChatPage() {
     return () => window.cancelAnimationFrame(frame)
   }, [timeline.length, sendMessageMutation.isPending])
 
-  const composerHint = useMemo(() => {
-    if (composeMode === 'Think') {
-      return pendingAttachments.some((attachment) => attachment.kind === 'image')
-        ? 'Photo attached'
-        : ''
-    }
-    if (composeMode === 'Vision') return ''
-    return ''
-  }, [composeMode, pendingAttachments])
-
   const focusComposer = useCallback(() => {
     window.requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
@@ -870,48 +838,69 @@ export default function ChatPage() {
   }, [focusComposer, messages, navigate])
 
   useEffect(() => {
-    if (!canLoadPrivate) return
-    if (!pendingVisuals.length) return
+    if (!canLoadPrivate || !isPageVisible || !pendingVisuals.length) return
 
-    const interval = window.setInterval(async () => {
+    const pollPendingVisuals = async () => {
       const snapshots = await Promise.all(
         pendingVisuals.map(async (v) => {
-          try { const g = await studioApi.getGeneration(v.jobId as string); return [v.id, g] as const }
-          catch { return null }
+          try {
+            const generation = await studioApi.getGeneration(v.jobId as string)
+            return [v.id, generation] as const
+          } catch {
+            return null
+          }
         }),
       )
+
       const snapshotMap = new Map(snapshots.filter(Boolean) as Array<readonly [string, Awaited<ReturnType<typeof studioApi.getGeneration>>]>)
       let invalidate = false
       startTransition(() => {
-        setVisualMessages((current) =>
-          current.map((v) => {
+        setVisualMessages((current) => {
+          let hasChanges = false
+          const nextState = current.map((v) => {
             const snap = snapshotMap.get(v.id)
             if (!snap) return v
+
             if (!isTerminalStatus(v.status) && isTerminalStatus(snap.status)) invalidate = true
-            return {
-              ...v,
-              title: snap.title,
-              prompt: snap.prompt_snapshot.prompt || v.prompt,
-              model: snap.model || v.model,
-              aspectRatio: snap.prompt_snapshot.aspect_ratio || v.aspectRatio,
-              workflow: snap.prompt_snapshot.workflow || v.workflow,
-              referenceAssetId: snap.prompt_snapshot.reference_asset_id || v.referenceAssetId,
-              status: snap.status,
-              outputs: snap.outputs,
-              error: snap.error,
-              updatedAt: new Date().toISOString(),
+
+            if (v.status !== snap.status || (snap.error && v.error !== snap.error) || (snap.outputs?.length !== v.outputs?.length)) {
+              hasChanges = true
+              return {
+                ...v,
+                title: snap.title,
+                prompt: snap.prompt_snapshot.prompt || v.prompt,
+                model: snap.model || v.model,
+                aspectRatio: snap.prompt_snapshot.aspect_ratio || v.aspectRatio,
+                workflow: snap.prompt_snapshot.workflow || v.workflow,
+                referenceAssetId: snap.prompt_snapshot.reference_asset_id || v.referenceAssetId,
+                status: snap.status,
+                outputs: snap.outputs,
+                error: snap.error,
+                updatedAt: new Date().toISOString(),
+              }
             }
-          }),
-        )
+            return v
+          })
+          return hasChanges ? nextState : current
+        })
       })
+
       if (invalidate) {
-        await queryClient.invalidateQueries({ queryKey: ['assets'] })
-        await queryClient.invalidateQueries({ queryKey: ['generations'] })
-        await queryClient.invalidateQueries({ queryKey: ['projects'] })
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['assets'] }),
+          queryClient.invalidateQueries({ queryKey: ['generations'] }),
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+        ])
       }
-    }, 1500)
+    }
+
+    void pollPendingVisuals()
+    const interval = window.setInterval(() => {
+      void pollPendingVisuals()
+    }, 3000)
+
     return () => window.clearInterval(interval)
-  }, [canLoadPrivate, pendingVisualPollKey, queryClient])
+  }, [canLoadPrivate, isPageVisible, pendingVisualPollKey, pendingVisuals, queryClient])
 
 
   /* ─── Handlers ────────────────────────────────── */
@@ -1242,11 +1231,7 @@ export default function ChatPage() {
               ) : ['failed', 'retryable_failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(visual.status)) ? (
                         <GenerationBlocked
                           title={visual.title}
-                          status={visual.status}
                           error={visual.error}
-                          model={visual.model}
-                          aspectRatio={visual.aspectRatio}
-                          mode={visual.mode}
                         />
                       ) : (
                         <GenerationPending title={visual.title} />

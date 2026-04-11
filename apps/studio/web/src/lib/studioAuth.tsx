@@ -46,26 +46,12 @@ let oauthCompletionKeyInFlight: string | null = null
 let oauthCompletionPromiseInFlight: Promise<void> | null = null
 
 function readAuthSnapshot() {
-  if (typeof window === 'undefined') return undefined
-  const raw = window.localStorage.getItem(AUTH_SNAPSHOT_KEY)
-  if (!raw) return undefined
-
-  try {
-    return JSON.parse(raw) as AuthMeResponse
-  } catch {
-    window.localStorage.removeItem(AUTH_SNAPSHOT_KEY)
-    return undefined
-  }
+  return undefined
 }
 
 function writeAuthSnapshot(value: AuthMeResponse | null) {
   if (typeof window === 'undefined') return
-  if (!value) {
-    window.localStorage.removeItem(AUTH_SNAPSHOT_KEY)
-    return
-  }
-
-  window.localStorage.setItem(AUTH_SNAPSHOT_KEY, JSON.stringify(value))
+  window.localStorage.removeItem(AUTH_SNAPSHOT_KEY)
 }
 
 async function syncBrowserSession(accessToken: string, refreshToken?: string) {
@@ -375,51 +361,24 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
         throw new Error(callbackError)
       }
 
-      const currentUrl = typeof window === 'undefined' ? null : new URL(window.location.href)
-      const authCode = currentUrl?.searchParams.get('code')
-      const hashParams = new URLSearchParams(currentUrl?.hash.replace(/^#/, '') ?? '')
-      const hashAccessToken = hashParams.get('access_token')
-      const hashRefreshToken = hashParams.get('refresh_token')
+      // With detectSessionInUrl: true and PKCE flow, Supabase client
+      // auto-exchanges the ?code= param on initialization. We just need
+      // to wait for the session to become available via getSession().
       let session = null
 
-      if (hashAccessToken && hashRefreshToken) {
-        logAuthTrace('oauth_callback_setting_hash_session', { hasHashAccessToken: true, hasHashRefreshToken: true })
-        const { data, error } = await supabaseBrowser.auth.setSession({
-          access_token: hashAccessToken,
-          refresh_token: hashRefreshToken,
-        })
+      for (const delayMs of OAUTH_SESSION_RETRY_DELAYS_MS) {
+        if (delayMs) {
+          await wait(delayMs)
+        }
+        const { data, error } = await supabaseBrowser.auth.getSession()
         if (error) {
           clearOAuthCallbackUrl()
           throw error
         }
-        session = data.session
-      }
-
-      if (!session?.access_token && authCode) {
-        logAuthTrace('oauth_callback_exchanging_code', { hasCode: true })
-        const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(authCode)
-        if (error) {
-          clearOAuthCallbackUrl()
-          throw error
-        }
-        session = data.session
-      }
-
-      if (!session?.access_token) {
-        for (const delayMs of OAUTH_SESSION_RETRY_DELAYS_MS) {
-          if (delayMs) {
-            await wait(delayMs)
-          }
-          const { data, error } = await supabaseBrowser.auth.getSession()
-          if (error) {
-            clearOAuthCallbackUrl()
-            throw error
-          }
-          if (data.session?.access_token) {
-            session = data.session
-            logAuthTrace('oauth_callback_session_detected', { delayMs })
-            break
-          }
+        if (data.session?.access_token) {
+          session = data.session
+          logAuthTrace('oauth_callback_session_detected', { delayMs })
+          break
         }
       }
 

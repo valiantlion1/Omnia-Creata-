@@ -45,6 +45,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip expected-failure probes that validate error mapping.",
     )
+    parser.add_argument(
+        "--profile",
+        choices=("full", "refresh"),
+        default="full",
+        help="Smoke profile. 'refresh' keeps current-build truth fresh with cheaper required-path cases only.",
+    )
     return parser.parse_args()
 
 
@@ -101,6 +107,7 @@ async def main() -> int:
         selected_provider=args.provider,
         selected_surface=args.surface,
         include_failure_probe=not args.skip_failure_probe,
+        profile=args.profile,
     )
     report = persist_provider_smoke_report(
         settings,
@@ -113,6 +120,7 @@ async def main() -> int:
     payload = {
         "provider": args.provider,
         "surface": args.surface,
+        "profile": args.profile,
         "report_path": report["path"],
         "summary": report["summary"],
         "coverage": report.get("coverage"),

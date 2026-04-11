@@ -19,8 +19,11 @@ def filter_projects(
     *,
     identity_id: str,
     surface: Optional[ProjectSurface] = None,
+    include_system_managed: bool = False,
 ) -> list[Project]:
     filtered = [project for project in projects if project.identity_id == identity_id]
+    if not include_system_managed:
+        filtered = [project for project in filtered if not project.system_managed]
     if surface is not None:
         normalized_surface = normalize_project_surface(surface)
         filtered = [project for project in filtered if normalize_project_surface(project.surface) == normalized_surface]
@@ -34,6 +37,7 @@ def create_project_record(
     title: str,
     description: str = "",
     surface: Optional[str] = None,
+    system_managed: bool = False,
 ) -> Project:
     return Project(
         workspace_id=workspace_id,
@@ -41,6 +45,7 @@ def create_project_record(
         title=title.strip() or "Untitled Project",
         description=description.strip(),
         surface=normalize_project_surface(surface),
+        system_managed=system_managed,
     )
 
 

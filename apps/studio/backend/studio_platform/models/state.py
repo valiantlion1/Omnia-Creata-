@@ -10,6 +10,10 @@ from .generation import GenerationJob
 from .media import MediaAsset, PublicPost, ShareLink
 from .chat import ChatConversation, ChatMessage
 from .billing import BillingWebhookReceipt, CreditLedgerEntry
+from .telemetry import CostTelemetryEvent
+from .persona import StudioPersona
+from .prompt_memory import PromptMemoryProfile
+from .style import StudioStyle
 
 
 class StudioState(BaseModel):
@@ -24,3 +28,7 @@ class StudioState(BaseModel):
     shares: Dict[str, ShareLink] = Field(default_factory=dict)
     credit_ledger: Dict[str, CreditLedgerEntry] = Field(default_factory=dict)
     billing_webhook_receipts: Dict[str, BillingWebhookReceipt] = Field(default_factory=dict)
+    cost_telemetry_events: Dict[str, CostTelemetryEvent] = Field(default_factory=dict)
+    personas: Dict[str, StudioPersona] = Field(default_factory=dict)
+    styles: Dict[str, StudioStyle] = Field(default_factory=dict)
+    prompt_memories: Dict[str, PromptMemoryProfile] = Field(default_factory=dict)

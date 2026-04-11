@@ -10,7 +10,7 @@ from passlib.hash import bcrypt
 import secrets
 import time
 from enum import Enum
-from config.env import get_settings
+from config.env import get_settings, reveal_secret
 from .supabase_auth import SupabaseAuthClient, SupabaseAuthError
 
 logger = logging.getLogger(__name__)
@@ -307,8 +307,9 @@ _supabase_auth_client: Optional[SupabaseAuthClient] = None
 
 def _build_supabase_auth_client_from_settings() -> Optional[SupabaseAuthClient]:
     settings = get_settings()
-    if settings.supabase_url and settings.supabase_anon_key:
-        return SupabaseAuthClient(settings.supabase_url, settings.supabase_anon_key)
+    anon_key = reveal_secret(settings.supabase_anon_key)
+    if settings.supabase_url and anon_key:
+        return SupabaseAuthClient(settings.supabase_url, anon_key)
     return None
 
 
@@ -344,9 +345,15 @@ def get_supabase_auth_client() -> Optional[SupabaseAuthClient]:
 def create_auth_config_from_env() -> AuthConfig:
     """Create auth configuration from environment variables"""
     import os
+    from .secrets import get_secrets_provider
+    
+    provider = get_secrets_provider()
+    
+    # Safely extract secret
+    jwt_secret_val = provider.get_secret("AUTH_SECRET_KEY") or provider.get_secret("JWT_SECRET")
     
     return AuthConfig(
-        secret_key=os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET", ""),
+        secret_key=jwt_secret_val.get_secret_value() if jwt_secret_val else "",
         algorithm=os.getenv("AUTH_ALGORITHM", "HS256"),
         access_token_expire_minutes=int(os.getenv("AUTH_ACCESS_TOKEN_EXPIRE_MINUTES", "30")),
         refresh_token_expire_days=int(os.getenv("AUTH_REFRESH_TOKEN_EXPIRE_DAYS", "7")),
@@ -357,7 +364,6 @@ def create_auth_config_from_env() -> AuthConfig:
         api_key_prefix=os.getenv("AUTH_API_KEY_PREFIX", "oc_"),
         api_key_length=int(os.getenv("AUTH_API_KEY_LENGTH", "32"))
     )
-
 
 # FastAPI dependencies
 security = HTTPBearer(auto_error=False)

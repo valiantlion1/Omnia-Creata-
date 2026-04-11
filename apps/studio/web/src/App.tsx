@@ -1,29 +1,19 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LightboxProvider } from '@/components/Lightbox'
-import posthog from 'posthog-js'
-import { PostHogProvider } from 'posthog-js/react'
 
 import StudioShell from '@/components/StudioShell'
-import { CommandPalette } from '@/components/CommandPalette'
-import { ShortcutModal } from '@/components/ShortcutModal'
+import { ToastProvider } from '@/components/Toast'
+import { useStudioAuth } from '@/lib/studioAuth'
+import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
 const shouldEnablePosthog = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
-
-if (shouldEnablePosthog) {
-  posthog.init(posthogKey, {
-    api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com',
-    loaded: (posthog_instance) => {
-      if (import.meta.env.DEV) {
-        posthog_instance.opt_out_capturing()
-      }
-    },
-  })
-}
-import { useStudioAuth } from '@/lib/studioAuth'
-import { setStudioPostAuthRedirect } from '@/lib/studioSession'
+let posthogBootstrapPromise: Promise<{
+  Provider: ComponentType<{ client: unknown; children: ReactNode }>
+  client: unknown
+}> | null = null
 
 const AccountPage = lazy(() => import('@/pages/Account'))
 const BillingPage = lazy(() => import('@/pages/Billing'))
@@ -32,14 +22,70 @@ const CreatePage = lazy(() => import('@/pages/Create'))
 const DashboardPage = lazy(() => import('@/pages/Dashboard'))
 const DocumentationPage = lazy(() => import('@/pages/Documentation'))
 const ElementsPage = lazy(() => import('@/pages/Elements'))
-const HomePage = lazy(() => import('@/pages/Home'))
+const LandingPage = lazy(() => import('@/pages/Landing'))
 const LoginPage = lazy(() => import('@/pages/Login'))
 const MediaLibraryPage = lazy(() => import('@/pages/MediaLibrary'))
 const ProjectPage = lazy(() => import('@/pages/Project'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
 const SharedPage = lazy(() => import('@/pages/Shared'))
 const SignupPage = lazy(() => import('@/pages/Signup'))
-const SplashPage = lazy(() => import('@/pages/Splash'))
+const CommunityPage = lazy(() => import('@/pages/Community'))
+const CharactersPage = lazy(() => import('@/pages/Characters'))
+const AnalyticsPage = lazy(() => import('@/pages/Analytics'))
+const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
+const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
+
+function loadPostHog() {
+  if (!posthogBootstrapPromise) {
+    posthogBootstrapPromise = Promise.all([import('posthog-js'), import('posthog-js/react')]).then(([posthogModule, reactModule]) => {
+      const client = posthogModule.default
+      client.init(posthogKey, {
+        api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://app.posthog.com',
+        loaded: (posthogInstance) => {
+          if (import.meta.env.DEV) {
+            posthogInstance.opt_out_capturing()
+          }
+        },
+      })
+
+      return {
+        Provider: reactModule.PostHogProvider as ComponentType<{ client: unknown; children: ReactNode }>,
+        client,
+      }
+    })
+  }
+
+  return posthogBootstrapPromise
+}
+
+function PostHogBoundary({ children }: { children: ReactNode }) {
+  const [providerState, setProviderState] = useState<{
+    Provider: ComponentType<{ client: unknown; children: ReactNode }>
+    client: unknown
+  } | null>(null)
+
+  useEffect(() => {
+    if (!shouldEnablePosthog) return undefined
+
+    let cancelled = false
+    void loadPostHog().then((state) => {
+      if (!cancelled) {
+        setProviderState(state)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!shouldEnablePosthog || !providerState) {
+    return <>{children}</>
+  }
+
+  const { Provider, client } = providerState
+  return <Provider client={client}>{children}</Provider>
+}
 
 function RouteFallback({ withShell = false }: { withShell?: boolean }) {
   const classes = withShell
@@ -52,8 +98,8 @@ function RouteFallback({ withShell = false }: { withShell?: boolean }) {
 function PublicRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<SplashPage />} />
-      <Route path="/landing" element={<HomePage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/help" element={<DocumentationPage />} />
@@ -75,9 +121,9 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route path="/explore" element={<DashboardPage />} />
-      <Route path="/community" element={<Navigate to="/explore" replace />} />
+      <Route path="/community" element={<CommunityPage />} />
       <Route path="/social" element={<Navigate to="/explore" replace />} />
-      <Route path="/dashboard" element={<Navigate to="/explore" replace />} />
+      <Route path="/dashboard" element={<AnalyticsPage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/compose" element={<Navigate to="/create" replace />} />
       <Route path="/chat" element={<ChatPage />} />
@@ -86,13 +132,14 @@ function ProtectedRoutes() {
       <Route path="/history" element={<Navigate to="/library/images" replace />} />
       <Route path="/library" element={<Navigate to="/library/images" replace />} />
       <Route path="/library/images" element={<MediaLibraryPage />} />
-      <Route path="/library/collections" element={<MediaLibraryPage />} />
+      <Route path="/library/projects" element={<MediaLibraryPage />} />
+      <Route path="/library/collections" element={<Navigate to="/library/projects" replace />} />
       <Route path="/library/likes" element={<MediaLibraryPage />} />
       <Route path="/library/trash" element={<MediaLibraryPage />} />
       <Route path="/media" element={<Navigate to="/library/images" replace />} />
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
-      <Route path="/elements/characters" element={<Navigate to="/elements/styles" replace />} />
+      <Route path="/elements/characters" element={<CharactersPage />} />
       <Route path="/help" element={<DocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
@@ -126,7 +173,8 @@ function AppFrame() {
     location.pathname === '/social' ||
     location.pathname === '/subscription' ||
     location.pathname === '/billing' ||
-    location.pathname === '/plan'
+    location.pathname === '/plan' ||
+    location.pathname.startsWith('/elements/')
   const isAlwaysPublic =
     location.pathname === '/' ||
     location.pathname === '/landing' ||
@@ -182,15 +230,19 @@ function AppFrame() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <PostHogProvider client={posthog}>
-        <LightboxProvider>
-          <Router>
-            <ShortcutModal />
-            <CommandPalette />
-            <AppFrame />
-          </Router>
-        </LightboxProvider>
-      </PostHogProvider>
+      <PostHogBoundary>
+        <ToastProvider>
+          <LightboxProvider>
+            <Router>
+              <Suspense fallback={null}>
+                <ShortcutModal />
+                <CommandPalette />
+              </Suspense>
+              <AppFrame />
+            </Router>
+          </LightboxProvider>
+        </ToastProvider>
+      </PostHogBoundary>
     </ErrorBoundary>
   )
 }

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from config.env import Environment, Settings
+from config.env import Environment, Settings, reveal_secret
 
 from ..versioning import load_version_info
 
@@ -201,6 +201,72 @@ def load_startup_verification_report(settings: Settings) -> dict[str, Any] | Non
     return payload
 
 
+def build_truth_sync_summary(
+    *,
+    provider_smoke_report: dict[str, Any] | None,
+    startup_verification_report: dict[str, Any] | None,
+    deployment_verification_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    current_build = load_version_info().build
+    artifacts: list[dict[str, Any]] = []
+    blocking_artifacts: list[str] = []
+    warning_artifacts: list[str] = []
+
+    artifact_specs = (
+        ("provider_smoke", "Provider Smoke", provider_smoke_report, ("build",)),
+        ("startup_verification", "Startup Verification", startup_verification_report, ("backend_build", "expected_build", "build")),
+        ("deployment_verification", "Deployment Verification", deployment_verification_report, ("actual_build", "build")),
+    )
+
+    for artifact_id, label, payload, build_keys in artifact_specs:
+        present = isinstance(payload, dict)
+        build = _read_report_build(payload, keys=build_keys)
+        recorded_at = str(payload.get("recorded_at") or "").strip() if isinstance(payload, dict) else ""
+        path = str(payload.get("path") or "").strip() if isinstance(payload, dict) else ""
+        current_build_match = bool(present and build and current_build and build == current_build)
+        if not present:
+            status = "missing"
+            blocking_artifacts.append(artifact_id)
+        elif not build:
+            status = "missing_build"
+            blocking_artifacts.append(artifact_id)
+        elif current_build and build != current_build:
+            status = "stale"
+            warning_artifacts.append(artifact_id)
+        else:
+            status = "current"
+
+        artifacts.append(
+            {
+                "id": artifact_id,
+                "label": label,
+                "present": present,
+                "status": status,
+                "build": build,
+                "current_build_match": current_build_match,
+                "recorded_at": recorded_at or None,
+                "path": path or None,
+            }
+        )
+
+    if blocking_artifacts:
+        summary = "Some operator artefacts are missing or incomplete for the current build."
+    elif warning_artifacts:
+        summary = "Some operator artefacts still point at an older build."
+    else:
+        summary = "Operator artefacts are synchronized to the current build."
+
+    return {
+        "current_build": current_build,
+        "summary": summary,
+        "all_present": not blocking_artifacts,
+        "all_current_build": not blocking_artifacts and not warning_artifacts,
+        "blocking_artifacts": blocking_artifacts,
+        "warning_artifacts": warning_artifacts,
+        "artifacts": artifacts,
+    }
+
+
 def build_runtime_log_snapshot(settings: Settings) -> dict[str, Any]:
     log_directory = settings.log_directory_path
     repo_root = Path(__file__).resolve().parents[3]
@@ -257,6 +323,16 @@ def build_launch_readiness_report(
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
 
+    def _has_secret_value(value: Any) -> bool:
+        if value is None:
+            return False
+        if hasattr(value, "get_secret_value"):
+            try:
+                return bool(str(value.get_secret_value() or "").strip())
+            except Exception:
+                return False
+        return bool(str(value or "").strip())
+
     def add_check(key: str, status: str, summary: str, detail: str) -> None:
         checks.append(
             {
@@ -285,8 +361,8 @@ def build_launch_readiness_report(
 
     auth_fields = {
         "supabase_url": bool((settings.supabase_url or "").strip()),
-        "supabase_anon_key": bool((settings.supabase_anon_key or "").strip()),
-        "supabase_service_role_key": bool((settings.supabase_service_role_key or "").strip()),
+        "supabase_anon_key": _has_secret_value(settings.supabase_anon_key),
+        "supabase_service_role_key": _has_secret_value(settings.supabase_service_role_key),
     }
     missing_auth = [key for key, present in auth_fields.items() if not present]
     if missing_auth:
@@ -466,6 +542,11 @@ def build_launch_readiness_report(
         deployment_verification_report=deployment_verification_report,
         provider_smoke_report=provider_smoke_report,
     )
+    truth_sync = build_truth_sync_summary(
+        provider_smoke_report=provider_smoke_report,
+        startup_verification_report=startup_verification_report,
+        deployment_verification_report=deployment_verification_report,
+    )
     platform_readiness = _build_platform_readiness(
         checks=checks,
         launch_gate=launch_gate,
@@ -481,6 +562,7 @@ def build_launch_readiness_report(
         "launch_gate": launch_gate,
         "provider_truth": provider_truth,
         "platform_readiness": platform_readiness,
+        "truth_sync": truth_sync,
     }
 
 
@@ -1226,11 +1308,11 @@ def _serialize_image_provider_state(
 def _chat_provider_is_configured(*, settings: Settings, provider: str) -> bool:
     normalized = provider.strip().lower()
     if normalized == "gemini":
-        return bool((settings.gemini_api_key or "").strip())
+        return bool(reveal_secret(settings.gemini_api_key).strip())
     if normalized == "openrouter":
-        return bool((settings.openrouter_api_key or "").strip())
+        return bool(reveal_secret(settings.openrouter_api_key).strip())
     if normalized == "openai":
-        return bool((settings.openai_api_key or "").strip())
+        return bool(reveal_secret(settings.openai_api_key).strip())
     return False
 
 
@@ -1918,15 +2000,15 @@ def _build_chat_provider_check(*, settings: Settings, chat_routing: dict[str, An
         configured_by_settings = any(
             (
                 provider == "gemini"
-                and bool((settings.gemini_api_key or "").strip())
+                and bool(reveal_secret(settings.gemini_api_key).strip())
             )
             or (
                 provider == "openrouter"
-                and bool((settings.openrouter_api_key or "").strip())
+                and bool(reveal_secret(settings.openrouter_api_key).strip())
             )
             or (
                 provider == "openai"
-                and bool((settings.openai_api_key or "").strip())
+                and bool(reveal_secret(settings.openai_api_key).strip())
             )
             for provider in {
                 str(chat_routing.get("primary_provider") or "").strip().lower(),

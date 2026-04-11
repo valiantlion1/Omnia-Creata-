@@ -9,7 +9,7 @@ from typing import Any, Optional, Sequence
 
 import httpx
 
-from config.env import Environment, get_settings
+from config.env import Environment, get_settings, reveal_secret
 
 from .models import ChatAttachment, ChatMessage, ChatRole
 from .prompt_engineering import analyze_generation_prompt_profile, improve_prompt_candidate
@@ -255,10 +255,11 @@ class StudioLLMGateway:
 
         return None
 
-    async def improve_prompt(self, prompt: str) -> LLMResult | None:
+    async def improve_prompt(self, prompt: str, *, memory_context: str = "") -> LLMResult | None:
         cleaned = " ".join(prompt.strip().split())
         if not cleaned:
             return None
+        settings = get_settings()
 
         profile_analysis = analyze_generation_prompt_profile(prompt=cleaned)
         execution_plan = self.resolve_chat_execution_plan(
@@ -272,13 +273,15 @@ class StudioLLMGateway:
             recommended_workflow=profile_analysis.workflow,
         )
 
+        memory_guidance = " ".join(memory_context.strip().split())
         request_text = (
             "Rewrite this into one production-ready image generation prompt. "
             "Preserve the user's intent, but sharpen subject clarity, composition, camera feel, lighting, "
             "environment, material detail, and finish quality. "
             "Infer only helpful visual details, avoid generic filler, and keep the result under 95 words. "
             "Return only the final prompt.\n\n"
-            f"Prompt: {cleaned}"
+            + (f"Creator preference context: {memory_guidance}\n\n" if memory_guidance else "")
+            + f"Prompt: {cleaned}"
         )
         system_prompt = (
             "You are OmniaCreata Studio's senior prompt director for premium image generation. "
@@ -304,9 +307,18 @@ class StudioLLMGateway:
                 )
                 continue
             try:
+                candidate_model = candidate.model
+                candidate_quality_tier = candidate.quality_tier
+                if (
+                    candidate.provider == "openai"
+                    and candidate.used_fallback
+                    and candidate_quality_tier == "premium"
+                ):
+                    candidate_model = settings.openai_model
+                    candidate_quality_tier = self._infer_quality_tier_from_model(candidate_model)
                 if candidate.provider == "gemini":
                     result = await self._chat_with_gemini(
-                        model=candidate.model,
+                        model=candidate_model,
                         system_prompt=system_prompt,
                         history=(),
                         current_message=request_text,
@@ -316,7 +328,7 @@ class StudioLLMGateway:
                     )
                 elif candidate.provider == "openrouter":
                     result = await self._chat_with_openrouter(
-                        model=candidate.model,
+                        model=candidate_model,
                         system_prompt=system_prompt,
                         history=(),
                         current_message=request_text,
@@ -326,7 +338,7 @@ class StudioLLMGateway:
                     )
                 elif candidate.provider == "openai":
                     result = await self._chat_with_openai(
-                        model=candidate.model,
+                        model=candidate_model,
                         system_prompt=system_prompt,
                         history=(),
                         current_message=request_text,
@@ -375,10 +387,10 @@ class StudioLLMGateway:
             result.text = improve_prompt_candidate(self._normalize_prompt(result.text))
             result.used_fallback = candidate.used_fallback
             result.requested_quality_tier = execution_plan.requested_quality_tier
-            result.selected_quality_tier = candidate.quality_tier
+            result.selected_quality_tier = candidate_quality_tier
             result.degraded = self._is_quality_degraded(
                 execution_plan.requested_quality_tier,
-                candidate.quality_tier,
+                candidate_quality_tier,
             )
             result.routing_strategy = execution_plan.routing_strategy
             result.routing_reason = execution_plan.routing_reason
@@ -920,7 +932,8 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        if not settings.gemini_api_key:
+        gemini_api_key = reveal_secret(settings.gemini_api_key)
+        if not gemini_api_key:
             return None
 
         contents: list[dict[str, Any]] = []
@@ -938,7 +951,7 @@ class StudioLLMGateway:
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{model}:generateContent?key={settings.gemini_api_key}"
+            f"{model}:generateContent?key={gemini_api_key}"
         )
         body = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
@@ -990,7 +1003,8 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        if not settings.openrouter_api_key:
+        openrouter_api_key = reveal_secret(settings.openrouter_api_key)
+        if not openrouter_api_key:
             return None
 
         body = self._build_openrouter_request_body(
@@ -1004,7 +1018,7 @@ class StudioLLMGateway:
         )
 
         headers = {
-            "Authorization": f"Bearer {settings.openrouter_api_key}",
+            "Authorization": f"Bearer {openrouter_api_key}",
             "Content-Type": "application/json",
             "X-Title": "OmniaCreata Studio",
         }
@@ -1048,7 +1062,8 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        if not settings.openai_api_key:
+        openai_api_key = reveal_secret(settings.openai_api_key)
+        if not openai_api_key:
             return None
 
         body = self._build_openai_request_body(
@@ -1061,7 +1076,7 @@ class StudioLLMGateway:
             max_output_tokens=max_output_tokens,
         )
         headers = {
-            "Authorization": f"Bearer {settings.openai_api_key}",
+            "Authorization": f"Bearer {openai_api_key}",
             "Content-Type": "application/json",
         }
 

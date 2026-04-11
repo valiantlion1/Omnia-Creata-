@@ -20,6 +20,7 @@ from studio_platform.models import (
     PromptSnapshot,
     StudioWorkspace,
     SubscriptionStatus,
+    utc_now,
 )
 from studio_platform.providers import (
     ProviderCapabilities,
@@ -645,7 +646,7 @@ async def test_retryable_failure_keeps_existing_reservation(
 
 
 @pytest.mark.asyncio
-async def test_retryable_failure_updates_job_provider_to_last_actual_attempt(
+async def test_auth_failure_does_not_retry_and_updates_job_provider_to_last_actual_attempt(
     tmp_path: Path,
     _web_runtime_mode: None,
 ) -> None:
@@ -681,12 +682,203 @@ async def test_retryable_failure_updates_job_provider_to_last_actual_attempt(
         await service._process_generation(job.id)
 
         snapshot = await store.snapshot()
-        retryable = snapshot.generations[job.id]
+        failed = snapshot.generations[job.id]
 
-        assert retryable.status == JobStatus.RETRYABLE_FAILED
-        assert retryable.provider == "huggingface"
-        assert retryable.error == "huggingface expired token"
+        assert failed.status == JobStatus.FAILED
+        assert failed.provider == "huggingface"
+        assert failed.error == "huggingface expired token"
+        assert failed.error_code == "provider_auth"
     finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_billable_temporary_failure_in_development_does_not_auto_retry(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    settings = get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    providers = _registry_with(
+        _FakeProvider(name="openai", rollout_tier="primary", billable=True),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store, plan=IdentityPlan.PRO, monthly_remaining=1200)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="premium campaign portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="realvis-xl",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=44,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        async def temporary_fail(_: GenerationJob) -> ExecutedGenerationBatch:
+            exc = ProviderTemporaryError("openai temporary capacity issue")
+            setattr(exc, "provider_name", "openai")
+            raise exc
+
+        service.generation_runtime.execute_job = temporary_fail  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        snapshot = await store.snapshot()
+        failed = snapshot.generations[job.id]
+
+        assert failed.status == JobStatus.FAILED
+        assert failed.provider == "openai"
+        assert failed.provider_billable is True
+        assert failed.credit_status == "released"
+        assert failed.final_credit_cost == 0
+    finally:
+        settings.environment = original_environment
+
+
+@pytest.mark.asyncio
+async def test_create_generation_blocks_when_billable_provider_daily_hard_cap_is_reached(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.provider_spend_guardrails_enabled
+    original_soft = settings.development_billable_provider_daily_soft_cap_usd
+    original_hard = settings.development_billable_provider_daily_hard_cap_usd
+    original_emergency = settings.provider_spend_emergency_disabled
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    settings.provider_spend_guardrails_enabled = True
+    settings.development_billable_provider_daily_soft_cap_usd = 0.5
+    settings.development_billable_provider_daily_hard_cap_usd = 1.0
+    settings.provider_spend_emergency_disabled = ""
+    providers = _registry_with(
+        _FakeProvider(name="openai", rollout_tier="primary", billable=True),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store, plan=IdentityPlan.PRO, monthly_remaining=1200)
+        spent_job = GenerationJob(
+            workspace_id=identity.workspace_id,
+            project_id=project.id,
+            identity_id=identity.id,
+            title="Earlier OpenAI run",
+            status=JobStatus.SUCCEEDED,
+            provider="openai",
+            model="realvis-xl",
+            prompt_snapshot=_prompt_snapshot("previous premium run"),
+            estimated_cost=0.04,
+            actual_cost_usd=1.0,
+            credit_cost=12,
+            completed_at=utc_now(),
+        )
+        await store.mutate(lambda state: state.generations.__setitem__(spent_job.id, spent_job))
+
+        with pytest.raises(RuntimeError, match="temporarily unavailable"):
+            await service.create_generation(
+                identity_id=identity.id,
+                project_id=project.id,
+                prompt="new campaign portrait",
+                negative_prompt="",
+                reference_asset_id=None,
+                model_id="realvis-xl",
+                width=1024,
+                height=1024,
+                steps=28,
+                cfg_scale=6.5,
+                seed=52,
+                aspect_ratio="1:1",
+                output_count=1,
+            )
+    finally:
+        settings.environment = original_environment
+        settings.provider_spend_guardrails_enabled = original_enabled
+        settings.development_billable_provider_daily_soft_cap_usd = original_soft
+        settings.development_billable_provider_daily_hard_cap_usd = original_hard
+        settings.provider_spend_emergency_disabled = original_emergency
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_process_generation_blocks_when_billable_provider_hits_spend_cap_after_admission(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.provider_spend_guardrails_enabled
+    original_soft = settings.development_billable_provider_daily_soft_cap_usd
+    original_hard = settings.development_billable_provider_daily_hard_cap_usd
+    original_emergency = settings.provider_spend_emergency_disabled
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    settings.provider_spend_guardrails_enabled = True
+    settings.development_billable_provider_daily_soft_cap_usd = 0.5
+    settings.development_billable_provider_daily_hard_cap_usd = 1.0
+    settings.provider_spend_emergency_disabled = ""
+    providers = _registry_with(
+        _FakeProvider(name="openai", rollout_tier="primary", billable=True),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    execute_calls = {"count": 0}
+    try:
+        identity, project = await _seed_identity_project(store, plan=IdentityPlan.PRO, monthly_remaining=1200)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="premium portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="realvis-xl",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=53,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+        spent_job = GenerationJob(
+            workspace_id=identity.workspace_id,
+            project_id=project.id,
+            identity_id=identity.id,
+            title="Earlier OpenAI run",
+            status=JobStatus.SUCCEEDED,
+            provider="openai",
+            model="realvis-xl",
+            prompt_snapshot=_prompt_snapshot("previous premium run"),
+            estimated_cost=0.04,
+            actual_cost_usd=1.0,
+            credit_cost=12,
+            completed_at=utc_now(),
+        )
+        await store.mutate(lambda state: state.generations.__setitem__(spent_job.id, spent_job))
+
+        async def should_not_execute(_: GenerationJob) -> ExecutedGenerationBatch:
+            execute_calls["count"] += 1
+            return _executed_batch(job, provider_name="openai", provider_billable=True)
+
+        service.generation_runtime.execute_job = should_not_execute  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        failed = await store.get_model("generations", job.id, GenerationJob)
+        assert failed is not None
+        assert execute_calls["count"] == 0
+        assert failed.status == JobStatus.FAILED
+        assert failed.error_code == "provider_spend_guardrail"
+        assert failed.credit_status == "released"
+        assert failed.final_credit_cost == 0
+    finally:
+        settings.environment = original_environment
+        settings.provider_spend_guardrails_enabled = original_enabled
+        settings.development_billable_provider_daily_soft_cap_usd = original_soft
+        settings.development_billable_provider_daily_hard_cap_usd = original_hard
+        settings.provider_spend_emergency_disabled = original_emergency
         await service.shutdown()
 
 

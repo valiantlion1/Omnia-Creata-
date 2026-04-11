@@ -48,7 +48,7 @@ rate_limiter = build_rate_limiter(settings)
 async def lifespan(app: FastAPI):
     setup_auth(
         AuthConfig(
-            secret_key=settings.jwt_secret or "",
+            secret_key=settings.jwt_secret.get_secret_value() if settings.jwt_secret else "",
             algorithm=settings.jwt_algorithm,
         )
     )

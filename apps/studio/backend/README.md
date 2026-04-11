@@ -316,6 +316,7 @@ These tests are intentionally manual and never run in normal CI.
 set ENABLE_LIVE_PROVIDER_SMOKE=true
 python scripts/provider_smoke.py --provider fal
 python scripts/provider_smoke.py --provider runware
+python scripts/provider_smoke.py --provider all --surface all --profile refresh
 ```
 
 Use `--provider all` to run the whole suite and `--skip-failure-probe` if you only want successful generation checks.

@@ -31,11 +31,13 @@ class _FakeProvider(StudioImageProvider):
         name: str,
         rollout_tier: str,
         capabilities: ProviderCapabilities,
+        billable: bool = False,
         available: bool = True,
         configured: bool = True,
     ) -> None:
         self.name = name
         self.rollout_tier = rollout_tier
+        self.billable = billable
         self.capabilities = capabilities
         self.available = available
         self.configured = configured
@@ -119,11 +121,13 @@ class _FatalProbeProvider(StudioImageProvider):
 
 
 class _AlwaysTemporaryProvider(StudioImageProvider):
-    def __init__(self, *, name: str, detail: str = "temporary failure") -> None:
+    def __init__(self, *, name: str, detail: str = "temporary failure", billable: bool = False) -> None:
         self.name = name
         self.rollout_tier = "standard"
+        self.billable = billable
         self.capabilities = ProviderCapabilities(workflows=("text_to_image",))
         self.detail = detail
+        self.calls = 0
 
     async def is_available(self) -> bool:
         return True
@@ -132,6 +136,7 @@ class _AlwaysTemporaryProvider(StudioImageProvider):
         return {"name": self.name, "status": "healthy", "detail": "configured"}
 
     async def generate(self, **kwargs) -> ProviderResult:
+        self.calls += 1
         raise provider_module.ProviderTemporaryError(self.detail)
 
 
@@ -249,6 +254,66 @@ def test_provider_registry_can_explicitly_enable_demo_fallback() -> None:
         assert registry.routing_summary()["demo_policy"] == "degraded_only_last_resort"
     finally:
         settings.enable_demo_generation_fallback = original_demo
+        settings.huggingface_token = original_hf
+        settings.enable_pollinations = original_pollinations
+        settings.fal_api_key = original_fal
+        settings.runware_api_key = original_runware
+
+
+def test_provider_registry_disables_openai_image_premium_qa_by_default_in_development() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    original_openai_api_key = settings.openai_api_key
+    original_openai_image_premium_qa_enabled = settings.openai_image_premium_qa_enabled
+    try:
+        settings.environment = provider_module.Environment.DEVELOPMENT
+        settings.openai_api_key = "openai-key"
+        settings.openai_image_premium_qa_enabled = False
+        registry = ProviderRegistry()
+        openai_provider = registry.get_provider("openai")
+        assert isinstance(openai_provider, OpenAIImageProvider)
+        assert openai_provider.premium_qa_enabled is False
+    finally:
+        settings.environment = original_environment
+        settings.openai_api_key = original_openai_api_key
+        settings.openai_image_premium_qa_enabled = original_openai_image_premium_qa_enabled
+
+
+def test_provider_registry_uses_cost_safe_openai_image_estimate_in_development() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    original_openai_api_key = settings.openai_api_key
+    original_openai_image_premium_qa_enabled = settings.openai_image_premium_qa_enabled
+    original_hf = settings.huggingface_token
+    original_pollinations = settings.enable_pollinations
+    original_fal = settings.fal_api_key
+    original_runware = settings.runware_api_key
+    try:
+        settings.environment = provider_module.Environment.DEVELOPMENT
+        settings.openai_api_key = "openai-key"
+        settings.openai_image_premium_qa_enabled = False
+        settings.huggingface_token = None
+        settings.enable_pollinations = False
+        settings.fal_api_key = None
+        settings.runware_api_key = None
+        registry = ProviderRegistry()
+        decision = registry.plan_generation_route(
+            plan=IdentityPlan.PRO,
+            prompt="polished beauty portrait for a premium campaign",
+            model_id="realvis-xl",
+        )
+        assert decision.selected_provider == "openai"
+        assert registry.estimate_generation_cost(
+            provider_name="openai",
+            width=1024,
+            height=1024,
+            model_id="realvis-xl",
+            workflow="text_to_image",
+        ) == 0.009
+    finally:
+        settings.environment = original_environment
+        settings.openai_api_key = original_openai_api_key
+        settings.openai_image_premium_qa_enabled = original_openai_image_premium_qa_enabled
         settings.huggingface_token = original_hf
         settings.enable_pollinations = original_pollinations
         settings.fal_api_key = original_fal
@@ -753,6 +818,37 @@ async def test_health_snapshot_marks_nonretryable_failure_as_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_plan_generation_route_skips_auth_broken_provider_with_open_circuit() -> None:
+    registry = _registry_with(
+        _FakeProvider(
+            name="pollinations",
+            rollout_tier="degraded",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+        _FakeProvider(
+            name="huggingface",
+            rollout_tier="optional-router",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+        ),
+    )
+
+    registry._record_provider_failure(
+        "pollinations",
+        latency_ms=55.0,
+        error=provider_module.ProviderTemporaryError("Pollinations returned 401 unauthorized"),
+    )
+
+    decision = registry.plan_generation_route(
+        plan=IdentityPlan.FREE,
+        prompt="editorial portrait",
+        model_id="flux-schnell",
+    )
+
+    assert decision.selected_provider == "huggingface"
+    assert "pollinations" not in decision.provider_candidates
+
+
+@pytest.mark.asyncio
 async def test_generate_preserves_last_attempted_provider_on_retryable_failure() -> None:
     registry = _registry_with(
         _AlwaysTemporaryProvider(name="pollinations", detail="pollinations temporary"),
@@ -771,6 +867,70 @@ async def test_generate_preserves_last_attempted_provider_on_retryable_failure()
 
     assert str(exc_info.value) == "huggingface expired token"
     assert getattr(exc_info.value, "provider_name", None) == "huggingface"
+
+
+@pytest.mark.asyncio
+async def test_pollinations_provider_does_not_retry_auth_rejection() -> None:
+    request_attempts = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_attempts["count"] += 1
+        return httpx.Response(401, text="unauthorized")
+
+    provider = PollinationsProvider(enabled=True, transport=httpx.MockTransport(handler))
+
+    with pytest.raises(provider_module.ProviderTemporaryError) as exc_info:
+        await provider.generate(
+            prompt="portrait",
+            negative_prompt="",
+            width=512,
+            height=512,
+            seed=11,
+            model_id="flux-schnell",
+        )
+
+    assert "401" in str(exc_info.value)
+    assert request_attempts["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_skips_additional_billable_failover_after_billable_failure_in_development() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    try:
+        openai = _AlwaysTemporaryProvider(
+            name="openai",
+            detail="openai temporary",
+            billable=True,
+        )
+        fal = _AlwaysTemporaryProvider(
+            name="fal",
+            detail="fal temporary",
+            billable=True,
+        )
+        fallback = _FakeProvider(
+            name="pollinations",
+            rollout_tier="fallback",
+            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            billable=False,
+        )
+        registry = _registry_with(openai, fal, fallback)
+
+        result = await registry.generate(
+            prompt="portrait",
+            negative_prompt="",
+            width=512,
+            height=512,
+            seed=7,
+            model_id="flux-schnell",
+        )
+
+        assert result.provider == "pollinations"
+        assert openai.calls == 1
+        assert fal.calls == 0
+    finally:
+        settings.environment = original_environment
 
 
 @pytest.mark.asyncio
@@ -1182,6 +1342,131 @@ def test_openai_image_provider_estimates_draft_and_final_lane_costs() -> None:
     ) == 0.133
 
 
+@pytest.mark.asyncio
+async def test_openai_image_provider_uses_draft_model_when_premium_qa_is_disabled() -> None:
+    submitted_payload: dict[str, object] = {}
+    png_bytes = image_bytes(width=1024, height=1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal submitted_payload
+        submitted_payload = json.loads(request.content.decode("utf-8"))
+        assert request.url.path == "/v1/images/generations"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        draft_image_model="gpt-image-1-mini",
+        image_model="gpt-image-1.5",
+        premium_qa_enabled=False,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await provider.generate(
+        prompt="luxury interior hero render",
+        negative_prompt="muddy shadows",
+        width=1024,
+        height=1024,
+        seed=15,
+        model_id="realvis-xl",
+    )
+
+    assert result.provider == "openai"
+    assert result.estimated_cost == 0.009
+    assert submitted_payload["model"] == "gpt-image-1-mini"
+    assert submitted_payload["quality"] == "low"
+    assert provider.estimate_generation_cost(
+        width=1024,
+        height=1024,
+        model_id="realvis-xl",
+        workflow="text_to_image",
+    ) == 0.009
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_allows_explicit_premium_model_when_premium_qa_is_disabled() -> None:
+    submitted_payload: dict[str, object] = {}
+    png_bytes = image_bytes(width=1024, height=1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal submitted_payload
+        submitted_payload = json.loads(request.content.decode("utf-8"))
+        assert request.url.path == "/v1/images/generations"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        draft_image_model="gpt-image-1-mini",
+        image_model="gpt-image-1.5",
+        premium_qa_enabled=False,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await provider.generate(
+        prompt="explicit premium QA render",
+        negative_prompt="",
+        width=1024,
+        height=1024,
+        seed=16,
+        model_id="gpt-image-1.5",
+    )
+
+    assert result.provider == "openai"
+    assert result.estimated_cost == 0.034
+    assert submitted_payload["model"] == "gpt-image-1.5"
+    assert submitted_payload["quality"] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_does_not_retry_billable_requests_in_development() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(500, text="temporary overload")
+
+    try:
+        provider = OpenAIImageProvider(
+            "openai-key",
+            draft_image_model="gpt-image-1-mini",
+            image_model="gpt-image-1.5",
+            transport=httpx.MockTransport(handler),
+        )
+
+        with pytest.raises(provider_module.ProviderTemporaryError):
+            await provider.generate(
+                prompt="editorial portrait",
+                negative_prompt="",
+                width=1024,
+                height=1024,
+                seed=22,
+                model_id="flux-schnell",
+            )
+
+        assert call_count == 1
+    finally:
+        settings.environment = original_environment
+
+
 def test_fal_provider_estimates_cost_from_selected_model_path() -> None:
     provider = FalProvider("fal-key")
 
@@ -1203,6 +1488,9 @@ def test_fal_provider_estimates_cost_from_selected_model_path() -> None:
 async def test_fal_provider_retries_temporary_submit_failures_with_exponential_backoff(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.PRODUCTION
     delays: list[float] = []
     submit_attempts = {"count": 0}
 
@@ -1244,15 +1532,18 @@ async def test_fal_provider_retries_temporary_submit_failures_with_exponential_b
             return httpx.Response(200, content=b"retry-bytes", headers={"content-type": "image/png"})
         raise AssertionError(f"Unexpected request: {request.method} {request.url}")
 
-    provider = FalProvider("test-key", transport=httpx.MockTransport(handler))
-    result = await provider.generate(
-        prompt="cinematic portrait",
-        negative_prompt="",
-        width=1024,
-        height=1024,
-        seed=77,
-        model_id="flux-schnell",
-    )
+    try:
+        provider = FalProvider("test-key", transport=httpx.MockTransport(handler))
+        result = await provider.generate(
+            prompt="cinematic portrait",
+            negative_prompt="",
+            width=1024,
+            height=1024,
+            seed=77,
+            model_id="flux-schnell",
+        )
+    finally:
+        settings.environment = original_environment
 
     assert result.provider == "fal"
     assert submit_attempts["count"] == 3
@@ -1263,6 +1554,9 @@ async def test_fal_provider_retries_temporary_submit_failures_with_exponential_b
 async def test_runware_provider_retries_temporary_request_failures_with_exponential_backoff(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    settings.environment = provider_module.Environment.PRODUCTION
     delays: list[float] = []
     request_attempts = {"count": 0}
 
@@ -1289,15 +1583,18 @@ async def test_runware_provider_retries_temporary_request_failures_with_exponent
             },
         )
 
-    provider = RunwareProvider("runware-key", transport=httpx.MockTransport(handler))
-    result = await provider.generate(
-        prompt="editorial portrait",
-        negative_prompt="",
-        width=768,
-        height=1024,
-        seed=88,
-        model_id="flux-schnell",
-    )
+    try:
+        provider = RunwareProvider("runware-key", transport=httpx.MockTransport(handler))
+        result = await provider.generate(
+            prompt="editorial portrait",
+            negative_prompt="",
+            width=768,
+            height=1024,
+            seed=88,
+            model_id="flux-schnell",
+        )
+    finally:
+        settings.environment = original_environment
 
     assert result.provider == "runware"
     assert request_attempts["count"] == 3
@@ -1353,6 +1650,32 @@ async def test_huggingface_provider_falls_back_to_next_candidate_model_when_firs
     assert any("FLUX.1-Krea-dev" in url for url in requested_urls)
     assert any("playground-v2.5-1024px-aesthetic" in url for url in requested_urls)
     assert result.mime_type == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_pollinations_health_marks_auth_rejection_unavailable() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, text="unauthorized")
+
+    provider = PollinationsProvider(enabled=True, transport=httpx.MockTransport(handler))
+    health = await provider.health()
+
+    assert health["status"] == "unavailable"
+    assert "401" in str(health["detail"])
+
+
+@pytest.mark.asyncio
+async def test_huggingface_health_marks_rejected_token_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://huggingface.co/api/whoami-v2":
+            return httpx.Response(401, text="expired token")
+        raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+    provider = HuggingFaceImageProvider("hf-token", transport=httpx.MockTransport(handler))
+    health = await provider.health()
+
+    assert health["status"] == "unavailable"
+    assert "token rejected" in str(health["detail"])
 
 
 def base64_png(text: str) -> str:

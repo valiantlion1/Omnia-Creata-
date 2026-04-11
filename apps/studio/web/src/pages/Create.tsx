@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, Dices, Image as ImageIcon, Monitor, RefreshCw, RectangleVertical, SlidersHorizontal, Smartphone, Sparkles, Square, Wand2, X } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, Check, ChevronDown, Dices, Image as ImageIcon, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import {
@@ -15,6 +15,7 @@ import {
   type ModelCatalogEntry,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { usePageVisibility } from '@/lib/usePageVisibility'
 
 /* ─── Placeholder prompts ──────────────────────────── */
 
@@ -82,7 +83,7 @@ function getToastDescription(job: GenerationToast) {
 function mapGenerationToToast(generation: Generation, projectId: string): GenerationToast {
   return {
     id: generation.job_id,
-    title: generation.title,
+    title: generation.display_title || generation.title,
     status: generation.status,
     outputCount: generation.output_count,
     projectId,
@@ -128,6 +129,7 @@ function parseBoundedFloat(value: string | null, fallback: number, min: number, 
 
 export default function CreatePage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { projectId: routeProjectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
@@ -135,6 +137,7 @@ export default function CreatePage() {
   const requestedProjectId = routeProjectId ?? searchParams.get('projectId')
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const canUseLocalModels = Boolean(auth?.identity.owner_mode && auth?.identity.local_access)
+  const isPageVisible = usePageVisibility()
 
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
@@ -171,6 +174,11 @@ export default function CreatePage() {
     queryFn: () => studioApi.getBillingSummary(),
     enabled: canLoadPrivate,
   })
+  const settingsQuery = useQuery({
+    queryKey: ['settings-bootstrap', 'create'],
+    queryFn: () => studioApi.getSettingsBootstrap(),
+    enabled: canLoadPrivate,
+  })
 
   const models = useMemo(
     () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
@@ -182,12 +190,21 @@ export default function CreatePage() {
     [billingQuery.data, selectedModel],
   )
   const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
+  const draftProjectId = settingsQuery.data?.draft_projects?.compose ?? null
   const runningJobs = useMemo(
     () => generationToasts.filter((job) => {
       const normalized = normalizeJobStatus(job.status)
       return normalized === 'queued' || normalized === 'running'
     }).length,
     [generationToasts],
+  )
+  const pendingGenerationJobs = useMemo(
+    () => generationToasts.filter((job) => !isTerminalStatus(job.status)),
+    [generationToasts],
+  )
+  const pendingGenerationPollKey = useMemo(
+    () => pendingGenerationJobs.map((job) => `${job.id}:${normalizeJobStatus(job.status)}`).join('|'),
+    [pendingGenerationJobs],
   )
   const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
   const activeAspect = aspectPresets[aspectRatio]
@@ -196,9 +213,6 @@ export default function CreatePage() {
   const requiresChatReference = prefillSource === 'chat' && prefillReferenceMode === 'required'
   const missingRequiredReference = requiresChatReference && !referenceAssetId
   const blockedByCurrentCredits = Boolean(selectedModelCreditGuide && !selectedModelCreditGuide.affordable_now)
-  const selectedLaneTrustLabel = selectedModelCreditGuide
-    ? describeGenerationLaneTrust(selectedModelCreditGuide.pricing_lane, selectedModelCreditGuide.planned_provider)
-    : null
 
   /* ─── Effects ─────────────────────────────────── */
 
@@ -269,13 +283,11 @@ export default function CreatePage() {
   /* ─── Poll running jobs for status ────────────── */
 
   useEffect(() => {
-    if (!canLoadPrivate) return
-    const pendingJobs = generationToasts.filter((job) => !isTerminalStatus(job.status))
-    if (!pendingJobs.length) return
+    if (!canLoadPrivate || !isPageVisible || !pendingGenerationJobs.length) return
 
-    const interval = window.setInterval(async () => {
+    const pollPendingJobs = async () => {
       const snapshots = await Promise.all(
-        pendingJobs.map(async (job) => {
+        pendingGenerationJobs.map(async (job) => {
           try {
             const generation = await studioApi.getGeneration(job.id)
             return [job.id, generation] as const
@@ -288,32 +300,51 @@ export default function CreatePage() {
       const snapshotMap = new Map(snapshots.filter(Boolean) as Array<readonly [string, Generation]>)
       let invalidate = false
 
-      setGenerationToasts((current) =>
-        current
+      setGenerationToasts((current) => {
+        let hasChanges = false
+        const nextState = current
           .map((job) => {
             const snapshot = snapshotMap.get(job.id)
             if (!snapshot) return job
             if (!isTerminalStatus(job.status) && isTerminalStatus(snapshot.status)) invalidate = true
-            return {
-              ...job,
-              title: snapshot.title,
-              status: snapshot.status,
-              outputCount: snapshot.output_count,
-              error: snapshot.error,
+
+            if (job.status !== snapshot.status || job.outputCount !== snapshot.output_count || job.error !== snapshot.error) {
+              hasChanges = true
+              return {
+                ...job,
+                title: snapshot.title,
+                status: snapshot.status,
+                outputCount: snapshot.output_count,
+                error: snapshot.error,
+              }
             }
+            return job
           })
-          .filter((job) => !(job.dismissed && isTerminalStatus(job.status))),
-      )
+          .filter((job) => {
+            const keep = !(job.dismissed && isTerminalStatus(job.status))
+            if (!keep) hasChanges = true
+            return keep
+          })
+
+        return hasChanges ? nextState : current
+      })
 
       if (invalidate) {
-        await queryClient.invalidateQueries({ queryKey: ['assets'] })
-        await queryClient.invalidateQueries({ queryKey: ['generations'] })
-        await queryClient.invalidateQueries({ queryKey: ['projects'] })
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['assets'] }),
+          queryClient.invalidateQueries({ queryKey: ['generations'] }),
+          queryClient.invalidateQueries({ queryKey: ['projects'] }),
+        ])
       }
-    }, 1500)
+    }
+
+    void pollPendingJobs()
+    const interval = window.setInterval(() => {
+      void pollPendingJobs()
+    }, 3000)
 
     return () => window.clearInterval(interval)
-  }, [canLoadPrivate, generationToasts, queryClient])
+  }, [canLoadPrivate, isPageVisible, pendingGenerationJobs, pendingGenerationPollKey, queryClient])
 
   useEffect(() => {
     setModelPickerOpen(false)
@@ -334,6 +365,10 @@ export default function CreatePage() {
 
   const ensureProjectId = useCallback(async () => {
     if (resolvedProjectId) return resolvedProjectId
+    if (draftProjectId) {
+      setResolvedProjectId(draftProjectId)
+      return draftProjectId
+    }
     if (!projectPromiseRef.current) {
       projectPromiseRef.current = studioApi
         .createProject({ title: 'New image set', description: 'Created from Studio Create', surface: 'compose' })
@@ -344,7 +379,7 @@ export default function CreatePage() {
         .finally(() => { projectPromiseRef.current = null })
     }
     return projectPromiseRef.current
-  }, [resolvedProjectId])
+  }, [draftProjectId, resolvedProjectId])
 
   const dismissToast = useCallback((jobId: string) => {
     setGenerationToasts((current) =>
@@ -358,6 +393,19 @@ export default function CreatePage() {
     )
   }, [])
 
+  useEffect(() => {
+    if (!visibleToasts.length) return
+    const completed = visibleToasts.filter((job) => isTerminalStatus(job.status))
+    if (!completed.length) return
+
+    const timers = completed.map((job) =>
+      window.setTimeout(() => {
+        dismissToast(job.id)
+      }, 4000),
+    )
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [dismissToast, visibleToasts])
+
   const handleImprovePrompt = useCallback(async () => {
     if (!prompt.trim()) return
     setImproveState('working')
@@ -370,6 +418,13 @@ export default function CreatePage() {
       setImproveState('idle')
     }
   }, [prompt])
+
+  const saveStyleMutation = useMutation({
+    mutationFn: () => studioApi.saveStyleFromPrompt({ prompt }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] })
+    },
+  })
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || !selectedModel) return
@@ -402,7 +457,7 @@ export default function CreatePage() {
         aspect_ratio: aspectRatio,
         output_count: outputCount,
       })
-      setGenerationToasts((current) => [mapGenerationToToast(generation, projectId), ...current.filter((job) => job.id !== generation.job_id)])
+      setGenerationToasts((current) => [mapGenerationToToast(generation, generation.project_id || projectId), ...current.filter((job) => job.id !== generation.job_id)])
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
       await queryClient.invalidateQueries({ queryKey: ['assets'] })
@@ -502,6 +557,15 @@ export default function CreatePage() {
 
             {/* ✨ Improve & Random buttons */}
             <div className="absolute bottom-5 right-6 flex items-center gap-2">
+              <button
+                onClick={() => saveStyleMutation.mutate()}
+                disabled={!prompt.trim() || saveStyleMutation.isPending}
+                title="Save this prompt as a reusable style"
+                className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saveStyleMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-[rgb(var(--primary-light))]" />}
+                Save Style
+              </button>
               <button
                 onClick={() => {
                   const randomPrompt = PLACEHOLDER_PROMPTS[Math.floor(Math.random() * PLACEHOLDER_PROMPTS.length)]
@@ -759,11 +823,37 @@ export default function CreatePage() {
 
       {/* ── Toast stack ──────────────────────────── */}
       {visibleToasts.length ? (
-        <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-3">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[320px] max-w-[calc(100vw-20px)] flex-col gap-2.5">
           {visibleToasts.slice(0, 5).map((job) => (
             <div
               key={job.id}
-              className="pointer-events-auto animate-toast overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (!isTerminalStatus(job.status)) {
+                  navigate('/library/images')
+                  return
+                }
+                if (job.projectId && job.projectId !== draftProjectId) {
+                  navigate(`/projects/${job.projectId}`)
+                  return
+                }
+                navigate('/library/images')
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                if (!isTerminalStatus(job.status)) {
+                  navigate('/library/images')
+                  return
+                }
+                if (job.projectId && job.projectId !== draftProjectId) {
+                  navigate(`/projects/${job.projectId}`)
+                  return
+                }
+                navigate('/library/images')
+              }}
+              className="pointer-events-auto animate-toast cursor-pointer overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_18px_56px_rgba(0,0,0,0.38)] backdrop-blur-xl"
             >
               {/* Progress bar for running jobs */}
               {!isTerminalStatus(job.status) ? (
@@ -772,17 +862,20 @@ export default function CreatePage() {
                 </div>
               ) : null}
 
-              <div className="p-4">
+              <div className="p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <StatusPill tone={getToastTone(job.status)}>{getToastLabel(job.status)}</StatusPill>
                       <span className="text-[10px] text-zinc-600">{job.outputCount} output{job.outputCount > 1 ? 's' : ''}</span>
                     </div>
-                    <div className="mt-2 line-clamp-2 text-sm font-medium text-white">{job.title}</div>
+                    <div className="mt-1.5 line-clamp-1 text-[13px] font-medium text-white">{job.title}</div>
                   </div>
                   <button
-                    onClick={() => dismissToast(job.id)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      dismissToast(job.id)
+                    }}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
                     title="Dismiss"
                   >
@@ -790,18 +883,7 @@ export default function CreatePage() {
                   </button>
                 </div>
 
-                <div className="mt-2.5 text-[13px] leading-6 text-zinc-400">{getToastDescription(job)}</div>
-
-                {normalizeJobStatus(job.status) === 'succeeded' ? (
-                  <div className="mt-3 flex items-center gap-3">
-                    <Link to="/library/images" className="text-[13px] font-medium text-white transition hover:text-zinc-200">
-                      Open My Images
-                    </Link>
-                    <Link to={`/projects/${job.projectId}`} className="text-[13px] text-zinc-400 transition hover:text-white">
-                      Open project
-                    </Link>
-                  </div>
-                ) : null}
+                <div className="mt-1.5 text-[12px] leading-5 text-zinc-400">{getToastDescription(job)}</div>
               </div>
             </div>
           ))}

@@ -11,6 +11,7 @@ from studio_platform.service import StudioService
 from studio_platform.services.launch_readiness import (
     build_runtime_log_snapshot,
     build_launch_readiness_report,
+    build_truth_sync_summary,
     load_provider_smoke_report,
     load_startup_verification_report,
     persist_provider_smoke_report,
@@ -663,6 +664,7 @@ def test_launch_readiness_marks_provider_smoke_warning_when_report_is_stale_for_
         assert smoke_check["status"] == "warning"
         assert "current_build" in smoke_check["detail"]
         assert "premium chat lanes were not smoke-tested" in smoke_check["detail"]
+        assert readiness["truth_sync"]["warning_artifacts"] == ["provider_smoke", "startup_verification", "deployment_verification"]
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.environment = original_environment
@@ -1031,10 +1033,14 @@ async def test_health_detail_includes_provider_smoke_and_launch_readiness(tmp_pa
             assert "launch_gate" in health
             assert "provider_truth" in health
             assert "platform_readiness" in health
+            assert "truth_sync" in health
             assert "chat" in health["provider_truth"]
             assert "image" in health["provider_truth"]
             assert health["platform_readiness"]["current_stage"] == "local_alpha"
             assert health["launch_gate"]["last_verified_build"] == "2026.04.07.25"
+            assert health["truth_sync"]["all_current_build"] is False
+            assert "startup_verification" in health["truth_sync"]["warning_artifacts"]
+            assert "deployment_verification" in health["truth_sync"]["warning_artifacts"]
             assert any(check["key"] == "provider_smoke" for check in health["launch_readiness"]["checks"])
             assert any(check["key"] == "startup_verification" for check in health["launch_readiness"]["checks"])
             assert any(check["key"] == "deployment_verification" for check in health["launch_readiness"]["checks"])
@@ -1250,10 +1256,35 @@ def test_launch_readiness_reports_public_paid_platform_when_provider_mix_is_read
         assert public_paid_phase["ready"] is True
     finally:
         settings.studio_runtime_root = original_runtime_root
-        settings.environment = original_environment
-        settings.supabase_url = original_supabase_url
-        settings.supabase_anon_key = original_supabase_anon_key
-        settings.supabase_service_role_key = original_supabase_service_role_key
-        settings.openrouter_api_key = original_openrouter_api_key
-        settings.openai_api_key = original_openai_api_key
-        settings.fal_api_key = original_fal_api_key
+
+
+def test_build_truth_sync_summary_marks_current_and_stale_artifacts() -> None:
+    current_build = load_version_info().build
+    summary = build_truth_sync_summary(
+        provider_smoke_report={
+            "build": current_build,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "path": "C:/runtime/provider-smoke-latest.json",
+        },
+        startup_verification_report={
+            "backend_build": current_build,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "path": "C:/runtime/local-verify-latest.json",
+        },
+        deployment_verification_report={
+            "actual_build": "2026.04.01.01",
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "path": "C:/runtime/protected-staging-verify-latest.json",
+        },
+    )
+
+    assert summary["current_build"] == current_build
+    assert summary["all_present"] is True
+    assert summary["all_current_build"] is False
+    assert summary["blocking_artifacts"] == []
+    assert summary["warning_artifacts"] == ["deployment_verification"]
+    deployment_entry = next(
+        item for item in summary["artifacts"] if item["id"] == "deployment_verification"
+    )
+    assert deployment_entry["status"] == "stale"
+    assert deployment_entry["current_build_match"] is False

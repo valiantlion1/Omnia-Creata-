@@ -139,6 +139,35 @@ def test_build_default_smoke_cases_split_openai_image_into_draft_and_final_lanes
     }
 
 
+def test_build_default_smoke_cases_refresh_profile_keeps_required_openai_lanes_only() -> None:
+    settings = get_settings()
+    cases = build_default_smoke_cases(
+        selected_provider="openai",
+        selected_surface="image",
+        include_failure_probe=True,
+        profile="refresh",
+    )
+
+    image_cases = {(case.label, case.lane, case.model, case.workflow) for case in cases}
+
+    assert image_cases == {
+        ("openai-draft-text-to-image", "draft", settings.openai_image_draft_model, "text_to_image"),
+        ("openai-final-text-to-image", "final", settings.openai_image_model, "text_to_image"),
+    }
+    assert all("probe" not in case.label for case in cases)
+
+
+def test_build_default_smoke_cases_refresh_profile_skips_optional_edit_cases_for_fal() -> None:
+    cases = build_default_smoke_cases(
+        selected_provider="fal",
+        selected_surface="image",
+        include_failure_probe=True,
+        profile="refresh",
+    )
+
+    assert [case.label for case in cases] == ["fal-text-to-image"]
+
+
 def test_build_smoke_reference_image_returns_png_reference() -> None:
     reference = build_smoke_reference_image()
     assert reference.asset_id == "smoke-reference"
@@ -244,13 +273,13 @@ async def test_run_chat_provider_smoke_case_reports_success() -> None:
 async def test_run_chat_provider_smoke_case_redacts_sensitive_error_text() -> None:
     settings = get_settings()
     original_gemini_api_key = settings.gemini_api_key
-    settings.gemini_api_key = "AIzaSyRealKeyShouldNeverLeak1234567890"
+    settings.gemini_api_key = "MOCK_GEMINI_KEY_ABC1234567890"
     try:
         result = await run_chat_provider_smoke_case(
             FakeGateway(
                 error=RuntimeError(
                     "provider failed at https://generativelanguage.googleapis.com/v1beta/models"
-                    "/gemini-2.5-flash:generateContent?key=AIzaSyRealKeyShouldNeverLeak1234567890"
+                    "/gemini-2.5-flash:generateContent?key=MOCK_GEMINI_KEY_ABC1234567890"
                 )
             ),
             ProviderSmokeCase(
@@ -263,7 +292,7 @@ async def test_run_chat_provider_smoke_case_redacts_sensitive_error_text() -> No
         )
         assert result.status == "error"
         assert result.error is not None
-        assert "AIzaSyRealKeyShouldNeverLeak1234567890" not in result.error
+        assert "MOCK_GEMINI_KEY_ABC1234567890" not in result.error
         assert "ShouldNeverLeak1234567890" not in result.error
         assert "***REDACTED***" in result.error
     finally:
@@ -273,12 +302,12 @@ async def test_run_chat_provider_smoke_case_redacts_sensitive_error_text() -> No
 def test_redact_sensitive_text_fully_masks_query_param_value() -> None:
     redacted = redact_sensitive_text(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-        "?key=AIzaSyCPQPhy6yWLzfJ6W7icofB771qmdfifG90"
+        "?key=MOCK_GEMINI_KEY_XYZ0987654321"
     )
 
     assert "?key=***REDACTED***" in redacted
-    assert "AIzaSyCPQPhy6yWLzfJ6W7icofB771qmdfifG90" not in redacted
-    assert "SyCPQPhy6yWLzfJ6W7icofB771qmdfifG90" not in redacted
+    assert "MOCK_GEMINI_KEY_XYZ0987654321" not in redacted
+    assert "XYZ0987654321" not in redacted
 
 
 @pytest.mark.asyncio

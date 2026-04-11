@@ -23,6 +23,7 @@ class Project(BaseModel):
     title: str
     description: str = ""
     surface: Literal["compose", "chat"] = "compose"
+    system_managed: bool = False
     cover_asset_id: Optional[str] = None
     last_generation_id: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)

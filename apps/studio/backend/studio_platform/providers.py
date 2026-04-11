@@ -16,7 +16,7 @@ from urllib.parse import quote
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
-from config.env import Environment, get_settings
+from config.env import Environment, get_settings, reveal_secret
 from security.redaction import redact_sensitive_text
 
 from .models import IdentityPlan
@@ -120,6 +120,18 @@ _STYLIZED_HINTS = (
     "cyberpunk",
     "stylized",
 )
+_AUTH_FAILURE_MARKERS = (
+    "401",
+    "403",
+    "unauthorized",
+    "forbidden",
+    "invalid api key",
+    "invalid token",
+    "expired token",
+    "token is expired",
+    "authentication required",
+    "permission denied",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +156,13 @@ def normalize_generation_workflow(workflow: str | None, *, has_reference_image: 
     if has_reference_image:
         return "image_to_image"
     return "text_to_image"
+
+
+def is_provider_auth_failure(value: Exception | str | None) -> bool:
+    text = str(value or "").strip().lower()
+    if not text:
+        return False
+    return any(marker in text for marker in _AUTH_FAILURE_MARKERS)
 
 
 class StudioImageProvider(ABC):
@@ -218,7 +237,8 @@ class StudioImageProvider(ABC):
         operation: Callable[[], Awaitable[ProviderOpT]],
     ) -> ProviderOpT:
         last_error: ProviderTemporaryError | None = None
-        max_attempts = len(self.retry_backoff_seconds) + 1
+        retry_backoff_seconds = self._effective_retry_backoff_seconds()
+        max_attempts = len(retry_backoff_seconds) + 1
 
         for attempt in range(max_attempts):
             try:
@@ -229,6 +249,8 @@ class StudioImageProvider(ABC):
                 raise
             except ProviderTemporaryError as exc:
                 last_error = exc
+                if is_provider_auth_failure(exc):
+                    break
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_error = ProviderTemporaryError(
                     f"{self.name} {operation_name} timed out or lost network connectivity: {exc}"
@@ -238,12 +260,18 @@ class StudioImageProvider(ABC):
                     f"{self.name} {operation_name} failed unexpectedly: {exc}"
                 )
 
-            if attempt >= len(self.retry_backoff_seconds):
+            if attempt >= len(retry_backoff_seconds):
                 break
 
-            await asyncio.sleep(self.retry_backoff_seconds[attempt])
+            await asyncio.sleep(retry_backoff_seconds[attempt])
 
         raise last_error or ProviderTemporaryError(f"{self.name} {operation_name} failed")
+
+    def _effective_retry_backoff_seconds(self) -> tuple[float, ...]:
+        settings = get_settings()
+        if settings.environment == Environment.DEVELOPMENT and self.billable:
+            return ()
+        return self.retry_backoff_seconds
 
 
 class FalProvider(StudioImageProvider):
@@ -817,6 +845,7 @@ class OpenAIImageProvider(StudioImageProvider):
         *,
         draft_image_model: Optional[str] = None,
         image_model: Optional[str] = None,
+        premium_qa_enabled: bool = True,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         self.api_key = api_key
@@ -825,6 +854,7 @@ class OpenAIImageProvider(StudioImageProvider):
             or self._DEFAULT_DRAFT_IMAGE_MODEL
         )
         self.image_model = (image_model or self._DEFAULT_IMAGE_MODEL).strip() or self._DEFAULT_IMAGE_MODEL
+        self.premium_qa_enabled = bool(premium_qa_enabled)
         self._transport = transport
 
     def is_configured(self) -> bool:
@@ -839,7 +869,8 @@ class OpenAIImageProvider(StudioImageProvider):
             "status": "healthy" if self.api_key else "not_configured",
             "detail": (
                 "primary billable image provider configured "
-                f"(draft={self.draft_image_model}, final={self.image_model})"
+                f"(draft={self.draft_image_model}, final={self.image_model}, "
+                f"premium_qa={'enabled' if self.premium_qa_enabled else 'development_cost_safe'})"
                 if self.api_key
                 else "OPENAI_API_KEY missing"
             ),
@@ -1061,6 +1092,8 @@ class OpenAIImageProvider(StudioImageProvider):
         return f"{cleaned_prompt}\n\nAvoid: {cleaned_negative}"
 
     def _select_quality(self, *, model_id: Optional[str]) -> str:
+        if self._should_force_cost_safe_draft(model_id=model_id):
+            return "low"
         normalized_model = (model_id or "").strip().lower()
         if normalized_model == self.draft_image_model.strip().lower():
             return "low"
@@ -1069,6 +1102,8 @@ class OpenAIImageProvider(StudioImageProvider):
         return self._QUALITY_BY_MODEL_ID.get(normalized_model, "medium")
 
     def _select_request_model(self, *, model_id: Optional[str], quality: str) -> str:
+        if self._should_force_cost_safe_draft(model_id=model_id):
+            return self.draft_image_model
         normalized_model = (model_id or "").strip().lower()
         if normalized_model in {
             self.draft_image_model.strip().lower(),
@@ -1078,6 +1113,20 @@ class OpenAIImageProvider(StudioImageProvider):
         if quality == "low":
             return self.draft_image_model
         return self.image_model
+
+    def _should_force_cost_safe_draft(self, *, model_id: Optional[str]) -> bool:
+        if self.premium_qa_enabled:
+            return False
+        normalized_model = (model_id or "").strip().lower()
+        explicit_model_ids = {
+            self.draft_image_model.strip().lower(),
+            self.image_model.strip().lower(),
+            "gpt-image-1",
+            "gpt-image-1.5",
+            "gpt-image-1-mini",
+            "chatgpt-image-latest",
+        }
+        return normalized_model not in explicit_model_ids
 
     def _select_size(self, *, width: int, height: int) -> str:
         safe_width = max(int(width or 0), 1)
@@ -1147,11 +1196,21 @@ class PollinationsProvider(StudioImageProvider):
             return {"name": self.name, "status": "healthy", "detail": "probe skipped"}
 
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                timeout=5.0,
+                transport=self._transport,
+                follow_redirects=True,
+            ) as client:
                 response = await client.get("https://image.pollinations.ai/")
+                if response.status_code in {401, 403}:
+                    return {
+                        "name": self.name,
+                        "status": "unavailable",
+                        "detail": f"http {response.status_code} auth rejected",
+                    }
                 return {
                     "name": self.name,
-                    "status": "healthy" if response.status_code < 500 else "degraded",
+                    "status": "healthy" if response.status_code < 400 else "degraded",
                     "detail": f"http {response.status_code}",
                 }
         except Exception as exc:
@@ -1256,7 +1315,29 @@ class HuggingFaceImageProvider(StudioImageProvider):
     async def health(self, probe: bool = True) -> Dict[str, object]:
         if not self.api_token:
             return {"name": self.name, "status": "disabled", "detail": "Missing HUGGINGFACE_TOKEN"}
-        return {"name": self.name, "status": "healthy", "detail": "Configured"}
+        if not probe:
+            return {"name": self.name, "status": "healthy", "detail": "Configured"}
+
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+        try:
+            async with self._build_client() as client:
+                response = await client.get("https://huggingface.co/api/whoami-v2", headers=headers)
+                if response.status_code in {401, 403}:
+                    return {
+                        "name": self.name,
+                        "status": "unavailable",
+                        "detail": f"token rejected (http {response.status_code})",
+                    }
+                if response.status_code >= 500:
+                    return {
+                        "name": self.name,
+                        "status": "degraded",
+                        "detail": f"http {response.status_code}",
+                    }
+                response.raise_for_status()
+                return {"name": self.name, "status": "healthy", "detail": "token probe ok"}
+        except Exception as exc:
+            return {"name": self.name, "status": "unavailable", "detail": str(exc)}
 
     async def generate(
         self,
@@ -1498,13 +1579,17 @@ class ProviderRegistry:
         self._enable_demo_generation_fallback = bool(settings.enable_demo_generation_fallback)
         providers_by_name: dict[str, StudioImageProvider | None] = {
             "openai": OpenAIImageProvider(
-                settings.openai_api_key,
+                reveal_secret(settings.openai_api_key),
                 draft_image_model=settings.openai_image_draft_model,
                 image_model=settings.openai_image_model,
+                premium_qa_enabled=(
+                    settings.environment != Environment.DEVELOPMENT
+                    or bool(settings.openai_image_premium_qa_enabled)
+                ),
             ),
-            "fal": FalProvider(settings.fal_api_key),
-            "runware": RunwareProvider(settings.runware_api_key),
-            "huggingface": HuggingFaceImageProvider(settings.huggingface_token) if settings.huggingface_token else None,
+            "fal": FalProvider(reveal_secret(settings.fal_api_key)),
+            "runware": RunwareProvider(reveal_secret(settings.runware_api_key)),
+            "huggingface": HuggingFaceImageProvider(reveal_secret(settings.huggingface_token)) if settings.huggingface_token else None,
             "pollinations": PollinationsProvider(enabled=True) if settings.enable_pollinations else None,
             "demo": DemoImageProvider() if self._enable_demo_generation_fallback else None,
         }
@@ -1615,6 +1700,7 @@ class ProviderRegistry:
             for provider in [self.get_provider(provider_name)]
             if provider is not None
             and provider.is_configured()
+            and not self._provider_circuit_blocks_routing(provider.name)
             and provider.supports_generation(
                 normalized_workflow,
                 has_reference_image=has_reference_image,
@@ -1721,6 +1807,7 @@ class ProviderRegistry:
         return any(
             provider is not None
             and provider.is_configured()
+            and not self._provider_circuit_blocks_routing(provider.name)
             and provider.supports_generation(normalized_workflow, has_reference_image=False)
             for provider in (
                 self.get_provider("openai"),
@@ -1786,6 +1873,8 @@ class ProviderRegistry:
                 provider = self.get_provider(provider_name)
                 if provider is None or not provider.is_configured():
                     continue
+                if self._provider_circuit_blocks_routing(provider.name):
+                    continue
                 if not provider.supports_generation(
                     normalized_workflow,
                     has_reference_image=reference_image is not None,
@@ -1826,7 +1915,7 @@ class ProviderRegistry:
             if provider.is_configured() and provider.supports_generation(
                 normalized_workflow,
                 has_reference_image=has_reference_image,
-            ):
+            ) and not self._provider_circuit_blocks_routing(provider.name):
                 return provider.name
         return "cloud"
 
@@ -1842,6 +1931,7 @@ class ProviderRegistry:
         )
         return any(
             provider.is_configured()
+            and not self._provider_circuit_blocks_routing(provider.name)
             and provider.supports_generation(
                 normalized_workflow,
                 has_reference_image=has_reference_image,
@@ -1884,6 +1974,7 @@ class ProviderRegistry:
     ) -> ProviderResult:
         last_error: Optional[Exception] = None
         last_provider_name: str | None = None
+        billable_failure_seen = False
         supported_providers = self._iter_supported_providers(
             workflow=workflow,
             reference_image=reference_image,
@@ -1893,6 +1984,8 @@ class ProviderRegistry:
             raise ProviderTemporaryError("No provider supports this generation workflow")
 
         for provider in supported_providers:
+            if billable_failure_seen and provider.billable:
+                continue
             if not await provider.is_available():
                 continue
             if not self._allow_provider_attempt(provider.name):
@@ -1925,6 +2018,8 @@ class ProviderRegistry:
                 latency_ms = (time.monotonic() - started_at) * 1000
                 tagged_error = self._tag_provider_error(exc, provider.name)
                 self._record_provider_failure(provider.name, latency_ms, tagged_error)
+                if provider.billable and self._development_cost_safe_failover_guard_active():
+                    billable_failure_seen = True
                 last_error = tagged_error
                 continue
 
@@ -1938,6 +2033,10 @@ class ProviderRegistry:
             )
             raise wrapped_error from last_error
         raise ProviderTemporaryError("No providers available")
+
+    def _development_cost_safe_failover_guard_active(self) -> bool:
+        settings = get_settings()
+        return settings.environment == Environment.DEVELOPMENT
 
     def _tag_provider_error(self, exc: Exception, provider_name: str | None) -> Exception:
         if provider_name:
@@ -1964,6 +2063,16 @@ class ProviderRegistry:
 
         return True
 
+    def _provider_circuit_blocks_routing(self, provider_name: str) -> bool:
+        state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
+        now = time.monotonic()
+        self._prune_provider_observations(state, now=now)
+        if state.opened_until_monotonic is not None and now < state.opened_until_monotonic:
+            return True
+        if state.half_open_in_flight:
+            return True
+        return False
+
     def _record_provider_success(self, provider_name: str, latency_ms: float) -> None:
         state = self._provider_circuits.setdefault(provider_name, ProviderCircuitState())
         now = time.monotonic()
@@ -1987,7 +2096,11 @@ class ProviderRegistry:
         state.consecutive_failures += 1
         state.last_error = redact_sensitive_text(error)
         state.half_open_in_flight = False
-        if state.half_open or state.consecutive_failures >= self._CIRCUIT_FAILURE_THRESHOLD:
+        if (
+            state.half_open
+            or state.consecutive_failures >= self._CIRCUIT_FAILURE_THRESHOLD
+            or is_provider_auth_failure(error)
+        ):
             state.opened_until_monotonic = now + self._CIRCUIT_OPEN_SECONDS
             state.half_open = False
         state.observations.append(

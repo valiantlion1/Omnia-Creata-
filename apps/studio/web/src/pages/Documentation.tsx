@@ -19,7 +19,7 @@ const sections: HelpSection[] = [
       { title: 'Explore', body: 'Browse public creations, trending styles, and community work. No account needed.' },
       { title: 'Create', body: 'Describe what you want, and we\'ll generate it. You can fine-tune settings like aspect ratio and model if you want, or just hit Generate.' },
       { title: 'Chat', body: 'Have a conversation with AI to get prompt ideas, refine images, or explore creative directions. You can upload photos and ask for edits right in the chat.' },
-      { title: 'Library', body: 'All your images are saved automatically. Organize them into collections, mark favorites, and manage everything from one place.' },
+      { title: 'Library', body: 'All your images are saved automatically. Organize them into projects, mark favorites, and manage everything from one place.' },
       { title: 'Profile', body: 'Your public portfolio. Choose what to share and what stays private.' },
       { title: 'Plans', body: 'See pricing, compare plans, and manage your subscription anytime.' },
     ],

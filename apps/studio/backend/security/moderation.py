@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, Tuple
 import httpx
 
-from config.env import get_settings
+from config.env import get_settings, reveal_secret
 
 logger = logging.getLogger("omnia.studio.moderation")
 
@@ -44,7 +44,7 @@ async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[s
             return (ModerationResult.HARD_BLOCK, term)
             
     # Try OpenRouter LLM approach if available
-    api_key = settings.openrouter_api_key
+    api_key = reveal_secret(settings.openrouter_api_key)
     if api_key:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:

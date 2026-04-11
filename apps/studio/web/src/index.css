@@ -152,6 +152,9 @@
 .bg-gradient-card {
   background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
   backdrop-filter: blur(24px);
+  -webkit-transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
+  will-change: transform, backdrop-filter;
   border: 1px solid rgba(255,255,255,0.04);
 }
 
@@ -193,6 +196,9 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   background: rgba(14, 15, 18, 0.7);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  -webkit-transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
+  will-change: transform, backdrop-filter;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 20px;
   box-shadow: 0 16px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.02);
@@ -215,4 +221,9 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }

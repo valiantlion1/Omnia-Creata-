@@ -11,6 +11,7 @@ from .workspace import Project, StudioWorkspace
 from .generation import GenerationJob, GenerationOutput, JobStatus, PromptSnapshot
 from .media import MediaAsset, PublicPost, ShareLink
 from .chat import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, ChatRole, ChatSuggestedAction
+from .telemetry import CostTelemetryEvent
 from .billing import (
     BillingWebhookReceipt,
     CheckoutKind,
@@ -20,7 +21,10 @@ from .billing import (
     ModelCatalogEntry,
     PlanCatalogEntry,
 )
+from .persona import StudioPersona
+from .prompt_memory import PromptMemoryProfile
 from .state import StudioState
+from .style import StudioStyle
 
 __all__ = [
     "utc_now",
@@ -49,6 +53,7 @@ __all__ = [
     "ChatMessage",
     "ChatRole",
     "ChatSuggestedAction",
+    "CostTelemetryEvent",
     # Billing
     "CheckoutKind",
     "CreditEntryType",
@@ -57,6 +62,9 @@ __all__ = [
     "CreativeProfileEntry",
     "ModelCatalogEntry",
     "PlanCatalogEntry",
+    "StudioPersona",
+    "StudioStyle",
+    "PromptMemoryProfile",
     # State
     "StudioState",
 ]

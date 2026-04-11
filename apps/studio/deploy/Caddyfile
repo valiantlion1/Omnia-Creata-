@@ -1,0 +1,13 @@
+http://localhost:80 {
+    # Proxy /api to the backend
+    handle_path /api/* {
+        reverse_proxy studio-backend:8000
+    }
+
+    # Proxy everything else to the frontend
+    handle {
+        reverse_proxy studio-web:3000 {
+            # Let Vite/React handle the routes instead of 404ing
+        }
+    }
+}

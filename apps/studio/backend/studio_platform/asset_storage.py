@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import httpx
 
-from config.env import Environment, Settings
+from config.env import Environment, Settings, reveal_secret
 
 
 logger = logging.getLogger(__name__)
@@ -190,12 +190,23 @@ def build_asset_storage_registry(settings: Settings, media_dir: Path) -> AssetSt
     if settings.supabase_url and settings.supabase_service_role_key:
         supabase_backend = SupabaseAssetStorageBackend(
             base_url=settings.supabase_url,
-            service_role_key=settings.supabase_service_role_key,
+            service_role_key=reveal_secret(settings.supabase_service_role_key),
             bucket=settings.supabase_storage_bucket,
             timeout_seconds=max(settings.default_timeout_seconds, 120),
         )
 
-    if requested_kind == "supabase":
+    prefers_local_non_postgres_storage = (
+        settings.state_store_backend != "postgres"
+        and not settings.development_remote_asset_storage_enabled
+    )
+
+    if prefers_local_non_postgres_storage:
+        if requested_kind == "supabase":
+            logger.info(
+                "Non-Postgres state store is using local asset storage by default; skipping remote Supabase asset storage"
+            )
+        requested_kind = "local"
+    elif requested_kind == "supabase":
         if supabase_backend is None:
             if settings.environment == Environment.DEVELOPMENT:
                 logger.warning("Supabase storage requested but not fully configured; falling back to local asset storage")

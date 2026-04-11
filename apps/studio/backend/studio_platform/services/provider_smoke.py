@@ -7,7 +7,7 @@ from typing import Any, Optional, Type
 
 from PIL import Image, ImageDraw
 
-from config.env import Settings, get_settings
+from config.env import Settings, get_settings, reveal_secret
 from security.redaction import redact_sensitive_text
 
 from ..llm import StudioLLMGateway
@@ -107,10 +107,16 @@ def build_default_smoke_cases(
     selected_provider: str = "all",
     selected_surface: str = "all",
     include_failure_probe: bool = True,
+    profile: str = "full",
 ) -> list[ProviderSmokeCase]:
     settings = get_settings()
     normalized_provider = (selected_provider or "all").strip().lower()
     normalized_surface = (selected_surface or "all").strip().lower()
+    normalized_profile = (profile or "full").strip().lower()
+    if normalized_profile not in {"full", "refresh"}:
+        normalized_profile = "full"
+    include_edit_cases = normalized_profile == "full"
+    include_failure_probe = include_failure_probe and normalized_profile == "full"
     reference_image = build_smoke_reference_image()
     cases: list[ProviderSmokeCase] = []
 
@@ -125,17 +131,18 @@ def build_default_smoke_cases(
                 prompt="Minimal studio product photograph of a matte ceramic mug on a soft gray backdrop, premium commercial lighting, clean composition, crisp detail.",
             )
         )
-        cases.append(
-            ProviderSmokeCase(
-                label="fal-image-edit",
-                provider_name="fal",
-                workflow="edit",
-                surface="image",
-                lane="managed_primary",
-                prompt="Turn this into a premium editorial product shot with refined reflections, soft studio lighting, and luxury art-direction.",
-                reference_image=reference_image,
+        if include_edit_cases:
+            cases.append(
+                ProviderSmokeCase(
+                    label="fal-image-edit",
+                    provider_name="fal",
+                    workflow="edit",
+                    surface="image",
+                    lane="managed_primary",
+                    prompt="Turn this into a premium editorial product shot with refined reflections, soft studio lighting, and luxury art-direction.",
+                    reference_image=reference_image,
+                )
             )
-        )
         if include_failure_probe:
             cases.append(
                 ProviderSmokeCase(
@@ -196,18 +203,19 @@ def build_default_smoke_cases(
                 prompt="Luxury skincare bottle on a sculpted stone plinth, premium studio campaign lighting, editorial polish, high-end product photography.",
             )
         )
-        cases.append(
-            ProviderSmokeCase(
-                label="openai-final-image-edit",
-                provider_name="openai",
-                workflow="edit",
-                surface="image",
-                lane="final",
-                model=settings.openai_image_model,
-                prompt="Turn this into a premium ecommerce hero image with soft daylight, clean background separation, and crisp product styling.",
-                reference_image=reference_image,
+        if include_edit_cases:
+            cases.append(
+                ProviderSmokeCase(
+                    label="openai-final-image-edit",
+                    provider_name="openai",
+                    workflow="edit",
+                    surface="image",
+                    lane="final",
+                    model=settings.openai_image_model,
+                    prompt="Turn this into a premium ecommerce hero image with soft daylight, clean background separation, and crisp product styling.",
+                    reference_image=reference_image,
+                )
             )
-        )
         if include_failure_probe:
             cases.append(
                 ProviderSmokeCase(
@@ -478,6 +486,7 @@ async def run_provider_smoke_suite(
     selected_provider: str = "all",
     selected_surface: str = "all",
     include_failure_probe: bool = True,
+    profile: str = "full",
 ) -> list[ProviderSmokeResult]:
     results: list[ProviderSmokeResult] = []
     gateway = StudioLLMGateway()
@@ -485,6 +494,7 @@ async def run_provider_smoke_suite(
         selected_provider=selected_provider,
         selected_surface=selected_surface,
         include_failure_probe=include_failure_probe,
+        profile=profile,
     ):
         if case.surface == "chat":
             results.append(await run_provider_smoke_case(gateway, case))
@@ -512,11 +522,11 @@ async def run_provider_smoke_suite(
 def _chat_provider_is_configured(settings: Settings, provider_name: str) -> bool:
     normalized = provider_name.strip().lower()
     if normalized == "gemini":
-        return bool((settings.gemini_api_key or "").strip())
+        return bool(reveal_secret(settings.gemini_api_key).strip())
     if normalized == "openrouter":
-        return bool((settings.openrouter_api_key or "").strip())
+        return bool(reveal_secret(settings.openrouter_api_key).strip())
     if normalized == "openai":
-        return bool((settings.openai_api_key or "").strip())
+        return bool(reveal_secret(settings.openai_api_key).strip())
     return False
 
 

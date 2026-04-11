@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { APP_VERSION_LABEL } from '@/lib/appVersion'
 
 export default function SplashPage() {
   const navigate = useNavigate()
@@ -144,7 +145,7 @@ export default function SplashPage() {
           transition: 'opacity 0.6s ease 500ms',
         }}
       >
-        v0.5.1
+        {APP_VERSION_LABEL}
       </div>
     </div>
   )

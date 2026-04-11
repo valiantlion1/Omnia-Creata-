@@ -345,6 +345,7 @@ def apply_generation_status_update(
     status: JobStatus,
     now: datetime,
     provider: Optional[str] = None,
+    provider_billable: Optional[bool] = None,
     error: Optional[str] = None,
     error_code: Optional[str] = None,
 ) -> None:
@@ -357,6 +358,8 @@ def apply_generation_status_update(
     job.updated_at = now
     if provider is not None:
         job.provider = provider
+    if provider_billable is not None:
+        job.provider_billable = provider_billable
     if error is not None:
         job.error = error
     if error_code is not None:

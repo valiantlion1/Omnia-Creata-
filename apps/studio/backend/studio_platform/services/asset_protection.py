@@ -55,7 +55,7 @@ class GeneratedAssetProtectionPipeline:
         normalized = ImageOps.exif_transpose(source_image).convert("RGBA")
 
         safe_username = self._normalize_username(username)
-        watermark_text = f"OMNIACREATA | @{safe_username}"
+        watermark_text = "OMNIA"
         proof_payload = self._build_proof_payload(
             asset_id=asset_id,
             job_id=job_id,

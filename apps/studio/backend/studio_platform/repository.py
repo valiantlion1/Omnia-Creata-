@@ -23,8 +23,10 @@ from .models import (
     OmniaIdentity,
     PromptSnapshot,
     Project,
+    PromptMemoryProfile,
     PublicPost,
     ShareLink,
+    StudioStyle,
     StudioState,
     StudioWorkspace,
 )
@@ -114,9 +116,20 @@ class StudioRepository:
     async def list_projects(self) -> list[Project]:
         return await self.list_models("projects", Project)
 
-    async def list_projects_for_identity(self, identity_id: str, *, surface: str | None = None) -> list[Project]:
+    async def list_projects_for_identity(
+        self,
+        identity_id: str,
+        *,
+        surface: str | None = None,
+        include_system_managed: bool = False,
+    ) -> list[Project]:
         def query(state: StudioState) -> list[Project]:
-            return filter_projects(state.projects.values(), identity_id=identity_id, surface=surface)
+            return filter_projects(
+                state.projects.values(),
+                identity_id=identity_id,
+                surface=surface,
+                include_system_managed=include_system_managed,
+            )
 
         return await self.read(query)
 
@@ -207,6 +220,32 @@ class StudioRepository:
                 for post in state.posts.values()
                 if post.identity_id == identity_id
             ]
+
+        return await self.read(query)
+
+    async def get_style(self, style_id: str) -> StudioStyle | None:
+        return await self.get_model("styles", style_id, StudioStyle)
+
+    async def list_styles(self) -> list[StudioStyle]:
+        return await self.list_models("styles", StudioStyle)
+
+    async def list_styles_for_identity(self, identity_id: str) -> list[StudioStyle]:
+        def query(state: StudioState) -> list[StudioStyle]:
+            styles = [
+                style.model_copy(deep=True)
+                for style in state.styles.values()
+                if style.identity_id == identity_id
+            ]
+            return sorted(styles, key=lambda item: item.updated_at, reverse=True)
+
+        return await self.read(query)
+
+    async def get_prompt_memory_for_identity(self, identity_id: str) -> PromptMemoryProfile | None:
+        def query(state: StudioState) -> PromptMemoryProfile | None:
+            for profile in state.prompt_memories.values():
+                if profile.identity_id == identity_id:
+                    return profile.model_copy(deep=True)
+            return None
 
         return await self.read(query)
 

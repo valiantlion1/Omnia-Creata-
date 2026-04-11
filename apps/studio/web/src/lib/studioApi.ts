@@ -1,6 +1,6 @@
 import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSession'
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000')).replace(/\/$/, '')
 
 export type IdentityPlan = 'guest' | 'free' | 'pro'
 export type JobStatus =
@@ -109,6 +109,7 @@ export type Project = {
   title: string
   description: string
   surface: ProjectSurface
+  system_managed?: boolean
   cover_asset_id: string | null
   last_generation_id: string | null
   created_at: string
@@ -145,12 +146,15 @@ export type EstimatedCostSource = 'provider_quote' | 'catalog_fallback'
 export type Generation = {
   job_id: string
   title: string
+  display_title?: string
   status: JobStatus
+  library_state?: 'generating' | 'ready' | 'failed' | 'blocked'
   project_id: string
   provider: string
   provider_rollout_tier?: string | null
   provider_billable?: boolean | null
   model: string
+  display_model_label?: string | null
   prompt_snapshot: PromptSnapshot
   pricing_lane: GenerationPricingLane
   estimated_cost: number
@@ -380,9 +384,73 @@ export type MediaAsset = {
   prompt: string
   url: string
   thumbnail_url: string | null
+  preview_url?: string | null
+  blocked_preview_url?: string | null
+  display_title?: string | null
+  derived_tags?: string[]
+  library_state?: 'generating' | 'ready' | 'failed' | 'blocked'
+  protection_state?: 'protected' | 'blocked'
+  can_open?: boolean
+  can_export_clean?: boolean
   metadata: Record<string, unknown>
   created_at: string
   deleted_at: string | null
+}
+
+export type StudioStyle = {
+  id: string
+  identity_id: string
+  title: string
+  prompt_modifier: string
+  description: string
+  category: string
+  preview_image_url?: string | null
+  source_kind: string
+  source_style_id?: string | null
+  favorite: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type StyleCatalogEntry = {
+  id: string
+  title: string
+  description: string
+  prompt_modifier: string
+  image: string
+  category: string
+  likes: number
+  is_omnia: boolean
+  saved_style_id?: string | null
+  saved: boolean
+  favorite: boolean
+}
+
+export type StylesPayload = {
+  catalog: StyleCatalogEntry[]
+  my_styles: StudioStyle[]
+  favorites: string[]
+}
+
+export type PromptMemoryProfile = {
+  id: string
+  identity_id: string
+  topic_tags: string[]
+  aesthetic_tags: string[]
+  repeated_phrases: string[]
+  preferred_model_ids: string[]
+  preferred_aspect_ratios: string[]
+  negative_prompt_terms: string[]
+  tone: string
+  generation_count: number
+  improve_count: number
+  flagged_generation_count: number
+  hourly_burst_peak: number
+  governance_hints: string[]
+  recent_prompt_examples: string[]
+  context_summary: string
+  created_at: string
+  updated_at: string
 }
 
 export type UsageSummary = {
@@ -783,7 +851,31 @@ export const studioApi = {
       models: ModelCatalogEntry[]
       presets: PresetEntry[]
       local_runtime: LocalRuntimeSummary
+      draft_projects: {
+        compose: string
+        chat: string
+      }
+      styles: StylesPayload
+      prompt_memory: PromptMemoryProfile
     }>('/settings/bootstrap'),
+  exportProject: (projectId: string) =>
+    apiFetchBlob(`/projects/${projectId}/export`, { method: 'POST' }),
+  listStyles: () => apiFetch<StylesPayload>('/styles'),
+  saveStyle: (payload: {
+    title: string
+    prompt_modifier: string
+    description?: string
+    category?: string
+    preview_image_url?: string | null
+    source_kind?: string
+    source_style_id?: string | null
+    favorite?: boolean
+  }) => apiFetch<StudioStyle>('/styles', { method: 'POST', body: JSON.stringify(payload) }),
+  updateStyle: (styleId: string, payload: { favorite?: boolean }) =>
+    apiFetch<StudioStyle>(`/styles/${styleId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  saveStyleFromPrompt: (payload: { prompt: string; title?: string; category?: string }) =>
+    apiFetch<StudioStyle>('/styles/from-prompt', { method: 'POST', body: JSON.stringify(payload) }),
+  getPromptMemory: () => apiFetch<PromptMemoryProfile>('/prompt-memory'),
   getOwnerLocalLabBootstrap: () => apiFetch<OwnerLocalLabBootstrap>('/owner/local-lab/bootstrap'),
   getHealth: () => apiFetch<HealthResponse>('/healthz'),
   getHealthDetail: () => apiFetch<HealthResponse>('/healthz/detail'),
@@ -804,4 +896,26 @@ export const studioApi = {
   deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
   updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>
     apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+}
+
+async function apiFetchBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers)
+  if (getStudioAccessToken()) headers.set('Authorization', `Bearer ${getStudioAccessToken()}`)
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/v1${path}`, {
+      ...init,
+      headers,
+    })
+  } catch {
+    throw new Error('Studio service is offline right now. Try again in a moment.')
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({ error: 'Request failed' }))
+    throw new Error(payload.error ?? payload.detail ?? `Request failed with ${response.status}`)
+  }
+
+  return response.blob()
 }

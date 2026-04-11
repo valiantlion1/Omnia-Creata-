@@ -127,6 +127,8 @@ def build_deployment_verification_report(
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
     platform_readiness_payload: dict[str, Any] | None = None
+    cost_telemetry_payload: dict[str, Any] | None = None
+    truth_sync_payload: dict[str, Any] | None = None
 
     def add_check(key: str, status: str, summary: str, detail: str) -> None:
         checks.append(
@@ -513,6 +515,55 @@ def build_deployment_verification_report(
             "Pass an owner token if you want deployment verify to inspect owner-only platform readiness phases.",
         )
 
+    cost_telemetry = None
+    if isinstance(health_detail_payload, dict):
+        cost_telemetry = health_detail_payload.get("cost_telemetry")
+    if isinstance(cost_telemetry, dict):
+        cost_telemetry_payload = cost_telemetry
+        add_check(
+            "cost_telemetry_visibility",
+            "pass",
+            "Owner health detail exposes cost telemetry summary.",
+            (
+                f"window_days={cost_telemetry.get('window_days')}, "
+                f"total_spend_usd={cost_telemetry.get('total_spend_usd')}"
+            ),
+        )
+    elif owner_health_checked:
+        add_check(
+            "cost_telemetry_visibility",
+            "warning",
+            "Owner health detail does not expose cost telemetry summary.",
+            "Expected /v1/healthz/detail to include cost_telemetry for owner-side spend truth.",
+        )
+    else:
+        add_check(
+            "cost_telemetry_visibility",
+            "warning",
+            "Cost telemetry visibility was not checked because owner health detail was skipped.",
+            "Pass an owner token if you want deployment verify to inspect owner-only cost telemetry.",
+        )
+
+    truth_sync = None
+    if isinstance(health_detail_payload, dict):
+        truth_sync = health_detail_payload.get("truth_sync")
+    if isinstance(truth_sync, dict):
+        truth_sync_payload = truth_sync
+    elif owner_health_checked:
+        add_check(
+            "truth_sync_visibility",
+            "warning",
+            "Owner health detail does not expose current-build truth sync metadata.",
+            "Expected /v1/healthz/detail to include truth_sync for current-build artefact drift visibility.",
+        )
+    else:
+        add_check(
+            "truth_sync_visibility",
+            "warning",
+            "Truth sync visibility was not checked because owner health detail was skipped.",
+            "Pass an owner token if you want deployment verify to inspect owner-only current-build truth sync.",
+        )
+
     blocked = sum(1 for check in checks if check["status"] == "blocked")
     warnings = sum(1 for check in checks if check["status"] == "warning")
     closure_ready = owner_health_checked and blocked == 0 and not closure_gaps
@@ -557,6 +608,10 @@ def build_deployment_verification_report(
     }
     if platform_readiness_payload is not None:
         report["platform_readiness"] = platform_readiness_payload
+    if cost_telemetry_payload is not None:
+        report["cost_telemetry"] = cost_telemetry_payload
+    if truth_sync_payload is not None:
+        report["truth_sync"] = truth_sync_payload
     return report
 
 

@@ -5,12 +5,22 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator, SecretStr
 from pydantic_settings import BaseSettings
 
-# Always resolve .env relative to this file's parent (backend/), regardless of cwd
+# Always resolve .env relative to unified root (apps/studio/.env), regardless of cwd
 _BACKEND_DIR = Path(__file__).parent.parent
-_ENV_FILE = str(_BACKEND_DIR / ".env")
+_STUDIO_ROOT = _BACKEND_DIR.parent
+_ENV_FILE = str(_STUDIO_ROOT / ".env")
+
+
+def reveal_secret(value: SecretStr | str | None) -> str:
+    """Return the plain string value for a SecretStr-or-string setting."""
+    if value is None:
+        return ""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return str(value)
 
 
 class Environment(str, Enum):
@@ -31,13 +41,13 @@ class Settings(BaseSettings):
     """Application settings with validation."""
 
     # API Keys (Required in production)
-    openai_api_key: Optional[str] = None
-    gemini_api_key: Optional[str] = None
-    huggingface_token: Optional[str] = None
-    openrouter_api_key: Optional[str] = None
-    stability_api_key: Optional[str] = None
-    fal_api_key: Optional[str] = None
-    runware_api_key: Optional[str] = None
+    openai_api_key: Optional[SecretStr] = None
+    gemini_api_key: Optional[SecretStr] = None
+    huggingface_token: Optional[SecretStr] = None
+    openrouter_api_key: Optional[SecretStr] = None
+    stability_api_key: Optional[SecretStr] = None
+    fal_api_key: Optional[SecretStr] = None
+    runware_api_key: Optional[SecretStr] = None
 
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -49,22 +59,41 @@ class Settings(BaseSettings):
     openai_premium_model: str = "gpt-5.4"
     openai_image_draft_model: str = "gpt-image-1-mini"
     openai_image_model: str = "gpt-image-1.5"
+    openai_image_premium_qa_enabled: bool = False
     chat_primary_provider: str = "openrouter"
     chat_fallback_provider: str = "openai"
     gemini_service_tier: str = "free"
     openrouter_service_tier: str = "paid"
     openai_service_tier: str = "paid"
     generation_provider_strategy: str = "free-first"
+    provider_spend_guardrails_enabled: bool = True
+    provider_spend_emergency_disabled: str = ""
+    billable_provider_daily_soft_cap_usd: Optional[float] = None
+    billable_provider_daily_hard_cap_usd: Optional[float] = None
+    development_billable_provider_daily_soft_cap_usd: float = 1.0
+    development_billable_provider_daily_hard_cap_usd: float = 2.0
+    openai_daily_soft_cap_usd: Optional[float] = None
+    openai_daily_hard_cap_usd: Optional[float] = None
+    fal_daily_soft_cap_usd: Optional[float] = None
+    fal_daily_hard_cap_usd: Optional[float] = None
+    runware_daily_soft_cap_usd: Optional[float] = None
+    runware_daily_hard_cap_usd: Optional[float] = None
+    huggingface_daily_soft_cap_usd: Optional[float] = None
+    huggingface_daily_hard_cap_usd: Optional[float] = None
+    openrouter_daily_soft_cap_usd: Optional[float] = None
+    openrouter_daily_hard_cap_usd: Optional[float] = None
+    owner_cost_telemetry_window_days: int = 30
+    owner_cost_telemetry_recent_event_limit: int = 20
 
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
     studio_root_admin_emails: str = ""
 
     # Database Configuration
-    database_url: Optional[str] = None
+    database_url: Optional[SecretStr] = None
     supabase_url: Optional[str] = None
-    supabase_anon_key: Optional[str] = None
-    supabase_service_role_key: Optional[str] = None
+    supabase_anon_key: Optional[SecretStr] = None
+    supabase_service_role_key: Optional[SecretStr] = None
     supabase_storage_bucket: str = "studio-assets"
     state_store_backend: str = "sqlite"
     state_store_path: Optional[str] = None
@@ -74,6 +103,7 @@ class Settings(BaseSettings):
 
     # Asset Storage
     asset_storage_backend: str = "local"
+    development_remote_asset_storage_enabled: bool = False
 
     # Redis Configuration
     redis_url: Optional[str] = None
@@ -92,7 +122,7 @@ class Settings(BaseSettings):
     allowed_hosts: str = "localhost,127.0.0.1,studio.omniacreata.com"
 
     # Security
-    jwt_secret: Optional[str] = None  # Optional in dev
+    jwt_secret: Optional[SecretStr] = None  # Optional in dev
     jwt_algorithm: str = "HS256"
     jwt_expiration: str = "24h"
     enable_api_docs: Optional[bool] = None
@@ -103,12 +133,12 @@ class Settings(BaseSettings):
     rate_limit_burst: int = 10
 
     # LemonSqueezy Configuration
-    lemonsqueezy_api_key: Optional[str] = None
-    lemonsqueezy_webhook_secret: Optional[str] = None
+    lemonsqueezy_api_key: Optional[SecretStr] = None
+    lemonsqueezy_webhook_secret: Optional[SecretStr] = None
     lemonsqueezy_store_id: Optional[str] = None
 
     # Mailer Configuration
-    resend_api_key: Optional[str] = None
+    resend_api_key: Optional[SecretStr] = None
 
     # Monitoring
     sentry_dsn: Optional[str] = None
@@ -183,6 +213,19 @@ class Settings(BaseSettings):
         return deduped
 
     @property
+    def provider_spend_emergency_disabled_list(self) -> List[str]:
+        values = [
+            provider.strip().lower()
+            for provider in self.provider_spend_emergency_disabled.split(",")
+            if provider.strip()
+        ]
+        deduped: List[str] = []
+        for value in values:
+            if value and value not in deduped:
+                deduped.append(value)
+        return deduped
+
+    @property
     def runtime_root_path(self) -> Path:
         if self.studio_runtime_root:
             return Path(self.studio_runtime_root).expanduser().resolve()
@@ -219,11 +262,37 @@ class Settings(BaseSettings):
         return v
 
     @field_validator(
+        "billable_provider_daily_soft_cap_usd",
+        "billable_provider_daily_hard_cap_usd",
+        "development_billable_provider_daily_soft_cap_usd",
+        "development_billable_provider_daily_hard_cap_usd",
+        "openai_daily_soft_cap_usd",
+        "openai_daily_hard_cap_usd",
+        "fal_daily_soft_cap_usd",
+        "fal_daily_hard_cap_usd",
+        "runware_daily_soft_cap_usd",
+        "runware_daily_hard_cap_usd",
+        "huggingface_daily_soft_cap_usd",
+        "huggingface_daily_hard_cap_usd",
+        "openrouter_daily_soft_cap_usd",
+        "openrouter_daily_hard_cap_usd",
+    )
+    @classmethod
+    def validate_provider_spend_caps(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("Provider spend caps must be positive when configured")
+        return value
+
+    @field_validator(
         "generation_retry_attempt_limit",
         "generation_retry_delay_seconds",
         "generation_stale_running_seconds",
         "generation_claim_lease_seconds",
         "generation_maintenance_interval_seconds",
+        "owner_cost_telemetry_window_days",
+        "owner_cost_telemetry_recent_event_limit",
     )
     @classmethod
     def validate_generation_runtime_limits(cls, v: int) -> int:
@@ -301,6 +370,21 @@ class Settings(BaseSettings):
             self.generation_claim_lease_seconds = minimum_claim_lease
         if self.generation_claim_lease_seconds > self.generation_stale_running_seconds:
             self.generation_claim_lease_seconds = self.generation_stale_running_seconds
+        if (
+            self.billable_provider_daily_soft_cap_usd is not None
+            and self.billable_provider_daily_hard_cap_usd is not None
+            and self.billable_provider_daily_hard_cap_usd < self.billable_provider_daily_soft_cap_usd
+        ):
+            self.billable_provider_daily_hard_cap_usd = self.billable_provider_daily_soft_cap_usd
+        if self.development_billable_provider_daily_hard_cap_usd < self.development_billable_provider_daily_soft_cap_usd:
+            self.development_billable_provider_daily_hard_cap_usd = self.development_billable_provider_daily_soft_cap_usd
+        for provider_name in ("openai", "fal", "runware", "huggingface", "openrouter"):
+            soft_field = f"{provider_name}_daily_soft_cap_usd"
+            hard_field = f"{provider_name}_daily_hard_cap_usd"
+            soft_value = getattr(self, soft_field)
+            hard_value = getattr(self, hard_field)
+            if soft_value is not None and hard_value is not None and hard_value < soft_value:
+                setattr(self, hard_field, soft_value)
         return self
 
     def validate_production_requirements(self):

@@ -55,7 +55,7 @@ const primaryNav: NavItem[] = [
 
 const libraryNav: NavItem[] = [
   { to: '/library/images', label: 'My images', icon: ImageIcon, aliases: ['/media', '/history'], exactAliases: ['/library'] },
-  { to: '/library/collections', label: 'Collections', icon: Folder, aliases: ['/projects'] },
+  { to: '/library/projects', label: 'Projects', icon: Folder, aliases: ['/library/collections', '/projects'] },
   { to: '/library/likes', label: 'Favorites', icon: Heart },
   { to: '/library/trash', label: 'Trash', icon: Trash2 },
 ]
@@ -487,7 +487,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Version */}
         {!collapsed && (
           <div className="mt-4 px-1 text-[10px] text-center font-medium text-zinc-600/50">
-            v{APP_VERSION_LABEL}
+            {APP_VERSION_LABEL}
           </div>
         )}
       </div>
