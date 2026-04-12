@@ -85,3 +85,6 @@ def remove_project_from_state(*, state: StudioState, project_id: str) -> None:
     stale_posts = [post_id for post_id, post in state.posts.items() if post.project_id == project_id]
     for post_id in stale_posts:
         state.posts.pop(post_id, None)
+    stale_share_ids = [share_id for share_id, share in state.shares.items() if share.project_id == project_id]
+    for share_id in stale_share_ids:
+        state.shares.pop(share_id, None)

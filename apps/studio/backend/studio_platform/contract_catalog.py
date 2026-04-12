@@ -26,10 +26,14 @@ ASSET_TRUTH_FIELDS: tuple[str, ...] = (
 )
 
 BOOTSTRAP_FIELDS: tuple[str, ...] = (
+    "identity",
+    "entitlements",
+    "plans",
+    "models",
+    "presets",
     "draft_projects",
     "styles",
     "prompt_memory",
-    "entitlements",
 )
 
 

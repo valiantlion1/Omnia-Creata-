@@ -20,6 +20,7 @@ from .models import (
     GenerationJob,
     JobStatus,
     MediaAsset,
+    DeletedIdentityTombstone,
     OmniaIdentity,
     PromptSnapshot,
     Project,
@@ -94,6 +95,12 @@ class StudioRepository:
 
     async def list_identities(self) -> list[OmniaIdentity]:
         return await self.list_models("identities", OmniaIdentity)
+
+    async def get_deleted_identity_tombstone(self, identity_id: str) -> DeletedIdentityTombstone | None:
+        return await self.get_model("deleted_identity_tombstones", identity_id, DeletedIdentityTombstone)
+
+    async def list_deleted_identity_tombstones(self) -> list[DeletedIdentityTombstone]:
+        return await self.list_models("deleted_identity_tombstones", DeletedIdentityTombstone)
 
     async def get_identity_map(self) -> dict[str, OmniaIdentity]:
         def query(state: StudioState) -> dict[str, OmniaIdentity]:
@@ -316,6 +323,7 @@ class StudioRepository:
         def query(state: StudioState) -> dict[str, int]:
             return {
                 "identities": len(state.identities),
+                "deleted_identity_tombstones": len(state.deleted_identity_tombstones),
                 "projects": len(state.projects),
                 "conversations": len(state.conversations),
                 "chat_messages": len(state.chat_messages),

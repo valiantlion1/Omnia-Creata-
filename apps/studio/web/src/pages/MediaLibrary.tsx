@@ -283,6 +283,8 @@ function RenameDialog({
         <div className="mt-5">
           <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">Title</label>
           <input
+            id="studio-library-rename-title"
+            name="title"
             autoFocus
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -715,6 +717,8 @@ function Toolbar({
           <label className="flex min-w-[170px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-400 ring-1 ring-white/8">
             <Search className="h-3.5 w-3.5" />
             <input
+              id="studio-library-search"
+              name="search"
               ref={(el) => setInputRef(el)}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}

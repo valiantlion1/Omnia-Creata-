@@ -1282,7 +1282,16 @@ export default function ChatPage() {
 
               {/* Input row */}
               <div className="flex items-end gap-2 px-3 py-2.5">
-                <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleUploadChange} />
+                <input
+                  id="studio-chat-attachments"
+                  name="attachments"
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUploadChange}
+                />
 
                 <button
                   onClick={handleUploadClick}
@@ -1293,6 +1302,8 @@ export default function ChatPage() {
                 </button>
 
                 <textarea
+                  id="studio-chat-draft"
+                  name="message"
                   ref={textareaRef}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

@@ -186,6 +186,14 @@ async def test_update_post_rejects_public_visibility_when_identity_blocked(tmp_p
 async def test_new_share_is_hashed_and_raw_token_not_persisted(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "asset-share.png"
+    render_path.write_bytes(b"asset-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
 
     try:
         share, raw_token = await service.create_share(identity.id, None, asset.id)
@@ -207,6 +215,14 @@ async def test_new_share_is_hashed_and_raw_token_not_persisted(tmp_path: Path) -
 async def test_legacy_raw_token_share_still_resolves(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "legacy-asset-share.png"
+    render_path.write_bytes(b"legacy-asset-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
     legacy = ShareLink(
         id="share-legacy",
         token="legacytoken123456",
@@ -255,6 +271,95 @@ async def test_revoked_share_asset_token_fails_with_permission_error(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_project_share_asset_token_fails_when_asset_becomes_blocked(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, project, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "project-share-asset.png"
+    render_path.write_bytes(b"project-share-asset")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        share, _ = await service.create_share(identity.id, project.id, None)
+        url = service.build_asset_delivery_url(asset.id, variant="content", share_id=share.id)
+        token = parse_qs(urlparse(url).query)["token"][0]
+        await store.mutate(
+            lambda state: (
+                state.assets[asset.id].metadata.__setitem__("protection_state", "blocked"),
+                state.assets[asset.id].metadata.__setitem__("library_state", "blocked"),
+            )
+        )
+
+        with pytest.raises(PermissionError):
+            await service.resolve_asset_delivery(asset.id, token, "content")
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_share_rejects_ambiguous_target_selection(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, project, asset = await _seed_identity_project_asset(store)
+
+    try:
+        with pytest.raises(ValueError, match="exactly one"):
+            await service.create_share(identity.id, project.id, asset.id)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_share_rejects_blocked_asset_target(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    await store.mutate(
+        lambda state: (
+            state.assets[asset.id].metadata.__setitem__("protection_state", "blocked"),
+            state.assets[asset.id].metadata.__setitem__("library_state", "blocked"),
+        )
+    )
+
+    try:
+        with pytest.raises(PermissionError, match="ready, truthful assets"):
+            await service.create_share(identity.id, None, asset.id)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_blocked_asset_share_public_lookup_returns_not_found(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "blocked-asset-share.png"
+    render_path.write_bytes(b"blocked-asset-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        share, raw_token = await service.create_share(identity.id, None, asset.id)
+        await store.mutate(
+            lambda state: (
+                state.shares.__setitem__(share.id, share),
+                state.assets[asset.id].metadata.__setitem__("protection_state", "blocked"),
+                state.assets[asset.id].metadata.__setitem__("library_state", "blocked"),
+            )
+        )
+
+        with pytest.raises(KeyError):
+            await service.get_public_share(raw_token)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_health_detail_includes_security_summary_counts(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity_one, _, _, asset_one = await _seed_identity_project_asset(
@@ -289,6 +394,7 @@ async def test_health_detail_includes_security_summary_counts(tmp_path: Path) ->
             "manual_review_required_identities": 1,
             "active_shares": 1,
             "revoked_shares": 1,
+            "deleted_identity_tombstones": 0,
         }
     finally:
         await service.shutdown()

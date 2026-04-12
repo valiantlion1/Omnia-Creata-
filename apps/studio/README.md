@@ -7,6 +7,7 @@ OmniaCreata Studio is the flagship visual generation and creative production pro
 - Studio is in `Protected Beta Hardening`.
 - The working target is a trustworthy protected beta, not a broad public paid launch yet.
 - Backend/operator truth is being locked around one contract, one artefact chain, and one Docker staging proof.
+- Backend spine modularization is active too: `contract_catalog.py`, `model_catalog_ops.py`, `operator_control_plane_ops.py`, and `owner_health_ops.py` now carry more of the hidden truth that used to sprawl inside `StudioService`.
 - Protected-beta provider policy is intentionally narrow for now:
   - chat: `OpenAI` is the only launch-grade lane
   - image: `OpenAI gpt-image-1-mini` is the default protected-beta lane

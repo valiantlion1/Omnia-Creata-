@@ -18,6 +18,171 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.12.84`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected staging could finally boot under Docker again, but the browser shell still had one last truth gap: the frontend build expected `VITE_SUPABASE_*` values while the staging env and hydration pipeline only guaranteed the server-side `SUPABASE_*` names, so `/login` rendered as a blank screen even though the containers were healthy
+- What:
+  the staging runtime helper now mirrors hydrated `SUPABASE_URL` and `SUPABASE_ANON_KEY` into `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` whenever the browser-facing variants are absent, which keeps the effective staging env honest for both backend and frontend consumers
+  Docker compose and the web Dockerfile now forward those `VITE_SUPABASE_*` values into the production frontend build, so the protected staging login shell can actually initialize its Supabase browser client instead of crashing at first render
+  deploy docs and the example staging env now also reflect that frontend/browser aliasing rule, which closes one more operator trap before closure-grade staging proofs
+
+### `0.6.0-alpha` / build `2026.04.12.83`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta closure still had one awkward local-security seam left: owner-token verification worked, but the safest path still depended on users pasting bearer tokens into shell env or command arguments by hand
+- What:
+  `deployment_verify.py` now accepts the owner token from `STUDIO_HEALTH_DETAIL_TOKEN`, so staging verification no longer needs to expose that token on the Python command line just to inspect `/v1/healthz/detail`
+  `start-studio-staging.ps1` and `verify-studio-staging.ps1` now support `-PromptForOwnerToken`, normalize pasted `Bearer ...` values automatically, and restore the previous shell env after the run so closure-grade verification can be done with less operator friction and less local token exposure
+  closure-gate blocker text and deploy docs now also point operators at that prompt-based path, which keeps Protected Beta Hardening honest without making owner verification feel like a manual secret-handling ritual every time
+
+### `0.6.0-alpha` / build `2026.04.12.82`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta closure still had one operator-honesty seam left: protected staging bring-up only proved that `docker.exe` existed, not that the Docker engine was actually reachable, and closure-grade runs could still drift into a soft verify attempt without an owner bearer token
+- What:
+  `start-studio-staging.ps1` now fails early with an external blocked report when the Docker engine itself is unavailable, so protected staging no longer burns time on a compose attempt that was doomed by an offline daemon
+  closure-grade staging runs now also fail before compose or verify if the owner bearer token is missing, which keeps `closure_ready` proof honest instead of silently downgrading a requested closure run into advisory-only verification
+  route regressions now also lock two more protected-beta edges directly: revoked public-share delivery tokens fail closed on asset content routes, and tombstoned sessions cannot reach `/v1/billing/checkout` before the deleted-identity check stops them
+
+### `0.6.0-alpha` / build `2026.04.12.81`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the final owner-truth sweep found one more stale-token fail-open seam: `/v1/healthz/detail` still accepted a token claiming `owner_mode` without first proving that the underlying identity could still bootstrap, and signed-in auth bootstrap could still overwrite an already-established public username from non-authoritative fallback fields
+- What:
+  owner gating now bootstraps identity before honoring owner claims, so deleted-owner sessions fail closed with `401` on `/v1/healthz/detail` instead of bypassing the tombstone check through stale token metadata
+  auth/bootstrap identity refresh now preserves an established username unless a real authoritative username arrives in auth metadata, so signed-in profile truth no longer drifts back to fallback ids or email-localpart guesses during ordinary route bootstrap
+  route regressions now lock that owner-only route directly and also cover tombstoned-session refusal on `/v1/assets` and `/v1/billing/summary`, so more of the protected signed-in shell stays explicitly fail-closed under deleted-account auth
+
+### `0.6.0-alpha` / build `2026.04.12.80`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the next billing/provider abuse pass found a subtle fail-open path in image generation routing: spend guardrails were enforced for the selected primary provider, but a later billable fallback candidate could still survive in the runtime chain and get attempted after the primary lane failed
+- What:
+  generation admission now prunes billable fallback providers that are already hard-blocked by spend guardrails instead of persisting them as valid backup candidates behind a healthy primary lane
+  generation processing now repeats that fallback pruning right before execution, so a provider that becomes blocked after admission cannot still ride along inside the execution candidate chain as a silent billable escape hatch
+  targeted billing regressions now lock both moments directly: blocked billable fallbacks are removed from job truth at creation time and are stripped out again before runtime execution when provider spend changes between admission and dispatch
+
+### `0.6.0-alpha` / build `2026.04.12.79`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the next abuse-sweep pass found two lingering trust inconsistencies: several signed-in routes still treated “has an auth token” as enough even when the identity had been tombstoned, and asset-share truth was still loose enough to tolerate ambiguous targets or blocked/non-truthful assets longer than it should
+- What:
+  protected routes that mutate or expose signed-in state now require an actively bootstrappable identity instead of raw auth alone, so tombstoned sessions fail closed with `401` on prompt improve, personas, chat message edits/regenerations, generation surfaces, clean export, post mutations, and share routes instead of falling through to inconsistent downstream behavior
+  share creation now rejects ambiguous `project_id + asset_id` payloads and refuses blocked/demo/deleted asset targets, while public asset-share lookup and share-token asset delivery also deny blocked or non-truthful assets instead of leaving public-link behavior partially alive
+  adversarial regressions now lock those router gates and share rules directly, keeping the protected-beta hardening wave focused on real auth/share abuse paths instead of more structural refactor noise
+
+### `0.6.0-alpha` / build `2026.04.12.78`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta hardening still had two trust gaps left that were too dangerous to defer: a deleted account could still be silently recreated by a surviving authenticated session, and project-bound public shares could outlive the project truth they were supposed to represent
+- What:
+  account deletion now writes a durable local deleted-identity tombstone while still purging the rest of the user state, and auth/bootstrap routes now fail closed with `401` when an authenticated session belongs to a deleted identity instead of quietly recreating the account or downgrading it into a fake guest session
+  project deletion now also clears project-bound shares, public project-share lookup now returns `404` when the project is gone or no share-eligible assets remain, and project-share asset delivery now re-checks project existence plus blocked/demo/renderable eligibility before honoring old delivery tokens
+  regression coverage now locks tombstone persistence, deleted-session refusal, project-share cleanup, and stale share denial directly, while the backend spine still stays under the service-size guard and the package is ready for the next audit sweep instead of more structural refactoring
+
+### `0.6.0-alpha` / build `2026.04.12.77`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the next exploit-sweep pass found that demo auth still defaulted on in staging and that unauthenticated demo login could still request a Pro plan outside true local development, which was too loose for protected-beta hardening
+- What:
+  `ENABLE_DEMO_AUTH` now defaults to `true` only in development, not in every non-production environment, so protected staging no longer quietly exposes the demo-auth lane unless an operator explicitly turns it on
+  even when demo auth is explicitly enabled outside development, unauthenticated demo login can no longer mint a Pro identity there; staged or protected environments now refuse that path with an explicit `403` instead of quietly granting elevated test access
+  regression coverage now locks both the settings default and the route-level refusal, while compile and follow-on verification keep the rest of the hardened billing/share/public trust changes intact
+
+### `0.6.0-alpha` / build `2026.04.12.76`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the audit-ready baseline was strong enough to stop refactoring and start closing concrete trust gaps where public interaction, clean export, or billing behavior could still overpromise or fail open under the wrong state
+- What:
+  public post reactions now fail closed unless a post is genuinely public and showcase-eligible, which prevents hidden internal/demo-style posts from being liked or unliked by direct route access and keeps route behavior at `403` instead of accidental mutation or secondary crashes
+  clean export now refuses blocked assets even for the owner, and billing checkout now refuses silent demo activation outside local development when LemonSqueezy is missing, so staging or production cannot quietly self-upgrade a user because checkout config drifted out of sync
+  focused regressions now lock those three trust boundaries directly, the touched backend surfaces still compile cleanly, and the broader protected-beta verification loop remains the next gate instead of another refactor wave
+
+### `0.6.0-alpha` / build `2026.04.12.75`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the protected-beta audit baseline was strong enough to stop adding features and instead harden trust boundaries, owner-truth honesty, and obvious abuse edges before the later full exploit/security sweep
+- What:
+  owner health detail now degrades honestly under partial failure instead of crashing or silently overclaiming readiness when telemetry, AI control-plane, or launch-readiness helpers fail
+  deleted or trashed asset shares now resolve to `404` instead of surviving past asset state, public profile payloads no longer leak private default-visibility settings, and the admin telemetry route now bootstraps identity correctly before enforcing root-admin access
+  security regressions now lock those auth/share/profile/owner-truth behaviors directly, protected-beta verify stays green, and login/signup form controls picked up stable `id` and `name` attributes so the shell preserves basic accessibility trust without redesigning the UI
+
+### `0.6.0-alpha` / build `2026.04.12.74`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `StudioService` was still directly owning signed-in shell/bootstrap assembly and model catalog helpers, which meant the final audit wave would still find façade noise instead of mostly real bugs and risks
+- What:
+  signed-in shell/bootstrap ownership now lives in `services/shell_service.py`, so `/v1/settings/bootstrap` and model catalog listing/lookup/serialization no longer need nontrivial inline assembly inside `StudioService`
+  cross-service reach-back is smaller too: identity/profile flows now route public-post visibility/serialization through `public_service.py` and asset/purge behavior through `library_service.py`, while public/share serialization also reads asset truth from `library_service.py`
+  route payloads stay wire-compatible, `service.py` stays below the backend spine size target, focused regressions pass, the full protected-beta verify matrix stays green, and read-only browser sanity still opens the signed-in `Create`, `Chat`, `My Images`, and `Projects` shell surfaces normally
+
+### `0.6.0-alpha` / build `2026.04.12.73`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `StudioService` was still too large to be a trustworthy long-term spine; even after earlier extractions, project, library, public/share, and health ownership were still living too directly inside one compatibility facade
+- What:
+  backend domain ownership is now explicit through `project_service.py`, `library_service.py`, `public_service.py`, and `health_service.py`, while `StudioService` keeps the same route-facing facade methods
+  signed-in and owner/operator route payloads stay wire-compatible, but project CRUD, asset/style/prompt-memory behavior, public/share/profile behavior, and owner health assembly now belong to dedicated services instead of inline god-object blocks
+  `service.py` now sits below the current backend spine size target, and the protected-beta verification matrix still passes after the extraction
+
+### `0.6.0-alpha` / build `2026.04.12.72`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  signed-in shell bootstrap is one of the highest-value stable contracts in Studio, so leaving its payload assembly inline inside `StudioService` would keep a subtle drift point exactly where the app initializes
+- What:
+  `/v1/settings/bootstrap` payload assembly now lives in `bootstrap_contract_ops.py`, which gives the signed-in shell a dedicated contract builder instead of hand-built inline response assembly
+  regression coverage now directly checks that the canonical bootstrap fields from `contract_catalog.py` still survive this builder unchanged
+  the extraction keeps the same route payload shape while shrinking another small but important contract seam out of `StudioService`
+
+### `0.6.0-alpha` / build `2026.04.12.71`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `health(detail=True)` was still acting like a mini god-object inside `StudioService`, stitching together security counts, operator artefacts, spend truth, control-plane truth, and launch-readiness in one place
+- What:
+  owner health detail now loads its security summary and detail-only operator extensions through dedicated helper functions in `owner_health_ops.py`
+  hidden AI control-plane assembly now has a single backend entrypoint in `operator_control_plane_ops.py`, so `StudioService` no longer manually rebuilds the model catalog plus surface matrix bundle
+  regression coverage now locks that extracted control-plane seam too, while the full protected-beta verification matrix still passes unchanged
+
+### `0.6.0-alpha` / build `2026.04.12.70`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta hardening still had too much model-catalog and owner-health assembly trapped inside `StudioService`, which would keep growing into a harder-to-change backend god-object if left alone
+- What:
+  Studio model registry lookup, validation, and identity-facing serialization now live in `model_catalog_ops.py` instead of being defined inline inside `StudioService`
+  owner health/detail payload assembly now lives in `owner_health_ops.py`, so hidden launch/provider truth can stay wire-compatible without forcing `StudioService` to keep owning every operator payload detail
+  direct regression coverage now locks both seams, and the AI handoff docs now point future assistants at the extracted backbone modules instead of treating `service.py` as the only orientation file
+
 ### `0.6.0-alpha` / build `2026.04.12.69`
 - Date: `2026-04-12`
 - Codename: `Foundation`

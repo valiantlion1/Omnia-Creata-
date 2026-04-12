@@ -4,7 +4,7 @@ import logging
 import os
 from pathlib import Path
 
-from config.env import Settings
+from config.env import Environment, Settings
 from runtime_logging import configure_runtime_logging
 
 
@@ -52,3 +52,19 @@ def test_runtime_logging_creates_external_log_directory(tmp_path):
     }
     assert str((log_root / "backend.app.log").resolve()) in file_handler_paths
     assert str((log_root / "backend.error.log").resolve()) in file_handler_paths
+
+
+def test_settings_enable_demo_auth_defaults_to_development_only():
+    development = Settings(_env_file=None, jwt_secret="x" * 32, environment=Environment.DEVELOPMENT)
+    staging = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        database_url="postgresql://user:pass@localhost:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_service_role_key="x" * 32,
+        state_store_backend="postgres",
+    )
+
+    assert development.enable_demo_auth is True
+    assert staging.enable_demo_auth is False

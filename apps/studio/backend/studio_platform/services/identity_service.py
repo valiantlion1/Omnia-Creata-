@@ -15,6 +15,18 @@ from ..billing_ops import BillingStateSnapshot, resolve_billing_state
 
 logger = logging.getLogger(__name__)
 
+
+class DeletedIdentityError(PermissionError):
+    def __init__(
+        self,
+        identity_id: str,
+        *,
+        deleted_at: datetime | None = None,
+    ) -> None:
+        self.identity_id = identity_id
+        self.deleted_at = deleted_at
+        super().__init__("Account has been permanently deleted.")
+
 if TYPE_CHECKING:
     from ..service import StudioService
 
@@ -57,20 +69,20 @@ class IdentityService:
         identity: OmniaIdentity,
         generations_by_id: Dict[str, GenerationJob],
     ) -> bool:
-        return self.service._should_hide_post_from_public(
+        return self.service.public.should_hide_post_from_public(
             post,
             identity=identity,
             generations_by_id=generations_by_id,
         )
 
     def _is_publicly_showcase_ready_post(self, post: PublicPost) -> bool:
-        return self.service._is_publicly_showcase_ready_post(post)
+        return self.service.public.is_publicly_showcase_ready_post(post)
 
     def _is_truthful_surface_asset(self, asset: MediaAsset) -> bool:
-        return self.service._is_truthful_surface_asset(asset)
+        return self.service.library.is_truthful_surface_asset(asset)
 
     def serialize_asset(self, asset: MediaAsset, *, identity_id: str | None = None) -> Dict[str, Any]:
-        return self.service.serialize_asset(asset, identity_id=identity_id)
+        return self.service.library.serialize_asset(asset, identity_id=identity_id)
 
     def serialize_post(
         self,
@@ -81,7 +93,7 @@ class IdentityService:
         viewer_identity_id: str | None = None,
         public_preview: bool = False,
     ) -> Dict[str, Any]:
-        return self.service.serialize_post(
+        return self.service.public.serialize_post(
             post,
             assets_by_id=assets_by_id,
             identities_by_id=identities_by_id,
@@ -90,7 +102,7 @@ class IdentityService:
         )
 
     async def _purge_asset_storage(self, asset: MediaAsset) -> None:
-        await self.service._purge_asset_storage(asset)
+        await self.service.library.purge_asset_storage(asset)
 
 
     async def get_public_identity(self, auth_user: Any | None) -> Dict[str, Any]:
@@ -107,9 +119,7 @@ class IdentityService:
             user_id=auth_user.id,
             email=auth_user.email or f"{auth_user.id}@omnia.local",
             display_name=getattr(auth_user, "username", None) or "Creator",
-            username=(getattr(auth_user, "metadata", {}) or {}).get("username")
-            or getattr(auth_user, "email", "").split("@")[0]
-            or "creator",
+            username=(getattr(auth_user, "metadata", {}) or {}).get("username") or None,
             owner_mode=bool(getattr(auth_user, "metadata", {}).get("owner_mode")),
             root_admin=bool(getattr(auth_user, "metadata", {}).get("root_admin")),
             local_access=bool(getattr(auth_user, "metadata", {}).get("local_access")),
@@ -120,6 +130,14 @@ class IdentityService:
         )
         billing_state = await self._resolve_billing_state_for_identity(identity)
         return self.serialize_identity(identity, billing_state=billing_state)
+
+
+    async def get_deleted_identity_tombstone(self, identity_id: str) -> DeletedIdentityTombstone | None:
+        return await self.service.store.get_deleted_identity_tombstone(identity_id)
+
+
+    async def is_identity_deleted(self, identity_id: str) -> bool:
+        return (await self.get_deleted_identity_tombstone(identity_id)) is not None
 
 
     async def ensure_identity(
@@ -140,9 +158,14 @@ class IdentityService:
         avatar_url: str | None = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
-        holder: Dict[str, OmniaIdentity] = {}
+        holder: Dict[str, Any] = {}
 
         def mutation(state: StudioState) -> None:
+            tombstone = state.deleted_identity_tombstones.get(user_id)
+            if tombstone is not None:
+                holder["deleted_tombstone"] = tombstone.model_copy(deep=True)
+                return
+
             identity = state.identities.get(user_id)
             now = utc_now()
 
@@ -208,7 +231,10 @@ class IdentityService:
                     identity.monthly_credits_remaining = max(identity.monthly_credits_remaining, upgraded_plan.monthly_credits)
                 identity.email = email or identity.email
                 identity.display_name = display_name or identity.display_name
-                identity.username = (username or identity.username or identity.email.split("@")[0] or "creator").strip().lower()
+                if username:
+                    identity.username = username.strip().lower()
+                elif not identity.username:
+                    identity.username = (identity.email.split("@")[0] or "creator").strip().lower()
                 identity.owner_mode = identity.owner_mode or owner_mode
                 identity.root_admin = identity.root_admin or root_admin
                 identity.local_access = identity.local_access or local_access
@@ -237,6 +263,12 @@ class IdentityService:
             holder["identity"] = identity.model_copy(deep=True)
 
         await self.service.store.mutate(mutation)
+        deleted_tombstone = holder.get("deleted_tombstone")
+        if isinstance(deleted_tombstone, DeletedIdentityTombstone):
+            raise DeletedIdentityError(
+                user_id,
+                deleted_at=deleted_tombstone.deleted_at,
+            )
         return holder["identity"]
 
 
@@ -498,8 +530,8 @@ class IdentityService:
 
     def _initialize_state_locked(self, state: StudioState) -> None:
         self._migrate_identity_visibility_defaults_locked(state)
-        self.service._backfill_posts_locked(state)
-        self.service._normalize_public_posts_locked(state)
+        self.service.public.backfill_posts_locked(state)
+        self.service.public.normalize_public_posts_locked(state)
 
 
     def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
@@ -600,7 +632,7 @@ class IdentityService:
                 "avatar_url": identity.avatar_url,
                 "bio": identity.bio,
                 "plan": identity.plan.value,
-                "default_visibility": identity.default_visibility.value,
+                "default_visibility": identity.default_visibility.value if own_profile else None,
                 "usage_summary": self.serialize_usage_summary(identity, billing_state=billing_state) if own_profile else None,
                 "public_post_count": public_post_count,
             },
@@ -726,13 +758,19 @@ class IdentityService:
 
     async def permanently_delete_identity(self, identity_id: str) -> bool:
         """Deep purge an identity and all belonging assets from DB and Supabase Auth."""
-        await self.get_identity(identity_id)
+        identity = await self.get_identity(identity_id)
         assets_to_delete = await self.service.store.list_assets_for_identity(identity_id)
         for asset in assets_to_delete:
             await self._purge_asset_storage(asset)
 
         def mutation(state: StudioState) -> None:
             purge_identity_state(state, identity_id, assets_to_delete)
+            state.deleted_identity_tombstones[identity_id] = DeletedIdentityTombstone(
+                id=identity_id,
+                identity_id=identity_id,
+                email=identity.email,
+                deleted_at=utc_now(),
+            )
 
         await self.service.store.mutate(mutation)
 

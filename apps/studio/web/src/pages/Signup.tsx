@@ -128,10 +128,13 @@ export default function SignupPage() {
               <label className="block">
                 <div className="mb-2 text-sm font-medium text-zinc-200">Name</div>
                 <input
+                  id="studio-signup-display-name"
+                  name="displayName"
                   type="text"
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder="Your name"
+                  autoComplete="name"
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />
               </label>
@@ -139,10 +142,13 @@ export default function SignupPage() {
               <label className="block">
                 <div className="mb-2 text-sm font-medium text-zinc-200">Username</div>
                 <input
+                  id="studio-signup-username"
+                  name="username"
                   type="text"
                   value={username}
                   onChange={(event) => setUsername(event.target.value.replace(/\s+/g, ''))}
                   placeholder="username"
+                  autoComplete="username"
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />
               </label>
@@ -151,10 +157,13 @@ export default function SignupPage() {
             <label className="block">
               <div className="mb-2 text-sm font-medium text-zinc-200">Email</div>
               <input
+                id="studio-signup-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@omniacreata.com"
+                autoComplete="email"
                 className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
               />
             </label>
@@ -163,10 +172,13 @@ export default function SignupPage() {
               <label className="block">
                 <div className="mb-2 text-sm font-medium text-zinc-200">Password</div>
                 <input
+                  id="studio-signup-password"
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="At least 8 characters"
+                  autoComplete="new-password"
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />
               </label>
@@ -174,10 +186,13 @@ export default function SignupPage() {
               <label className="block">
                 <div className="mb-2 text-sm font-medium text-zinc-200">Confirm password</div>
                 <input
+                  id="studio-signup-password-confirmation"
+                  name="passwordConfirmation"
                   type="password"
                   value={passwordConfirmation}
                   onChange={(event) => setPasswordConfirmation(event.target.value)}
                   placeholder="Repeat password"
+                  autoComplete="new-password"
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />
               </label>
@@ -185,7 +200,14 @@ export default function SignupPage() {
 
             <div className="space-y-3 pt-2 text-sm text-zinc-300">
               <label className="flex items-start gap-3">
-                <input type="checkbox" checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent" />
+                <input
+                  id="studio-signup-accepted-legal"
+                  name="acceptedLegal"
+                  type="checkbox"
+                  checked={acceptedLegal}
+                  onChange={(event) => setAcceptedLegal(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                />
                 <span>
                   I agree to the <Link to="/help#terms" className="text-white hover:text-zinc-200">Terms</Link>,{' '}
                   <Link to="/help#privacy" className="text-white hover:text-zinc-200">Privacy Policy</Link>, and{' '}
@@ -193,7 +215,14 @@ export default function SignupPage() {
                 </span>
               </label>
               <label className="flex items-start gap-3 text-zinc-400">
-                <input type="checkbox" checked={marketingOptIn} onChange={(event) => setMarketingOptIn(event.target.checked)} className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent" />
+                <input
+                  id="studio-signup-marketing-opt-in"
+                  name="marketingOptIn"
+                  type="checkbox"
+                  checked={marketingOptIn}
+                  onChange={(event) => setMarketingOptIn(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                />
                 <span>Send me product updates, release notes, and occasional news.</span>
               </label>
             </div>

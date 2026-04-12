@@ -4,6 +4,7 @@ param(
   [string]$ApiPrefix = "/api",
   [string]$Label = "protected-staging",
   [string]$OwnerBearerToken,
+  [switch]$PromptForOwnerToken,
   [switch]$RequireClosureReady
 )
 
@@ -22,6 +23,39 @@ if (-not (Test-Path $helperScript)) {
 }
 . $helperScript
 
+function Read-OwnerBearerToken {
+  param([string]$Prompt = "Paste the owner bearer token (Bearer prefix optional)")
+
+  $secureToken = Read-Host -Prompt $Prompt -AsSecureString
+  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+  try {
+    $plainToken = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+  } finally {
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+  }
+
+  if ([string]::IsNullOrWhiteSpace($plainToken)) {
+    return $null
+  }
+
+  $plainToken = $plainToken.Trim()
+  if ($plainToken -match '^(?i:Bearer)\s+') {
+    $plainToken = $plainToken -replace '^(?i:Bearer)\s+', ''
+  }
+  return $plainToken.Trim()
+}
+
+function Get-DeploymentReportFilename {
+  param([string]$Value)
+
+  $sourceValue = [string]$Value
+  $normalized = [regex]::Replace($sourceValue.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim("-")
+  if ([string]::IsNullOrWhiteSpace($normalized)) {
+    $normalized = "deployment"
+  }
+  return "$normalized-verify-latest.json"
+}
+
 if (Test-Path $versionFile) {
   try {
     $versionManifest = Get-Content $versionFile -Raw | ConvertFrom-Json
@@ -36,7 +70,7 @@ if (Test-Path $versionFile) {
 $runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues @{}
 
 $reportDir = Join-Path $runtimeRoot "reports"
-$blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
+$blockerReportPath = Join-Path $reportDir (Get-DeploymentReportFilename -Value $Label)
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
 function Write-StagingVerifyBlockerReport {
@@ -90,7 +124,7 @@ if (-not (Test-Path $resolvedEnvFile)) {
 $sourceEnvValues = Get-EnvMap -PathValue $resolvedEnvFile
 $runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues $sourceEnvValues
 $reportDir = Join-Path $runtimeRoot "reports"
-$blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
+$blockerReportPath = Join-Path $reportDir (Get-DeploymentReportFilename -Value $Label)
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
 $effectiveEnv = New-StagingEffectiveEnvFile -SourceEnvFile $resolvedEnvFile -RuntimeRoot $runtimeRoot
@@ -118,12 +152,19 @@ if ($expectedBuild) {
 if ([string]::IsNullOrWhiteSpace($OwnerBearerToken) -and -not [string]::IsNullOrWhiteSpace($env:STUDIO_HEALTH_DETAIL_TOKEN)) {
   $OwnerBearerToken = $env:STUDIO_HEALTH_DETAIL_TOKEN
 }
-if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
-  $args += @("--owner-bearer-token", $OwnerBearerToken)
+if ([string]::IsNullOrWhiteSpace($OwnerBearerToken) -and $PromptForOwnerToken.IsPresent) {
+  $OwnerBearerToken = Read-OwnerBearerToken
 }
 $effectiveRequireClosureReady = $RequireClosureReady.IsPresent
 if (-not $effectiveRequireClosureReady -and -not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
   $effectiveRequireClosureReady = $true
+}
+if ($effectiveRequireClosureReady -and [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
+  Write-StagingVerifyBlockerReport `
+    -Summary "Owner bearer token is missing for closure-grade staging verification." `
+    -Detail "Set STUDIO_HEALTH_DETAIL_TOKEN, pass -OwnerBearerToken, or use -PromptForOwnerToken before enforcing closure_ready from verify-studio-staging.ps1." `
+    -BaseUrl $BaseUrl
+  throw "Owner bearer token is required when protected staging verification is asked to enforce closure_ready."
 }
 if ($effectiveRequireClosureReady) {
   $args += "--require-closure-ready"
@@ -146,4 +187,17 @@ if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
 Write-Host "Closure gate:   $(if ($effectiveRequireClosureReady) { 'enforced' } else { 'advisory only' })"
 Write-Host ""
 
-& python @args
+$originalOwnerTokenPresent = Test-Path Env:STUDIO_HEALTH_DETAIL_TOKEN
+$originalOwnerToken = $env:STUDIO_HEALTH_DETAIL_TOKEN
+try {
+  if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
+    $env:STUDIO_HEALTH_DETAIL_TOKEN = $OwnerBearerToken
+  }
+  & python @args
+} finally {
+  if ($originalOwnerTokenPresent) {
+    $env:STUDIO_HEALTH_DETAIL_TOKEN = $originalOwnerToken
+  } else {
+    Remove-Item Env:STUDIO_HEALTH_DETAIL_TOKEN -ErrorAction SilentlyContinue
+  }
+}

@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.12.69",
+  "build": "2026.04.12.84",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-12",
-  "notes": "Protected Beta Hardening now trims service-layer sprawl too: operator surface and model catalog assembly moved out of StudioService into a dedicated control-plane module, keeping hidden provider/model truth modular while preserving the same owner health payload."
+  "notes": "Protected staging web build now receives the browser-facing Supabase env it actually needs, so the Docker login shell no longer whitescreens when staging only populated the server-side SUPABASE_* names; owner-token closure prompting remains short-lived and safer too."
 }

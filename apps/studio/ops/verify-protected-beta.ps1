@@ -27,7 +27,7 @@ function Invoke-Check {
 Push-Location $backendDir
 try {
   Invoke-Check -Label "Backend shard: route/security/readiness" -Action {
-    python -m pytest tests/test_router_security.py tests/test_launch_readiness.py tests/test_deployment_verification.py -q
+    python -m pytest tests/test_backend_spine_ops.py tests/test_router_security.py tests/test_launch_readiness.py tests/test_deployment_verification.py -q
   }
 
   Invoke-Check -Label "Backend shard: provider/billing/llm" -Action {

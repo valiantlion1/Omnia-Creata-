@@ -702,6 +702,8 @@ export default function CreatePage() {
             )}
 
             <textarea
+              id="studio-create-prompt"
+              name="prompt"
               ref={textareaRef}
               value={prompt}
               onChange={(event) => {
@@ -772,6 +774,8 @@ export default function CreatePage() {
                   <div className="sm:col-span-2">
                     <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Negative Prompt</label>
                     <textarea
+                      id="studio-create-negative-prompt"
+                      name="negativePrompt"
                       value={negativePrompt}
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}

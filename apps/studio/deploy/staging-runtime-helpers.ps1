@@ -257,6 +257,17 @@ function New-StagingEffectiveEnvFile {
     $effective[$key] = $hostValue.Trim()
   }
 
+  if ((-not $effective.Contains("VITE_SUPABASE_URL")) -or (Test-PlaceholderEnvValue -Value ([string]$effective["VITE_SUPABASE_URL"]))) {
+    if ($effective.Contains("SUPABASE_URL") -and -not (Test-PlaceholderEnvValue -Value ([string]$effective["SUPABASE_URL"]))) {
+      $effective["VITE_SUPABASE_URL"] = [string]$effective["SUPABASE_URL"]
+    }
+  }
+  if ((-not $effective.Contains("VITE_SUPABASE_ANON_KEY")) -or (Test-PlaceholderEnvValue -Value ([string]$effective["VITE_SUPABASE_ANON_KEY"]))) {
+    if ($effective.Contains("SUPABASE_ANON_KEY") -and -not (Test-PlaceholderEnvValue -Value ([string]$effective["SUPABASE_ANON_KEY"]))) {
+      $effective["VITE_SUPABASE_ANON_KEY"] = [string]$effective["SUPABASE_ANON_KEY"]
+    }
+  }
+
   $effective["STAGING_RUNTIME_ROOT"] = $RuntimeRoot
   if (-not $effective.Contains("STUDIO_RUNTIME_ROOT")) {
     $effective["STUDIO_RUNTIME_ROOT"] = $RuntimeRoot

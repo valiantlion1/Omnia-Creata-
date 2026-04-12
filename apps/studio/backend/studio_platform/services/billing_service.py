@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from fastapi import Request
 import asyncio
 import logging
-from config.env import get_settings
+from config.env import Environment, get_settings
 from ..models import *
 from ..billing_ops import *
 from ..cost_telemetry_ops import *
@@ -23,6 +23,9 @@ class BillingService:
     def __init__(self, service: 'StudioService'):
         self.service = service
         self.providers = service.providers
+
+    def _demo_checkout_fallback_allowed(self) -> bool:
+        return get_settings().environment == Environment.DEVELOPMENT
 
     async def _resolve_billing_state_for_identity(self, identity: OmniaIdentity) -> BillingStateSnapshot:
         def query(state: StudioState) -> BillingStateSnapshot:
@@ -94,7 +97,10 @@ class BillingService:
                 ),
             }
 
-        # Fallback to demo local mutation if no Lemonsqueezy configured
+        if not self._demo_checkout_fallback_allowed():
+            raise RuntimeError("Billing checkout is not configured for this environment")
+
+        # Fallback to demo local mutation only for local development.
         updated_holder: Dict[str, OmniaIdentity] = {}
 
         def mutation(state: StudioState) -> None:

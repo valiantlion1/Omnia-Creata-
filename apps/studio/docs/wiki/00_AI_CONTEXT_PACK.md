@@ -66,6 +66,16 @@ Treat these as stable unless the task explicitly changes them:
 - route contract freeze matters for signed-in surfaces
 - operational truth comes from manifest plus release/maintenance docs, not from memory
 
+## Current Security Guardrails
+
+Treat these as active guardrails, not optional implementation details:
+- deleted authenticated sessions must fail closed with `401`, not silently downgrade to guest and not recreate identity state
+- protected routes should bootstrap and verify a real identity, not rely on raw auth presence alone
+- share creation must target exactly one thing: a project or an asset, never both
+- blocked/demo/deleted assets are not truthful public share targets
+- project or asset share truth must die with the underlying project/asset truth instead of lingering as a half-alive public surface
+- billable provider spend guardrails must apply to fallback candidates too; a later managed provider that is already blocked cannot stay in the generation fallback chain as a silent paid escape hatch
+
 ## What Is Still Open
 
 These are still strategic decisions, not final permanent locks:
@@ -111,6 +121,40 @@ use owner health detail:
 - and `ai_control_plane.contract_freeze` for the canonical state/field vocabularies
 
 Do not reconstruct that map from scattered docs, guesses, or stale terminal memory.
+
+## Backend Spine Modules
+
+Do not assume `service.py` still owns every backend policy.
+
+For current protected-beta hardening, the key backbone modules are:
+- `contract_catalog.py` for canonical state and field vocabularies
+- `bootstrap_contract_ops.py` for canonical signed-in shell bootstrap payload assembly
+- `model_catalog_ops.py` for Studio model registry, lookup, validation, and identity-facing serialization
+- `services/shell_service.py` for signed-in shell/bootstrap ownership and model catalog assembly used by `/v1/settings/bootstrap`
+- `operator_control_plane_ops.py` for hidden operator model catalog and `surface_matrix` assembly
+- `owner_health_ops.py` for owner health/detail assembly, security summary, and launch-truth lifting
+- `services/project_service.py` for project CRUD, draft-project ownership, and generation-project recovery
+- `services/library_service.py` for asset serialization, library actions, style persistence, prompt-memory payloads, and export/trash flows
+- `services/public_service.py` for public feed behavior, share resolution, public profile-facing payloads, and post mutations
+- `services/health_service.py` for top-level `/v1/healthz/detail` orchestration
+
+Treat `StudioService` as an orchestrator first, not the only source of truth.
+
+## Audit Guardrails
+
+The current protected-beta hardening baseline also expects these rules to stay true:
+- owner health/detail must degrade honestly under partial helper failure; missing telemetry or readiness artefacts should become explicit fallback truth, not a route crash or a fake `ready`
+- public shares must die with asset truth; if an asset is deleted, trashed, demo-only, blocked from public delivery, or otherwise no longer eligible, the share route should fail closed
+- public post interaction must respect showcase truth too; hidden internal/demo or otherwise non-showcase public posts should fail closed for like/unlike mutations instead of remaining directly mutable by id
+- public profile payloads must not leak private defaults or owner-only settings just because the viewer can resolve a public identity
+- owner or root-only routes should bootstrap identity from auth/session truth before enforcing higher privileges; do not rely on stale token flags alone
+- permanently deleted identities must leave behind a local tombstone; a surviving authenticated token must fail closed with `401` instead of silently recreating the account through bootstrap or other signed-in routes
+- blocked assets must not keep clean-export rights just because a clean variant still exists on disk or in storage
+- checkout misconfiguration must fail closed outside local development; staging or production must never silently fall back to demo billing mutations
+- demo auth must be development-only by default, and unauthenticated demo login must not mint Pro access outside local development even if an operator explicitly toggles the demo lane on
+- project-bound public shares must also die with project truth; if the project is gone or no share-eligible assets remain, public share lookup and old project-share delivery tokens should fail closed
+- billable fallback providers that are blocked by spend guardrails should be pruned out at both generation admission and runtime execution; do not rely on only the first selected provider being checked
+- trust-preserving UI fixes are allowed during hardening, but only when they protect interpretation, accessibility, or basic usability without redesigning the product
 
 ## Planning Rules For AI Assistants
 

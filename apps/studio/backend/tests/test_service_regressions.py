@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from config.env import get_settings
+from config.env import Environment, get_settings
 import studio_platform.providers as provider_module
 from studio_platform.models import (
     BillingWebhookReceipt,
@@ -16,6 +16,7 @@ from studio_platform.models import (
     CostTelemetryEvent,
     CreditEntryType,
     CreditLedgerEntry,
+    DeletedIdentityTombstone,
     GenerationJob,
     GenerationOutput,
     IdentityPlan,
@@ -31,7 +32,7 @@ from studio_platform.models import (
     utc_now,
 )
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, ProviderResult
-from studio_platform.service import StudioService
+from studio_platform.service import DeletedIdentityError, StudioService
 from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
 from studio_platform.services.generation_runtime import ExecutedGenerationBatch
@@ -49,6 +50,7 @@ async def test_export_identity_data_uses_store_snapshot(tmp_path: Path):
         email="user@example.com",
         display_name="User One",
         username="userone",
+        plan=IdentityPlan.PRO,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
@@ -116,6 +118,7 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
             email="user@example.com",
             display_name="User One",
             username="userone",
+            plan=IdentityPlan.PRO,
             workspace_id="ws-user-1",
         )
         other_identity = OmniaIdentity(
@@ -221,6 +224,10 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
 
         assert deleted is True
         assert identity.id not in snapshot.identities
+        tombstone = snapshot.deleted_identity_tombstones.get(identity.id)
+        assert tombstone is not None
+        assert tombstone.identity_id == identity.id
+        assert tombstone.email == identity.email
         assert conversation.id not in snapshot.conversations
         assert message.id not in snapshot.chat_messages
         assert share.id not in snapshot.shares
@@ -231,6 +238,78 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
     finally:
         settings.supabase_url = original_supabase_url
         settings.supabase_service_role_key = original_service_role_key
+
+
+@pytest.mark.asyncio
+async def test_ensure_identity_refuses_tombstoned_identity(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    await store.mutate(
+        lambda state: state.deleted_identity_tombstones.__setitem__(
+            "user-1",
+            DeletedIdentityTombstone(
+                id="user-1",
+                identity_id="user-1",
+                email="user@example.com",
+                deleted_at=utc_now(),
+            ),
+        )
+    )
+
+    try:
+        with pytest.raises(DeletedIdentityError, match="permanently deleted"):
+            await service.ensure_identity(
+                user_id="user-1",
+                email="user@example.com",
+                display_name="User One",
+                username="userone",
+            )
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_delete_project_removes_project_bound_shares(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        plan=IdentityPlan.PRO,
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+        )
+    )
+
+    try:
+        share, _ = await service.create_share(identity.id, project.id, None)
+        deleted = await service.delete_project(identity.id, project.id)
+        snapshot = await store.snapshot()
+
+        assert deleted == {"project_id": project.id, "status": "deleted"}
+        assert project.id not in snapshot.projects
+        assert share.id not in snapshot.shares
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -267,6 +346,46 @@ async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
         assert "/checkout/buy/pro_subscription" in payload["checkout_url"]
         assert "checkout%5Bcustom%5D%5Bcheckout_kind%5D=pro_monthly" in payload["checkout_url"]
     finally:
+        settings.lemonsqueezy_store_id = original_store_id
+
+
+@pytest.mark.asyncio
+async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_store_id = settings.lemonsqueezy_store_id
+    settings.environment = Environment.STAGING
+    settings.lemonsqueezy_store_id = None
+    service: StudioService | None = None
+
+    try:
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        await service.initialize()
+
+        identity = OmniaIdentity(
+            id="user-1",
+            email="user@example.com",
+            display_name="User One",
+            username="userone",
+            workspace_id="ws-user-1",
+        )
+        await store.mutate(
+            lambda state: (
+                state.identities.__setitem__(identity.id, identity),
+                state.workspaces.__setitem__(
+                    identity.workspace_id,
+                    StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio"),
+                ),
+            )
+        )
+
+        with pytest.raises(RuntimeError, match="Billing checkout is not configured for this environment"):
+            await service.checkout(identity.id, CheckoutKind.PRO_MONTHLY)
+    finally:
+        if service is not None:
+            await service.shutdown()
+        settings.environment = original_environment
         settings.lemonsqueezy_store_id = original_store_id
 
 
@@ -426,7 +545,8 @@ async def test_create_generation_recovers_stale_project_reference_by_creating_co
     assert created_project is not None
     assert created_project.identity_id == identity.id
     assert created_project.surface == "compose"
-    assert created_project.title == "New image set"
+    assert created_project.system_managed is True
+    assert created_project.title == "Draft project"
 
     pending_tasks = list(service._tasks)
     for task in pending_tasks:
@@ -585,9 +705,11 @@ async def test_get_public_share_returns_project_payload(tmp_path: Path):
         title="Render One",
         prompt="cinematic portrait",
         url="stored",
+        local_path=str(tmp_path / "project-share-asset.png"),
         metadata={},
     )
     share = ShareLink(id="share-1", token="sharetoken123456", identity_id=identity.id, project_id=project.id)
+    Path(asset.local_path).write_bytes(b"project-share")
 
     await store.mutate(
         lambda state: (
@@ -778,10 +900,12 @@ async def test_get_public_share_hides_demo_placeholder_assets(tmp_path: Path):
         title="Real render",
         prompt="cinematic portrait",
         url="stored",
+        local_path=str(tmp_path / "real-share-asset.png"),
         metadata={"provider": "pollinations"},
     )
     project_share = ShareLink(id="share-project", token="shareproject123456", identity_id=identity.id, project_id=project.id)
     asset_share = ShareLink(id="share-asset", token="shareasset123456", identity_id=identity.id, asset_id=demo_asset.id)
+    Path(real_asset.local_path).write_bytes(b"real-share")
 
     await store.mutate(
         lambda state: (
@@ -801,6 +925,54 @@ async def test_get_public_share_hides_demo_placeholder_assets(tmp_path: Path):
 
     with pytest.raises(KeyError):
         await service.get_public_share(asset_share.token)
+
+
+@pytest.mark.asyncio
+async def test_get_public_share_rejects_trashed_asset_share(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-trashed",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Trashed render",
+        prompt="cinematic portrait",
+        url="stored",
+        metadata={"provider": "openai"},
+        deleted_at=utc_now(),
+    )
+    share = ShareLink(id="share-trashed", token="sharetrashed123456", identity_id=identity.id, asset_id=asset.id)
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.shares.__setitem__(share.id, share),
+        )
+    )
+
+    with pytest.raises(KeyError):
+        await service.get_public_share(share.token)
 
 
 @pytest.mark.asyncio
@@ -2509,8 +2681,9 @@ async def test_improve_generation_prompt_records_cost_telemetry_event(tmp_path: 
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
 
     class _LLMGateway:
-        async def improve_prompt(self, prompt: str) -> LLMResult:
+        async def improve_prompt(self, prompt: str, *, memory_context: str = "") -> LLMResult:
             assert prompt == "portrait prompt"
+            assert isinstance(memory_context, str)
             return LLMResult(
                 text="polished portrait prompt",
                 provider="openai",
@@ -3169,8 +3342,8 @@ async def test_worker_runtime_mode_processes_jobs_claimed_from_shared_broker(tmp
 @pytest.mark.asyncio
 async def test_cancelled_worker_keeps_shared_broker_claim_for_recovery(tmp_path: Path):
     class _SlowProvider:
-        name = "slow-provider"
-        rollout_tier = "fallback"
+        name = "openai"
+        rollout_tier = "primary"
         billable = False
         capabilities = ProviderCapabilities(workflows=("text_to_image",))
 

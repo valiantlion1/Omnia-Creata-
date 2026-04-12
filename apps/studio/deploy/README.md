@@ -35,9 +35,12 @@ Do not treat it as the final production platform contract yet.
 
 Prerequisite:
 - Docker Desktop or another compatible `docker` CLI must be installed
+- the Docker engine itself must be running before protected staging bring-up; a visible `docker.exe` alone is no longer treated as enough
 - `start-studio-staging.ps1` now also checks the standard Docker Desktop install path on Windows and prepends that directory to the current process `PATH`, so a fresh Docker install does not look missing just because the shell or Docker credential helper path is stale
 - `start-studio-staging.ps1` and `verify-studio-staging.ps1` now also default to an external staging runtime root under `%LOCALAPPDATA%\OmniaCreata\Studio\staging`, which is bind-mounted into `/runtime` so deployment reports can round-trip back into owner health detail
 - those scripts now also generate an effective staging env file under that runtime root, hydrate placeholder secrets from host environment variables when available, and keep preflight, Docker, and verify aligned to the same env snapshot
+- the staging helper now also mirrors `SUPABASE_URL` and `SUPABASE_ANON_KEY` into the frontend-facing `VITE_SUPABASE_*` build args when those public browser values are not set separately, so the login shell does not render as a blank page under Docker just because only the server-side names were populated
+- closure-grade staging verification should also have an owner bearer token ready through `STUDIO_HEALTH_DETAIL_TOKEN`, `-OwnerBearerToken`, or the interactive `-PromptForOwnerToken` flow
 
 1. Copy `.env.staging.example` to `.env.staging`
 2. Fill in the real secrets
@@ -94,6 +97,12 @@ If you want the verify step to inspect owner-only launch readiness, pass an owne
 powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -OwnerBearerToken "<owner-token>"
 ```
 
+If you do not want that token living in shell history or command arguments, use the prompt flow instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -PromptForOwnerToken
+```
+
 By default the verify script now targets the local forwarded staging URL (`http://127.0.0.1:<WEB_PORT>`) for Docker proofs.
 If you need different operator behavior, set one or both of these optional values in `.env.staging`:
 
@@ -109,6 +118,15 @@ If you want to enforce that gate explicitly from startup too, use:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start-studio-staging.ps1 -OwnerBearerToken "<owner-token>" -RequireClosureReady
 ```
+
+Or prompt once, let the script use it for the run, then restore the previous shell env afterward:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-studio-staging.ps1 -PromptForOwnerToken -RequireClosureReady
+```
+
+When `-RequireClosureReady` is used, startup now fails before compose bring-up if the owner bearer token is missing. The verify script also fails early on the same condition instead of silently turning a requested closure run into an advisory-only pass.
+Protected staging scripts now also prefer handing that token to Python through a short-lived process environment variable instead of a command-line argument, which reduces local exposure in shell history and process listings.
 
 That verify step persists an external deployment verification report under the Studio runtime root, following the same non-repo operator-artifact discipline as local startup verification and runtime logs.
 It also mirrors the latest local startup verification and provider smoke reports into the staging runtime root before owner checks, so staging truth does not drift away from current-build local proof.

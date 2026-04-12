@@ -4,7 +4,7 @@ from typing import Dict
 
 from pydantic import BaseModel, Field
 
-from .identity import OmniaIdentity
+from .identity import DeletedIdentityTombstone, OmniaIdentity
 from .workspace import Project, StudioWorkspace
 from .generation import GenerationJob
 from .media import MediaAsset, PublicPost, ShareLink
@@ -18,6 +18,7 @@ from .style import StudioStyle
 
 class StudioState(BaseModel):
     identities: Dict[str, OmniaIdentity] = Field(default_factory=dict)
+    deleted_identity_tombstones: Dict[str, DeletedIdentityTombstone] = Field(default_factory=dict)
     workspaces: Dict[str, StudioWorkspace] = Field(default_factory=dict)
     projects: Dict[str, Project] = Field(default_factory=dict)
     conversations: Dict[str, ChatConversation] = Field(default_factory=dict)

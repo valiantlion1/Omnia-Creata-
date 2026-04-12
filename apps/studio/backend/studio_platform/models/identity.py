@@ -63,3 +63,10 @@ class OmniaIdentity(BaseModel):
     last_credit_refresh_at: datetime = Field(default_factory=utc_now)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class DeletedIdentityTombstone(BaseModel):
+    id: str
+    identity_id: str
+    email: Optional[str] = None
+    deleted_at: datetime = Field(default_factory=utc_now)

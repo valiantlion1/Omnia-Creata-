@@ -6,10 +6,12 @@ from config.env import Settings
 
 from .ai_provider_catalog import (
     STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID,
+    build_ai_control_plane_summary,
     lookup_chat_model_pricing,
     resolve_openai_image_request_model,
 )
 from .experience_contract_ops import build_model_route_preview
+from .model_catalog_ops import list_model_catalog_entries
 from .models import IdentityPlan, ModelCatalogEntry
 
 
@@ -138,6 +140,32 @@ def build_operator_surface_matrix(
         ]
     )
     return matrix
+
+
+def build_owner_ai_control_plane(
+    *,
+    settings: Settings,
+    providers,
+    llm_gateway,
+    chat_routing: Mapping[str, Any],
+    generation_routing: Mapping[str, Any],
+) -> dict[str, Any]:
+    studio_model_catalog = build_operator_studio_model_catalog(
+        settings=settings,
+        providers=providers,
+        studio_models=list_model_catalog_entries(),
+    )
+    return build_ai_control_plane_summary(
+        settings=settings,
+        chat_routing=chat_routing,
+        generation_routing=generation_routing,
+        studio_models=studio_model_catalog,
+        surface_matrix=build_operator_surface_matrix(
+            settings=settings,
+            llm_gateway=llm_gateway,
+            studio_models=studio_model_catalog,
+        ),
+    )
 
 
 def _build_chat_surface_matrix_entry(

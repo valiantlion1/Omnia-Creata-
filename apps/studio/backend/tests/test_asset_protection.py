@@ -201,3 +201,70 @@ async def test_clean_export_requires_pro_owner(tmp_path: Path) -> None:
 
     with pytest.raises(PermissionError, match="asset owner"):
         await service.resolve_clean_asset_export(asset.id, other_identity.id)
+
+
+@pytest.mark.asyncio
+async def test_blocked_assets_cannot_clean_export_even_for_pro_owner(tmp_path: Path) -> None:
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        plan=IdentityPlan.PRO,
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+        )
+    )
+
+    job = GenerationJob(
+        id="job-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Blocked render",
+        model="flux-schnell",
+        estimated_cost=0.0,
+        credit_cost=0,
+        output_count=1,
+        prompt_snapshot=PromptSnapshot(
+            prompt="Studio portrait with soft light",
+            negative_prompt="",
+            model="flux-schnell",
+            workflow="text_to_image",
+            width=768,
+            height=768,
+            steps=24,
+            cfg_scale=6.5,
+            seed=42,
+            aspect_ratio="1:1",
+        ),
+    )
+
+    asset = await service._create_asset_from_result(
+        job=job,
+        provider="demo",
+        image_bytes=_build_png_bytes((48, 24, 90)),
+        mime_type="image/png",
+    )
+    asset.metadata["protection_state"] = "blocked"
+    asset.metadata["library_state"] = "blocked"
+    await store.mutate(lambda state: state.assets.__setitem__(asset.id, asset))
+
+    with pytest.raises(PermissionError, match="blocked assets"):
+        await service.resolve_clean_asset_export(asset.id, identity.id)

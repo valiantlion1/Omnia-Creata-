@@ -373,7 +373,7 @@ class Settings(BaseSettings):
         if self.enable_api_docs is None:
             self.enable_api_docs = default_non_prod
         if self.enable_demo_auth is None:
-            self.enable_demo_auth = default_non_prod
+            self.enable_demo_auth = self.environment == Environment.DEVELOPMENT
         if not self.jwt_secret:
             # Provide a stable development fallback
             if self.environment == Environment.DEVELOPMENT:

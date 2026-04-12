@@ -4,6 +4,7 @@ param(
   [switch]$NoVerify,
   [string]$VerifyBaseUrl,
   [string]$OwnerBearerToken,
+  [switch]$PromptForOwnerToken,
   [switch]$RequireClosureReady
 )
 
@@ -24,6 +25,28 @@ if (-not (Test-Path $helperScript)) {
   throw "Missing staging runtime helper script: $helperScript"
 }
 . $helperScript
+
+function Read-OwnerBearerToken {
+  param([string]$Prompt = "Paste the owner bearer token (Bearer prefix optional)")
+
+  $secureToken = Read-Host -Prompt $Prompt -AsSecureString
+  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+  try {
+    $plainToken = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+  } finally {
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+  }
+
+  if ([string]::IsNullOrWhiteSpace($plainToken)) {
+    return $null
+  }
+
+  $plainToken = $plainToken.Trim()
+  if ($plainToken -match '^(?i:Bearer)\s+') {
+    $plainToken = $plainToken -replace '^(?i:Bearer)\s+', ''
+  }
+  return $plainToken.Trim()
+}
 
 function Get-DockerCommandPath {
   $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
@@ -56,6 +79,19 @@ function Ensure-PathContains {
     return
   }
   $env:PATH = "$DirectoryPath;$env:PATH"
+}
+
+function Test-DockerEngineReady {
+  param([string]$DockerCommandPath)
+
+  if ([string]::IsNullOrWhiteSpace($DockerCommandPath)) {
+    return $false
+  }
+
+  $quotedDockerCommandPath = '"' + $DockerCommandPath + '"'
+  $probeCommand = "$quotedDockerCommandPath info --format ""{{.ServerVersion}}"" >nul 2>nul"
+  cmd /c $probeCommand | Out-Null
+  return ($LASTEXITCODE -eq 0)
 }
 
 if (Test-Path $versionFile) {
@@ -131,6 +167,14 @@ $env:STAGING_ENV_FILE = $effectiveEnvFile
 
 $baseUrl = Resolve-StagingVerifyBaseUrl -EnvValues $envValues -ExplicitBaseUrl $VerifyBaseUrl
 
+if ([string]::IsNullOrWhiteSpace($OwnerBearerToken) -and -not [string]::IsNullOrWhiteSpace($env:STUDIO_HEALTH_DETAIL_TOKEN)) {
+  $OwnerBearerToken = $env:STUDIO_HEALTH_DETAIL_TOKEN
+}
+if ([string]::IsNullOrWhiteSpace($OwnerBearerToken) -and $PromptForOwnerToken.IsPresent) {
+  $OwnerBearerToken = Read-OwnerBearerToken
+}
+$closureGateRequested = $RequireClosureReady.IsPresent
+
 if (-not (Test-Path $resolvedEnvFile)) {
   Write-StagingBlockerReport `
     -Summary "Protected staging env file is missing." `
@@ -150,6 +194,22 @@ if ([string]::IsNullOrWhiteSpace($dockerCommandPath)) {
 
 Ensure-PathContains -DirectoryPath (Split-Path -Parent $dockerCommandPath)
 
+if (-not (Test-DockerEngineReady -DockerCommandPath $dockerCommandPath)) {
+  Write-StagingBlockerReport `
+    -Summary "Docker engine is not running." `
+    -Detail "Protected beta staging requires a running Docker daemon. Start Docker Desktop (or another compatible engine) before retrying protected staging bring-up." `
+    -BaseUrl $baseUrl
+  throw "Docker engine is not running. Start Docker Desktop (or another compatible engine) before retrying protected staging bring-up."
+}
+
+if ($closureGateRequested -and [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
+  Write-StagingBlockerReport `
+    -Summary "Owner bearer token is missing for closure-grade staging bring-up." `
+    -Detail "Set STUDIO_HEALTH_DETAIL_TOKEN, pass -OwnerBearerToken, or use -PromptForOwnerToken before running protected staging with -RequireClosureReady." `
+    -BaseUrl $baseUrl
+  throw "Owner bearer token is required when protected staging bring-up is asked to enforce closure_ready."
+}
+
 Write-Host ""
 Write-Host "Studio protected staging bring-up" -ForegroundColor Cyan
 Write-Host "Compose file: $composeFile"
@@ -157,6 +217,8 @@ Write-Host "Env file:     $resolvedEnvFile"
 Write-Host "Effective env:$effectiveEnvFile"
 Write-Host "Runtime root: $runtimeRoot"
 Write-Host "Verify URL:   $baseUrl"
+Write-Host "Owner detail: $(if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) { 'enabled' } else { 'skipped (no bearer token)' })"
+Write-Host "Closure gate: $(if ($closureGateRequested -or -not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) { 'enforced during verify' } else { 'advisory only' })"
 Write-Host ""
 
 & python (Join-Path $backendDir "scripts\deployment_preflight.py") --env-file $effectiveEnvFile
@@ -201,14 +263,24 @@ if (-not $NoVerify) {
     "-BaseUrl",
     $baseUrl
   )
-  if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
-    $verifyArgs += @("-OwnerBearerToken", $OwnerBearerToken)
-  }
   if ($RequireClosureReady.IsPresent) {
     $verifyArgs += "-RequireClosureReady"
   }
-  & powershell @verifyArgs
-  if ($LASTEXITCODE -ne 0) {
-    throw "Protected staging verification failed."
+  $originalOwnerTokenPresent = Test-Path Env:STUDIO_HEALTH_DETAIL_TOKEN
+  $originalOwnerToken = $env:STUDIO_HEALTH_DETAIL_TOKEN
+  try {
+    if (-not [string]::IsNullOrWhiteSpace($OwnerBearerToken)) {
+      $env:STUDIO_HEALTH_DETAIL_TOKEN = $OwnerBearerToken
+    }
+    & powershell @verifyArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "Protected staging verification failed."
+    }
+  } finally {
+    if ($originalOwnerTokenPresent) {
+      $env:STUDIO_HEALTH_DETAIL_TOKEN = $originalOwnerToken
+    } else {
+      Remove-Item Env:STUDIO_HEALTH_DETAIL_TOKEN -ErrorAction SilentlyContinue
+    }
   }
 }

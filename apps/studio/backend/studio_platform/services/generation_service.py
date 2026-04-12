@@ -551,6 +551,53 @@ class GenerationService:
         return await self.service.require_owned_model("generations", generation_id, GenerationJob, identity_id)
 
 
+    async def _filter_blocked_fallback_provider_candidates(
+        self,
+        *,
+        provider_candidates: tuple[str, ...] | list[str],
+        width: int,
+        height: int,
+        model_id: str,
+        workflow: str,
+        has_reference_image: bool,
+    ) -> tuple[str, ...]:
+        normalized_candidates = tuple(
+            str(provider_name or "").strip().lower()
+            for provider_name in provider_candidates
+            if str(provider_name or "").strip()
+        )
+        if len(normalized_candidates) <= 1:
+            return normalized_candidates
+
+        allowed_candidates = [normalized_candidates[0]]
+        for provider_name in normalized_candidates[1:]:
+            provider_billable = self.service.providers.provider_billable(provider_name)
+            projected_cost_usd = self.service.providers.estimate_generation_cost(
+                provider_name=provider_name,
+                width=width,
+                height=height,
+                model_id=model_id,
+                workflow=workflow,
+                has_reference_image=has_reference_image,
+            )
+            spend_guardrail = await self.service._provider_spend_guardrail_for_provider(
+                provider_name=provider_name,
+                provider_billable=provider_billable,
+                projected_cost_usd=projected_cost_usd or 0.0,
+            )
+            if spend_guardrail is not None and spend_guardrail.status == "blocked":
+                logger.warning(
+                    "generation_provider_spend_guardrail_skip_fallback %s",
+                    spend_guardrail.serialize(),
+                )
+                continue
+            if spend_guardrail is not None and spend_guardrail.status == "warning":
+                logger.warning("generation_provider_spend_guardrail_warning %s", spend_guardrail.serialize())
+            allowed_candidates.append(provider_name)
+
+        return tuple(allowed_candidates)
+
+
     async def create_generation(
         self,
         identity_id: str,
@@ -681,6 +728,14 @@ class GenerationService:
                 raise RuntimeError(self._provider_spend_guardrail_message())
             if spend_guardrail.status == "warning":
                 logger.warning("generation_provider_spend_guardrail_warning %s", spend_guardrail.serialize())
+        filtered_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
+            provider_candidates=routing_decision.provider_candidates,
+            width=width,
+            height=height,
+            model_id=model.id,
+            workflow=routing_decision.workflow,
+            has_reference_image=reference_asset is not None,
+        )
         pricing_quote = build_generation_pricing_quote(
             selected_provider=routing_decision.selected_provider,
             routing_decision=routing_decision,
@@ -715,7 +770,7 @@ class GenerationService:
             routing_strategy=routing_decision.routing_strategy,
             routing_reason=routing_decision.routing_reason,
             prompt_profile=routing_decision.prompt_profile,
-            provider_candidates=list(routing_decision.provider_candidates),
+            provider_candidates=list(filtered_provider_candidates),
             reserved_credit_cost=pricing_quote.reserved_credit_cost,
             credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",
         )
@@ -974,7 +1029,20 @@ class GenerationService:
                     return
                 if preflight_guardrail.status == "warning":
                     logger.warning("generation_provider_spend_guardrail_warning %s", preflight_guardrail.serialize())
-            execution = await self.service.generation_runtime.execute_job(job)
+            execution_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
+                provider_candidates=tuple(job.provider_candidates or [provider_label]),
+                width=job.prompt_snapshot.width,
+                height=job.prompt_snapshot.height,
+                model_id=job.model,
+                workflow=job.prompt_snapshot.workflow,
+                has_reference_image=job.prompt_snapshot.reference_asset_id is not None,
+            )
+            execution_job = job
+            if execution_provider_candidates and tuple(job.provider_candidates) != execution_provider_candidates:
+                execution_job = job.model_copy(
+                    update={"provider_candidates": list(execution_provider_candidates)}
+                )
+            execution = await self.service.generation_runtime.execute_job(execution_job)
             finished_at = utc_now()
             identity = await self.service.store.get_identity(job.identity_id)
             unlimited_access = bool(identity and self.service._has_unlimited_generation_access(identity))

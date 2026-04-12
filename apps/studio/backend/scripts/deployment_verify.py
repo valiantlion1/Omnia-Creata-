@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -43,7 +44,8 @@ def main() -> int:
         api_prefix = "/" + api_prefix
     api_prefix = api_prefix.rstrip("/")
 
-    owner_health_checked = bool(args.owner_bearer_token)
+    owner_bearer_token = args.owner_bearer_token or os.getenv("STUDIO_HEALTH_DETAIL_TOKEN")
+    owner_health_checked = bool(owner_bearer_token)
     settings = get_settings()
 
     def persist_blocked_report(summary: str, detail: str, *, check_key: str = "staging_environment") -> dict[str, object]:
@@ -79,7 +81,7 @@ def main() -> int:
             print(f"Report path: {persisted['path']}")
         return 1
 
-    owner_health_checked = bool(args.owner_bearer_token)
+    owner_health_checked = bool(owner_bearer_token)
     settings = get_settings()
     version_dict = version_payload or {}
     expected_report_build = (
@@ -115,7 +117,7 @@ def main() -> int:
             health_detail_payload = _fetch_json(
                 f"{base_url}{api_prefix}/v1/healthz/detail",
                 timeout=args.timeout,
-                bearer_token=args.owner_bearer_token,
+                bearer_token=owner_bearer_token,
             )
         except SystemExit as exc:
             persisted = persist_blocked_report(
@@ -154,7 +156,7 @@ def main() -> int:
             health_detail_payload = _fetch_json(
                 f"{base_url}{api_prefix}/v1/healthz/detail",
                 timeout=args.timeout,
-                bearer_token=args.owner_bearer_token,
+                bearer_token=owner_bearer_token,
             )
         except SystemExit as exc:
             persisted = persist_blocked_report(

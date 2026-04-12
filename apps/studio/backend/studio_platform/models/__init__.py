@@ -6,7 +6,7 @@ like `from .models import OmniaIdentity` continue to work unchanged.
 """
 
 from .common import utc_now
-from .identity import IdentityPlan, ManualReviewState, OmniaIdentity, SubscriptionStatus, Visibility
+from .identity import DeletedIdentityTombstone, IdentityPlan, ManualReviewState, OmniaIdentity, SubscriptionStatus, Visibility
 from .workspace import Project, StudioWorkspace
 from .generation import GenerationJob, GenerationOutput, JobStatus, PromptSnapshot
 from .media import MediaAsset, PublicPost, ShareLink
@@ -32,6 +32,7 @@ __all__ = [
     "IdentityPlan",
     "ManualReviewState",
     "OmniaIdentity",
+    "DeletedIdentityTombstone",
     "SubscriptionStatus",
     "Visibility",
     # Workspace

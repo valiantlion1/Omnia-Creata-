@@ -141,10 +141,13 @@ export default function LoginPage() {
             <label className="block">
               <div className="mb-2 text-sm font-medium text-zinc-200">Email</div>
               <input
+                id="studio-login-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@omniacreata.com"
+                autoComplete="email"
                 disabled={oauthCompleting}
                 className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
               />
@@ -154,10 +157,13 @@ export default function LoginPage() {
               <div className="mb-2 text-sm font-medium text-zinc-200">Password</div>
               <div className="relative">
                 <input
+                  id="studio-login-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
                   disabled={oauthCompleting}
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 pr-10 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />

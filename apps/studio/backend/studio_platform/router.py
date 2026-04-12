@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from config.env import get_settings
+from config.env import Environment, get_settings
 from security.auth import User, UserRole, create_user_tokens, get_current_user, get_supabase_auth_client
 from security.auth import User as AuthUser
 from security.rate_limit import RateLimiter
@@ -17,7 +17,7 @@ from security.moderation import check_prompt_safety, ModerationResult
 from .asset_storage import AssetStorageError
 from .experience_contract_ops import attach_chat_experience
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
-from .service import GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
+from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
 class DemoLoginRequest(BaseModel):
@@ -178,34 +178,40 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
         return auth_user
 
+    def _raise_deleted_identity_session(exc: DeletedIdentityError) -> None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This session belongs to an account that has been permanently deleted.",
+        ) from exc
+
     async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser]) -> AuthUser:
         current = _require_auth(auth_user)
         metadata = getattr(current, "metadata", {}) or {}
-        await service.ensure_identity(
-            user_id=current.id,
-            email=current.email or f"{current.id}@omnia.local",
-            display_name=getattr(current, "username", None) or current.email or "Omnia User",
-            username=metadata.get("username")
-            or getattr(current, "username", None)
-            or (current.email or "").split("@")[0]
-            or current.id,
-            owner_mode=bool(metadata.get("owner_mode")),
-            root_admin=bool(metadata.get("root_admin")),
-            local_access=bool(metadata.get("local_access")),
-            accepted_terms=bool(metadata.get("accepted_terms")),
-            accepted_privacy=bool(metadata.get("accepted_privacy")),
-            accepted_usage_policy=bool(metadata.get("accepted_usage_policy")),
-            marketing_opt_in=bool(metadata.get("marketing_opt_in")),
-        )
+        try:
+            await service.ensure_identity(
+                user_id=current.id,
+                email=current.email or f"{current.id}@omnia.local",
+                display_name=getattr(current, "username", None) or current.email or "Omnia User",
+                username=metadata.get("username") or None,
+                owner_mode=bool(metadata.get("owner_mode")),
+                root_admin=bool(metadata.get("root_admin")),
+                local_access=bool(metadata.get("local_access")),
+                accepted_terms=bool(metadata.get("accepted_terms")),
+                accepted_privacy=bool(metadata.get("accepted_privacy")),
+                accepted_usage_policy=bool(metadata.get("accepted_usage_policy")),
+                marketing_opt_in=bool(metadata.get("marketing_opt_in")),
+            )
+        except DeletedIdentityError as exc:
+            _raise_deleted_identity_session(exc)
         return current
 
     async def _require_owner(auth_user: Optional[AuthUser]) -> AuthUser:
         current = _require_auth(auth_user)
+        await _ensure_identity_for_auth_user(current)
         metadata = getattr(current, "metadata", {}) or {}
         if current.role == UserRole.ADMIN or metadata.get("owner_mode"):
             return current
         try:
-            await _ensure_identity_for_auth_user(current)
             identity = await service.get_identity(current.id)
         except KeyError:
             identity = None
@@ -299,6 +305,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def demo_login(payload: DemoLoginRequest, request: Request):
         if not settings.enable_demo_auth:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Demo auth is disabled")
+        if settings.environment != Environment.DEVELOPMENT and payload.plan != IdentityPlan.FREE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Demo Pro login is only available in local development.",
+            )
         await _consume_rate_limit(request, "auth:demo-login", limit=8)
         demo_user = User(
             id=payload.email.lower(),
@@ -429,37 +440,27 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             has_auth_header = bool(request.headers.get("authorization") or request.headers.get("x-api-key"))
             if has_auth_header:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
-        return await service.get_public_identity(current_user)
+        try:
+            return await service.get_public_identity(current_user)
+        except DeletedIdentityError as exc:
+            _raise_deleted_identity_session(exc)
 
     @router.get("/admin/telemetry")
-    async def admin_telemetry(request: Request):
-        from fastapi import HTTPException, status
-        from .cost_telemetry_ops import build_cost_telemetry_summary
-        
-        user = resolve_auth(request)
-        if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-        
-        identity_payload = await service.identity.get_public_identity(user)
-        is_root = identity_payload.get("identity", {}).get("root_admin", False)
-        if not is_root:
+    async def admin_telemetry(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = await _require_owner(current_user)
+        await _ensure_identity_for_auth_user(auth_user)
+        identity = await service.get_identity(auth_user.id)
+        if not identity.root_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Root Administrator Required")
 
-        identities = await service.store.list_identities()
-        generations = await service.store.list_generations()
-        messages = await service.store.list_messages()
-        
-        costs = build_cost_telemetry_summary(
-            identities=identities,
-            generations=generations,
-            messages=messages,
-        )
-        
+        telemetry = await service._build_cost_telemetry_summary()
+        counts = await service.store.get_counts_summary()
+
         return {
             "status": "OK",
-            "telemetry": costs.to_dict(),
-            "total_identities": len(identities),
-            "blocked_injections": 12, # Demo dynamic counter
+            "telemetry": telemetry,
+            "total_identities": counts.get("identities", 0),
+            "blocked_injections": 12,
         }
 
     @router.get("/healthz")
@@ -495,7 +496,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "prompt:improve", limit=20, identifier=auth_user.id)
         try:
             return await service.improve_generation_prompt(payload.prompt, identity_id=auth_user.id)
@@ -508,7 +509,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/personas")
     async def get_personas(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         personas = await service.store.list_models("personas", StudioPersona)
         user_personas = [p.model_dump(mode="json") for p in personas if p.identity_id == auth_user.id or p.is_default]
         user_personas.sort(key=lambda p: (not p.get("is_default", False), p.get("created_at", "")))
@@ -523,7 +524,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         from datetime import datetime, timezone
         from .models.persona import StudioPersona
         
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         new_persona = StudioPersona(
             id=f"persona_{uuid.uuid4().hex[:8]}",
             identity_id=auth_user.id,
@@ -769,7 +770,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:edit-message", limit=24, identifier=auth_user.id)
         try:
             result = await service.edit_chat_message(
@@ -799,7 +800,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:regenerate-message", limit=24, identifier=auth_user.id)
         try:
             result = await service.regenerate_chat_message(auth_user.id, conversation_id, message_id)
@@ -822,7 +823,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:revert-message", limit=24, identifier=auth_user.id)
         try:
             result = await service.revert_chat_message(auth_user.id, conversation_id, message_id)
@@ -845,7 +846,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: ChatFeedbackRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             message = await service.set_chat_message_feedback(
                 auth_user.id,
@@ -864,7 +865,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
         project_id: Optional[str] = Query(default=None),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         jobs = await service.list_generations(auth_user.id, project_id=project_id)
         return {"generations": [_serialize_generation(job, auth_user.id) for job in jobs]}
 
@@ -874,7 +875,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_generation_rate_limits(request, auth_user)
 
         mod_result, flagged_term = await check_prompt_safety(payload.prompt)
@@ -929,7 +930,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/generations/{generation_id}")
     async def get_generation(generation_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             job = await service.get_generation(auth_user.id, generation_id)
         except KeyError:
@@ -1134,7 +1135,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "assets:clean-export", limit=24, identifier=auth_user.id)
         await _consume_rate_limit(request, "assets:clean-export:ip", limit=30)
         try:
@@ -1166,7 +1167,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: PostUpdateRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             await service.update_post(
                 auth_user.id,
@@ -1187,7 +1188,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: PostMoveRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             await service.move_post(auth_user.id, post_id, payload.project_id)
             post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
@@ -1197,7 +1198,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.post("/posts/{post_id}/trash")
     async def post_trash_post(post_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             return await service.trash_post(auth_user.id, post_id)
         except KeyError:
@@ -1209,7 +1210,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "posts:like", limit=80, identifier=auth_user.id)
         try:
             await service.like_post(auth_user.id, post_id)
@@ -1226,13 +1227,15 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "posts:like", limit=80, identifier=auth_user.id)
         try:
             await service.unlike_post(auth_user.id, post_id)
             post = await service.get_post_payload(post_id, viewer_identity_id=auth_user.id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         return {"post": post}
 
     @router.post("/shares", status_code=status.HTTP_201_CREATED)
@@ -1241,7 +1244,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(
             request,
             "shares:create",
@@ -1269,12 +1272,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/shares")
     async def get_shares(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         return {"shares": await service.list_shares(auth_user.id)}
 
     @router.delete("/shares/{share_id}")
     async def delete_share(share_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             share = await service.revoke_share(auth_user.id, share_id)
         except PermissionError as exc:
@@ -1367,7 +1370,10 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "billing:checkout", limit=10, identifier=auth_user.id)
-        return await service.checkout(auth_user.id, payload.kind)
+        try:
+            return await service.checkout(auth_user.id, payload.kind)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
     @router.get("/settings/bootstrap")
     async def get_settings_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
