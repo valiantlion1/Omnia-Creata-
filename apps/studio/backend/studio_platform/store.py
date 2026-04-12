@@ -22,6 +22,7 @@ STATE_COLLECTIONS = tuple(StudioState.model_fields.keys())
 POSTGRES_RECORDS_TABLE = "studio_state_records"
 POSTGRES_METADATA_TABLE = "studio_state_metadata"
 STORE_SCHEMA_VERSION = "2"
+POSTGRES_WRITE_LOCK_KEY = 902417531
 
 
 def _utc_now_iso() -> str:
@@ -729,6 +730,16 @@ class PostgresStudioStateStore:
             payload.setdefault(collection, {})[model_id] = _normalize_loaded_payload(raw_payload)
         return StudioState.model_validate(payload)
 
+    def _acquire_write_lock_sync(self, connection) -> None:
+        # Serialize durable-state writes across backend and worker processes.
+        # The in-process asyncio lock only protects one process; staging runs
+        # both backend and worker against the same Postgres table.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (POSTGRES_WRITE_LOCK_KEY,),
+            )
+
     def _replace_state_sync(self, state: StudioState, *, connection=None) -> None:
         owns_connection = connection is None
         if connection is None:
@@ -749,6 +760,7 @@ class PostgresStudioStateStore:
         connection = self._connect()
         try:
             self._ensure_schema_sync(connection)
+            self._acquire_write_lock_sync(connection)
             with connection.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -770,6 +782,7 @@ class PostgresStudioStateStore:
         connection = self._connect()
         try:
             self._ensure_schema_sync(connection)
+            self._acquire_write_lock_sync(connection)
             with connection.cursor() as cursor:
                 cursor.execute(
                     f"DELETE FROM {POSTGRES_RECORDS_TABLE} WHERE collection = %s AND model_id = %s",
@@ -798,6 +811,7 @@ class PostgresStudioStateStore:
         return rows
 
     def _replace_rows_sync(self, connection, rows: list[tuple[str, str, str]]) -> None:
+        self._acquire_write_lock_sync(connection)
         with connection.cursor() as cursor:
             cursor.execute(f"DELETE FROM {POSTGRES_RECORDS_TABLE}")
             if rows:

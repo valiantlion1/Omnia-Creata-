@@ -18,6 +18,28 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.12.86`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta closure proof had passed, but the signed-in shell still had a cluster of everyday honesty bugs: post visibility toggles were dying in the browser before they even reached the backend route, project cards had lost the image lightbox path, several Settings actions looked clickable while actually being unavailable in the current shell, and public-facing landing/billing copy was still overclaiming hardware and package truth
+- What:
+  backend CORS now explicitly allows `PATCH`, which restores browser preflight for post visibility updates so `Set public` and `Set private` no longer fail at the transport layer before the protected route can answer
+  signed-in shell behavior is more honest now too: project cards reopen the lightbox path, trash action menus anchor under the three-dot control instead of appearing in the wrong place, Explore search also checks style tags and gives a real no-results message, and media-library actions now label create-reroute flows more truthfully
+  Settings, Billing, and Landing were tightened toward launch honesty rather than polish theater: protected-beta-only controls now either work or clearly disclose that they are managed outside the shell, fake checkout loading states are gone, and launch-copy claims about A100/H100/4K-style guarantees were replaced with protected-beta-safe wording that matches the current product truth
+
+### `0.6.0-alpha` / build `2026.04.12.85`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta closure proof had landed, but real signed-in shell behavior in protected staging was still intermittently breaking: backend and worker could both rewrite the durable Postgres state table at the same time, which surfaced as duplicate `identities` primary-key collisions during auth bootstrap and turned ordinary signed-in routes into shell-facing `500`s
+- What:
+  the Postgres durable-state store now acquires a transaction-scoped advisory write lock before full-table replace, row upsert, or row delete operations, which serializes backend and worker writes across processes instead of trusting only the in-process asyncio lock
+  that closes the duplicate-identity race behind the observed staging failures on `/v1/conversations`, `/v1/projects`, `/v1/models`, `/v1/settings/bootstrap`, `/v1/assets`, and `/v1/profiles/me`, where auth bootstrap was otherwise trying to persist the same identity while another process was already replacing the state snapshot
+  store regressions now also lock that write-serialization behavior directly, and the full backend suite remains green after the fix so protected-beta hardening can move back from shell-breakage cleanup to the remaining runtime truth sweep
+
 ### `0.6.0-alpha` / build `2026.04.12.84`
 - Date: `2026-04-12`
 - Codename: `Foundation`

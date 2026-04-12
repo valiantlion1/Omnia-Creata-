@@ -1,6 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   ChevronRight,
@@ -26,7 +26,7 @@ import {
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { studioApi, type HealthProvider, type HealthResponse } from '@/lib/studioApi'
+import { studioApi, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
@@ -88,8 +88,12 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
 export default function SettingsPage() {
   const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
-  
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
+  const [notice, setNotice] = useState<{ tone: 'info' | 'success' | 'warning'; title: string; body: string } | null>(null)
+  const [pendingVisibility, setPendingVisibility] = useState<Visibility | null>(null)
+  const activeDefaultVisibility = pendingVisibility ?? auth?.identity.default_visibility ?? 'public'
+  const isGMMode = Boolean(auth?.identity.owner_mode)
 
   useQuery({
     queryKey: ['settings-bootstrap'],
@@ -98,12 +102,43 @@ export default function SettingsPage() {
   })
 
   const healthQuery = useQuery({
-    queryKey: ['health', 'public'],
-    queryFn: () => studioApi.getHealth(),
+    queryKey: ['health', isGMMode ? 'detail' : 'public'],
+    queryFn: () => (isGMMode ? studioApi.getHealthDetail() : studioApi.getHealth()),
+    enabled: isAuthenticated,
+  })
+
+  const discoverabilityMutation = useMutation({
+    mutationFn: (nextVisibility: Visibility) => studioApi.updateMyProfile({ default_visibility: nextVisibility }),
+    onSuccess: async (_, nextVisibility) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['profile'] }),
+        queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
+        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+      ])
+      setNotice({
+        tone: 'success',
+        title: 'Default visibility updated',
+        body:
+          nextVisibility === 'public'
+            ? 'New creations will default to public visibility.'
+            : 'New creations will default to private visibility.',
+      })
+    },
+    onError: (error) => {
+      setPendingVisibility(null)
+      setNotice({
+        tone: 'warning',
+        title: 'Could not update visibility',
+        body: error instanceof Error ? error.message : 'Try again in a moment.',
+      })
+    },
   })
 
   const health = healthQuery.data as HealthResponse | undefined
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
+  useEffect(() => {
+    setPendingVisibility(null)
+  }, [auth?.identity.default_visibility])
 
   // GM Mode — completely invisible to regular users
   const isGM = Boolean(auth?.identity.owner_mode)
@@ -142,6 +177,35 @@ export default function SettingsPage() {
       await signOut()
     }
   }
+
+  const handleHealthRefresh = async () => {
+    const result = await healthQuery.refetch()
+    if (result.error) {
+      setNotice({
+        tone: 'warning',
+        title: 'Diagnostics refresh failed',
+        body: result.error instanceof Error ? result.error.message : 'Studio could not refresh diagnostics right now.',
+      })
+      return
+    }
+    if (result.data) {
+      setNotice({
+        tone: result.data.status === 'healthy' ? 'success' : 'info',
+        title: isGM ? 'Owner diagnostics refreshed' : 'System health refreshed',
+        body:
+          result.data.status === 'healthy'
+            ? 'Studio services reported a healthy state on the latest check.'
+            : `Studio reported status: ${result.data.status}.`,
+      })
+    }
+  }
+
+  const noticeToneClasses =
+    notice?.tone === 'success'
+      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+      : notice?.tone === 'warning'
+        ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
+        : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100'
 
   return (
     <AppPage className="flex flex-col items-center py-10 px-4 md:px-8">
@@ -184,6 +248,12 @@ export default function SettingsPage() {
 
         {/* Content Area */}
         <main className="flex-1 w-full min-w-0">
+          {notice ? (
+            <div className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${noticeToneClasses}`}>
+              <div className="font-semibold">{notice.title}</div>
+              <p className="mt-1 text-current/80">{notice.body}</p>
+            </div>
+          ) : null}
 
           {/* ════ GENERAL TAB ════ */}
           {activeTab === 'general' && (
@@ -278,15 +348,39 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Sparkles}
                     title="Smart Interface Hints"
-                    description="Show subtle, intelligent tooltips seamlessly within tools like Create and Media Library."
-                    action={<div className="flex justify-start sm:justify-end w-full"><Switch checked={prefs.tipsEnabled} onChange={() => setTipsEnabled(!prefs.tipsEnabled)} /></div>}
+                    description="Remember this browser's guidance preference while protected-beta onboarding finishes rolling out."
+                    action={
+                      <div className="flex justify-start sm:justify-end w-full">
+                        <Switch
+                          checked={prefs.tipsEnabled}
+                          onChange={() => {
+                            setTipsEnabled(!prefs.tipsEnabled)
+                            setNotice({
+                              tone: 'info',
+                              title: 'Hint preference saved',
+                              body: 'Studio will remember your guidance preference on this browser.',
+                            })
+                          }}
+                        />
+                      </div>
+                    }
                   />
                   <SettingsRow 
                     icon={RefreshCw}
                     title="Restore Dismissed Guidance"
-                    description="Lost track? Reactivate all the onboarding guides and walkthroughs you've dismissed."
+                    description="Reset the local walkthrough state for this browser."
                     action={
-                      <button onClick={resetTips} className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.04] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                      <button
+                        onClick={() => {
+                          resetTips()
+                          setNotice({
+                            tone: 'success',
+                            title: 'Guidance reset',
+                            body: 'Dismissed walkthrough hints were reset for this browser.',
+                          })
+                        }}
+                        className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.04] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                      >
                         Reset Guides
                       </button>
                     }
@@ -309,8 +403,26 @@ export default function SettingsPage() {
                     description="Set whether new creations and projects are public out of the box."
                     action={
                       <div className="flex items-center gap-1.5 rounded-[12px] bg-black/40 p-1 ring-1 ring-white/10 w-max">
-                        <button disabled className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 ${auth?.identity.default_visibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}>Public</button>
-                        <button disabled className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 ${auth?.identity.default_visibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}>Private</button>
+                        <button
+                          onClick={() => {
+                            setPendingVisibility('public')
+                            discoverabilityMutation.mutate('public')
+                          }}
+                          disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'public'}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                        >
+                          {discoverabilityMutation.isPending && pendingVisibility === 'public' ? 'Saving...' : 'Public'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPendingVisibility('private')
+                            discoverabilityMutation.mutate('private')
+                          }}
+                          disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'private'}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                        >
+                          {discoverabilityMutation.isPending && pendingVisibility === 'private' ? 'Saving...' : 'Private'}
+                        </button>
                       </div>
                     }
                   />
@@ -333,14 +445,14 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Key}
                     title="Credentials"
-                    description="Update the password used to access this workspace."
-                    action={<button className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">Update</button>}
+                    description="Password changes stay with your active sign-in provider during protected beta."
+                    action={<StatusPill tone="neutral">Managed outside Studio</StatusPill>}
                   />
                   <SettingsRow 
                     icon={MonitorSmartphone}
                     title="Active Sessions"
-                    description="View and sign out from other devices logged into your account."
-                    action={<button className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.04] hover:text-white">Manage Devices</button>}
+                    description="Device session management is not exposed in the Studio shell during protected beta."
+                    action={<StatusPill tone="neutral">Protected beta</StatusPill>}
                   />
                 </SettingsCard>
               </div>
@@ -380,7 +492,7 @@ export default function SettingsPage() {
                     title="System Health"
                     description="Check that all generation services are running normally."
                     action={
-                      <button onClick={() => healthQuery.refetch()} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                      <button onClick={handleHealthRefresh} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                         <RefreshCw className={`h-4 w-4 transition-transform duration-500 ${healthQuery.isFetching ? 'animate-spin' : 'group-hover:rotate-180'}`} /> Run Check
                       </button>
                     }
@@ -418,9 +530,25 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-amber-500/60">Community Controls</h3>
                 <SettingsCard>
-                  <SettingsRow icon={Users} title="User Management" description="View and manage registered accounts." />
-                  <SettingsRow icon={BarChart3} title="Growth Analytics" description="Track platform usage, growth, and spend." />
-                  <SettingsRow icon={Trash2} title="Clear Sandbox Data" description="Remove test environments and temporary data." danger />
+                  <SettingsRow
+                    icon={Users}
+                    title="User Management"
+                    description="Workspace account administration stays in backoffice tooling during protected beta."
+                    action={<StatusPill tone="neutral">Backoffice only</StatusPill>}
+                  />
+                  <SettingsRow
+                    icon={BarChart3}
+                    title="Growth Analytics"
+                    description="Growth and spend analytics are kept outside the Studio shell until public rollout."
+                    action={<StatusPill tone="neutral">Not in shell</StatusPill>}
+                  />
+                  <SettingsRow
+                    icon={Trash2}
+                    title="Clear Sandbox Data"
+                    description="Sandbox cleanup stays manual-only during protected beta to avoid destructive accidental clicks."
+                    action={<StatusPill tone="neutral">Manual only</StatusPill>}
+                    danger
+                  />
                 </SettingsCard>
               </div>
 

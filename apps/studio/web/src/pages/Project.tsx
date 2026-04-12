@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Download, Lock, Sparkles } from 'lucide-react'
 
+import { LightboxTrigger } from '@/components/ImageLightbox'
+import { useLightbox } from '@/components/Lightbox'
 import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -32,6 +34,7 @@ async function downloadBlob(blob: Blob, filename: string) {
 export default function ProjectPage() {
   const { projectId = '' } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
+  const { openLightbox } = useLightbox()
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const [shareMessage, setShareMessage] = useState('')
 
@@ -180,15 +183,49 @@ export default function ProjectPage() {
 
           {assets.length ? (
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {assets.map((asset) => (
+              {assets.map((asset) => {
+                const previewSrc = assetPreviewSources(asset).find(Boolean) ?? ''
+                const canOpenPreview =
+                  Boolean(previewSrc) &&
+                  asset.can_open !== false &&
+                  asset.protection_state !== 'blocked'
+                const aspectRatio = typeof asset.metadata.aspect_ratio === 'string' ? asset.metadata.aspect_ratio : undefined
+                const likeCount = typeof asset.metadata.like_count === 'number' ? asset.metadata.like_count : 0
+
+                return (
                 <div key={asset.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  <div className="relative overflow-hidden">
+                  <div className="group relative overflow-hidden">
                     <ProtectedAssetImage
                       sources={assetPreviewSources(asset)}
                       alt={asset.display_title ?? asset.title}
-                      className={`aspect-square w-full object-cover ${asset.protection_state === 'blocked' ? 'blur-[10px] saturate-50' : ''}`}
+                      className={`aspect-square w-full object-cover ${canOpenPreview ? 'cursor-zoom-in' : ''} ${asset.protection_state === 'blocked' ? 'blur-[10px] saturate-50' : ''}`}
                       fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                      onClick={() => {
+                        if (!canOpenPreview) return
+                        openLightbox(previewSrc, asset.display_title ?? asset.title, {
+                          title: asset.display_title ?? asset.title,
+                          prompt: asset.prompt,
+                          authorName: auth?.identity.display_name ?? 'You',
+                          authorUsername: auth?.identity.username ?? 'creator',
+                          aspectRatio,
+                          likes: likeCount,
+                        })
+                      }}
                     />
+                    {canOpenPreview ? (
+                      <LightboxTrigger
+                        onClick={() =>
+                          openLightbox(previewSrc, asset.display_title ?? asset.title, {
+                            title: asset.display_title ?? asset.title,
+                            prompt: asset.prompt,
+                            authorName: auth?.identity.display_name ?? 'You',
+                            authorUsername: auth?.identity.username ?? 'creator',
+                            aspectRatio,
+                            likes: likeCount,
+                          })
+                        }
+                      />
+                    ) : null}
                     {asset.protection_state === 'blocked' ? (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-sm">
                         <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200 ring-1 ring-amber-500/20">
@@ -206,7 +243,8 @@ export default function ProjectPage() {
                     <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">{asset.prompt}</p>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <EmptyState

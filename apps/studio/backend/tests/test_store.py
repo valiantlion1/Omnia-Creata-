@@ -20,6 +20,9 @@ class _FakeCursor:
     def execute(self, sql: str, *args, **kwargs):
         self._statements.append(sql)
 
+    def executemany(self, sql: str, seq_of_parameters):
+        self._statements.append(sql)
+
     def __enter__(self):
         return self
 
@@ -249,3 +252,24 @@ def test_postgres_store_prepares_statement_timeout_and_generation_index():
     assert "SET statement_timeout = 30000" in joined_sql
     assert "idx_studio_state_records_generations_identity_status_created_at" in joined_sql
     assert "payload ->> 'identity_id'" in joined_sql
+
+
+def test_postgres_store_replace_rows_uses_advisory_lock():
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _FakeConnection()
+
+    store._replace_rows_sync(
+        connection,
+        [
+            (
+                "identities",
+                "user-1",
+                '{"id":"user-1","email":"user@example.com","display_name":"User","username":"user","workspace_id":"ws-user-1"}',
+            )
+        ],
+    )
+
+    joined_sql = "\n".join(connection.statements)
+    assert "SELECT pg_advisory_xact_lock" in joined_sql
+    assert "DELETE FROM studio_state_records" in joined_sql
+    assert "INSERT INTO studio_state_records (collection, model_id, payload)" in joined_sql

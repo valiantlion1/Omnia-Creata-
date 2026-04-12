@@ -10,6 +10,7 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true)
   const [sort, setSort] = useState<SortMode>('trending')
   const [searchQuery, setSearchQuery] = useState('')
+  const normalizedSearch = searchQuery.trim().toLowerCase()
   usePageMeta('Explore AI Creations', 'Discover breathtaking AI-generated art and connect with creators on the Omnia Creata community.')
 
   const fetchFeed = useCallback(async (sortMode: SortMode) => {
@@ -41,11 +42,12 @@ export default function CommunityPage() {
     }
   }
 
-  const filteredPosts = searchQuery.trim()
+  const filteredPosts = normalizedSearch
     ? posts.filter((p) =>
-        p.prompt?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.owner_display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.title?.toLowerCase().includes(searchQuery.toLowerCase())
+        p.prompt?.toLowerCase().includes(normalizedSearch) ||
+        p.owner_display_name?.toLowerCase().includes(normalizedSearch) ||
+        p.title?.toLowerCase().includes(normalizedSearch) ||
+        p.style_tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch))
       )
     : posts
 
@@ -100,11 +102,20 @@ export default function CommunityPage() {
           <Search className="h-4 w-4 text-zinc-500" />
           <input
             type="text"
-            placeholder="Search prompts..."
+            placeholder="Search prompts, creators, styles..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-transparent text-sm text-white placeholder-zinc-500 outline-none w-40"
           />
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-xs font-semibold text-zinc-500 transition hover:text-white"
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -119,8 +130,12 @@ export default function CommunityPage() {
       {!loading && filteredPosts.length === 0 && (
          <div className="text-center py-20">
            <div className="text-zinc-600 text-6xl mb-4">🎨</div>
-           <div className="text-zinc-400 font-semibold text-lg">Nothing here yet.</div>
-           <p className="text-zinc-500 mt-2">Be the first to share your work!</p>
+           <div className="text-zinc-400 font-semibold text-lg">
+             {searchQuery ? `No results for "${searchQuery}".` : 'Nothing here yet.'}
+           </div>
+           <p className="text-zinc-500 mt-2">
+             {searchQuery ? 'Try prompt words, creator names, or style tags.' : 'Be the first to share your work!'}
+           </p>
          </div>
       )}
 

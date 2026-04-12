@@ -1417,7 +1417,7 @@ export default function MediaLibraryPage() {
                                       setActionMenu(null)
                                     }}
                                   >
-                                    Regenerate
+                                    Create variations
                                   </MenuAction>
                                   <MenuAction
                                     onClick={() => {
@@ -1425,7 +1425,7 @@ export default function MediaLibraryPage() {
                                       setActionMenu(null)
                                     }}
                                   >
-                                    Edit (img2img)
+                                    Edit in Create
                                   </MenuAction>
                                   <MenuDivider />
                                 </>
@@ -1852,38 +1852,40 @@ export default function MediaLibraryPage() {
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredTrash.map((asset) => (
                     <div key={asset.id} className="space-y-2.5">
-                      <div className="relative rounded-[20px]" data-library-menu-root="true">
+                      <div key={asset.id} className="relative rounded-[20px]">
                         <div className="overflow-hidden rounded-[20px] bg-white/[0.03]">
                           <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-[4/5] w-full object-cover opacity-75" />
                         </div>
-                        <button
-                          onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
-                          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                        {actionMenu === `trash:${asset.id}` ? (
-                          <InlineActionMenu>
-                            <MenuAction
-                              disabled={menuBusy}
-                              onClick={() => {
-                                restoreAssetMutation.mutate(asset.id)
-                                setActionMenu(null)
-                              }}
-                            >
-                              Restore
-                            </MenuAction>
-                            <MenuAction
-                              tone="danger"
-                              onClick={() => {
-                                setConfirmState({ kind: 'permanent-delete', asset })
-                                setActionMenu(null)
-                              }}
-                            >
-                              Delete forever
-                            </MenuAction>
-                          </InlineActionMenu>
-                        ) : null}
+                        <div className="absolute right-2 top-2" data-library-menu-root="true">
+                          <button
+                            onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {actionMenu === `trash:${asset.id}` ? (
+                            <InlineActionMenu>
+                              <MenuAction
+                                disabled={menuBusy}
+                                onClick={() => {
+                                  restoreAssetMutation.mutate(asset.id)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Restore
+                              </MenuAction>
+                              <MenuAction
+                                tone="danger"
+                                onClick={() => {
+                                  setConfirmState({ kind: 'permanent-delete', asset })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Delete forever
+                              </MenuAction>
+                            </InlineActionMenu>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <div className="truncate text-sm font-medium text-white">{asset.title}</div>

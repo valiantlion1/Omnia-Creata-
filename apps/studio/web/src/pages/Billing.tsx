@@ -9,7 +9,7 @@ const tiers = [
     name: 'Free Creator',
     price: '$0',
     description: 'Perfect for exploring the Studio capabilities.',
-    features: ['150 Monthly Credits', 'Standard Processing', 'Community Access', 'Basic Output Resolution'],
+    features: ['150 Monthly Credits', 'Standard generation lane', 'Community access', 'Starter export quality'],
     cta: 'Current Plan',
     checkoutKind: null as null,
     highlighted: false,
@@ -19,7 +19,7 @@ const tiers = [
     price: '$15',
     period: '/mo',
     description: 'Unlock the full power of Omnia Creata models.',
-    features: ['2,500 Monthly Credits', 'Priority GPU Access', 'Commercial License', '4K Output Resolution', 'Custom Memory Personas'],
+    features: ['2,500 Monthly Credits', 'Priority generation lane', 'Commercial license', 'Higher quality exports', 'Saved workflow memory'],
     cta: 'Upgrade to Pro',
     checkoutKind: 'pro_monthly' as const,
     highlighted: true,
@@ -29,7 +29,7 @@ const tiers = [
     price: '$45',
     period: '/mo',
     description: 'For power users and boutique creative teams.',
-    features: ['10,000 Monthly Credits', 'Dedicated H100 Queue', 'Team Collaboration', 'API Access', 'White-glove Support'],
+    features: ['10,000 Monthly Credits', 'Shared team workflows', 'Advanced account controls', 'Priority support', 'Custom onboarding'],
     cta: 'Contact Sales',
     checkoutKind: null as null,
     highlighted: false,
@@ -42,7 +42,7 @@ export default function BillingPage() {
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
-  usePageMeta('Plans & Billing', 'Choose the perfect plan for your creative workflow. Powered by LemonSqueezy.')
+  usePageMeta('Plans & Billing', 'Review protected-beta plans, credits, and checkout lanes powered by LemonSqueezy.')
 
   // Fetch live billing summary
   useEffect(() => {
@@ -82,7 +82,7 @@ export default function BillingPage() {
           Plans for Every Creator
         </h1>
         <p className="text-zinc-400 max-w-2xl text-lg">
-          No hidden fees. No surprise api costs. Just pure creative firepower.
+          Protected-beta plan packaging with clear credit allowances and checkout handled by LemonSqueezy.
         </p>
       </section>
 
@@ -119,7 +119,10 @@ export default function BillingPage() {
 
       {/* Pricing Cards */}
       <section className="grid gap-8 md:grid-cols-3 pt-8">
-        {tiers.map((tier) => (
+        {tiers.map((tier) => {
+          const isCheckoutPending = Boolean(tier.checkoutKind) && checkoutLoading === tier.checkoutKind
+
+          return (
           <div 
             key={tier.name} 
             className={`relative flex flex-col rounded-[32px] p-8 transition-all duration-300 ${
@@ -144,14 +147,14 @@ export default function BillingPage() {
 
             <button 
               onClick={() => tier.checkoutKind && handleCheckout(tier.checkoutKind)}
-              disabled={!tier.checkoutKind || checkoutLoading === tier.checkoutKind}
+              disabled={!tier.checkoutKind || isCheckoutPending}
               className={`w-full rounded-full py-3.5 px-6 font-semibold transition-all flex items-center justify-center gap-2 ${
                 tier.highlighted
                   ? 'bg-gradient-to-r from-[#7c3aed] to-fuchsia-500 text-white shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:shadow-[0_0_30px_rgba(124,58,237,0.6)] hover:scale-[1.02] disabled:opacity-60'
                   : 'bg-white/[0.05] text-white hover:bg-white/[0.1] disabled:opacity-40'
               }`}
             >
-              {checkoutLoading === tier.checkoutKind ? (
+              {isCheckoutPending ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
               ) : tier.checkoutKind ? (
                 <><ExternalLink className="h-4 w-4" /> {tier.cta}</>
@@ -169,8 +172,13 @@ export default function BillingPage() {
               ))}
             </div>
           </div>
-        ))}
+          )
+        })}
       </section>
+
+      <p className="mt-[-12px] text-center text-sm text-zinc-500">
+        Protected beta pricing copy is provisional and may change before public launch.
+      </p>
 
       {/* Recent Activity */}
       {billing && billing.recent_activity.length > 0 && (
@@ -197,8 +205,8 @@ export default function BillingPage() {
          <div className="flex gap-4 items-center">
             <Cpu className="h-8 w-8 text-zinc-600" />
             <div>
-               <p className="font-semibold text-zinc-200">Enterprise Grade Hardware</p>
-               <p>All generations are processed on private scalable A100 infrastructure ensuring maximum uptime and data privacy.</p>
+               <p className="font-semibold text-zinc-200">Managed Render Infrastructure</p>
+               <p>Protected beta generations run through curated provider lanes tuned for reliability, safety, and honest delivery expectations.</p>
             </div>
          </div>
          <div className="flex gap-4 items-center">
