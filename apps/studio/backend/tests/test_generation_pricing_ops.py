@@ -63,13 +63,13 @@ def test_openai_draft_route_uses_provider_quote_and_draft_lane() -> None:
         width=1024,
         height=1024,
         output_count=2,
-        provider_estimated_cost=0.009,
+        provider_estimated_cost=0.005,
         legacy_model=_model("flux-schnell", credit_cost=6, estimated_cost=0.003),
     )
 
     assert quote.pricing_lane == "draft"
     assert quote.estimated_cost_source == "provider_quote"
-    assert quote.estimated_cost == 0.018
+    assert quote.estimated_cost == 0.01
     assert quote.credit_cost == 12
     assert quote.reserved_credit_cost == 12
 

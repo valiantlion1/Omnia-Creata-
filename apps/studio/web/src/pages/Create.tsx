@@ -17,6 +17,77 @@ import {
 import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageVisibility } from '@/lib/usePageVisibility'
 
+/* ─── Prompt history ──────────────────────────────── */
+
+const PROMPT_HISTORY_KEY = 'omnia-prompt-history'
+
+function usePromptHistory() {
+  const [history, setHistory] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) ?? '[]') as string[] } catch { return [] }
+  })
+
+  const push = useCallback((prompt: string) => {
+    if (!prompt.trim()) return
+    setHistory((prev) => {
+      const next = [prompt.trim(), ...prev.filter((p) => p !== prompt.trim())].slice(0, 12)
+      localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  return { history, push }
+}
+
+/* ─── Prompt templates ─────────────────────────────── */
+
+const PROMPT_TEMPLATES = [
+  {
+    category: 'Cinematic',
+    icon: '🎬',
+    prompts: [
+      'Cinematic still, golden hour light, 35mm film grain, dramatic lens flare, hyperrealistic',
+      'Aerial establishing shot, volumetric fog, epic landscape, cinematic color grade',
+      'Close-up portrait, shallow depth of field, creamy bokeh, soft studio lighting',
+    ],
+  },
+  {
+    category: 'Nature',
+    icon: '🌿',
+    prompts: [
+      'Misty forest at dawn, god rays through ancient trees, macro detail, 8k nature photography',
+      'Ocean at golden hour, long exposure, silky water, dramatic storm clouds on horizon',
+      'Cherry blossoms in gentle wind, soft pastel tones, Japanese garden, dreamy atmosphere',
+    ],
+  },
+  {
+    category: 'Architecture',
+    icon: '🏛️',
+    prompts: [
+      'Brutalist concrete architecture, dramatic shadow play, black and white fine art photography',
+      'Futuristic glass tower facade, reflections of city at dusk, blue hour, cyberpunk aesthetic',
+      'Ancient stone ruins at sunset, warm amber light, rich textures, cinematic depth of field',
+    ],
+  },
+  {
+    category: 'Fashion',
+    icon: '👗',
+    prompts: [
+      'High fashion editorial, avant-garde styling, dramatic studio lighting, Vogue aesthetic',
+      'Street style photography, urban backdrop, candid moment, fashion week crowd behind',
+      'Luxury product shot, dark marble surface, studio light, commercial grade photography',
+    ],
+  },
+  {
+    category: 'Abstract',
+    icon: '✨',
+    prompts: [
+      'Fluid liquid metal textures, iridescent surfaces, macro photography, dark background',
+      'Bioluminescent deep sea creatures, ethereal glow, dark ocean, otherworldly beauty',
+      'Sacred geometry patterns, vibrant neon colors, mathematical precision, digital art',
+    ],
+  },
+] as const
+
 /* ─── Placeholder prompts ──────────────────────────── */
 
 const PLACEHOLDER_PROMPTS = [
@@ -156,6 +227,10 @@ export default function CreatePage() {
   const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [seed, setSeed] = useState<number | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
+  const { history: promptHistory, push: pushPromptHistory } = usePromptHistory()
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
@@ -230,9 +305,13 @@ export default function CreatePage() {
 
   useEffect(() => {
     const nextPrompt = searchParams.get('prompt')
+    const nextStyleModifier = searchParams.get('style_modifier')
     const nextModel = searchParams.get('model')
     const nextAspect = searchParams.get('aspect_ratio') as keyof typeof aspectPresets | null
-    if (nextPrompt) setPrompt(nextPrompt)
+    const combinedPrompt = nextStyleModifier
+      ? [nextPrompt, nextStyleModifier].filter(Boolean).join(', ')
+      : nextPrompt
+    if (combinedPrompt) setPrompt(combinedPrompt)
     setNegativePrompt(searchParams.get('negative_prompt') ?? '')
     if (nextModel) setSelectedModelId(nextModel)
     if (nextAspect && nextAspect in aspectPresets) setAspectRatio(nextAspect)
@@ -442,6 +521,7 @@ export default function CreatePage() {
     setCreateError(null)
     setSubmittingCount((value) => value + 1)
     try {
+      pushPromptHistory(prompt)
       const projectId = await ensureProjectId()
       const generation = await studioApi.createGeneration({
         project_id: projectId,
@@ -478,7 +558,17 @@ export default function CreatePage() {
   /* ─── Render: Loading ─────────────────────────── */
 
   if (isLoading) {
-    return <div className="px-6 py-10 text-sm text-zinc-500">Loading...</div>
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative flex h-10 w-10 items-center justify-center">
+            <div className="absolute inset-0 animate-ping rounded-full bg-[rgb(var(--primary-light)/0.2)]" />
+            <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+          </div>
+          <p className="text-sm text-zinc-500">Getting your studio ready…</p>
+        </div>
+      </div>
+    )
   }
 
   /* ─── Render: Guest ───────────────────────────── */
@@ -538,7 +628,78 @@ export default function CreatePage() {
 
             <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
               <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-zinc-400" /> Your idea</span>
+              <div className="flex items-center gap-2">
+                {promptHistory.length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowHistory((v) => !v); setShowTemplates(false) }}
+                      className="flex items-center gap-1 text-zinc-500 transition hover:text-zinc-300"
+                      title="Recent prompts"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}><circle cx="8" cy="8" r="6.5" /><path strokeLinecap="round" d="M8 5v3.5l2 2" /></svg>
+                      <span>History</span>
+                    </button>
+                    {showHistory && (
+                      <div className="absolute right-0 top-6 z-50 w-[min(420px,calc(100vw-48px))] overflow-hidden rounded-[18px] border border-white/[0.07] bg-[#0d0e14] shadow-[0_24px_80px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+                        <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-600">Recent prompts</div>
+                        <div className="max-h-[280px] overflow-y-auto">
+                          {promptHistory.map((entry, i) => (
+                            <button
+                              key={i}
+                              onClick={() => { setPrompt(entry); setShowHistory(false) }}
+                              className="block w-full px-4 py-2.5 text-left text-[13px] leading-5 text-zinc-300 transition hover:bg-white/[0.05] hover:text-white"
+                            >
+                              <span className="line-clamp-2">{entry}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => { setShowTemplates((v) => !v); setShowHistory(false) }}
+                  className="flex items-center gap-1 text-zinc-500 transition hover:text-zinc-300"
+                  title="Prompt templates"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+                  <span>Templates</span>
+                </button>
+              </div>
             </div>
+
+            {/* Templates panel */}
+            {showTemplates && (
+              <div className="mb-4 overflow-hidden rounded-[16px] border border-white/[0.07] bg-black/30">
+                <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] p-2">
+                  {PROMPT_TEMPLATES.map((cat, i) => (
+                    <button
+                      key={cat.category}
+                      onClick={() => setActiveTemplateCategory(i)}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                        activeTemplateCategory === i
+                          ? 'bg-white/[0.1] text-white ring-1 ring-white/[0.15]'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span>{cat.category}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="divide-y divide-white/[0.05]">
+                  {PROMPT_TEMPLATES[activeTemplateCategory].prompts.map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setPrompt(p); setShowTemplates(false) }}
+                      className="block w-full px-4 py-3 text-left text-[13px] leading-5 text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <textarea
               ref={textareaRef}
@@ -583,7 +744,7 @@ export default function CreatePage() {
                 title="Improve prompt with AI"
                 className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.04] px-4 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.1] shadow-lg transition hover:bg-white/[0.08] hover:text-white hover:ring-white/[0.15] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Dices className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
+                {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
                 {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Improved' : 'Improve Prompt'}
               </button>
             </div>
@@ -658,10 +819,10 @@ export default function CreatePage() {
                     />
                   </div>
 
-                  {/* CFG Scale */}
+                  {/* Guidance */}
                   <div>
                     <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
-                      <span>CFG Scale</span>
+                      <span>Guidance</span>
                       <span className="tabular-nums text-zinc-300">{cfgScale}</span>
                     </label>
                     <input
@@ -675,10 +836,10 @@ export default function CreatePage() {
                     />
                   </div>
 
-                  {/* Output Count */}
+                  {/* Variations */}
                   <div>
                     <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
-                      <span>Output Count</span>
+                      <span>Variations</span>
                       <span className="tabular-nums text-zinc-300">{outputCount}</span>
                     </label>
                     <input

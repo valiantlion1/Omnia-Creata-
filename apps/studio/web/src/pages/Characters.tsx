@@ -18,7 +18,7 @@ async function apiFetchPersonas(path: string, init?: RequestInit) {
 }
 
 export default function CharactersPage() {
-  const { auth: session } = useStudioAuth()
+  useStudioAuth()
   const { addToast } = useToast()
   const [personas, setPersonas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,7 +49,7 @@ export default function CharactersPage() {
       setPersonas((prev) => [res, ...prev])
       addToast('success', `Character "${name}" created successfully!`)
     } catch (e) {
-      addToast('error', 'Failed to create character. The API endpoint may not be available yet.')
+      addToast('error', 'Something went wrong. Please try again.')
       console.error('Failed to create persona', e)
     }
   }
@@ -94,7 +94,7 @@ export default function CharactersPage() {
           </div>
           <div className="mt-6 text-center">
             <div className="text-xl font-semibold text-white">Create Character</div>
-            <div className="mt-2 text-sm text-zinc-500">Train a new AI identity with customized logic and references.</div>
+            <div className="mt-2 text-sm text-zinc-500">Design a new character with a unique style and personality.</div>
           </div>
         </div>
 
@@ -119,7 +119,7 @@ export default function CharactersPage() {
             <div className="relative z-20 flex flex-1 flex-col p-6 pt-0">
               <div className="mb-2 flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-[#7c3aed]" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#7c3aed]">{card.is_default ? 'System Default' : 'Custom Model'}</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#7c3aed]">{card.is_default ? 'Built-in' : 'Custom'}</span>
               </div>
               <h3 className="text-2xl font-bold text-white">{card.name}</h3>
               <p className="mt-3 flex-1 text-sm leading-relaxed text-zinc-400">{card.description}</p>

@@ -1,24 +1,21 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Download, Lock } from 'lucide-react'
+import { ChevronLeft, Download, Lock, Sparkles } from 'lucide-react'
 
+import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
 import {
-  describeGenerationLaneTrust,
-  formatGenerationCreditState,
-  formatGenerationEstimateSummary,
-  formatGenerationPricingLane,
   normalizeJobStatus,
   studioApi,
 } from '@/lib/studioApi'
 
-function assetPreviewUrl(asset: Awaited<ReturnType<typeof studioApi.getProject>>['recent_assets'][number]) {
+function assetPreviewSources(asset: Awaited<ReturnType<typeof studioApi.getProject>>['recent_assets'][number]) {
   if (asset.protection_state === 'blocked') {
-    return asset.blocked_preview_url ?? asset.preview_url ?? asset.thumbnail_url ?? asset.url
+    return [asset.blocked_preview_url, asset.preview_url, asset.thumbnail_url, asset.url]
   }
-  return asset.preview_url ?? asset.thumbnail_url ?? asset.url
+  return [asset.preview_url, asset.thumbnail_url, asset.url]
 }
 
 async function downloadBlob(blob: Blob, filename: string) {
@@ -56,6 +53,16 @@ export default function ProjectPage() {
     },
   })
 
+  const saveStyleMutation = useMutation({
+    mutationFn: async (prompt: string) => studioApi.saveStyleFromPrompt({ prompt }),
+    onSuccess: () => {
+      setShareMessage('Saved to My Styles.')
+    },
+    onError: (error) => {
+      setShareMessage(error instanceof Error ? error.message : 'Unable to save this prompt as a style.')
+    },
+  })
+
   const exportMutation = useMutation({
     mutationFn: async () => {
       const blob = await studioApi.exportProject(projectId)
@@ -71,7 +78,7 @@ export default function ProjectPage() {
   })
 
   if (isLoading) {
-    return <div className="px-6 py-12 text-sm text-zinc-400">Loading project...</div>
+    return <div className="flex items-center gap-3 px-6 py-12 text-sm text-zinc-400"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your project…</div>
   }
 
   if (auth?.guest) {
@@ -94,7 +101,7 @@ export default function ProjectPage() {
   }
 
   if (projectQuery.isLoading) {
-    return <div className="px-6 py-12 text-sm text-zinc-400">Loading project...</div>
+    return <div className="flex items-center gap-3 px-6 py-12 text-sm text-zinc-400"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your project…</div>
   }
 
   if (!projectQuery.data) {
@@ -161,7 +168,7 @@ export default function ProjectPage() {
         <Panel>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Latest outputs</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Recent creations</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
                 {isChatSurface ? 'Images from this chat' : 'Recent creations'}
               </h2>
@@ -176,12 +183,11 @@ export default function ProjectPage() {
               {assets.map((asset) => (
                 <div key={asset.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
                   <div className="relative overflow-hidden">
-                    <img
-                      src={assetPreviewUrl(asset)}
+                    <ProtectedAssetImage
+                      sources={assetPreviewSources(asset)}
                       alt={asset.display_title ?? asset.title}
                       className={`aspect-square w-full object-cover ${asset.protection_state === 'blocked' ? 'blur-[10px] saturate-50' : ''}`}
-                      draggable={false}
-                      onContextMenu={(event) => event.preventDefault()}
+                      fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                     />
                     {asset.protection_state === 'blocked' ? (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-sm">
@@ -195,7 +201,7 @@ export default function ProjectPage() {
                   <div className="p-4">
                     <div className="text-sm font-semibold text-white">{asset.display_title ?? asset.title}</div>
                     <div className="mt-1 text-[11px] text-zinc-500">
-                      {asset.protection_state === 'blocked' ? 'Protected preview only' : 'Protected preview'}
+                      {asset.protection_state === 'blocked' ? 'Under review' : ''}
                     </div>
                     <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">{asset.prompt}</p>
                   </div>
@@ -234,12 +240,20 @@ export default function ProjectPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-white">{generation.display_model_label ?? generation.model}</div>
                     <StatusPill tone={normalizeJobStatus(generation.status) === 'succeeded' ? 'success' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'warning' : ['failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(generation.status)) ? 'danger' : 'brand'}>
-                      {generation.status}
+                      {normalizeJobStatus(generation.status) === 'succeeded' ? 'Complete' : normalizeJobStatus(generation.status) === 'running' ? 'Processing' : normalizeJobStatus(generation.status) === 'queued' ? 'Queued' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'Retrying' : normalizeJobStatus(generation.status) === 'cancelled' ? 'Cancelled' : normalizeJobStatus(generation.status) === 'timed_out' ? 'Timed out' : 'Failed'}
                     </StatusPill>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
+                    <button
+                      onClick={() => saveStyleMutation.mutate(generation.prompt_snapshot.prompt)}
+                      disabled={saveStyleMutation.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {saveStyleMutation.isPending ? 'Saving style...' : 'Save as style'}
+                    </button>
                   </div>
                 </div>
               ))}

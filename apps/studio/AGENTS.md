@@ -28,7 +28,7 @@ Keep the product feeling:
 6. Do not redesign the UI unless the user explicitly asks for UI work.
 
 ## Current architecture priorities
-Completed backend hardening sprints:
+Historical backend hardening chain:
 - Sprint 1: runtime durability
 - Sprint 2: provider routing and quality policy
 - Sprint 3: billing, credits, entitlement reconciliation
@@ -37,15 +37,16 @@ Completed backend hardening sprints:
 - Sprint 6: premium chat backbone
 - Sprint 7: live provider verification and launch hardening
 
-Current next major priority:
+Current active frame:
 - The broad end-to-end review is complete.
-- Sprint 8 is complete: deployment and always-on environments are now staging-proven.
-- Sprint 9 is now active: provider reliability and economics.
-- Do not drift back into random feature work before provider truth, real premium lanes, and public-paid safety are materially stronger.
+- Sprint 8 and Sprint 9 are now part of the historical chain.
+- `Protected Beta Hardening` is the active working frame.
+- Do not drift back into random feature work before contract truth, artefact sync, provider proof, and closure are materially stronger.
 - `main` is the only official Studio continuation branch. If Studio work appears on OOFM/Organizer branches again, recover `apps/studio/**` path-by-path instead of merging those branches wholesale.
 - Sprint 6 is complete, but its chat-quality guardrails remain active and should not be eroded by later changes.
 - Sprint 7 is complete, but its launch-readiness and smoke-reporting surfaces should be kept honest; do not treat them as vanity status panels.
 - Sprint 8 should prefer stable deployment/runtime truth over extra feature surface area; protected staging, real topology, and honest readiness matter more now than another speculative capability spike.
+- Sprint 9 remains useful history for provider truth and economics, but it is no longer the name of the active planning frame.
 - Keep chat provider health visible and avoid hammering broken premium lanes; degraded chat should fail fast and observably when upstream providers are misconfigured or rate-limited.
 - When extending premium chat providers, prefer optional lanes that preserve current defaults and verify the live API shape against official provider documentation before wiring them into Studio.
 - When improving chat quality, prefer conversation-aware continuity over one-off cleverness; short follow-up turns should inherit prior generation/edit intent when that makes Studio feel more like a real creative copilot.
@@ -157,6 +158,7 @@ When changing backend behavior:
 
 ## Source-of-truth files
 Use these first when orienting:
+- `apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md`
 - `apps/studio/docs/wiki/README.md`
 - `apps/studio/version.json`
 - `apps/studio/docs/operations/STUDIO_RELEASE_LEDGER.md`

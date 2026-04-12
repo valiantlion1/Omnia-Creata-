@@ -79,7 +79,7 @@ def test_blocked_deployment_verification_report_is_not_closure_ready() -> None:
     assert report["closure_gaps"] == [
         "Network failure while requesting https://staging.example.com/api/v1/version: timeout"
     ]
-    assert "Sprint 9" in report["closure_summary"]
+    assert "Protected Beta Hardening" in report["closure_summary"]
     blocked_check = report["checks"][0]
     assert blocked_check["key"] == "deployment_connectivity"
     assert blocked_check["status"] == "blocked"
@@ -247,6 +247,37 @@ def test_load_deployment_verification_report_prefers_latest_runtime_report(tmp_p
         assert loaded is not None
         assert loaded["label"] == "staging-b"
         assert loaded["base_url"] == "https://b.example.com"
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+
+
+def test_load_deployment_verification_report_prefers_newer_staging_sibling_report(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    local_runtime_root = tmp_path / "runtime-root"
+    staging_runtime_root = local_runtime_root / "staging"
+    try:
+        settings.studio_runtime_root = str(local_runtime_root)
+        persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://old.example.com",
+            report={"status": "blocked", "summary": "old", "checks": []},
+        )
+        settings.studio_runtime_root = str(staging_runtime_root)
+        persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://staging.example.com",
+            report={"status": "warning", "summary": "new", "checks": []},
+        )
+
+        settings.studio_runtime_root = str(local_runtime_root)
+        loaded = load_deployment_verification_report(settings, label="protected-staging")
+
+        assert loaded is not None
+        assert loaded["base_url"] == "https://staging.example.com"
+        assert "staging" in loaded["path"]
     finally:
         settings.studio_runtime_root = original_runtime_root
 

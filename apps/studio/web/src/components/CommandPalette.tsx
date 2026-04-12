@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Sparkles, MessageCircle, Library, LayoutDashboard, Settings as SettingsIcon, BookOpen, X } from 'lucide-react'
+import { Search, Sparkles, MessageCircle, Library, LayoutDashboard, Settings as SettingsIcon, BookOpen } from 'lucide-react'
 
 type CommandInfo = {
   id: string

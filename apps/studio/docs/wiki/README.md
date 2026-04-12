@@ -12,6 +12,7 @@ Use it to answer five questions fast:
 
 ## Start Here
 
+- [AI Context Pack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md)
 - [Product North Star](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/01_PRODUCT_NORTH_STAR.md)
 - [System Architecture](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/02_SYSTEM_ARCHITECTURE.md)
 - [Delivery Status](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/03_DELIVERY_STATUS.md)
@@ -30,6 +31,7 @@ Use it for:
 - sprint context
 - engineering rules
 - launch discipline
+- AI/IDE context compression
 
 Do not use it as the only source for operational truth.
 
@@ -44,8 +46,24 @@ Operational truth still lives in:
 - Studio is a premium creative product with two distinct surfaces: `Create` and `Chat`.
 - Sprint 1 through Sprint 7 are complete.
 - The broad end-to-end review is complete.
-- Sprint 8 is now active.
+- Sprint 8 and Sprint 9 now belong to the historical sprint chain.
+- The active hardening track is `Protected Beta Hardening`.
+- Current priorities are:
+  - freeze signed-in/backend contracts
+  - keep local verify, provider smoke, and staging verify on the same build
+  - prove one protected-beta chat lane and one protected-beta image lane
+  - close staging truth without drifting into new feature work
+- protected-beta provider policy is intentionally temporary; use owner health detail `ai_control_plane` as the hidden operator map until public-paid provider strategy is chosen
 - Build discipline, release bookkeeping, auth hardening, runtime durability, routing, billing, security, and persistence foundations already exist.
+
+## AI And IDE Use
+
+If another AI model or coding IDE assistant needs fast Studio context:
+- start with [AI Context Pack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md)
+- then read only the nearest wiki pages for the task
+- then inspect the exact touched files
+
+This is the intended low-token orientation path.
 
 ## Existing Reference Docs
 

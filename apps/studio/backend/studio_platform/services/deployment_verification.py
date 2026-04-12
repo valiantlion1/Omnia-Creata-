@@ -11,7 +11,7 @@ from config.env import Settings
 from ..versioning import load_version_info
 
 _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
-_CLOSURE_SPRINT_LABEL = "Sprint 9"
+_CLOSURE_SPRINT_LABEL = "Protected Beta Hardening"
 _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "provider_smoke",
     "provider_health_snapshot",
@@ -86,16 +86,23 @@ def load_deployment_verification_report(
     label: str | None = None,
 ) -> dict[str, Any] | None:
     candidate_paths: list[Path] = []
+    report_roots = _deployment_verification_report_roots(settings)
     if label:
-        candidate_paths.append(deployment_verification_report_path(settings, label=label))
+        normalized = _normalize_label(label)
+        candidate_paths.extend(root / f"{normalized}-verify-latest.json" for root in report_roots)
     else:
-        reports_root = (settings.runtime_root_path / "reports").resolve()
-        if reports_root.exists():
-            candidate_paths.extend(sorted(reports_root.glob("*-verify-latest.json")))
+        for reports_root in report_roots:
+            if reports_root.exists():
+                candidate_paths.extend(sorted(reports_root.glob("*-verify-latest.json")))
 
     newest_payload: dict[str, Any] | None = None
     newest_time: float | None = None
+    seen_paths: set[Path] = set()
     for path in candidate_paths:
+        resolved_path = path.resolve()
+        if resolved_path in seen_paths:
+            continue
+        seen_paths.add(resolved_path)
         payload = _load_json_payload(path)
         if not isinstance(payload, dict):
             continue
@@ -110,6 +117,17 @@ def load_deployment_verification_report(
             newest_payload = payload
             newest_time = modified_at
     return newest_payload
+
+
+def _deployment_verification_report_roots(settings: Settings) -> list[Path]:
+    primary_root = (settings.runtime_root_path / "reports").resolve()
+    roots = [primary_root]
+    runtime_root = settings.runtime_root_path.resolve()
+    if runtime_root.name.lower() != "staging":
+        staging_root = (runtime_root / "staging" / "reports").resolve()
+        if staging_root not in roots:
+            roots.append(staging_root)
+    return roots
 
 
 def build_deployment_verification_report(
@@ -257,7 +275,7 @@ def build_deployment_verification_report(
             )
             if disallowed_launch_gate_warning_keys:
                 closure_gaps.append(
-                    "launch gate still has non-Sprint-9 warnings: "
+                    "launch gate still has non-protected-beta-closure warnings: "
                     + ", ".join(disallowed_launch_gate_warning_keys)
                 )
 
@@ -322,7 +340,7 @@ def build_deployment_verification_report(
             )
             if disallowed_launch_warning_keys:
                 closure_gaps.append(
-                    "launch readiness still has non-Sprint-9 warnings: "
+                    "launch readiness still has non-protected-beta-closure warnings: "
                     + ", ".join(disallowed_launch_warning_keys)
                 )
         else:

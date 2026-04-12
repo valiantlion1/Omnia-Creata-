@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
+from config.env import reveal_secret
+
 from .models import StudioState
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -837,7 +839,7 @@ def build_state_store(
     bootstrap_paths.append(bootstrap_json_path)
     if backend == "postgres":
         return PostgresStudioStateStore(
-            settings.database_url or "",
+            reveal_secret(settings.database_url),
             bootstrap_paths=bootstrap_paths,
         )
 

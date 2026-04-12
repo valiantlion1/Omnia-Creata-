@@ -32,6 +32,9 @@ from .asset_ops import (
     restore_asset_in_state,
     trash_asset_in_state,
 )
+from .ai_provider_catalog import (
+    build_ai_control_plane_summary,
+)
 from .asset_storage import (
     ResolvedAssetDelivery,
     build_asset_storage_registry,
@@ -148,6 +151,10 @@ from .project_ops import (
     remove_project_from_state,
 )
 from .profile_ops import build_identity_export, purge_identity_state
+from .operator_control_plane_ops import (
+    build_operator_studio_model_catalog,
+    build_operator_surface_matrix,
+)
 from .provider_spend_guardrails import (
     ProviderSpendGuardrailStatus,
     evaluate_provider_spend_guardrail,
@@ -1866,7 +1873,7 @@ class StudioService:
             plan_catalog=PLAN_CATALOG,
             billing_state=billing_state,
         )
-        return bool(entitlements.can_clean_exports)
+        return bool(entitlements.can_clean_export)
 
     async def list_styles(self, identity_id: str) -> Dict[str, Any]:
         await self.get_identity(identity_id)
@@ -2589,6 +2596,8 @@ class StudioService:
         counts = await self.store.get_counts_summary()
         data_authority = await self.store.describe_persistence()
         provider_status = await self.providers.health_snapshot(probe=detail)
+        generation_routing_summary = self.providers.routing_summary()
+        chat_routing_summary = self.llm_gateway.routing_summary()
         degraded_states = {"degraded", "unavailable", "error"}
         overall_status = "degraded" if any(provider.get("status") in degraded_states for provider in provider_status) else "healthy"
         broker_metrics = await self.generation_broker.metrics() if self.generation_broker is not None else None
@@ -2606,6 +2615,7 @@ class StudioService:
         launch_readiness: Dict[str, Any] | None = None
         provider_spend_guardrails: Dict[str, Any] | None = None
         cost_telemetry: Dict[str, Any] | None = None
+        ai_control_plane: Dict[str, Any] | None = None
         if detail:
             def query(state: StudioState) -> Dict[str, int]:
                 now = utc_now()
@@ -2635,6 +2645,22 @@ class StudioService:
             runtime_logs = build_runtime_log_snapshot(self.settings)
             provider_spend_guardrails = await self._build_provider_spend_guardrails_summary()
             cost_telemetry = await self._build_cost_telemetry_summary()
+            studio_model_catalog = build_operator_studio_model_catalog(
+                settings=self.settings,
+                providers=self.providers,
+                studio_models=MODEL_CATALOG.values(),
+            )
+            ai_control_plane = build_ai_control_plane_summary(
+                settings=self.settings,
+                chat_routing=chat_routing_summary,
+                generation_routing=generation_routing_summary,
+                studio_models=studio_model_catalog,
+                surface_matrix=build_operator_surface_matrix(
+                    settings=self.settings,
+                    llm_gateway=self.llm_gateway,
+                    studio_models=studio_model_catalog,
+                ),
+            )
         if self._generation_broker_degraded_reason is not None:
             overall_status = "degraded"
         generation_broker_payload = {
@@ -2654,11 +2680,12 @@ class StudioService:
                 data_authority=data_authority,
                 generation_runtime_mode=self._generation_runtime_mode,
                 generation_broker=generation_broker_payload,
-                chat_routing=self.llm_gateway.routing_summary(),
+                chat_routing=chat_routing_summary,
                 provider_smoke_report=provider_smoke_report,
                 startup_verification_report=startup_verification_report,
                 deployment_verification_report=deployment_verification_report,
                 runtime_logs=runtime_logs,
+                cost_telemetry=cost_telemetry,
             )
         payload = {
             "status": overall_status,
@@ -2671,8 +2698,8 @@ class StudioService:
                 "id": self._worker_id,
                 "processing_active": worker_processing_active,
             },
-            "generation_routing": self.providers.routing_summary(),
-            "chat_routing": self.llm_gateway.routing_summary(),
+            "generation_routing": generation_routing_summary,
+            "chat_routing": chat_routing_summary,
             "data_authority": data_authority,
         }
         if security_summary is not None:
@@ -2689,6 +2716,8 @@ class StudioService:
             payload["provider_spend_guardrails"] = provider_spend_guardrails
         if cost_telemetry is not None:
             payload["cost_telemetry"] = cost_telemetry
+        if ai_control_plane is not None:
+            payload["ai_control_plane"] = ai_control_plane
         if launch_readiness is not None:
             payload["launch_readiness"] = launch_readiness
             launch_gate = launch_readiness.get("launch_gate")

@@ -13,54 +13,17 @@ $deployDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $studioRoot = Split-Path -Parent $deployDir
 $backendDir = Join-Path $studioRoot "backend"
 $composeFile = Join-Path $deployDir "docker-compose.staging.yml"
+$helperScript = Join-Path $deployDir "staging-runtime-helpers.ps1"
 $verifyScript = Join-Path $deployDir "verify-studio-staging.ps1"
 $versionFile = Join-Path $studioRoot "version.json"
 $versionManifest = $null
 $expectedBuild = $null
 $expectedVersion = $null
 
-function Resolve-AbsolutePath {
-  param([string]$PathValue)
-
-  if ([string]::IsNullOrWhiteSpace($PathValue)) {
-    return $null
-  }
-
-  return [System.IO.Path]::GetFullPath($PathValue)
+if (-not (Test-Path $helperScript)) {
+  throw "Missing staging runtime helper script: $helperScript"
 }
-
-function Resolve-EnvFilePath {
-  param([string]$PathValue)
-
-  if ([string]::IsNullOrWhiteSpace($PathValue)) {
-    return $null
-  }
-
-  if ([System.IO.Path]::IsPathRooted($PathValue)) {
-    return [System.IO.Path]::GetFullPath($PathValue)
-  }
-
-  return [System.IO.Path]::GetFullPath((Join-Path $deployDir $PathValue))
-}
-
-function Get-EnvMap {
-  param([string]$PathValue)
-
-  $values = @{}
-  if (-not (Test-Path $PathValue)) {
-    return $values
-  }
-
-  foreach ($rawLine in Get-Content -Path $PathValue) {
-    $line = $rawLine.Trim()
-    if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) {
-      continue
-    }
-    $parts = $line.Split("=", 2)
-    $values[$parts[0].Trim()] = $parts[1].Trim()
-  }
-  return $values
-}
+. $helperScript
 
 function Get-DockerCommandPath {
   $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
@@ -95,66 +58,6 @@ function Ensure-PathContains {
   $env:PATH = "$DirectoryPath;$env:PATH"
 }
 
-function Resolve-StagingRuntimeRoot {
-  param([hashtable]$EnvValues)
-
-  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_RUNTIME_ROOT")) {
-    $candidate = Resolve-AbsolutePath $EnvValues["STAGING_RUNTIME_ROOT"]
-    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-      return $candidate
-    }
-  }
-
-  if (-not [string]::IsNullOrWhiteSpace($env:STAGING_RUNTIME_ROOT)) {
-    $candidate = Resolve-AbsolutePath $env:STAGING_RUNTIME_ROOT
-    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-      return $candidate
-    }
-  }
-
-  if (-not [string]::IsNullOrWhiteSpace($env:STUDIO_RUNTIME_ROOT)) {
-    $candidate = Resolve-AbsolutePath $env:STUDIO_RUNTIME_ROOT
-    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-      return $candidate
-    }
-  }
-
-  if ($env:LOCALAPPDATA) {
-    return Join-Path $env:LOCALAPPDATA "OmniaCreata\Studio\staging"
-  }
-
-  return Join-Path $HOME ".omnia_creata\studio\staging"
-}
-
-function Resolve-StagingVerifyBaseUrl {
-  param(
-    [hashtable]$EnvValues,
-    [string]$ExplicitBaseUrl
-  )
-
-  if (-not [string]::IsNullOrWhiteSpace($ExplicitBaseUrl)) {
-    return $ExplicitBaseUrl.Trim()
-  }
-
-  if ($EnvValues -and $EnvValues.ContainsKey("STAGING_VERIFY_BASE_URL")) {
-    $candidate = [string]$EnvValues["STAGING_VERIFY_BASE_URL"]
-    $candidate = $candidate.Trim()
-    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-      return $candidate
-    }
-  }
-
-  $webPort = ""
-  if ($EnvValues -and $EnvValues.ContainsKey("WEB_PORT")) {
-    $webPort = [string]$EnvValues["WEB_PORT"]
-    $webPort = $webPort.Trim()
-  }
-  if ([string]::IsNullOrWhiteSpace($webPort)) {
-    $webPort = "8080"
-  }
-  return "http://127.0.0.1:$webPort"
-}
-
 if (Test-Path $versionFile) {
   try {
     $versionManifest = Get-Content $versionFile -Raw | ConvertFrom-Json
@@ -165,7 +68,7 @@ if (Test-Path $versionFile) {
   }
 }
 
-$resolvedEnvFile = Resolve-EnvFilePath -PathValue $EnvFile
+$resolvedEnvFile = Resolve-EnvFilePath -DeployDir $deployDir -PathValue $EnvFile
 
 $runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues @{}
 
@@ -212,22 +115,26 @@ function Write-StagingBlockerReport {
   [System.IO.File]::WriteAllText($blockerReportPath, $json, $utf8NoBom)
 }
 
-$envValues = Get-EnvMap -PathValue $resolvedEnvFile
-$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues $envValues
+$sourceEnvValues = Get-EnvMap -PathValue $resolvedEnvFile
+$runtimeRoot = Resolve-StagingRuntimeRoot -EnvValues $sourceEnvValues
 $reportDir = Join-Path $runtimeRoot "reports"
 $blockerReportPath = Join-Path $reportDir "protected-staging-verify-latest.json"
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $runtimeRoot "logs") | Out-Null
+$effectiveEnv = New-StagingEffectiveEnvFile -SourceEnvFile $resolvedEnvFile -RuntimeRoot $runtimeRoot
+$effectiveEnvFile = [string]$effectiveEnv.Path
+$envValues = $effectiveEnv.Values
 $env:STAGING_RUNTIME_ROOT = $runtimeRoot
 $env:STUDIO_RUNTIME_ROOT = $runtimeRoot
+$env:STAGING_ENV_FILE = $effectiveEnvFile
 
 $baseUrl = Resolve-StagingVerifyBaseUrl -EnvValues $envValues -ExplicitBaseUrl $VerifyBaseUrl
 
 if (-not (Test-Path $resolvedEnvFile)) {
   Write-StagingBlockerReport `
     -Summary "Protected staging env file is missing." `
-    -Detail "Create $resolvedEnvFile before attempting Sprint 8 staging bring-up." `
+    -Detail "Create $resolvedEnvFile before attempting protected beta staging bring-up." `
     -BaseUrl $baseUrl
   throw "Missing staging env file: $resolvedEnvFile"
 }
@@ -236,9 +143,9 @@ $dockerCommandPath = Get-DockerCommandPath
 if ([string]::IsNullOrWhiteSpace($dockerCommandPath)) {
   Write-StagingBlockerReport `
     -Summary "Docker is missing on this machine." `
-    -Detail "Sprint 8 protected staging requires Docker Desktop or a compatible docker CLI on PATH or in the standard Docker Desktop install path." `
+    -Detail "Protected beta staging requires Docker Desktop or a compatible docker CLI on PATH or in the standard Docker Desktop install path." `
     -BaseUrl $baseUrl
-  throw "Docker is not installed or not available on PATH or in the standard Docker Desktop install path. Sprint 8 protected staging requires Docker Desktop or a compatible docker CLI."
+  throw "Docker is not installed or not available on PATH or in the standard Docker Desktop install path. Protected beta staging requires Docker Desktop or a compatible docker CLI."
 }
 
 Ensure-PathContains -DirectoryPath (Split-Path -Parent $dockerCommandPath)
@@ -247,15 +154,16 @@ Write-Host ""
 Write-Host "Studio protected staging bring-up" -ForegroundColor Cyan
 Write-Host "Compose file: $composeFile"
 Write-Host "Env file:     $resolvedEnvFile"
+Write-Host "Effective env:$effectiveEnvFile"
 Write-Host "Runtime root: $runtimeRoot"
 Write-Host "Verify URL:   $baseUrl"
 Write-Host ""
 
-& python (Join-Path $backendDir "scripts\deployment_preflight.py") --env-file $resolvedEnvFile
+& python (Join-Path $backendDir "scripts\deployment_preflight.py") --env-file $effectiveEnvFile
 if ($LASTEXITCODE -ne 0) {
   Write-StagingBlockerReport `
     -Summary "Studio deployment preflight failed." `
-    -Detail "Fix the staging env/topology issues reported by deployment_preflight.py before retrying Sprint 8 staging bring-up." `
+    -Detail "Fix the staging env/topology issues reported by deployment_preflight.py before retrying protected beta staging bring-up." `
     -BaseUrl $baseUrl
   throw "Studio deployment preflight failed."
 }
@@ -265,7 +173,7 @@ $composeArgs = @(
   "-f",
   $composeFile,
   "--env-file",
-  $resolvedEnvFile,
+  $effectiveEnvFile,
   "up"
 )
 if (-not $SkipBuild) {
@@ -289,7 +197,7 @@ if (-not $NoVerify) {
     "-File",
     $verifyScript,
     "-EnvFile",
-    $resolvedEnvFile,
+    $effectiveEnvFile,
     "-BaseUrl",
     $baseUrl
   )

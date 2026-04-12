@@ -1,8 +1,8 @@
 # Delivery Status
 
-## Sprint Status
+## Delivery State
 
-### Completed
+### Historical Sprint Chain
 
 - Sprint 1: runtime durability
 - Sprint 2: provider routing and quality policy
@@ -12,89 +12,90 @@
 - Sprint 6: premium chat backbone
 - Sprint 7: live provider verification and launch hardening
 - Sprint 8: deployment and always-on environments
-
-### Active
-
 - Sprint 9: provider reliability and economics
+
+Those sprints are no longer the active planning language.
+They remain the historical path that got Studio to the current beta-hardening phase.
+
+### Active Now
+
+- `Protected Beta Hardening`
 
 ## What "Done" Means
 
-A sprint is not done because code exists.
-
-A sprint is done only when:
-- the core flow works
-- regressions are tested or explicitly verified
-- release bookkeeping is updated
-- the result fits product intent
-- the change is explainable in docs
+Work is only done when:
+- the current build behavior is proven, not inferred
+- route-level regressions protect the signed-in shell
+- operator artefacts agree on the same build
+- staging proof exists for the current build
+- wiki, release ledger, maintenance map, and version manifest all tell the same story
 
 ## Current Product Reality
 
 Already strong:
-- auth is much more stable than before
-- generation runtime is materially more durable
-- provider routing is policy-driven
-- billing and entitlements are harder to corrupt
-- share and ownership rules are much safer
-- persistence direction is cleaner
-- chat continuity is materially stronger
-- chat-to-create/edit handoff is now much more trustworthy
-- degraded chat keeps more useful direction and execution context alive
+- auth and ownership are materially safer
+- generation runtime is durable enough for serious local rehearsal
+- billing, entitlements, and asset protection are much harder to corrupt
+- launch-readiness and owner truth exist as first-class backend/operator surfaces
 
-Still strategically important:
-- premium provider lane reliability
-- premium provider economics truth
-- real managed image-generation readiness
-- launch truth under real deployment conditions
+Still open:
+- launch-grade provider proof for protected beta must stay narrow and explicit
+- current-build image proof still matters more than provider config alone
+- staging closure depends on Docker bring-up, owner verify, and artefact sync staying truthful
+- public-paid readiness remains a later stage, not the current acceptance target
 
-## Sprint 8 Outcome
+## Protected Beta Hardening Outcome So Far
 
-Sprint 8 moved Studio from strong local-only behavior to a staging-proven operator loop.
+Key outcomes already landed:
+- signed-in route contracts are harder to break accidentally
+- startup verification, provider smoke, and deployment verification can now be compared as one truth chain
+- staging truth no longer depends on reading only one runtime root
+- owner verification can inspect the same launch gate humans read from `/v1/healthz/detail`
+- protected-beta provider policy is intentionally simplified:
+  - chat: `OpenAI` only counts as launch-grade
+  - image: `OpenAI gpt-image-1-mini` is the protected-beta default
+  - owner-only premium image QA stays explicit and optional
+- this protected-beta lane lock is temporary proof policy, not the final public-paid provider strategy
+- hidden operator mapping for `surface -> tier -> provider -> model` should now come from `ai_control_plane.surface_matrix`, not scattered notes
 
-Key outcomes:
-- stable local always-on loop now verifies itself and writes external reports
-- protected staging now boots through the official Docker path
-- owner-token staging verify now produces a real closure decision
-- external logs and reports remain outside the repo
-- protected launch truth is now provable instead of inferred
+## State Language
 
-## Sprint 6 Outcome
+Use these two state layers deliberately:
 
-Sprint 6 turned Chat into the flagship creative copilot surface.
+- signed-in/library-facing contract:
+  - `queued`
+  - `running`
+  - `ready`
+  - `failed`
+  - `blocked`
+- internal worker/job lifecycle:
+  - `queued`
+  - `running`
+  - `succeeded`
+  - `failed`
+  - `retryable_failed`
+  - `cancelled`
+  - `timed_out`
 
-Key outcomes:
-- premium-feeling creative guidance
-- multimodal awareness
-- strong follow-up refinement
-- assistant-authored execution bridge
-- better continuity across edit and generation turns
-- less fragile degraded behavior
+The second layer exists for backend recovery and queue logic.
+The first layer is the product contract and should be the default language in UI, planning, and operator summaries unless lower-level debugging is the real topic.
 
-## Sprint 7 Outcome
+## Readiness Language
 
-Sprint 7 hardened the operator view and launch-readiness layer.
-
-Key outcomes:
-- launch-readiness summary now exists as a first-class backend concept
-- latest live provider smoke report can be persisted outside the repo
-- owner health detail can now answer launch questions, not only service uptime questions
-- deployment, auth, provider, runtime, and logging gaps are surfaced as blocked/warning/pass checks
-- the current sprint chain is complete and future work should start from a fresh review instead of improvisation
-
-## Review Outcome
-
-The broad end-to-end review is complete.
-
-It concluded that:
-- deployment shape is now the biggest real blocker
-- premium provider health must be treated as runtime truth, not only config truth
-- deprecated local-owner / ComfyUI assumptions needed cleanup
+Use these terms consistently:
+- `local alpha`
+  - stable for local rehearsal, but not a deployment proof
+- `protected beta`
+  - current acceptance target
+  - requires truthful local + staging proof on the same build
+- `public paid platform`
+  - later stage
+  - requires stronger resilience and economics than protected beta
 
 ## Immediate Planning Rule
 
-The next sprint family has started.
-
 Current rule:
-- keep work inside Sprint 9 until provider truth and economics are materially stronger
-- use the end-to-end review plus live findings as the planning source, not chat memory alone
-- do not treat accepted provider requests as success; real premium chat and real managed image output are the truth that matters now
+- stay inside `Protected Beta Hardening`
+- sequence work as `contract -> truth sync -> provider proof -> closure`
+- do not open new large backend features until `closure_ready=true`
+- treat wiki as strategy memory and operations docs as historical/operator memory

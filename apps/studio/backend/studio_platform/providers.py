@@ -19,6 +19,11 @@ from PIL import Image, ImageDraw, ImageFont
 from config.env import Environment, get_settings, reveal_secret
 from security.redaction import redact_sensitive_text
 
+from .ai_provider_catalog import (
+    STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID,
+    lookup_openai_image_output_price,
+    resolve_openai_image_request_model,
+)
 from .models import IdentityPlan
 from .prompt_engineering import PromptProfileAnalysis, analyze_generation_prompt_profile
 
@@ -821,23 +826,7 @@ class OpenAIImageProvider(StudioImageProvider):
     _SQUARE_SIZE = "1024x1024"
     _PORTRAIT_SIZE = "1024x1536"
     _LANDSCAPE_SIZE = "1536x1024"
-    _QUALITY_BY_MODEL_ID = {
-        "flux-schnell": "low",
-        "sdxl-base": "medium",
-        "realvis-xl": "high",
-        "juggernaut-xl": "high",
-    }
-    _COST_TABLE = {
-        ("1024x1024", "low"): 0.009,
-        ("1024x1024", "medium"): 0.034,
-        ("1024x1024", "high"): 0.133,
-        ("1024x1536", "low"): 0.013,
-        ("1024x1536", "medium"): 0.05,
-        ("1024x1536", "high"): 0.2,
-        ("1536x1024", "low"): 0.013,
-        ("1536x1024", "medium"): 0.05,
-        ("1536x1024", "high"): 0.2,
-    }
+    _QUALITY_BY_MODEL_ID = STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID
 
     def __init__(
         self,
@@ -933,7 +922,7 @@ class OpenAIImageProvider(StudioImageProvider):
             mime_type=mime_type,
             width=actual_width,
             height=actual_height,
-            estimated_cost=self._estimate_cost(size=requested_size, quality=quality),
+            estimated_cost=self._estimate_cost(model=request_model, size=requested_size, quality=quality),
             provider_rollout_tier=self.rollout_tier,
             billable=self.billable,
         )
@@ -949,7 +938,8 @@ class OpenAIImageProvider(StudioImageProvider):
     ) -> float | None:
         requested_size = self._select_size(width=width, height=height)
         quality = self._select_quality(model_id=model_id)
-        return self._estimate_cost(size=requested_size, quality=quality)
+        request_model = self._select_request_model(model_id=model_id, quality=quality)
+        return self._estimate_cost(model=request_model, size=requested_size, quality=quality)
 
     async def _request_generation(
         self,
@@ -1102,17 +1092,16 @@ class OpenAIImageProvider(StudioImageProvider):
         return self._QUALITY_BY_MODEL_ID.get(normalized_model, "medium")
 
     def _select_request_model(self, *, model_id: Optional[str], quality: str) -> str:
-        if self._should_force_cost_safe_draft(model_id=model_id):
+        selected = resolve_openai_image_request_model(
+            model_id=model_id,
+            draft_image_model=self.draft_image_model,
+            image_model=self.image_model,
+            premium_qa_enabled=self.premium_qa_enabled,
+        )
+        normalized_quality = str(quality or "").strip().lower()
+        if normalized_quality == "low" and selected == self.image_model:
             return self.draft_image_model
-        normalized_model = (model_id or "").strip().lower()
-        if normalized_model in {
-            self.draft_image_model.strip().lower(),
-            self.image_model.strip().lower(),
-        }:
-            return normalized_model
-        if quality == "low":
-            return self.draft_image_model
-        return self.image_model
+        return selected
 
     def _should_force_cost_safe_draft(self, *, model_id: Optional[str]) -> bool:
         if self.premium_qa_enabled:
@@ -1144,13 +1133,11 @@ class OpenAIImageProvider(StudioImageProvider):
         except Exception:
             return (1024, 1024)
 
-    def _estimate_cost(self, *, size: str, quality: str) -> float:
-        return float(
-            self._COST_TABLE.get(
-                (size, quality),
-                self._COST_TABLE[(self._SQUARE_SIZE, "medium")],
-            )
-        )
+    def _estimate_cost(self, *, model: str, size: str, quality: str) -> float:
+        amount = lookup_openai_image_output_price(model, size=size, quality=quality)
+        if amount is None:
+            amount = lookup_openai_image_output_price(self.image_model, size=self._SQUARE_SIZE, quality="medium")
+        return float(amount or 0.0)
 
     def _build_client(self) -> httpx.AsyncClient:
         timeout = httpx.Timeout(self.request_timeout_seconds, connect=min(10.0, self.request_timeout_seconds))

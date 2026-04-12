@@ -2,90 +2,101 @@
 
 ## Planning Philosophy
 
-Studio should be planned in explicit, bounded sprints.
+Studio should now be planned around release-shaping gates, not endless new sprint names.
 
-Each sprint should answer:
-- what problem it solves
-- why it matters now
-- what done means
-- what it must not quietly break
+Each planning step should answer:
+- what contract is being protected
+- what operator truth is being tightened
+- what proof is missing today
+- what would count as closure on the current build
 
-## Current Roadmap
+## Active Track
 
-### Active Now
+### Protected Beta Hardening
 
-- Sprint 9: Provider reliability and economics
-
-### Near-Term
-
-- Turn provider health into truthful launch-grade vs fallback-only operator signals
-- Get at least one reliable managed image lane back to a real working state
-- Keep launch-readiness honest about public-paid safety, not only raw configuration
-- Reassess operator truth after provider fixes land
-
-### After Current Sprint Chain
-
-After Sprint 7:
-- run a broad end-to-end review
-- reassess launch readiness
-- write the next sprint set from the current repo truth, not memory alone
-
-## What Future Sprints Should Probably Cover
-
-These are not active promises yet.
-They are likely next planning domains after the current chain finishes.
-
-### Sprint 8: Deployment And Always-On Environments
+Sequence:
+- `contract`
+- `truth sync`
+- `provider proof`
+- `closure`
 
 Purpose:
-- stop relying on a single local machine for access
-- introduce protected staging and stable public runtime paths
+- reduce backend/ops spaghetti risk before scale
+- keep one canonical signed-in contract
+- keep one artefact chain for the current build
+- prove Docker staging and owner verification on the same truth surface
 
-Status:
-- complete
+## Near-Term Order
 
-### Sprint 9: Provider Reliability And Economics
+### 1. Contract
 
-Purpose:
-- decide sustainable premium chat/image provider strategy
-- align product promise with real cost ceilings
+- keep `/v1/assets`, `/v1/projects`, `/v1/settings/bootstrap`, `/v1/auth/me`, and `/v1/healthz/detail` stable
+- avoid silent alias drift
+- add route-level regressions before changing shared payloads
 
-### Sprint 10: Launch Truth And Operator Confidence
+### 2. Truth Sync
 
-Purpose:
-- turn smoke, health, incidents, and launch gates into operator-trustworthy signals
+- keep `version`, `local verify`, `provider smoke`, and `protected staging verify` on the same build
+- mirror smoke/startup artefacts into the staging runtime root
+- keep runtime logs classified as operator artefacts, not repo content
 
-### Sprint 11: Public Launch Polish
+### 3. Provider Proof
 
-Purpose:
-- close remaining trust gaps before broader public rollout
+- protected-beta chat lane: `OpenAI`
+- protected-beta image lane: `OpenAI gpt-image-1-mini`
+- owner-only premium image QA remains explicit
+- other providers may exist as backups or experiments, but they do not count as launch-grade proof until they are deliberately promoted
+- this narrow provider lock only exists for protected-beta proof; public-paid provider strategy stays open until after closure
+- operator-facing `surface -> tier -> provider -> model` truth should live in `ai_control_plane.surface_matrix`, not in scattered docs or terminal memory
 
-## Planning Rules
+### 4. Closure
 
-1. Do not start another new sprint family while Sprint 8-11 is unfinished unless the user explicitly changes priorities.
-2. Do not mix random improvements into active sprint work unless they directly unblock it.
-3. Prefer a few strong themes over many shallow promises.
-4. Keep sprint completion tied to product behavior, not only code volume.
-5. Use the wiki and operations docs as planning inputs, not only conversation memory.
+- local restart on current build
+- local verify
+- provider smoke
+- staging bring-up
+- owner-token staging verify
+- truth-sync confirmation
+- `closure_ready=true`
 
-## Backlog Categories
+## Historical Sprint Map
 
-### Must-Have Before Broader Public Launch
+The Sprint 1-9 chain remains useful as history, but it is no longer the active planning frame.
 
-- premium chat quality confidence
-- provider reliability confidence
-- stable protected staging shape
-- trustworthy launch-readiness and smoke signals
+- Sprint 8 explains how deployment/staging arrived
+- Sprint 9 explains why provider truth and economics became first-class
+- the active system now uses `Protected Beta Hardening` as the working frame
 
-### Important But Not Launch-Critical
+## Rules
 
-- richer admin surfaces
-- deeper analytics
-- more content/docs surface breadth
-- extra modality expansion
+1. Do not start a new large backend feature while `Protected Beta Hardening` is still open.
+2. Prefer one current truth source over several half-overlapping summaries.
+3. If a bug fits one of the standard classes, document it that way:
+   - contract drift
+   - route integration gap
+   - provider/config fragility
+   - environment/staging drift
+   - UI/backend truth mismatch
+4. A passing test shard is not closure on its own; the artefact chain still has to prove the current build.
+5. Public-paid planning should remain downstream of protected-beta closure, not compete with it.
+
+## Backlog Shape
+
+### Before Protected Beta Closure
+
+- current-build provider proof
+- staging truth and owner verification
+- current-build artefact sync
+- backend contract freeze
+
+### After Protected Beta Closure
+
+- broader provider economics decisions
+- public-paid resilience
+- launch polish and operator UX
 
 ### Later
 
+- wider modality expansion
+- deeper analytics
 - broader team workflows
-- extended media modalities
-- advanced sharing/community layers beyond V1 needs

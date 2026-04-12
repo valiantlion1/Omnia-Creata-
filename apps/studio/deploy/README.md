@@ -37,6 +37,7 @@ Prerequisite:
 - Docker Desktop or another compatible `docker` CLI must be installed
 - `start-studio-staging.ps1` now also checks the standard Docker Desktop install path on Windows and prepends that directory to the current process `PATH`, so a fresh Docker install does not look missing just because the shell or Docker credential helper path is stale
 - `start-studio-staging.ps1` and `verify-studio-staging.ps1` now also default to an external staging runtime root under `%LOCALAPPDATA%\OmniaCreata\Studio\staging`, which is bind-mounted into `/runtime` so deployment reports can round-trip back into owner health detail
+- those scripts now also generate an effective staging env file under that runtime root, hydrate placeholder secrets from host environment variables when available, and keep preflight, Docker, and verify aligned to the same env snapshot
 
 1. Copy `.env.staging.example` to `.env.staging`
 2. Fill in the real secrets
@@ -101,7 +102,7 @@ STAGING_VERIFY_BASE_URL=http://127.0.0.1:8080
 STAGING_RUNTIME_ROOT=C:\Users\<you>\AppData\Local\OmniaCreata\Studio\staging
 ```
 
-When an owner bearer token is present, the verify script now enforces the Sprint 8 closure gate by default. That means a staging run only counts as closure-ready when the resulting report says `closure_ready=true`.
+When an owner bearer token is present, the verify script now enforces the Protected Beta Hardening closure gate by default. That means a staging run only counts as closure-ready when the resulting report says `closure_ready=true`.
 
 If you want to enforce that gate explicitly from startup too, use:
 
@@ -110,19 +111,20 @@ powershell -ExecutionPolicy Bypass -File .\start-studio-staging.ps1 -OwnerBearer
 ```
 
 That verify step persists an external deployment verification report under the Studio runtime root, following the same non-repo operator-artifact discipline as local startup verification and runtime logs.
+It also mirrors the latest local startup verification and provider smoke reports into the staging runtime root before owner checks, so staging truth does not drift away from current-build local proof.
 
 If the verify step is run from the same runtime root that Studio is using, owner health detail can also surface that latest deployment verification report back through the launch-readiness view.
 That same owner detail now also exposes a single `launch_gate` object for operators, so protected-launch safety, blockers, warnings, and last verified build can be read without manually interpreting every readiness check.
 Protected staging verification prefers that explicit launch gate when it exists, so the closure decision matches the same truth surface humans read from owner health detail.
-If staging bring-up cannot even start because Docker is missing, the env file is missing, preflight fails, or compose fails, `start-studio-staging.ps1` now writes an external blocked report to `reports/protected-staging-verify-latest.json` so Sprint 8 keeps an honest environment blocker trail outside the repo too.
+If staging bring-up cannot even start because Docker is missing, the env file is missing, preflight fails, or compose fails, `start-studio-staging.ps1` now writes an external blocked report to `reports/protected-staging-verify-latest.json` so Protected Beta Hardening keeps an honest environment blocker trail outside the repo too.
 If `verify-studio-staging.ps1` cannot even begin cleanly because its env file is missing, or if `deployment_verify.py` cannot reach the deployed stack or owner health detail, that same external report is now overwritten with an explicit blocked verification record instead of leaving the failure only in terminal output.
 
-Sprint 8 closure expectation:
+Protected Beta Hardening closure expectation:
 - a passing local verify report is not enough on its own
 - protected staging should also be verified through `verify-studio-staging.ps1`
 - run that verify step with an owner bearer token whenever possible
 - the resulting report now carries `closure_ready`, `closure_summary`, and `closure_gaps`
-- Sprint 8 should only be treated as closed once protected staging verification reports `closure_ready=true`
+- Protected Beta Hardening should only be treated as closed once protected staging verification reports `closure_ready=true`
 
 ## Local always-on companion
 

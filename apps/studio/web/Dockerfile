@@ -9,6 +9,7 @@ RUN npm ci --ignore-scripts 2>/dev/null || npm install
 # Copy source
 COPY web/ ./
 COPY version.json ./version.json
+COPY version.json /version.json
 
 # Build for production
 ARG VITE_API_BASE_URL=https://api.omniacreata.com
@@ -20,21 +21,7 @@ FROM nginx:alpine AS production
 
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# SPA routing: serve index.html for all 404s
-RUN echo 'server { \
-  listen 80; \
-  server_name _; \
-  root /usr/share/nginx/html; \
-  index index.html; \
-  location / { \
-    try_files $uri $uri/ /index.html; \
-  } \
-  location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ { \
-    expires 1y; \
-    add_header Cache-Control "public, immutable"; \
-  } \
-}' > /etc/nginx/conf.d/default.conf
+COPY web/nginx.staging.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

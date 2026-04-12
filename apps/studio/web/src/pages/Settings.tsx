@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Sparkles,
   User,
-  Zap,
   Crown,
   Database,
   Users,
@@ -87,12 +86,12 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
-  const { auth, isAuthenticated, isLoading, isAuthSyncing, signOut } = useStudioAuth()
+  const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
   
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
 
-  const settingsQuery = useQuery({
+  useQuery({
     queryKey: ['settings-bootstrap'],
     queryFn: () => studioApi.getSettingsBootstrap(),
     enabled: isAuthenticated,
@@ -105,13 +104,22 @@ export default function SettingsPage() {
 
   const health = healthQuery.data as HealthResponse | undefined
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
-  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
   // GM Mode — completely invisible to regular users
   const isGM = Boolean(auth?.identity.owner_mode)
 
   if (isLoading) {
-    return <div className="px-6 py-12 text-sm text-zinc-500">Loading ecosystem...</div>
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative flex h-10 w-10 items-center justify-center">
+            <div className="absolute inset-0 animate-ping rounded-full bg-[rgb(var(--primary-light)/0.2)]" />
+            <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+          </div>
+          <p className="text-sm text-zinc-500">Loading your settings…</p>
+        </div>
+      </div>
+    )
   }
 
   const handleExport = async () => {
@@ -309,7 +317,7 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={HardDriveDownload}
                     title="Download Archive"
-                    description="Extract a compiled JSON package of your complete history, assets, and metadata limits."
+                    description="Export a full backup of your images, projects, and account history."
                     action={
                       <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                         Export Archive
@@ -331,7 +339,7 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={MonitorSmartphone}
                     title="Active Sessions"
-                    description="Remotely disconnect unrecognized web or app instances."
+                    description="View and sign out from other devices logged into your account."
                     action={<button className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.04] hover:text-white">Manage Devices</button>}
                   />
                 </SettingsCard>
@@ -364,13 +372,13 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={ShieldCheck}
                     title="Platform Oversight"
-                    description="Active clearance for all moderation backends."
+                    description="Content safety is active across your account."
                     action={<StatusPill tone="success" className="bg-emerald-500/10 text-emerald-400 ring-emerald-500/20">Active Clear</StatusPill>}
                   />
                   <SettingsRow 
                     icon={Database}
                     title="System Health"
-                    description="Core platform router and balancing logic."
+                    description="Check that all generation services are running normally."
                     action={
                       <button onClick={() => healthQuery.refetch()} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                         <RefreshCw className={`h-4 w-4 transition-transform duration-500 ${healthQuery.isFetching ? 'animate-spin' : 'group-hover:rotate-180'}`} /> Run Check
@@ -395,8 +403,8 @@ export default function SettingsPage() {
                                 {(!isHealthy && !isDegraded && !isDisabled) && <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-80 duration-700" />}
                               </div>
                               <div className="min-w-0 flex-1 relative z-10">
-                                <div className="text-[13px] font-bold capitalize text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{provider.name}</div>
-                                <div className="truncate text-[11px] font-medium text-zinc-500 mt-1 transition-colors duration-300 group-hover:text-zinc-400 uppercase tracking-widest">{provider.detail ?? provider.status.replace('_', ' ')}</div>
+                                <div className="text-[13px] font-bold capitalize text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{provider.name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</div>
+                                <div className="truncate text-[11px] font-medium text-zinc-500 mt-1 transition-colors duration-300 group-hover:text-zinc-400 uppercase tracking-widest">{provider.detail ?? provider.status.replace(/_/g, ' ')}</div>
                               </div>
                             </div>
                           )
@@ -410,9 +418,9 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-amber-500/60">Community Controls</h3>
                 <SettingsCard>
-                  <SettingsRow icon={Users} title="User Management" description="Query registered accounts and intervene securely." />
-                  <SettingsRow icon={BarChart3} title="Growth Analytics" description="Review macro statistics of volume and spend patterns." />
-                  <SettingsRow icon={Trash2} title="Purge Databases" description="Destroy test environments silently." danger />
+                  <SettingsRow icon={Users} title="User Management" description="View and manage registered accounts." />
+                  <SettingsRow icon={BarChart3} title="Growth Analytics" description="Track platform usage, growth, and spend." />
+                  <SettingsRow icon={Trash2} title="Clear Sandbox Data" description="Remove test environments and temporary data." danger />
                 </SettingsCard>
               </div>
 

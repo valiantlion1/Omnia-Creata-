@@ -6,6 +6,7 @@ import pytest
 from config.env import get_settings
 from studio_platform.llm import LLMResult, StudioLLMGateway
 from studio_platform.models import ChatAttachment, ChatMessage, ChatRole
+from studio_platform.services.launch_readiness import persist_provider_smoke_report
 
 
 def test_gemini_parts_include_inline_image_data():
@@ -635,3 +636,143 @@ async def test_improve_prompt_can_fall_back_to_openai_when_openrouter_is_unavail
         settings.chat_fallback_provider = original["chat_fallback_provider"]
         settings.openrouter_premium_model = original["openrouter_premium_model"]
         settings.openai_premium_model = original["openai_premium_model"]
+
+
+def test_routing_summary_hydrates_chat_provider_cooldown_from_current_build_smoke_report(
+    tmp_path,
+) -> None:
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_openrouter_api_key = settings.openrouter_api_key
+
+    try:
+        settings.studio_runtime_root = str(tmp_path / "runtime-root")
+        settings.openrouter_api_key = "openrouter-key"
+        persist_provider_smoke_report(
+            settings,
+            selected_provider="openrouter",
+            selected_surface="chat",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openrouter-chat-premium-smoke",
+                    "provider_name": "openrouter",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "error",
+                    "error_type": "HTTPStatusError",
+                    "error": "Client error '401 Unauthorized' for url 'https://openrouter.ai/api/v1/chat/completions'",
+                }
+            ],
+        )
+
+        summary = gateway.routing_summary()
+
+        assert summary["providers"]["openrouter"]["configured"] is True
+        assert summary["providers"]["openrouter"]["status"] == "cooldown"
+        assert summary["providers"]["openrouter"]["last_status_code"] == 401
+        assert summary["providers"]["openrouter"]["last_failure_reason"] == "smoke_report_error"
+        assert summary["providers"]["openrouter"]["cooldown_remaining_seconds"] > 0
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.openrouter_api_key = original_openrouter_api_key
+
+
+@pytest.mark.asyncio
+async def test_improve_prompt_skips_smoke_blocked_openrouter_and_uses_openai_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original = {
+        "studio_runtime_root": settings.studio_runtime_root,
+        "openrouter_api_key": settings.openrouter_api_key,
+        "openai_api_key": settings.openai_api_key,
+        "chat_primary_provider": settings.chat_primary_provider,
+        "chat_fallback_provider": settings.chat_fallback_provider,
+    }
+    calls: list[tuple[str, str]] = []
+
+    async def fake_openrouter(
+        *,
+        model: str,
+        system_prompt: str,
+        history,
+        current_message: str,
+        attachments,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> LLMResult | None:
+        del system_prompt, history, current_message, attachments, temperature, max_output_tokens
+        calls.append(("openrouter", model))
+        return LLMResult(
+            text="should not be used",
+            provider="openrouter",
+            model=model,
+        )
+
+    async def fake_openai(
+        *,
+        model: str,
+        system_prompt: str,
+        history,
+        current_message: str,
+        attachments,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> LLMResult | None:
+        del system_prompt, history, current_message, attachments, temperature, max_output_tokens
+        calls.append(("openai", model))
+        return LLMResult(
+            text="clean fallback direction",
+            provider="openai",
+            model=model,
+        )
+
+    try:
+        settings.studio_runtime_root = str(tmp_path / "runtime-root")
+        settings.openrouter_api_key = "openrouter-key"
+        settings.openai_api_key = "openai-key"
+        settings.chat_primary_provider = "openrouter"
+        settings.chat_fallback_provider = "openai"
+        persist_provider_smoke_report(
+            settings,
+            selected_provider="openrouter",
+            selected_surface="chat",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openrouter-chat-premium-smoke",
+                    "provider_name": "openrouter",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "error",
+                    "error_type": "HTTPStatusError",
+                    "error": "Client error '401 Unauthorized' for url 'https://openrouter.ai/api/v1/chat/completions'",
+                },
+                {
+                    "label": "openai-chat-premium-smoke",
+                    "provider_name": "openai",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                },
+            ],
+        )
+        monkeypatch.setattr(gateway, "_chat_with_openrouter", fake_openrouter)
+        monkeypatch.setattr(gateway, "_chat_with_openai", fake_openai)
+
+        result = await gateway.improve_prompt("cinematic portrait")
+
+        assert result is not None
+        assert result.provider == "openai"
+        assert calls == [("openai", settings.openai_model)]
+        assert gateway.routing_summary()["providers"]["openrouter"]["status"] == "cooldown"
+    finally:
+        settings.studio_runtime_root = original["studio_runtime_root"]
+        settings.openrouter_api_key = original["openrouter_api_key"]
+        settings.openai_api_key = original["openai_api_key"]
+        settings.chat_primary_provider = original["chat_primary_provider"]
+        settings.chat_fallback_provider = original["chat_fallback_provider"]

@@ -4,7 +4,7 @@ AI Image Generation Platform Backend with Multi-Provider Support
 
 ## Features
 
-- **Multi-Provider Architecture**: HuggingFace, Gemini, OpenRouter, and managed/cloud provider integration
+- **Multi-Provider Architecture**: multiple chat and image providers remain available, while protected-beta proof stays intentionally narrower than the full provider catalog
 - **Durable Metadata Store**: SQLite for local development and Postgres/Supabase for staging-production metadata
 - **Preset System**: Realistic, Anime, Ultra quality presets with keyword-based LoRA mapping
 - **Asset Management**: Local and cloud asset resolution with caching
@@ -178,6 +178,7 @@ Once running, visit:
   - `provider_smoke.summary`
   - `launch_readiness.status`
   - `launch_readiness.checks`
+  - `ai_control_plane`
 - Generation job lifecycle uses:
   - `queued`
   - `running`
@@ -186,6 +187,28 @@ Once running, visit:
   - `retryable_failed`
   - `cancelled`
   - `timed_out`
+
+### State Language
+
+Studio now uses two different state vocabularies on purpose:
+
+- signed-in/library-facing state contract:
+  - `queued`
+  - `running`
+  - `ready`
+  - `failed`
+  - `blocked`
+- internal generation-worker lifecycle:
+  - `queued`
+  - `running`
+  - `succeeded`
+  - `failed`
+  - `retryable_failed`
+  - `cancelled`
+  - `timed_out`
+
+The second list is richer because workers and recovery logic need more detail.
+The first list is the stable product-facing contract and should be the one that UI and product docs speak by default.
 
 ## API Endpoints
 
@@ -242,8 +265,12 @@ Studio no longer treats local ComfyUI as an active runtime lane.
 Current provider/runtime truth is controlled by environment variables such as:
 
 ```env
-CHAT_PRIMARY_PROVIDER=gemini
-CHAT_FALLBACK_PROVIDER=openrouter
+CHAT_PRIMARY_PROVIDER=openrouter
+CHAT_FALLBACK_PROVIDER=openai
+PROTECTED_BETA_CHAT_PROVIDER=openai
+PROTECTED_BETA_IMAGE_PROVIDER=openai
+OPENAI_IMAGE_DRAFT_MODEL=gpt-image-1-mini
+OPENAI_IMAGE_MODEL=gpt-image-1.5
 GENERATION_PROVIDER_STRATEGY=balanced
 ENABLE_POLLINATIONS=true
 FAL_API_KEY=

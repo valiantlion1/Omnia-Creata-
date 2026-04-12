@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-11
+Last updated: 2026-04-12
 
 ## Current baseline
 
@@ -9,11 +9,54 @@ Last updated: 2026-04-11
 - Login/signup currently support Google plus email/password only.
 - UI is intentionally in preservation mode unless explicitly requested.
 - Frontend is under active Antigravity work, so UI-side `type-check` / build status should be re-checked after each frontend merge wave.
-- Sprint 8 is complete; Sprint 9 is now active and focused on provider reliability plus economics truth.
+- Active backend/ops frame is now `Protected Beta Hardening`.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
 
 ## Recent stabilization wins
 
+- Hidden operator control-plane assembly is less tangled now: StudioService no longer hand-builds the full operator model catalog and surface matrix itself, which lowers one more backend god-object risk.
+- Studio contract truth is more modular now: product-facing state language and internal worker/job state language live in a dedicated contract catalog instead of piggybacking on provider-oriented code.
+- Owner health detail now exposes that richer `contract_freeze` payload too, so future debugging and AI-assisted orientation can read the canonical state vocabularies without re-deriving them from mixed docs and enums.
+- Studio now has a dedicated AI-friendly wiki handoff file, so another model or IDE assistant can get the right product, planning, and operator context without re-reading the whole repo or reviving stale sprint language.
+- Studio `AGENTS.md` now matches the real active frame again, which reduces one more source of plan confusion between code assistants, wiki readers, and operator docs.
+- Plan and operator language is cleaner now: backend docs clearly separate product-facing signed-in states from the richer internal worker lifecycle, which reduces a subtle but recurring source of contract confusion.
+- Wiki and operations guidance now explicitly send humans to owner health detail `ai_control_plane.surface_matrix` for the hidden `surface -> tier -> provider -> model` truth, instead of leaving that map half-implied across several notes.
+- Studio now has one operator-facing AI control-plane truth layer, so chat provider roles, image lanes, protected-beta selections, Studio model aliases, and route previews can be inspected from one owner health payload instead of being mentally stitched together from config plus code.
+- OpenAI image quote logic is model-aware again: draft `gpt-image-1-mini` lanes and final `gpt-image-1.5` lanes now carry different per-image costs, which removes a stale pricing drift from create/billing/operator reasoning.
+- Backend provider docs now match the actual protected-beta provider contract again, which reduces another easy-to-miss source of setup and launch confusion.
+- Protected-beta closure truth no longer self-deadlocks when staging verification itself passes with warnings; deployment verification warnings can now remain advisory without making the selected beta lane proof look falsely not-ready.
+- Regression coverage now locks that distinction too, so a real missing deployment report still blocks protected beta while a current owner-checked warning report does not masquerade as a hard closure mismatch.
+- The protected-beta operator loop is cleaner now: staging helper scripts understand ordered PowerShell dictionaries, so first-run bring-up no longer fails before preflight due to a shell type mismatch.
+- Staging secret hydration is more practical too: when host environment variables are missing, the effective staging env can now reuse real Studio secrets from the existing repo-level `.env` files instead of stopping at placeholder examples.
+- Current-build provider smoke is now refreshed against the selected OpenAI protected-beta lanes only, which keeps launch truth focused on the lane we actually plan to ship instead of mixing known-broken backup providers back into the closure signal.
+- Runtime and deployment blocker text now use `Protected Beta Hardening` language instead of stale sprint labels, so operator output, wiki guidance, and closure expectations no longer contradict each other.
+- Protected-beta launch truth is narrower and more professional now: only the explicitly selected protected-beta chat and image providers count as launch-grade proof, while other managed providers remain visible as backups instead of silently inflating closure confidence.
+- Launch-readiness now treats OpenAI draft image proof as enough for the protected-beta default lane unless final-lane proof is explicitly required, which matches the current owner-QA-only premium image policy instead of forcing public-paid assumptions into beta closure.
+- Deployment preflight now validates the selected protected-beta lanes directly and treats obvious placeholder secrets as missing, so staging cannot look launch-shaped just because an example env file happened to contain non-empty fake values.
+- Protected staging operator scripts now generate one effective env file under the external staging runtime root, hydrate placeholder secrets from host environment variables when available, and keep preflight, Docker compose, and verification aligned to that same env snapshot.
+- Protected staging verify now mirrors the latest local `provider-smoke-latest.json` into the staging runtime root before owner checks, which closes one more current-build truth drift between local proof and staging owner detail.
+- Closure discipline is now repeatable through `apps/studio/ops/verify-protected-beta.ps1`, which runs the backend shards plus compile/frontend safety checks without relying on one monolithic timeout-prone suite.
+- The repo README and wiki now speak the same language as current backend/operator truth: `Protected Beta Hardening` is the active frame, and the ordering is `contract -> truth sync -> provider proof -> closure` instead of stale “Sprint 8 active” wording.
+- Owner-only health/detail routes now trust the same privileged identity truth that Studio derives during identity bootstrap, so founder/owner emails are no longer blocked just because an older JWT arrived without `owner_mode` already set in token metadata.
+- Router regressions now lock that owner-bootstrap path, which matters for protected-staging closure because demo/login or freshly-minted local tokens can now round-trip into owner verification without a misleading `403`.
+- Protected staging rehearsal now gets through the actual Postgres metadata boot path; `DATABASE_URL` values wrapped in `SecretStr` are unwrapped before reaching the Postgres store, so staging no longer dies on a `.strip()` crash that local sqlite development could never reveal.
+- Staging env drift is harder to miss now: deployment preflight explicitly checks that `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` match the credentials encoded in `DATABASE_URL`, and the local protected-staging env has been pinned to one coherent Postgres service contract.
+- Protected staging web delivery is finally same-origin truthful too: the nginx image now proxies `/api/*` and `/v1/*` to backend, so deployment verification can read build and health JSON from `127.0.0.1:8080` instead of accidentally receiving the SPA shell for API routes.
+- Protected staging no longer crashes just because `DATABASE_URL` arrived as a Pydantic `SecretStr`; the Postgres metadata store builder now unwraps the DSN through the canonical secret helper before the staging backend or worker tries to `.strip()` it.
+- Store regression coverage now locks that SecretStr-safe Postgres builder path, which matters because local sqlite development would otherwise keep hiding the exact failure class that only appears during protected-staging bring-up.
+- Owner readiness truth no longer gets stranded on an old local deployment report when a fresh protected-staging verify run exists under the staging runtime root; deployment report loading now prefers the newest valid sibling staging artefact too.
+- Regression coverage now locks that deployment-report root preference, which reduces another source of current-build truth drift during protected-beta rehearsal.
+- Old or remote Supabase-backed assets no longer turn signed-in delivery paths into raw backend `500`s; content, preview, thumbnail, blocked-preview, clean-export, permanent-delete, and empty-trash routes now surface a controlled `asset storage unavailable` response instead of throwing unhandled storage exceptions.
+- Route-level regressions now also cover storage-unavailable asset delivery and delete flows, so stale remote storage auth no longer hides outside the normal protected-beta contract suite.
+- Signed-in route contracts are harder to accidentally break now: core shell routes self-bootstrap identity state instead of assuming `/auth/me` already ran, which reduces direct-route and refresh-path crashes during local protected-beta rehearsal.
+- Route-level regressions now explicitly cover `/v1/auth/me`, `/v1/assets`, `/v1/projects`, `/v1/settings/bootstrap`, and `/v1/healthz/detail`, so contract drift in the signed-in shell is less likely to hide behind passing lower-level tests.
+- Owner readiness truth is more actionable now: chat-provider economics include per-provider comparison rows, and launch-readiness also exposes a built-in low-cost operator smoke checklist for signed-in and private-asset happy paths.
+- Studio library entitlement resolution is hardened again; a clean-export flag typo can no longer crash `/v1/assets` and hide ready images behind stale failure cards.
+- Signed-in library truth is more product-safe now: My Images and Projects prefer protected preview delivery, recover more gracefully when a thumbnail is missing, and keep blocked assets visually locked instead of presenting them like ordinary openable renders.
+- User-facing library language is cleaner too: `Projects` is now the primary signed-in product term, project menus expose the intended high-signal actions, and project export is wired directly into the refreshed project and library surfaces.
+- Styles is no longer a static visual placeholder; it now has real catalog apply flows, saved styles, favorites, and a visible Prompt Memory card that turns the backend learning profile into an understandable signed-in product surface.
+- Create and Project now connect back into that style system more directly, so prompt-to-style saving and style reuse flows are available without leaking backend/provider jargon into the UI.
+- Frontend type-check is green again after the library/style refactor, and backend regression coverage now explicitly locks draft-project hiding, protected asset serialization, styles, and prompt memory behavior into tests.
 - Local frontend runtime is materially lighter now: development runs no longer pay React StrictMode double-mount cost, which reduces unnecessary CPU/RAM churn while we are still iterating locally.
 - The Studio shell also front-loads less code now because PostHog and low-frequency utility overlays are lazy-loaded instead of being hard-bundled into the main entry path.
 - Create and Chat background activity are calmer too: polling waits longer, pauses when the tab is hidden, and cache invalidation now happens in parallel instead of serial bursts.
@@ -325,6 +368,7 @@ Last updated: 2026-04-11
 - The repo wiki should now be treated as the strategic memory layer; if product direction, planning rules, or architecture boundaries change, update `docs/wiki` instead of leaving that knowledge only in chat history.
 - Shell route aliases must stay aligned with router gating too; if the UI advertises `/billing` or `/plan` as Subscription aliases, guest and signed-in navigation should resolve to Subscription rather than falling through login confusion or wildcard redirects.
 - Sprint 9 generation surfaces should expose estimate provenance, not only estimate numbers; if Billing, Create, Project, or Library show a USD estimate, users should be able to tell whether it came from a live provider quote or the legacy catalog fallback.
+- Current-build provider smoke is now part of live chat routing truth too; if the latest smoke on the current build already shows a premium chat lane returning hard auth/config errors, the gateway should seed that lane into cooldown before the next user request retries it.
 - Private Studio library/history should not hide a user's own legacy demo-generated renders; keep strict provider-truth filtering on public/showcase/share surfaces, but let owned archive surfaces remain complete.
 - Local development free-plan image routing should prefer a healthy managed lane when one is configured; do not strand everyday Create testing on expired HuggingFace credentials or broken Pollinations responses when OpenAI is already available.
 - Local launcher scripts should hydrate provider secrets from the Windows user environment into the spawned process environment; storing a key in User env is not enough if restart flows only inherit the stale shell state.

@@ -15,6 +15,7 @@ _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "chat_provider_lane",
     "image_provider_lane",
     "provider_economics",
+    "deployment_verification",
 }
 
 _CHAT_LAUNCH_GRADE_PROVIDERS = frozenset({"gemini", "openrouter", "openai"})
@@ -25,6 +26,36 @@ _LOCAL_ALPHA_REQUIRED_KEYS = frozenset(
     {"auth_configuration", "data_authority", "runtime_topology", "startup_verification"}
 )
 _LOCAL_ALPHA_WARNING_KEYS = frozenset({"external_logs"})
+
+
+def _protected_beta_chat_provider(settings: Settings) -> str:
+    value = str(getattr(settings, "protected_beta_chat_provider", "openai") or "").strip().lower()
+    if value in _CHAT_LAUNCH_GRADE_PROVIDERS:
+        return value
+    return "openai"
+
+
+def _protected_beta_image_provider(settings: Settings) -> str:
+    value = str(getattr(settings, "protected_beta_image_provider", "openai") or "").strip().lower()
+    if value in _IMAGE_LAUNCH_GRADE_PROVIDERS:
+        return value
+    return "openai"
+
+
+def _protected_beta_requires_final_image_lane(settings: Settings) -> bool:
+    return bool(getattr(settings, "protected_beta_image_require_final_lane", False))
+
+
+def _warning_counts_for_protected_launch(check: dict[str, str]) -> bool:
+    key = str(check.get("key") or "").strip()
+    if key in _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS and key != "deployment_verification":
+        return True
+    if key != "deployment_verification":
+        return False
+
+    summary = str(check.get("summary") or "").strip().lower()
+    detail = str(check.get("detail") or "").strip().lower()
+    return "passed with warnings" in summary or "passed with warnings" in detail
 
 
 def provider_smoke_report_path(settings: Settings) -> Path:
@@ -298,10 +329,13 @@ def build_runtime_log_snapshot(settings: Settings) -> dict[str, Any]:
                 entry["modified_at"] = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
                 existing_files.append(name)
         files[name] = entry
+    outside_repo = _is_outside_repo(log_directory, repo_root=repo_root)
+    if not outside_repo:
+        outside_repo = _looks_like_external_runtime_mount(settings=settings, path=log_directory, repo_root=repo_root)
     return {
         "directory": str(log_directory.resolve()),
         "exists": log_directory.exists(),
-        "outside_repo": _is_outside_repo(log_directory, repo_root=repo_root),
+        "outside_repo": outside_repo,
         "existing_count": len(existing_files),
         "existing_files": existing_files,
         "files": files,
@@ -320,6 +354,7 @@ def build_launch_readiness_report(
     startup_verification_report: dict[str, Any] | None,
     deployment_verification_report: dict[str, Any] | None,
     runtime_logs: dict[str, Any] | None,
+    cost_telemetry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
 
@@ -433,6 +468,7 @@ def build_launch_readiness_report(
         provider_status=provider_status,
         chat_routing=chat_routing,
         provider_smoke_report=provider_smoke_report,
+        cost_telemetry=cost_telemetry,
     )
     chat_provider_check = provider_truth["chat"]
     add_check(
@@ -563,6 +599,7 @@ def build_launch_readiness_report(
         "provider_truth": provider_truth,
         "platform_readiness": platform_readiness,
         "truth_sync": truth_sync,
+        "operator_checklists": _build_operator_checklists(),
     }
 
 
@@ -647,12 +684,15 @@ def _build_provider_truth_report(
     provider_status: list[dict[str, Any]],
     chat_routing: dict[str, Any],
     provider_smoke_report: dict[str, Any] | None,
+    cost_telemetry: dict[str, Any] | None,
 ) -> dict[str, Any]:
     smoke_lookup = _build_provider_smoke_lookup(provider_smoke_report)
+    provider_spend_lookup = _build_provider_spend_lookup(cost_telemetry)
     chat_truth = _build_chat_provider_truth(
         settings=settings,
         chat_routing=chat_routing,
         smoke_lookup=smoke_lookup,
+        provider_spend_lookup=provider_spend_lookup,
     )
     image_truth = _build_image_provider_truth(
         settings=settings,
@@ -705,6 +745,7 @@ def _build_provider_truth_report(
             "chat_resilience_status": chat_truth["resilience_status"],
             "image_resilience_status": image_truth["resilience_status"],
             "resilience_warnings": resilience_warnings,
+            "chat_provider_comparison": chat_truth["comparison"],
         },
         "chat": chat_truth,
         "image": image_truth,
@@ -825,6 +866,26 @@ def _smoke_lane_verified_for_current_build(smoke: dict[str, Any] | None, *, lane
     return lane_ok.get(normalized_lane) is True
 
 
+def _build_provider_spend_lookup(cost_telemetry: dict[str, Any] | None) -> dict[str, float]:
+    if not isinstance(cost_telemetry, dict):
+        return {}
+    providers = cost_telemetry.get("providers")
+    if not isinstance(providers, list):
+        return {}
+    lookup: dict[str, float] = {}
+    for item in providers:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip().lower()
+        if not provider:
+            continue
+        try:
+            lookup[provider] = float(item.get("total_spend_usd") or 0.0)
+        except (TypeError, ValueError):
+            lookup[provider] = 0.0
+    return lookup
+
+
 def _serialize_chat_provider_state(
     *,
     settings: Settings,
@@ -881,6 +942,7 @@ def _build_chat_provider_truth(
     settings: Settings,
     chat_routing: dict[str, Any],
     smoke_lookup: dict[tuple[str, str], dict[str, Any]],
+    provider_spend_lookup: dict[str, float],
 ) -> dict[str, Any]:
     providers_payload = chat_routing.get("providers") if isinstance(chat_routing, dict) else None
     primary_provider = str(chat_routing.get("primary_provider") or "").strip().lower()
@@ -965,6 +1027,17 @@ def _build_chat_provider_truth(
         resilience_status = "blocked"
         resilience_summary = "Premium chat does not yet have any configured paid launch-grade lane redundancy."
 
+    comparison = [
+        _build_chat_provider_comparison_entry(
+            settings=settings,
+            provider_state=item,
+            primary_provider=primary_provider,
+            fallback_provider=fallback_provider,
+            recent_spend_usd=provider_spend_lookup.get(str(item.get("provider") or "").strip().lower(), 0.0),
+        )
+        for item in provider_states
+    ]
+
     return {
         "status": status,
         "summary": summary,
@@ -986,13 +1059,101 @@ def _build_chat_provider_truth(
         "economics_summary": economics_summary,
         "resilience_status": resilience_status,
         "resilience_summary": resilience_summary,
+        "comparison": comparison,
         "providers": provider_states,
     }
 
 
-def _image_lane_class(provider: str) -> str:
-    if provider in _IMAGE_LAUNCH_GRADE_PROVIDERS:
+def _build_chat_provider_comparison_entry(
+    *,
+    settings: Settings,
+    provider_state: dict[str, Any],
+    primary_provider: str,
+    fallback_provider: str,
+    recent_spend_usd: float,
+) -> dict[str, Any]:
+    provider_name = str(provider_state.get("provider") or "").strip().lower()
+    current_status = str(provider_state.get("status") or "unknown").strip().lower() or "unknown"
+    smoke = provider_state.get("smoke") if isinstance(provider_state.get("smoke"), dict) else None
+    smoke_status = "verified" if _smoke_verified_for_current_build(smoke) else "error" if _smoke_has_current_build_error(smoke) else "unverified"
+    configured = provider_state.get("configured") is True
+    recent_failure = provider_state.get("recent_failure_state") if isinstance(provider_state.get("recent_failure_state"), dict) else {}
+    risk_flags: list[str] = []
+    if not configured:
+        risk_flags.append("not_configured")
+    if current_status == "cooldown":
+        risk_flags.append("cooldown")
+    if _smoke_has_current_build_error(smoke):
+        risk_flags.append("current_build_smoke_error")
+    if configured and provider_state.get("healthy_for_launch") is not True:
+        risk_flags.append("launch_unhealthy")
+    last_status_code = recent_failure.get("last_status_code")
+    if last_status_code in {401, 403}:
+        risk_flags.append("auth_fragile")
+
+    if provider_name == primary_provider:
+        routing_role = "primary"
+        fallback_behavior = (
+            f"Falls back to {fallback_provider} when the primary lane cools down."
+            if fallback_provider
+            else "No configured fallback lane."
+        )
+    elif provider_name == fallback_provider:
+        routing_role = "fallback"
+        fallback_behavior = f"Receives traffic when {primary_provider or 'the primary lane'} is unavailable."
+    else:
+        routing_role = "standby"
+        fallback_behavior = "Not part of the default runtime route today."
+
+    if "auth_fragile" in risk_flags or "current_build_smoke_error" in risk_flags:
+        risk_profile = "high"
+    elif "cooldown" in risk_flags or "launch_unhealthy" in risk_flags:
+        risk_profile = "medium"
+    elif configured:
+        risk_profile = "low"
+    else:
+        risk_profile = "unknown"
+
+    return {
+        "provider": provider_name,
+        "routing_role": routing_role,
+        "service_tier": provider_state.get("service_tier"),
+        "default_model": _chat_provider_default_model(settings=settings, provider=provider_name),
+        "premium_model": _chat_provider_premium_model(settings=settings, provider=provider_name),
+        "configured": configured,
+        "launch_grade": provider_state.get("launch_grade") is True,
+        "healthy_for_launch": provider_state.get("healthy_for_launch") is True,
+        "current_status": current_status,
+        "smoke_status": smoke_status,
+        "estimated_request_cost_class": (
+            "paid_variable"
+            if _chat_provider_service_tier(settings=settings, provider=provider_name) == "paid"
+            else "free_or_included"
+        ),
+        "quality_profile": _chat_model_quality_profile(
+            _chat_provider_default_model(settings=settings, provider=provider_name)
+        ),
+        "recent_spend_usd": round(recent_spend_usd, 6),
+        "risk_profile": risk_profile,
+        "risk_flags": risk_flags,
+        "fallback_behavior": fallback_behavior,
+        "last_failure_reason": recent_failure.get("last_failure_reason"),
+        "last_status_code": last_status_code,
+    }
+
+
+def _image_provider_counts_as_launch_grade(*, settings: Settings, provider: str) -> bool:
+    normalized = provider.strip().lower()
+    if normalized not in _IMAGE_LAUNCH_GRADE_PROVIDERS:
+        return False
+    return normalized == _protected_beta_image_provider(settings)
+
+
+def _image_lane_class(*, settings: Settings, provider: str) -> str:
+    if _image_provider_counts_as_launch_grade(settings=settings, provider=provider):
         return "launch_grade"
+    if provider in _IMAGE_LAUNCH_GRADE_PROVIDERS:
+        return "managed_backup"
     if provider in _IMAGE_FALLBACK_ONLY_PROVIDERS:
         return "fallback_only"
     return "degraded_only"
@@ -1030,24 +1191,50 @@ def _build_image_provider_truth(
     }
 
     launch_grade_states = [
-        _serialize_image_provider_state(provider_map.get(name), provider=name, smoke_lookup=smoke_lookup)
+        _serialize_image_provider_state(
+            provider_map.get(name),
+            provider=name,
+            smoke_lookup=smoke_lookup,
+            settings=settings,
+        )
         for name in ("openai", "fal", "runware")
     ]
     fallback_states = [
-        _serialize_image_provider_state(provider_map.get(name), provider=name, smoke_lookup=smoke_lookup)
+        _serialize_image_provider_state(
+            provider_map.get(name),
+            provider=name,
+            smoke_lookup=smoke_lookup,
+            settings=settings,
+        )
         for name in ("huggingface", "pollinations")
     ]
     degraded_states = [
-        _serialize_image_provider_state(provider_map.get(name), provider=name, smoke_lookup=smoke_lookup)
+        _serialize_image_provider_state(
+            provider_map.get(name),
+            provider=name,
+            smoke_lookup=smoke_lookup,
+            settings=settings,
+        )
         for name in ("demo",)
     ]
 
-    configured_launch_grade = [item for item in launch_grade_states if item["configured"]]
-    healthy_launch_grade = [item for item in configured_launch_grade if item["healthy_for_launch"] is True]
+    selected_launch_grade = [
+        item for item in launch_grade_states if item["configured"] and item["launch_grade"] is True
+    ]
+    healthy_launch_grade = [item for item in selected_launch_grade if item["healthy_for_launch"] is True]
     unverified_runtime_healthy = [
         item
-        for item in configured_launch_grade
+        for item in selected_launch_grade
         if item["runtime_available"] is True and item["smoke_verified_for_current_build"] is not True
+    ]
+    managed_backup_states = [
+        item for item in launch_grade_states if item.get("lane_class") == "managed_backup"
+    ]
+    configured_managed_backups = [item for item in managed_backup_states if item["configured"]]
+    healthy_managed_backups = [
+        item
+        for item in configured_managed_backups
+        if item["runtime_available"] is True and item["smoke_verified_for_current_build"] is True
     ]
     configured_fallback = [item for item in fallback_states if item["configured"]]
     configured_degraded = [item for item in degraded_states if item["configured"]]
@@ -1067,22 +1254,30 @@ def _build_image_provider_truth(
             detail_groups.append(f"{label}: {', '.join(active_items)}")
     detail = " | ".join(detail_groups) or "no image provider is configured"
 
+    selected_provider = _protected_beta_image_provider(settings)
     if healthy_launch_grade:
         status = "pass"
-        summary = "Image generation has a healthy launch-grade billable lane."
+        summary = "Image generation has a healthy protected-beta billable lane."
     elif unverified_runtime_healthy:
         status = "blocked"
-        summary = "Launch-grade image lanes exist, but the current build has not proven them through live smoke yet."
-    elif configured_launch_grade:
+        summary = (
+            "The selected protected-beta image lane exists, but the current build has not proven it through live smoke yet."
+        )
+    elif selected_launch_grade:
         status = "blocked"
-        summary = "Launch-grade image providers are configured, but none are currently healthy."
+        summary = "The selected protected-beta image provider is configured, but it is not currently healthy."
     else:
         status = "blocked"
-        summary = "Image generation does not currently have a launch-grade billable lane."
+        summary = "Image generation does not currently have a protected-beta billable lane."
 
-    if configured_launch_grade:
+    if healthy_launch_grade and healthy_managed_backups:
         economics_status = "pass"
         economics_summary = ""
+    elif healthy_launch_grade:
+        economics_status = "warning"
+        economics_summary = (
+            "The selected protected-beta image lane is healthy, but broader paid rollout still lacks a proven managed backup lane."
+        )
     elif configured_fallback or configured_degraded:
         economics_status = "warning"
         economics_summary = (
@@ -1092,29 +1287,32 @@ def _build_image_provider_truth(
         economics_status = "warning"
         economics_summary = "No launch-grade billable image provider is configured for public paid usage."
 
-    if len(configured_launch_grade) >= 2:
+    if healthy_launch_grade and healthy_managed_backups:
         resilience_status = "pass"
-        resilience_summary = "Image generation has more than one configured launch-grade billable lane."
-    elif configured_launch_grade:
+        resilience_summary = "Image generation has a proven protected-beta lane and at least one proven managed backup lane."
+    elif healthy_launch_grade or selected_launch_grade:
         resilience_status = "warning"
-        resilience_summary = "Image generation currently relies on a single configured launch-grade billable lane."
+        resilience_summary = "Image generation currently relies on a single selected protected-beta lane."
     else:
         resilience_status = "blocked"
-        resilience_summary = "Image generation does not yet have launch-grade billable lane redundancy."
+        resilience_summary = "Image generation does not yet have a protected-beta billable lane."
 
     return {
         "status": status,
         "summary": summary,
         "detail": detail,
         "launch_grade_ready": bool(healthy_launch_grade),
-        "public_paid_usage_ready": bool(healthy_launch_grade),
-        "configured_launch_grade_provider_count": len(configured_launch_grade),
+        "public_paid_usage_ready": bool(healthy_launch_grade and healthy_managed_backups),
+        "selected_provider": selected_provider,
+        "configured_launch_grade_provider_count": len(selected_launch_grade),
         "healthy_launch_grade_provider_count": len(healthy_launch_grade),
-        "configured_launch_grade_providers": [item["provider"] for item in configured_launch_grade],
+        "configured_launch_grade_providers": [item["provider"] for item in selected_launch_grade],
         "healthy_launch_grade_providers": [item["provider"] for item in healthy_launch_grade],
+        "configured_managed_backup_providers": [item["provider"] for item in configured_managed_backups],
+        "healthy_managed_backup_providers": [item["provider"] for item in healthy_managed_backups],
         "fallback_only_providers": [item["provider"] for item in configured_fallback],
         "degraded_only_providers": [item["provider"] for item in configured_degraded],
-        "cost_class": "managed_image_variable" if configured_launch_grade else "fallback_only_or_missing",
+        "cost_class": "managed_image_variable" if selected_launch_grade else "fallback_only_or_missing",
         "economics_status": economics_status,
         "economics_summary": economics_summary,
         "resilience_status": resilience_status,
@@ -1134,18 +1332,25 @@ def _build_image_lane_truth(
         for item in launch_grade_states
         if isinstance(item, dict)
     }
+    selected_provider = _protected_beta_image_provider(settings)
+    selected_state = provider_map.get(selected_provider, {})
     openai_state = provider_map.get("openai", {})
     openai_smoke = openai_state.get("smoke") if isinstance(openai_state, dict) else None
     openai_configured = bool(openai_state.get("configured"))
     openai_runtime_available = bool(openai_state.get("runtime_available"))
+    selected_configured = bool(selected_state.get("configured"))
+    selected_runtime_available = bool(selected_state.get("runtime_available"))
+    selected_smoke_verified = bool(selected_state.get("smoke_verified_for_current_build"))
     draft_model = str(settings.openai_image_draft_model or "gpt-image-1-mini").strip() or "gpt-image-1-mini"
     final_model = str(settings.openai_image_model or "gpt-image-1.5").strip() or "gpt-image-1.5"
     draft_verified = _smoke_lane_verified_for_current_build(openai_smoke, lane="draft")
     final_verified = _smoke_lane_verified_for_current_build(openai_smoke, lane="final")
+    require_final_lane = _protected_beta_requires_final_image_lane(settings)
 
     secondary_states = [
         provider_map.get(name, {"provider": name, "configured": False, "healthy_for_launch": False})
-        for name in ("fal", "runware")
+        for name in ("openai", "fal", "runware")
+        if name != selected_provider
     ]
     configured_secondary = [
         str(item.get("provider") or "").strip().lower()
@@ -1155,30 +1360,44 @@ def _build_image_lane_truth(
     healthy_secondary = [
         str(item.get("provider") or "").strip().lower()
         for item in secondary_states
-        if item.get("healthy_for_launch") is True
+        if item.get("runtime_available") is True and item.get("smoke_verified_for_current_build") is True
     ]
 
-    if openai_configured and draft_verified and final_verified and healthy_secondary:
+    if selected_provider == "openai":
+        if openai_configured and draft_verified and (final_verified or not require_final_lane):
+            status = "pass"
+            if final_verified:
+                summary = "OpenAI draft and owner-QA final image lanes are proven on the current build."
+            else:
+                summary = "OpenAI draft image lane is proven for protected beta; owner-QA final proof remains optional."
+        elif openai_configured and (draft_verified or final_verified):
+            status = "warning"
+            summary = "OpenAI image lanes are only partially proven on the current build."
+        elif openai_configured and openai_runtime_available:
+            status = "warning"
+            summary = "OpenAI image lanes are configured, but current-build smoke has not proven the protected-beta draft lane yet."
+        elif openai_configured:
+            status = "warning"
+            summary = "OpenAI image lane is configured but not currently healthy enough to prove the protected-beta route."
+        else:
+            status = "warning"
+            summary = "OpenAI protected-beta image lane is not configured yet."
+    elif selected_configured and selected_runtime_available and selected_smoke_verified:
         status = "pass"
-        summary = "OpenAI draft/final lanes and a secondary image lane are proven on the current build."
-    elif openai_configured and draft_verified and final_verified:
+        summary = f"{selected_provider} is proven as the selected protected-beta image lane on the current build."
+    elif selected_configured and selected_runtime_available:
         status = "warning"
-        summary = "OpenAI draft/final image lanes are proven, but no secondary launch-grade image lane is healthy yet."
-    elif openai_configured and (draft_verified or final_verified):
+        summary = f"{selected_provider} is configured, but current-build smoke has not proven it as the protected-beta image lane yet."
+    elif selected_configured:
         status = "warning"
-        summary = "OpenAI image lanes are only partially proven on the current build."
-    elif openai_configured and openai_runtime_available:
-        status = "warning"
-        summary = "OpenAI image lanes are configured, but current-build smoke has not proven both draft and final lanes yet."
-    elif openai_configured:
-        status = "warning"
-        summary = "OpenAI image lane is configured but not currently healthy enough to prove draft/final routing."
+        summary = f"{selected_provider} is configured but not currently healthy enough to prove the protected-beta image route."
     else:
         status = "warning"
-        summary = "OpenAI draft/final image ladder is not configured yet."
+        summary = f"{selected_provider} is not configured as the protected-beta image lane."
 
     details: list[str] = []
-    if openai_configured:
+    details.append(f"selected provider={selected_provider}")
+    if selected_provider == "openai" and openai_configured:
         details.append(
             "OpenAI draft="
             + ("verified" if draft_verified else "unproven")
@@ -1189,8 +1408,15 @@ def _build_image_lane_truth(
             + ("verified" if final_verified else "unproven")
             + f" ({final_model})"
         )
-    else:
+        if not final_verified and not require_final_lane:
+            details.append("owner-QA final lane remains optional for protected beta")
+    elif selected_provider == "openai":
         details.append("OpenAI draft/final lanes are not configured")
+    else:
+        details.append(
+            f"{selected_provider} smoke="
+            + ("verified" if selected_smoke_verified else "unproven")
+        )
 
     if healthy_secondary:
         details.append("secondary healthy=" + ", ".join(healthy_secondary))
@@ -1203,19 +1429,26 @@ def _build_image_lane_truth(
         "status": status,
         "summary": summary,
         "detail": " | ".join(details),
+        "selected_provider": selected_provider,
+        "selected_lane": {
+            "provider": selected_provider if selected_configured else None,
+            "configured": selected_configured,
+            "runtime_available": selected_runtime_available,
+            "smoke_verified_for_current_build": selected_smoke_verified,
+        },
         "draft_lane": {
-            "provider": "openai" if openai_configured else None,
+            "provider": "openai" if selected_provider == "openai" and openai_configured else None,
             "model": draft_model,
-            "configured": openai_configured,
-            "runtime_available": openai_runtime_available,
-            "smoke_verified_for_current_build": draft_verified,
+            "configured": selected_provider == "openai" and openai_configured,
+            "runtime_available": selected_provider == "openai" and openai_runtime_available,
+            "smoke_verified_for_current_build": selected_provider == "openai" and draft_verified,
         },
         "final_lane": {
-            "provider": "openai" if openai_configured else None,
+            "provider": "openai" if selected_provider == "openai" and openai_configured else None,
             "model": final_model,
-            "configured": openai_configured,
-            "runtime_available": openai_runtime_available,
-            "smoke_verified_for_current_build": final_verified,
+            "configured": selected_provider == "openai" and openai_configured,
+            "runtime_available": selected_provider == "openai" and openai_runtime_available,
+            "smoke_verified_for_current_build": selected_provider == "openai" and final_verified,
         },
         "secondary_launch_grade_providers": secondary_states,
         "healthy_secondary_launch_grade_providers": healthy_secondary,
@@ -1227,20 +1460,26 @@ def _serialize_image_provider_state(
     *,
     provider: str,
     smoke_lookup: dict[tuple[str, str], dict[str, Any]],
+    settings: Settings,
 ) -> dict[str, Any]:
+    launch_grade = _image_provider_counts_as_launch_grade(settings=settings, provider=provider)
     if not isinstance(payload, dict):
         smoke = _smoke_state_for_provider(smoke_lookup=smoke_lookup, surface="image", provider=provider)
         return {
             "provider": provider,
-            "lane_class": _image_lane_class(provider),
-            "launch_grade": provider in _IMAGE_LAUNCH_GRADE_PROVIDERS,
+            "lane_class": _image_lane_class(settings=settings, provider=provider),
+            "launch_grade": launch_grade,
             "credential_present": False,
             "configured": False,
             "status": "not_configured",
             "detail": f"{provider}:not_configured",
             "runtime_available": False,
             "healthy_for_launch": False,
-            "launch_classification": "blocked" if provider in _IMAGE_LAUNCH_GRADE_PROVIDERS else "pass",
+            "launch_classification": _classify_launch_provider_state(
+                configured=False,
+                runtime_available=False,
+                launch_grade=launch_grade,
+            ),
             "circuit_breaker": {
                 "state": "closed",
                 "consecutive_failures": 0,
@@ -1269,18 +1508,18 @@ def _serialize_image_provider_state(
     healthy_for_launch = (
         configured
         and runtime_available
-        and provider in _IMAGE_LAUNCH_GRADE_PROVIDERS
+        and launch_grade
         and smoke_verified_for_current_build
     )
     launch_classification = _classify_launch_provider_state(
         configured=configured,
         runtime_available=healthy_for_launch,
-        launch_grade=provider in _IMAGE_LAUNCH_GRADE_PROVIDERS,
+        launch_grade=launch_grade,
     )
     return {
         "provider": provider,
-        "lane_class": _image_lane_class(provider),
-        "launch_grade": provider in _IMAGE_LAUNCH_GRADE_PROVIDERS,
+        "lane_class": _image_lane_class(settings=settings, provider=provider),
+        "launch_grade": launch_grade,
         "credential_present": configured,
         "configured": configured,
         "status": status,
@@ -1316,6 +1555,39 @@ def _chat_provider_is_configured(*, settings: Settings, provider: str) -> bool:
     return False
 
 
+def _chat_provider_default_model(*, settings: Settings, provider: str) -> str | None:
+    normalized = provider.strip().lower()
+    if normalized == "gemini":
+        return str(settings.gemini_model or "").strip() or None
+    if normalized == "openrouter":
+        return str(settings.openrouter_model or "").strip() or None
+    if normalized == "openai":
+        return str(settings.openai_model or "").strip() or None
+    return None
+
+
+def _chat_provider_premium_model(*, settings: Settings, provider: str) -> str | None:
+    normalized = provider.strip().lower()
+    if normalized == "gemini":
+        return str(settings.gemini_premium_model or "").strip() or None
+    if normalized == "openrouter":
+        return str(settings.openrouter_premium_model or "").strip() or None
+    if normalized == "openai":
+        return str(settings.openai_premium_model or "").strip() or None
+    return None
+
+
+def _chat_model_quality_profile(model: str | None) -> str:
+    normalized = str(model or "").strip().lower()
+    if not normalized:
+        return "unknown"
+    if "flash" in normalized or "mini" in normalized:
+        return "latency_optimized"
+    if "pro" in normalized or "gpt-5" in normalized:
+        return "premium_reasoning"
+    return "balanced_generalist"
+
+
 def _chat_provider_service_tier(*, settings: Settings, provider: str) -> str:
     normalized = provider.strip().lower()
     if normalized == "gemini":
@@ -1331,6 +1603,8 @@ def _chat_provider_counts_as_launch_grade(*, settings: Settings, provider: str) 
     normalized = provider.strip().lower()
     if normalized not in _CHAT_LAUNCH_GRADE_PROVIDERS:
         return False
+    if normalized != _protected_beta_chat_provider(settings):
+        return False
     return _chat_provider_service_tier(settings=settings, provider=normalized) == "paid"
 
 
@@ -1345,7 +1619,7 @@ def _build_smoke_check(
         return {
             "status": "warning",
             "summary": "No live provider smoke report has been recorded yet.",
-            "detail": "Run scripts/provider_smoke.py intentionally before broader public launch decisions; Sprint 9 should keep this visible.",
+            "detail": "Run scripts/provider_smoke.py intentionally before broader protected-beta and public-launch decisions; keep this visible in operator truth.",
         }
 
     current_build = load_version_info().build
@@ -1388,7 +1662,7 @@ def _build_smoke_check(
             "detail": (
                 f"Last smoke run was {_format_age(age)} ago"
                 f"{f' on build {report_build}' if report_build else ''} and recorded {error_count} hard errors. "
-                f"Coverage: {coverage_detail}. Keep this visible for Sprint 9 provider work."
+                f"Coverage: {coverage_detail}. Keep this visible while provider proof is still part of Protected Beta Hardening."
             ),
         }
     if ok_count <= 0:
@@ -1453,11 +1727,13 @@ def _resolve_smoke_coverage_gaps(
             + ", ".join(missing_chat)
         )
 
-    configured_image = set(_configured_image_launch_grade_providers(provider_status=provider_status))
+    configured_image = set(
+        _configured_image_launch_grade_providers(settings=settings, provider_status=provider_status)
+    )
     missing_image = sorted(configured_image - image_tested)
     if missing_image:
         gaps.append(
-            "configured launch-grade image lanes were not smoke-tested on this build: "
+            "configured protected-beta image lanes were not smoke-tested on this build: "
             + ", ".join(missing_image)
         )
 
@@ -1465,7 +1741,7 @@ def _resolve_smoke_coverage_gaps(
         openai_lanes = set(image_lanes_tested.get("openai", []))
         if "draft" not in openai_lanes:
             gaps.append("OpenAI draft image lane was not smoke-tested on this build")
-        if "final" not in openai_lanes:
+        if _protected_beta_requires_final_image_lane(settings) and "final" not in openai_lanes:
             gaps.append("OpenAI final image lane was not smoke-tested on this build")
 
     return gaps
@@ -1499,7 +1775,11 @@ def _configured_chat_launch_grade_providers(*, settings: Settings, chat_routing:
     return fallback_configured
 
 
-def _configured_image_launch_grade_providers(*, provider_status: list[dict[str, Any]]) -> list[str]:
+def _configured_image_launch_grade_providers(
+    *,
+    settings: Settings,
+    provider_status: list[dict[str, Any]],
+) -> list[str]:
     provider_map = {
         str(provider.get("name") or "").strip().lower(): provider
         for provider in provider_status
@@ -1507,6 +1787,8 @@ def _configured_image_launch_grade_providers(*, provider_status: list[dict[str, 
     }
     configured: list[str] = []
     for provider_name in ("openai", "fal", "runware"):
+        if not _image_provider_counts_as_launch_grade(settings=settings, provider=provider_name):
+            continue
         payload = provider_map.get(provider_name)
         if not isinstance(payload, dict):
             continue
@@ -1891,6 +2173,55 @@ def _coerce_display_string_list(values: Any) -> list[str]:
     return result
 
 
+def _build_operator_checklists() -> dict[str, Any]:
+    return {
+        "signed_in_happy_path": [
+            {
+                "id": "auth_me",
+                "path": "/v1/auth/me",
+                "goal": "Confirm the session resolves and identity bootstraps cleanly.",
+            },
+            {
+                "id": "settings_bootstrap",
+                "path": "/v1/settings/bootstrap",
+                "goal": "Confirm shell payload, draft projects, styles, prompt memory, and entitlements stay canonical.",
+            },
+            {
+                "id": "projects",
+                "path": "/v1/projects",
+                "goal": "Confirm user-managed projects list cleanly and system-managed drafts stay hidden.",
+            },
+            {
+                "id": "assets",
+                "path": "/v1/assets",
+                "goal": "Confirm private assets serialize with canonical library and protection fields.",
+            },
+            {
+                "id": "health_detail",
+                "path": "/v1/healthz/detail",
+                "goal": "Confirm owner truth exposes launch gate, provider truth, and artefact sync.",
+            },
+        ],
+        "private_assets_happy_path": [
+            {
+                "id": "asset_preview",
+                "path": "/v1/assets/{asset_id}/preview",
+                "goal": "Protected preview delivery should stay renderable for owned assets.",
+            },
+            {
+                "id": "asset_clean_export",
+                "path": "/v1/assets/{asset_id}/clean-export",
+                "goal": "Clean export should remain owner-gated and attachment-only.",
+            },
+            {
+                "id": "project_export",
+                "path": "/v1/projects/{project_id}/export",
+                "goal": "Project export should remain explicit and authenticated.",
+            },
+        ],
+    }
+
+
 def _build_runtime_logs_check(runtime_logs: dict[str, Any] | None, *, settings: Settings) -> dict[str, str]:
     if runtime_logs is None:
         return {
@@ -2082,7 +2413,13 @@ def _build_launch_gate(
     warning_reasons = [_format_launch_gate_reason(check) for check in warning_checks]
     blocking_keys = _collect_launch_gate_keys(blocking_checks)
     warning_keys = _collect_launch_gate_keys(warning_checks)
-    disallowed_warning_keys = sorted(key for key in warning_keys if key not in _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS)
+    disallowed_warning_keys = sorted(
+        {
+            str(check.get("key") or "").strip()
+            for check in warning_checks
+            if not _warning_counts_for_protected_launch(check)
+        }
+    )
     ready_for_protected_launch = not blocking_reasons and not disallowed_warning_keys
     if ready_for_protected_launch:
         status = "ready"
@@ -2241,3 +2578,19 @@ def _is_outside_repo(path: Path, *, repo_root: Path) -> bool:
     except ValueError:
         return True
     return False
+
+
+def _looks_like_external_runtime_mount(*, settings: Settings, path: Path, repo_root: Path) -> bool:
+    configured_runtime_root = str(getattr(settings, "studio_runtime_root", "") or "").strip()
+    if not configured_runtime_root:
+        return False
+    resolved_path = path.resolve()
+    runtime_root = settings.runtime_root_path.resolve()
+    try:
+        resolved_path.relative_to(runtime_root)
+    except ValueError:
+        return False
+    runtime_root_value = runtime_root.as_posix().rstrip("/")
+    if runtime_root_value == "/runtime":
+        return True
+    return _is_outside_repo(runtime_root, repo_root=repo_root)

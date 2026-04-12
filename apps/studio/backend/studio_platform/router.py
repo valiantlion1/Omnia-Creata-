@@ -14,6 +14,7 @@ from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
 
+from .asset_storage import AssetStorageError
 from .experience_contract_ops import attach_chat_experience
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
 from .service import GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
@@ -177,10 +178,38 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
         return auth_user
 
+    async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser]) -> AuthUser:
+        current = _require_auth(auth_user)
+        metadata = getattr(current, "metadata", {}) or {}
+        await service.ensure_identity(
+            user_id=current.id,
+            email=current.email or f"{current.id}@omnia.local",
+            display_name=getattr(current, "username", None) or current.email or "Omnia User",
+            username=metadata.get("username")
+            or getattr(current, "username", None)
+            or (current.email or "").split("@")[0]
+            or current.id,
+            owner_mode=bool(metadata.get("owner_mode")),
+            root_admin=bool(metadata.get("root_admin")),
+            local_access=bool(metadata.get("local_access")),
+            accepted_terms=bool(metadata.get("accepted_terms")),
+            accepted_privacy=bool(metadata.get("accepted_privacy")),
+            accepted_usage_policy=bool(metadata.get("accepted_usage_policy")),
+            marketing_opt_in=bool(metadata.get("marketing_opt_in")),
+        )
+        return current
+
     async def _require_owner(auth_user: Optional[AuthUser]) -> AuthUser:
         current = _require_auth(auth_user)
         metadata = getattr(current, "metadata", {}) or {}
-        if current.role != UserRole.ADMIN and not metadata.get("owner_mode"):
+        if current.role == UserRole.ADMIN or metadata.get("owner_mode"):
+            return current
+        try:
+            await _ensure_identity_for_auth_user(current)
+            identity = await service.get_identity(current.id)
+        except KeyError:
+            identity = None
+        if identity is None or not (identity.owner_mode or identity.root_admin or identity.local_access):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
         return current
 
@@ -449,6 +478,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         identity = None
         if current_user is not None:
             try:
+                await _ensure_identity_for_auth_user(current_user)
                 identity = await service.get_identity(current_user.id)
             except KeyError:
                 identity = None
@@ -513,19 +543,19 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         surface: Optional[Literal["compose", "chat"]] = Query(default=None),
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         projects = await service.list_projects(auth_user.id, surface=surface)
         return {"projects": [project.model_dump(mode="json") for project in projects]}
 
     @router.post("/projects", status_code=status.HTTP_201_CREATED)
     async def post_project(payload: ProjectCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         project = await service.create_project(auth_user.id, payload.title, payload.description, payload.surface)
         return project.model_dump(mode="json")
 
     @router.get("/projects/{project_id}")
     async def get_project(project_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             payload = await service.get_project(auth_user.id, project_id)
         except KeyError:
@@ -538,7 +568,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "projects:export", limit=12, identifier=auth_user.id)
         await _consume_rate_limit(request, "projects:export:ip", limit=20)
         try:
@@ -558,7 +588,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: ProjectUpdateRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             project = await service.update_project(
                 auth_user.id,
@@ -574,7 +604,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.delete("/projects/{project_id}")
     async def delete_project(project_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             return await service.delete_project(auth_user.id, project_id)
         except KeyError:
@@ -613,7 +643,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/profiles/me")
     async def get_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
         except KeyError:
@@ -621,7 +651,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/profiles/me/export")
     async def export_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             data = await service.export_identity_data(identity_id=auth_user.id)
             return data
@@ -630,7 +660,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.delete("/profiles/me")
     async def delete_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             await service.permanently_delete_identity(identity_id=auth_user.id)
             return {"status": "deleted"}
@@ -642,7 +672,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: ProfileUpdateRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             await service.update_profile(
                 auth_user.id,
@@ -666,7 +696,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/conversations")
     async def get_conversations(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         conversations = await service.list_conversations(auth_user.id)
         return {"conversations": [_serialize_conversation(conversation) for conversation in conversations]}
 
@@ -676,14 +706,14 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:new-conversation", limit=20, identifier=auth_user.id)
         conversation = await service.create_conversation(auth_user.id, payload.title, payload.model)
         return _serialize_conversation(conversation)
 
     @router.get("/conversations/{conversation_id}")
     async def get_conversation(conversation_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             payload = await service.get_conversation(auth_user.id, conversation_id)
         except KeyError:
@@ -695,7 +725,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.delete("/conversations/{conversation_id}")
     async def delete_conversation(conversation_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             await service.delete_conversation(auth_user.id, conversation_id)
         except KeyError:
@@ -709,7 +739,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
         try:
             result = await service.send_chat_message(
@@ -912,7 +942,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         project_id: Optional[str] = Query(default=None),
         include_deleted: bool = Query(default=False),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         assets = await service.list_assets(auth_user.id, project_id=project_id, include_deleted=include_deleted)
         allow_clean_export = await service.can_identity_clean_export(auth_user.id)
         return {"assets": service.serialize_assets(assets, identity_id=auth_user.id, allow_clean_export=allow_clean_export)}
@@ -922,7 +952,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: AssetImportRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             asset = await service.import_asset_from_data_url(
                 identity_id=auth_user.id,
@@ -942,7 +972,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: AssetRenameRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             asset = await service.rename_asset(auth_user.id, asset_id, payload.title)
         except KeyError:
@@ -953,7 +983,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.delete("/assets/{asset_id}")
     async def delete_asset(asset_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             asset = await service.trash_asset(auth_user.id, asset_id)
         except KeyError:
@@ -962,7 +992,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.post("/assets/{asset_id}/restore")
     async def restore_asset(asset_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             asset = await service.restore_asset(auth_user.id, asset_id)
         except KeyError:
@@ -975,21 +1005,32 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "assets:permanent-delete", limit=20, identifier=auth_user.id)
         try:
             return await service.permanently_delete_asset(auth_user.id, asset_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
 
     @router.post("/assets/trash/empty")
     async def empty_trash(
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "assets:empty-trash", limit=8, identifier=auth_user.id)
-        return await service.empty_trash(auth_user.id)
+        try:
+            return await service.empty_trash(auth_user.id)
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
 
     @router.get("/assets/{asset_id}/content")
     async def get_asset_content(
@@ -1006,6 +1047,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset file not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
         if delivery.local_path is not None:
             return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
@@ -1025,6 +1071,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
         if delivery.local_path is not None:
             return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
@@ -1044,6 +1095,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
         if delivery.local_path is not None:
             return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
@@ -1063,6 +1119,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blocked preview not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
         if delivery.local_path is not None:
             return FileResponse(delivery.local_path, media_type=delivery.media_type, filename=delivery.filename)
         return Response(content=delivery.content or b"", media_type=delivery.media_type)
@@ -1084,6 +1145,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except AssetStorageError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Asset storage unavailable",
+            )
         headers = {"Content-Disposition": f'attachment; filename="{delivery.filename}"'}
         if delivery.local_path is not None:
             return FileResponse(
@@ -1228,12 +1294,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/billing/summary")
     async def get_billing_summary(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         return await service.billing_summary(auth_user.id)
 
     @router.get("/styles")
     async def get_styles(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         return await service.list_styles(auth_user.id)
 
     @router.post("/styles", status_code=status.HTTP_201_CREATED)
@@ -1241,7 +1307,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: StyleSaveRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             style = await service.save_style(
                 auth_user.id,
@@ -1263,7 +1329,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: StyleFromPromptRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             style = await service.save_style_from_prompt(
                 auth_user.id,
@@ -1281,7 +1347,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         payload: StyleUpdateRequest,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         try:
             style = await service.update_style(auth_user.id, style_id, favorite=payload.favorite)
         except KeyError:
@@ -1290,7 +1356,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/prompt-memory")
     async def get_prompt_memory(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         return await service.get_prompt_memory_profile_payload(auth_user.id)
 
     @router.post("/billing/checkout")
@@ -1299,13 +1365,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "billing:checkout", limit=10, identifier=auth_user.id)
         return await service.checkout(auth_user.id, payload.kind)
 
     @router.get("/settings/bootstrap")
     async def get_settings_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = _require_auth(current_user)
+        auth_user = await _ensure_identity_for_auth_user(current_user)
         return await service.get_settings_payload(auth_user.id)
 
     @router.post("/webhooks/lemonsqueezy")

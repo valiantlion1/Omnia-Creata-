@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import SecretStr
 
 from studio_platform.models import OmniaIdentity, StudioWorkspace
 from studio_platform.store import (
@@ -216,6 +217,25 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
     assert postgres_store._pool_minconn == 2
     assert postgres_store._pool_maxconn == 10
     assert postgres_store._statement_timeout_ms == 30000
+
+
+def test_build_state_store_accepts_secretstr_database_url(tmp_path: Path):
+    settings = SimpleNamespace(
+        state_store_backend="postgres",
+        state_store_path=None,
+        legacy_state_store_path=None,
+        database_url=SecretStr("postgresql://studio:secret@localhost:5432/studio"),
+    )
+
+    store = build_state_store(
+        settings,
+        default_json_path=tmp_path / "studio-state.json",
+        default_sqlite_path=tmp_path / "studio-state.sqlite3",
+        default_legacy_sqlite_path=tmp_path / "legacy-state.sqlite3",
+    )
+
+    assert isinstance(store, PostgresStudioStateStore)
+    assert store.dsn == "postgresql://studio:secret@localhost:5432/studio"
 
 
 def test_postgres_store_prepares_statement_timeout_and_generation_index():

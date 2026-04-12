@@ -18,6 +18,198 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.12.69`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the hidden operator control-plane logic was already useful, but too much of its assembly still lived inside `StudioService`, which is exactly the kind of slow service-layer bloat that becomes painful later
+- What:
+  operator model-catalog and surface-matrix assembly now live in a dedicated control-plane module instead of being hand-built inside `StudioService`
+  this keeps owner health detail output unchanged while making the backend easier to reason about, safer to extend, and less likely to turn into a god-object around provider truth
+  regression coverage and focused compile/test runs confirm that the same `ai_control_plane` contract still reaches owner health detail after the extraction
+
+### `0.6.0-alpha` / build `2026.04.12.68`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  contract truth was still partially living inside provider-oriented code, which is the kind of quiet coupling that turns into spaghetti later when state vocabularies and provider strategy evolve at different speeds
+- What:
+  Studio backend now has a dedicated contract catalog module for canonical product-facing statuses, internal worker-job statuses, asset truth fields, and bootstrap fields
+  owner health detail now exposes that richer contract freeze through `ai_control_plane.contract_freeze`, so operators and future AI assistants can distinguish product state language from internal recovery state without reading multiple files
+  the AI context pack now points directly at that hidden contract source as well, which keeps orientation cheaper and more accurate for future tooling
+
+### `0.6.0-alpha` / build `2026.04.12.67`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio wiki context was already useful for humans, but another AI model or coding IDE assistant could still fall into stale sprint language or waste tokens rediscovering context that the repo already knew
+- What:
+  Studio wiki now has a dedicated `AI Context Pack` that gives external models and IDE assistants a low-token orientation path, including what to read first, what is stable, what is still open, and where hidden operator truth actually lives
+  the wiki index now advertises that context pack directly, so future assistants can start from one compact handoff file before diving into code or deeper docs
+  Studio `AGENTS.md` has also been corrected to use the current `Protected Beta Hardening` frame instead of stale wording that made Sprint 9 sound like the still-active planning layer
+
+### `0.6.0-alpha` / build `2026.04.12.66`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the backend truth layer was stronger, but plan language could still drift because internal worker states, signed-in library states, and hidden provider routing notes were not clearly separated in the docs humans actually read
+- What:
+  backend docs now distinguish the stable product-facing state contract (`queued`, `running`, `ready`, `failed`, `blocked`) from the richer internal worker lifecycle used by queue and recovery code
+  the wiki and operations guidance now explicitly point operators at owner health detail `ai_control_plane.surface_matrix` as the hidden `surface -> tier -> provider -> model` map, which reduces one more source of plan and launch confusion
+  this keeps the protected-beta hardening frame more professional: one hidden operator map, one product-facing state language, and less accidental drift between docs and runtime truth
+
+### `0.6.0-alpha` / build `2026.04.12.65`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  provider/model/cost truth was still split across too many places, which made operator reasoning harder exactly when we need launch decisions to stay disciplined and cheap
+- What:
+  Studio backend now has a canonical AI provider catalog that centralizes the active chat/image model lanes plus their current operator-facing cost references
+  OpenAI image cost estimation is now model-aware again, so `gpt-image-1-mini` draft lanes and `gpt-image-1.5` final lanes no longer share the same stale price table
+  owner-only health detail now exposes an `ai_control_plane` summary, which means provider roles, protected-beta policy, Studio model aliases, and route previews can be read from one place instead of being reconstructed from multiple files
+  backend provider environment examples were also updated to match current routing truth, which reduces one more documentation drift source during hardening
+
+### `0.6.0-alpha` / build `2026.04.12.64`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected staging could finally boot and verify, but the last closure mile still had one operator-truth deadlock: `launch_readiness` and `deployment_verification` did not interpret warning-grade deployment truth the same way, so protected-beta proof could remain artificially not-ready even after selected lanes and staging shell were genuinely proven
+- What:
+  protected-beta launch gating now treats a current deployment verification report that explicitly `passed with warnings` as an advisory warning instead of a closure-blocking mismatch, while still keeping missing or stale deployment reports non-ready
+  regression coverage now locks that behavior, so selected protected-beta lanes can remain closure-grade without letting a missing deployment report or stale build silently pass
+  operator truth is now ready to promote the current build once local and staging runtimes have been restarted on the new snapshot
+
+### `0.6.0-alpha` / build `2026.04.12.63`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta hardening still had one last professional gap: the new staging helper chain was close, but PowerShell dictionary handling broke the first real bring-up attempt, repo env hydration was not yet sourcing the real Studio secrets automatically, and runtime/operator output still leaked stale sprint labels instead of the current hardening frame
+- What:
+  staging runtime helpers now work with ordered PowerShell dictionaries, hydrate missing staging secrets from the existing Studio `.env` files when host environment variables are absent, and keep the effective staging env generation deterministic
+  current-build provider smoke is now refreshed on the selected protected-beta OpenAI lanes only, which proves the chosen chat and image lanes without letting known-broken backup providers pollute closure truth
+  local runtime has been restarted and re-verified on the current build, and staging blocker output plus deployment-verification language now consistently speak in `Protected Beta Hardening` terms instead of stale sprint numbering
+
+### `0.6.0-alpha` / build `2026.04.12.62`
+- Date: `2026-04-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta hardening needed one narrower release contract so backend truth, staging proof, and wiki planning would stop drifting away from each other; selected protected-beta providers had to become explicit, staging env hydration had to stop relying on placeholder files, and operator artefacts needed to stay on one current-build chain
+- What:
+  launch-readiness now treats only the selected protected-beta chat and image providers as launch-grade lanes, while managed backups remain visible without silently counting as closure-grade proof
+  deployment preflight now validates the selected protected-beta lanes directly and treats obvious placeholder secrets as missing instead of green-lighting staging on fake values
+  protected staging start/verify scripts now generate one effective env file under the external runtime root, mirror local provider smoke into staging alongside startup verification, and keep Docker/preflight/verify aligned to the same env truth
+  protected-beta closure discipline now has a dedicated shard-based verification script and the repo wiki/README have been rewritten around `Protected Beta Hardening` instead of stale sprint-active language
+
+### `0.6.0-alpha` / build `2026.04.11.61`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected staging could finally issue an owner-flavored token, but owner-only verification still failed because `/v1/healthz/detail` trusted only JWT metadata and ignored the privileged identity state that Studio derives during identity bootstrap from approved owner emails
+- What:
+  owner-only router gating now self-bootstraps the caller identity and accepts the persisted owner/root/local-access flags from Studio state before rejecting access
+  regression coverage now proves a founder-email user can reach `/v1/healthz/detail` even when the incoming token metadata itself is not already marked `owner_mode`
+  this moves protected staging closer to a true owner-verified rehearsal instead of stopping at public-shell proof
+
+### `0.6.0-alpha` / build `2026.04.11.60`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected staging rehearsal had moved past truth-drift issues and into real runtime blockers: the Postgres metadata boot path still crashed on `SecretStr` DSNs, the staging env could silently drift away from the Postgres service credentials, and the staging web image served the shell but not the API truth that deployment verification expects on the same origin
+- What:
+  Postgres state-store construction now unwraps `SecretStr` database URLs before handing them to the Postgres metadata store
+  staging deployment preflight now validates that `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` actually agree with `DATABASE_URL`, and the local staging env has been pinned to one coherent Postgres credential set
+  the staging web image now ships an explicit nginx config that proxies `/api/*` and `/v1/*` to backend, so protected staging verification can read version and health truth from the public shell origin instead of accidentally fetching the SPA document
+  protected staging rehearsal now reaches a warning-state verification instead of failing on boot or same-origin API routing
+
+### `0.6.0-alpha` / build `2026.04.11.59`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected staging still had one deterministic boot blocker left: the metadata store builder passed `DATABASE_URL` through as a Pydantic `SecretStr`, but the Postgres store constructor expected a plain string and crashed on `.strip()` before backend or worker could finish startup
+- What:
+  Postgres state-store construction now unwraps `SecretStr` database URLs through the canonical secret helper before the DSN reaches the Postgres metadata layer
+  regression coverage now proves `build_state_store()` accepts a `SecretStr` `DATABASE_URL`, which keeps the staging-only Postgres boot path from silently regressing while local sqlite development still passes
+  this removes a real protected-staging crash class instead of only papering over it in operator scripts
+
+### `0.6.0-alpha` / build `2026.04.11.58`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  readiness truth still had one misleading drift: local owner health was reading only the local deployment report path, while protected-staging verification was being persisted under the staging runtime root, so truth-sync could still warn about a stale `.07` deployment artefact even after a fresh staging verify run
+- What:
+  deployment verification loading now searches both the primary runtime report root and the protected-staging sibling runtime report root, then picks the newest valid report instead of blindly trusting only the local root
+  regression coverage now locks that sibling-report preference so local owner truth can consume the latest protected-staging verification artefact during beta rehearsal
+  this keeps current-build truth, staging verify, and owner readiness closer to the same source of evidence during protected-beta hardening
+
+### `0.6.0-alpha` / build `2026.04.11.57`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta rehearsal still had one noisy stability gap left: old or remote Supabase-backed assets could fail storage auth and bubble unhandled exceptions out of asset delivery or delete routes, which turned recoverable storage trouble into signed-in `500` crashes
+- What:
+  asset content, thumbnail, preview, blocked-preview, and clean-export routes now convert storage backend failures into controlled `503 asset storage unavailable` responses instead of throwing unhandled exceptions through the signed-in shell
+  permanent delete and empty-trash paths now surface the same storage failure truth instead of collapsing into generic backend errors when remote asset cleanup fails
+  route-level regressions now lock those storage-unavailable cases so old remote asset auth drift does not silently regress back into crash-class failures
+
+### `0.6.0-alpha` / build `2026.04.11.56`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Sprint 9 readiness work still had a fragile gap between signed-in route contracts, owner launch truth, and current-build operator discipline: some shell routes assumed identity state already existed, route-level regressions did not yet lock the full signed-in contract, and owner truth still made chat provider economics harder to compare than they needed to be
+- What:
+  signed-in backend routes now self-bootstrap identity state before loading projects, assets, settings bootstrap, profile, billing, styles, prompt memory, and core chat/project surfaces, which reduces `auth/me happened first` coupling during local beta rehearsal
+  route-level regression coverage now explicitly locks `/v1/auth/me`, `/v1/assets`, `/v1/projects`, `/v1/settings/bootstrap`, and `/v1/healthz/detail`, including hidden draft-project behavior and owner-only health detail access
+  owner launch-readiness truth now carries chat-provider comparison rows plus a built-in low-cost operator smoke checklist, and the remaining frontend lifecycle drift (`pending`) was removed so type-check stays aligned with canonical generation states
+
+### `0.6.0-alpha` / build `2026.04.11.55`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  the Studio library route started crashing while resolving clean-export entitlements, so signed-in `My Images` views could lose their ready asset payload and misleadingly leave only stale failed cards visible after refresh
+- What:
+  the backend clean-export entitlement check now uses the canonical `can_clean_export` flag again
+  resolved entitlements also expose a backward-compatible plural alias so older callers do not crash if they still reference `can_clean_exports`
+  `/v1/assets` now has a route regression test proving ready assets can be listed successfully for a Pro identity without tripping the clean-export gate
+
+### `0.6.0-alpha` / build `2026.04.11.54`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  current-build smoke truth and live chat routing were disagreeing: OpenRouter and Gemini could already be known-bad from smoke, but the running gateway still treated them like clean primary lanes until a user request hit them again
+- What:
+  Studio chat routing now hydrates provider cooldown state from the latest current-build smoke report, so recent chat auth/config failures can mark a provider lane as temporarily unhealthy before the next user request arrives
+  this keeps broken premium chat lanes from wasting the first live request on a provider that current smoke already proved is returning `401` or similar hard errors
+  routing summary and launch-readiness truth now inherit that stricter chat lane picture, which makes backend diagnostics more honest without deleting any provider code or removing fallback support
+
+### `0.6.0-alpha` / build `2026.04.11.53`
+- Date: `2026-04-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  signed-in Studio library and projects were still behaving like a half-finished tool surface: broken previews could leak through, blocked assets were not consistently represented as protected previews, styles existed but were not fully usable from the refreshed UI, and prompt memory needed a real frontend-facing product surface
+- What:
+  My Images and Projects now bind to the new protected-delivery contract, so preview rendering prefers protected preview URLs, falls back more safely when a thumbnail is missing, and keeps blocked assets visually locked instead of pretending they are ordinary ready images
+  the signed-in library language is now more product-safe too: user-facing `Collections` wording has been shifted to `Projects`, project menus now carry the intended high-signal actions, and project export is wired directly into the refreshed project and library surfaces
+  Styles is now a working surface instead of a placeholder shell, with catalog apply flows, saved styles, favorites, and a visible Prompt Memory card that turns the low-cost backend learning profile into product-facing context
+  Create and Project now connect to that style system more directly as well, including prompt-to-style save flows and reusable style modifiers that route back into Create without exposing backend jargon
+  frontend type-check is green again after the library/style refactor, and new backend regression coverage now locks draft-project hiding, protected asset serialization, styles, and prompt memory behavior into tests
+
 ### `0.6.0-alpha` / build `2026.04.11.52`
 - Date: `2026-04-11`
 - Codename: `Foundation`

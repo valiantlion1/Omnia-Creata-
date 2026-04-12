@@ -90,7 +90,7 @@ export default function BillingPage() {
       {isRoot && (
          <div className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-[#7c3aed]/20 to-fuchsia-500/20 border border-[#7c3aed]/30 shadow-[0_0_30px_rgba(124,58,237,0.15)] text-[#d8b4fe]">
             <ShieldCheck className="h-6 w-6" />
-            <p className="font-semibold text-sm">System recognition: You are a Root Administrator. All limitations are lifted and your wallet has infinite credits.</p>
+            <p className="font-semibold text-sm">You have unlimited access to all features and credits.</p>
          </div>
       )}
 
@@ -107,7 +107,7 @@ export default function BillingPage() {
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Current Plan</div>
             <div className="text-3xl font-bold text-white">{billing.plan.label}</div>
-            <div className="mt-1 text-sm text-zinc-400">{billing.subscription_status}</div>
+            <div className="mt-1 text-sm text-zinc-400 capitalize">{billing.subscription_status?.replace(/_/g, ' ') ?? 'Active'}</div>
           </div>
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monthly Allowance</div>

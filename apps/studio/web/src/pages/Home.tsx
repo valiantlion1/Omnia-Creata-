@@ -200,7 +200,7 @@ export default function HomePage() {
               <div className="mt-10 flex flex-wrap items-center gap-6 text-sm text-zinc-500">
                 <span>✓ Free to start</span>
                 <span>✓ No credit card</span>
-                <span>✓ 60 monthly credits</span>
+                <span>✓ 150 monthly credits</span>
               </div>
             </div>
 

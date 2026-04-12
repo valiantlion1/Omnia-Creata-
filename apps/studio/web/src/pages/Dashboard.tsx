@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Crown, Heart, Lock, Sparkles, X, Zap } from 'lucide-react'
 
-import { AppPage, ButtonChip, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, ButtonChip, SkeletonMasonry, StatusPill } from '@/components/StudioPrimitives'
 import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -63,8 +63,8 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
 function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
   const miniTiers = [
-    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '60', features: ['Core access', '1024px maximum', 'Standard rendering'], style: 'outline' as const },
-    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '1,200', features: ['Premium models', '2048px maximum', 'Accelerated rendering', 'Commercial use'], style: 'gradient' as const },
+    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '150', features: ['All core features', 'Standard quality', 'Community access'], style: 'outline' as const },
+    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '2,500', features: ['Premium models', 'Priority processing', 'Commercial use'], style: 'gradient' as const },
     { id: 'creator', label: 'Creator', icon: Crown, price: 'TBD', credits: '5,000', features: ['Early features', '4096px maximum', 'Ultra-fast rendering', 'API access'], style: 'white' as const },
   ]
 
@@ -531,7 +531,7 @@ export default function DashboardPage() {
       <WelcomePricingOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
 
       {postsQuery.isLoading ? (
-        <div className="py-12 flex items-center justify-center text-sm font-medium text-zinc-500">Loading community feed...</div>
+        <SkeletonMasonry count={12} />
       ) : filteredPosts.length ? (
         <section className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
           {filteredPosts.map((post: PublicPost, index: number) => (
@@ -547,7 +547,7 @@ export default function DashboardPage() {
             </div>
             <div className="mt-6 text-2xl font-bold tracking-tight text-white relative z-10">Community gallery is warming up</div>
             <p className="mx-auto mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 relative z-10">
-              Be the first to publish — or get inspired by these sample generations made with OmniaCreata.
+              Be the first to publish — or get inspired by these stunning images made with OmniaCreata.
             </p>
           </div>
           <div className="mt-8 columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">

@@ -185,11 +185,11 @@ export default function AccountPage() {
   }, [usage?.reset_at])
 
   if (ownAccount && isLoading && !payload) {
-    return <div className="px-6 py-10 text-sm text-zinc-500">Loading profile...</div>
+    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile…</div>
   }
 
   if (profileQuery.isLoading && !payload) {
-    return <div className="px-6 py-10 text-sm text-zinc-500">Loading profile...</div>
+    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile…</div>
   }
 
   if (!payload) {

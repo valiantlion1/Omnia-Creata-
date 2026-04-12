@@ -334,7 +334,7 @@ export function formatGenerationGuideSummary(entry: Pick<
 
 export function describeGenerationLaneTrust(
   lane: GenerationPricingLane | string | null | undefined,
-  provider?: string | null,
+  _provider?: string | null,
 ) {
   switch (lane) {
     case 'draft':

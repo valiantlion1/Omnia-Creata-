@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     openai_image_premium_qa_enabled: bool = False
     chat_primary_provider: str = "openrouter"
     chat_fallback_provider: str = "openai"
+    protected_beta_chat_provider: str = "openai"
+    protected_beta_image_provider: str = "openai"
+    protected_beta_image_require_final_lane: bool = False
     gemini_service_tier: str = "free"
     openrouter_service_tier: str = "paid"
     openai_service_tier: str = "paid"
@@ -330,6 +333,22 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"gemini", "openrouter", "openai", "heuristic"}:
             raise ValueError("Chat providers must be gemini, openrouter, openai, or heuristic")
+        return normalized
+
+    @field_validator("protected_beta_chat_provider")
+    @classmethod
+    def validate_protected_beta_chat_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"gemini", "openrouter", "openai"}:
+            raise ValueError("PROTECTED_BETA_CHAT_PROVIDER must be gemini, openrouter, or openai")
+        return normalized
+
+    @field_validator("protected_beta_image_provider")
+    @classmethod
+    def validate_protected_beta_image_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"openai", "fal", "runware"}:
+            raise ValueError("PROTECTED_BETA_IMAGE_PROVIDER must be openai, fal, or runware")
         return normalized
 
     @field_validator("gemini_service_tier", "openrouter_service_tier", "openai_service_tier")

@@ -2,6 +2,13 @@
 
 This review closes the first sprint family and starts the next one from repo truth.
 
+## Historical Snapshot
+
+This document is now a historical snapshot.
+
+Use it to understand why the repo moved from sprint-by-sprint hardening into the current `Protected Beta Hardening` track.
+Do not treat its old “active sprint” language as the current planning source.
+
 ## Audit Scope
 
 Reviewed against:
@@ -119,7 +126,7 @@ Status: `pass`
 3. Local-owner and ComfyUI memory drift had become dangerous. Some historical docs still described flows that the current backend explicitly rejects.
 4. Startup should prefer stable always-on behavior by default. Hot reload is useful for active coding, but it should not be the default for a logon task or pseudo-staging local stack.
 
-## New Sprint Family
+## Historical Sprint Family
 
 ### Sprint 8 — Deployment And Always-On Environments
 
@@ -145,13 +152,18 @@ Purpose:
 Purpose:
 - close the last trust gaps on onboarding, create/chat trust, billing clarity, and public launch perception
 
-## Immediate Rule
+## What Still Matters
 
-Sprint 8 is now the active sprint.
+This review still matters because it established three durable truths:
+- deployment shape became the first-class blocker
+- provider truth had to become runtime truth, not config truth
+- historical doc drift could no longer be left unresolved
 
-Future work should start from:
-- protected staging and deployment shape
-- honest readiness checks
-- operational truth
+## Superseded Planning Language
 
-Not from another free-floating feature wave.
+The active rule is no longer “Sprint 8 is now active.”
+
+The current working rule lives in the wiki delivery/roadmap docs:
+- use `Protected Beta Hardening` as the active frame
+- sequence work as `contract -> truth sync -> provider proof -> closure`
+- keep new feature work subordinate to closure proof

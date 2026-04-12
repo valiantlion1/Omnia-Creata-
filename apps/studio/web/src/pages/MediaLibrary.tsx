@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Download, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, Lock, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, Lock, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
 
-import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
+import { AppPage, SkeletonImageGrid, StatusPill } from '@/components/StudioPrimitives'
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
 import {
-  describePendingGenerationState,
-  formatGenerationCreditState,
-  formatGenerationEstimateSummary,
-  formatGenerationPricingLane,
   normalizeJobStatus,
   studioApi,
   type Generation,
@@ -103,10 +100,14 @@ function assetDisplayTitle(asset: MediaAsset) {
 }
 
 function assetPreviewUrl(asset: MediaAsset) {
+  return assetPreviewSources(asset)[0] ?? null
+}
+
+function assetPreviewSources(asset: MediaAsset) {
   if (assetLibraryState(asset) === 'blocked') {
-    return asset.blocked_preview_url ?? asset.preview_url ?? asset.thumbnail_url ?? asset.url
+    return [asset.blocked_preview_url, asset.preview_url, asset.thumbnail_url, asset.url]
   }
-  return asset.preview_url ?? asset.thumbnail_url ?? asset.url
+  return [asset.preview_url, asset.thumbnail_url, asset.url]
 }
 
 function matchesQuery(query: string, ...parts: Array<string | null | undefined>) {
@@ -286,7 +287,7 @@ function RenameDialog({
             value={value}
             onChange={(event) => setValue(event.target.value)}
             className="input mt-2"
-            placeholder={state.kind === 'post' ? 'Image set name' : 'Collection name'}
+            placeholder={state.kind === 'post' ? 'Image set name' : 'Project name'}
           />
         </div>
 
@@ -363,8 +364,8 @@ function AssetLightbox({
 
   const asset = state.group.items[state.index]
   const canStep = state.group.items.length > 1
-  const previewSrc = assetPreviewUrl(asset)
-  const canOpenPreview = asset.can_open !== false && state.group.libraryState !== 'blocked'
+  const previewSrc = assetPreviewUrl(asset) ?? ''
+  const canOpenPreview = Boolean(previewSrc) && asset.can_open !== false && state.group.libraryState !== 'blocked'
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(4,6,10,0.82)] px-4 py-6 backdrop-blur-[10px]">
@@ -398,12 +399,11 @@ function AssetLightbox({
 
       <div className="relative z-[1] grid w-full max-w-[1380px] gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
         <div className="group relative flex min-h-0 items-center justify-center">
-          <img
-            src={previewSrc}
+          <ProtectedAssetImage
+            sources={assetPreviewSources(asset)}
             alt={assetDisplayTitle(asset)}
-            draggable={false}
-            onContextMenu={(event) => event.preventDefault()}
             className="max-h-[78vh] w-auto max-w-full cursor-zoom-in rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+            fallbackClassName="flex max-h-[78vh] min-h-[22rem] w-full max-w-full items-center justify-center rounded-[28px] bg-white/[0.04] text-zinc-600 shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
             onClick={() => {
               if (!canOpenPreview) return
               openLightbox(previewSrc, assetDisplayTitle(asset), {
@@ -516,12 +516,10 @@ function AssetLightbox({
                     state.index === index ? 'ring-white/40' : 'ring-white/6 hover:ring-white/20'
                   }`}
                 >
-                  <img
-                    src={assetPreviewUrl(item)}
+                  <ProtectedAssetImage
+                    sources={assetPreviewSources(item)}
                     alt={assetDisplayTitle(item)}
                     className="aspect-square h-full w-full object-cover"
-                    draggable={false}
-                    onContextMenu={(event) => event.preventDefault()}
                   />
                 </button>
               ))}
@@ -552,7 +550,7 @@ function MovePostDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/8">
+      <div className="w-full max-w-lg rounded-[24px] bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/[0.05]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">Move image set</div>
@@ -580,13 +578,13 @@ function MovePostDialog({
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-white">{project.title}</div>
-                  <div className="mt-1 truncate text-xs text-zinc-500">{project.description || 'Collection'}</div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">{project.description || 'Project'}</div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
               </button>
             ))
           ) : (
-            <div className="py-4 text-sm text-zinc-500">No other collections available.</div>
+            <div className="py-4 text-sm text-zinc-500">No other projects available.</div>
           )}
         </div>
       </div>
@@ -689,6 +687,22 @@ function Toolbar({
   filters?: ReactNode
   actions?: ReactNode
 }) {
+  const searchRef = useState<HTMLInputElement | null>(null)
+  const inputRef = { current: searchRef[0] }
+  const setInputRef = searchRef[1]
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/') return
+      const tag = (event.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      event.preventDefault()
+      inputRef.current?.focus()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [inputRef])
+
   return (
     <section className="border-b border-white/[0.06] pb-2">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
@@ -701,9 +715,10 @@ function Toolbar({
           <label className="flex min-w-[170px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-400 ring-1 ring-white/8">
             <Search className="h-3.5 w-3.5" />
             <input
+              ref={(el) => setInputRef(el)}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search"
+              placeholder="Search  /"
               className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-500"
             />
           </label>
@@ -748,11 +763,19 @@ function PendingPreview({
   view: ViewMode
   state: LibraryState
 }) {
+  const navigate = useNavigate()
   const isBlocked = state === 'blocked'
   const isFailed = state === 'failed'
   const title = generation.display_title || generation.title
   const subtitle = isBlocked ? 'Blocked for safety review' : isFailed ? 'Could not create image' : 'Painting your vision...'
   const badge = isBlocked ? 'Blocked' : isFailed ? 'Failed' : 'Running'
+
+  const handleRetry = () => {
+    const params = new URLSearchParams()
+    if (generation.prompt_snapshot?.prompt) params.set('prompt', generation.prompt_snapshot.prompt)
+    if (generation.model) params.set('model', generation.model)
+    navigate(`/create?${params.toString()}`)
+  }
 
   if (view === 'grid') {
     return (
@@ -760,12 +783,20 @@ function PendingPreview({
         <div className="relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
           {isBlocked || isFailed ? (
             <>
-              <div className={`aspect-[4/5] w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
-                 <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
+              <div className={`aspect-[16/9] w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/40 backdrop-blur-xl">
+                 <div className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
                    {isBlocked ? <Lock className="h-5 w-5 text-amber-300/90" /> : <ImageOff className="h-5 w-5 text-rose-400/80" />}
                  </div>
                  <span className={`text-[11px] font-bold tracking-wider uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}>{badge}</span>
+                 {isFailed && (
+                   <button
+                     onClick={handleRetry}
+                     className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+                   >
+                     Retry in Create →
+                   </button>
+                 )}
               </div>
             </>
           ) : (
@@ -852,9 +883,10 @@ export default function MediaLibraryPage() {
   const [moveState, setMoveState] = useState<MoveState>(null)
   const [noticeState, setNoticeState] = useState<NoticeState>(null)
   const [renameState, setRenameState] = useState<RenameState>(null)
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
 
   const section = useMemo<LibrarySection>(() => {
-    if (location.pathname.startsWith('/library/collections')) return 'collections'
+    if (location.pathname.startsWith('/library/projects') || location.pathname.startsWith('/library/collections')) return 'collections'
     if (location.pathname.startsWith('/library/likes')) return 'likes'
     if (location.pathname.startsWith('/library/trash')) return 'trash'
     return 'images'
@@ -992,6 +1024,7 @@ export default function MediaLibraryPage() {
 
       if (existing) {
         existing.items.push(asset)
+        existing.derivedTags = Array.from(new Set([...existing.derivedTags, ...(asset.derived_tags ?? [])]))
         continue
       }
 
@@ -1001,6 +1034,7 @@ export default function MediaLibraryPage() {
         prompt: asset.prompt || 'Saved Studio result',
         model: String(metadata.model ?? 'Image'),
         modelLabel: String(metadata.display_model_label ?? metadata.model ?? 'Studio profile'),
+        derivedTags: asset.derived_tags ?? [],
         createdAt: asset.created_at,
         projectId: asset.project_id,
         projectTitle: isChatOrigin ? 'Chat session' : project?.title ?? 'Project',
@@ -1051,7 +1085,7 @@ export default function MediaLibraryPage() {
   const filteredImageGroups = useMemo(
     () =>
       readyGroups.filter((group) => {
-        if (!matchesQuery(search, group.title, group.prompt, group.model, group.projectTitle)) return false
+        if (!matchesQuery(search, group.title, group.prompt, group.model, group.projectTitle, ...group.derivedTags)) return false
         if (imageFilter === 'recent') return Date.now() - new Date(group.createdAt).getTime() <= 1000 * 60 * 60 * 24 * 3
         if (imageFilter === 'processing') return false
         return true
@@ -1113,8 +1147,35 @@ export default function MediaLibraryPage() {
     setPreviewState({ group, index })
   }
 
+  const toggleGroupSelect = (id: string) => {
+    setSelectedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkTrash = async () => {
+    const ids = Array.from(selectedGroups)
+    for (const id of ids) {
+      try { await trashPostMutation.mutateAsync(id) } catch { /* continue */ }
+    }
+    setSelectedGroups(new Set())
+  }
+
   if (isLoading) {
-    return <div className="px-6 py-10 text-sm text-zinc-500">Loading library...</div>
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative flex h-10 w-10 items-center justify-center">
+            <div className="absolute inset-0 animate-ping rounded-full bg-[rgb(var(--primary-light)/0.2)]" />
+            <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+          </div>
+          <p className="text-sm text-zinc-500">Loading your library…</p>
+        </div>
+      </div>
+    )
   }
 
   if (!canLoadPrivate) {
@@ -1123,7 +1184,7 @@ export default function MediaLibraryPage() {
         <EmptyInline
           icon={<ImageIcon className="h-4 w-4" />}
           title="Your Library unlocks after sign in."
-          description="Saved images, collections, favorites, and trash only appear once you are inside Studio."
+          description="Saved images, projects, favorites, and trash only appear once you are inside Studio."
         />
       </AppPage>
     )
@@ -1136,7 +1197,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="My Images"
-              description="Your generated images live here. Running generations will preview until they complete."
+              description="All your created images live here. Images in progress will appear while they're being made."
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1170,12 +1231,11 @@ export default function MediaLibraryPage() {
                     return (
                       <div key={group.id} className={activeView === 'grid' ? 'space-y-3' : 'group flex items-center gap-4 py-3'}>
                         <div className={`relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] ${activeView === 'grid' ? '' : 'h-20 w-16 shrink-0'}`}>
-                          <img
-                            src={assetPreviewUrl(asset)}
+                          <ProtectedAssetImage
+                            sources={assetPreviewSources(asset)}
                             alt={group.title}
-                            draggable={false}
-                            onContextMenu={(event) => event.preventDefault()}
                             className={`${activeView === 'grid' ? 'aspect-[4/5] w-full' : 'h-full w-full'} object-cover blur-[12px] saturate-50`}
+                            fallbackClassName={`${activeView === 'grid' ? 'aspect-[4/5] w-full' : 'h-full w-full'} flex items-center justify-center bg-[#111216] text-zinc-600`}
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/35 backdrop-blur-md">
                             <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-500/20">
@@ -1200,7 +1260,7 @@ export default function MediaLibraryPage() {
               <section className="border-b border-white/[0.06] pb-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-sm font-medium text-white">Failed</div>
-                  <StatusPill tone="danger">{failedGenerations.length} recent</StatusPill>
+                  <StatusPill tone="danger">{failedGenerations.length} failed</StatusPill>
                 </div>
                 <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {failedGenerations.map((generation) => (
@@ -1210,12 +1270,14 @@ export default function MediaLibraryPage() {
               </section>
             ) : null}
 
-            {imageFilter === 'processing' ? (
+            {assetsQuery.isLoading ? (
+              <SkeletonImageGrid count={8} />
+            ) : imageFilter === 'processing' ? (
               pendingGenerations.length ? null : (
                 <EmptyInline
                   icon={<Sparkles className="h-4 w-4" />}
                   title="Nothing is rendering right now."
-                  description="Start a new generation from Create and it will preview here until it lands in Library."
+                  description="Head to Create and start generating — your images will appear here while they're in progress."
                 />
               )
             ) : filteredImageGroups.length ? (
@@ -1223,7 +1285,21 @@ export default function MediaLibraryPage() {
                 {filteredImageGroups.map((group) => (
                   <section key={group.id} className="group border-b border-white/[0.06] pb-3.5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <button
+                          onClick={() => toggleGroupSelect(group.id)}
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ${
+                            selectedGroups.has(group.id)
+                              ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white'
+                              : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30 hover:bg-white/[0.06]'
+                          }`}
+                          title={selectedGroups.has(group.id) ? 'Deselect' : 'Select'}
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                          </svg>
+                        </button>
+                        <div className="min-w-0">
                         <div className="text-base font-semibold text-white">{group.title}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
                           <span>{formatDate(group.createdAt)}</span>
@@ -1283,6 +1359,7 @@ export default function MediaLibraryPage() {
                           >
                             Trash
                           </button>
+                        </div>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
@@ -1381,7 +1458,7 @@ export default function MediaLibraryPage() {
                                   setActionMenu(null)
                                 }}
                               >
-                                Move to collection
+                                Move to project
                               </MenuAction>
                               <MenuDivider />
                               <MenuAction
@@ -1412,12 +1489,11 @@ export default function MediaLibraryPage() {
                               onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
                               className="block w-full overflow-hidden rounded-[20px] bg-white/[0.03] text-left"
                             >
-                              <img
-                                src={assetPreviewUrl(asset)}
+                              <ProtectedAssetImage
+                                sources={assetPreviewSources(asset)}
                                 alt={assetDisplayTitle(asset)}
-                                draggable={false}
-                                onContextMenu={(event) => event.preventDefault()}
                                 className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
+                                fallbackClassName="flex aspect-[4/5] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                               />
                             </button>
                             <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
@@ -1435,7 +1511,12 @@ export default function MediaLibraryPage() {
                               onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
                               className="block h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03] text-left"
                             >
-                              <img src={assetPreviewUrl(asset)} alt={assetDisplayTitle(asset)} draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-full w-full object-cover" />
+                              <ProtectedAssetImage
+                                sources={assetPreviewSources(asset)}
+                                alt={assetDisplayTitle(asset)}
+                                className="h-full w-full object-cover"
+                                fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                              />
                             </button>
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium text-white">{assetDisplayTitle(asset)}</div>
@@ -1454,14 +1535,44 @@ export default function MediaLibraryPage() {
             ) : (
               <EmptyInline icon={<ImageIcon className="h-4 w-4" />} title="No images yet." description="Generate something in Create and it will land here automatically." />
             )}
+
+            {/* Bulk action bar */}
+            {selectedGroups.size > 0 && (
+              <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+                <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-[#16181f]/95 px-6 py-3.5 shadow-[0_8px_48px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.1] backdrop-blur-xl">
+                  <span className="text-sm font-semibold text-white">{selectedGroups.size} selected</span>
+                  <div className="h-4 w-px bg-white/[0.12]" />
+                  <button
+                    onClick={() => setSelectedGroups(new Set(filteredImageGroups.map((g) => g.id)))}
+                    className="text-sm text-zinc-400 transition hover:text-white"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={handleBulkTrash}
+                    disabled={trashPostMutation.isPending}
+                    className="rounded-full bg-rose-500/[0.12] px-4 py-1.5 text-sm font-semibold text-rose-300 ring-1 ring-rose-500/20 transition hover:bg-rose-500/[0.2] disabled:opacity-50"
+                  >
+                    Move to trash
+                  </button>
+                  <button
+                    onClick={() => setSelectedGroups(new Set())}
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
+                    title="Clear selection"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : null}
 
         {section === 'collections' ? (
           <>
             <Toolbar
-              title="Collections"
-              description="Projects keep related images together so you can revisit them anytime."
+              title="Projects"
+              description="Projects keep related image sets together so you can revisit them anytime."
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1481,7 +1592,12 @@ export default function MediaLibraryPage() {
                           <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.06] shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:ring-white/[0.12] group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)] group-hover:-translate-y-1">
                             {cover ? (
                               <div className="relative overflow-hidden">
-                                <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]" />
+                                <ProtectedAssetImage
+                                  sources={assetPreviewSources(cover)}
+                                  alt={project.title}
+                                  className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+                                  fallbackClassName="flex aspect-[16/10] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                                 <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-md ring-1 ring-white/10 opacity-0 translate-y-2 transition-all duration-500 group-hover:opacity-100 group-hover:translate-y-0">
                                   <ImageIcon className="h-3 w-3" />
@@ -1499,12 +1615,20 @@ export default function MediaLibraryPage() {
                           <button
                             onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
                             className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100"
-                            title="Collection actions"
+                            title="Project actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                           {actionMenu === `project:${project.id}` ? (
                             <InlineActionMenu>
+                              <MenuAction
+                                onClick={() => {
+                                  navigate(`/projects/${project.id}`)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Open
+                              </MenuAction>
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={() => {
@@ -1515,12 +1639,17 @@ export default function MediaLibraryPage() {
                                 Rename
                               </MenuAction>
                               <MenuAction
-                                onClick={() => {
-                                  openComposeWith({ projectId: project.id })
-                                  setActionMenu(null)
+                                disabled={exportProjectMutation.isPending}
+                                onClick={async () => {
+                                  try {
+                                    await exportProjectMutation.mutateAsync({ projectId: project.id, title: project.title })
+                                    setActionMenu(null)
+                                  } catch (error) {
+                                    handleMenuError(error)
+                                  }
                                 }}
                               >
-                                Open in Create
+                                Export all
                               </MenuAction>
                               <MenuDivider />
                               <MenuAction
@@ -1530,8 +1659,8 @@ export default function MediaLibraryPage() {
                                   setActionMenu(null)
                                   if (projectAssets.length > 0) {
                                     setNoticeState({
-                                      title: 'Collection has images',
-                                      body: 'Move or remove items before deleting this collection.',
+                                      title: 'Project has images',
+                                      body: 'Move or remove items before deleting this project.',
                                     })
                                     return
                                   }
@@ -1562,7 +1691,12 @@ export default function MediaLibraryPage() {
                       <div key={project.id} className="group flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-all duration-300 hover:bg-white/[0.03]">
                         <Link to={`/projects/${project.id}`} className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[14px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md">
                           {cover ? (
-                            <img src={cover.thumbnail_url ?? cover.url} alt={project.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            <ProtectedAssetImage
+                              sources={assetPreviewSources(cover)}
+                              alt={project.title}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                            />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center bg-white/[0.02]">
                               <Folder className="h-4 w-4 text-zinc-600" />
@@ -1591,6 +1725,14 @@ export default function MediaLibraryPage() {
                             {actionMenu === `project:${project.id}` ? (
                               <InlineActionMenu>
                                 <MenuAction
+                                  onClick={() => {
+                                    navigate(`/projects/${project.id}`)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Open
+                                </MenuAction>
+                                <MenuAction
                                   disabled={menuBusy}
                                   onClick={() => {
                                     setRenameState({ kind: 'project', id: project.id, title: project.title, description: project.description })
@@ -1600,12 +1742,17 @@ export default function MediaLibraryPage() {
                                   Rename
                                 </MenuAction>
                                 <MenuAction
-                                  onClick={() => {
-                                    openComposeWith({ projectId: project.id })
-                                    setActionMenu(null)
+                                  disabled={exportProjectMutation.isPending}
+                                  onClick={async () => {
+                                    try {
+                                      await exportProjectMutation.mutateAsync({ projectId: project.id, title: project.title })
+                                      setActionMenu(null)
+                                    } catch (error) {
+                                      handleMenuError(error)
+                                    }
                                   }}
                                 >
-                                  Open in Create
+                                  Export all
                                 </MenuAction>
                                 <MenuDivider />
                                 <MenuAction
@@ -1615,8 +1762,8 @@ export default function MediaLibraryPage() {
                                     setActionMenu(null)
                                     if (projectAssets.length > 0) {
                                       setNoticeState({
-                                        title: 'Collection has images',
-                                        body: 'Move or remove items before deleting this collection.',
+                                        title: 'Project has images',
+                                        body: 'Move or remove items before deleting this project.',
                                       })
                                       return
                                     }
@@ -1639,9 +1786,9 @@ export default function MediaLibraryPage() {
                 <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(255,255,255,0.04)] backdrop-blur-md mb-5">
                   <Folder className="h-7 w-7" />
                 </div>
-                <h3 className="text-lg font-bold text-white tracking-tight">No collections yet</h3>
+                <h3 className="text-lg font-bold text-white tracking-tight">No projects yet</h3>
                 <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-zinc-500">
-                  Collections organize your creative work into projects. Generate your first image and a collection will appear automatically.
+                  Projects keep related image sets together. Create one when you want a dedicated space for a campaign, concept, or series.
                 </p>
                 <Link
                   to="/create"
@@ -1701,8 +1848,10 @@ export default function MediaLibraryPage() {
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {filteredTrash.map((asset) => (
                     <div key={asset.id} className="space-y-2.5">
-                      <div className="relative overflow-hidden rounded-[20px] bg-white/[0.03]" data-library-menu-root="true">
-                        <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-[4/5] w-full object-cover opacity-75" />
+                      <div className="relative rounded-[20px]" data-library-menu-root="true">
+                        <div className="overflow-hidden rounded-[20px] bg-white/[0.03]">
+                          <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-[4/5] w-full object-cover opacity-75" />
+                        </div>
                         <button
                           onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
                           className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"

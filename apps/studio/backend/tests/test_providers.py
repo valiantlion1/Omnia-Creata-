@@ -309,7 +309,7 @@ def test_provider_registry_uses_cost_safe_openai_image_estimate_in_development()
             height=1024,
             model_id="realvis-xl",
             workflow="text_to_image",
-        ) == 0.009
+        ) == 0.005
     finally:
         settings.environment = original_environment
         settings.openai_api_key = original_openai_api_key
@@ -1315,7 +1315,7 @@ async def test_openai_image_provider_uses_draft_model_for_draft_lane() -> None:
     )
 
     assert result.provider == "openai"
-    assert result.estimated_cost == 0.009
+    assert result.estimated_cost == 0.005
     assert submitted_payload["model"] == "gpt-image-1-mini"
     assert submitted_payload["quality"] == "low"
     assert submitted_payload["size"] == "1024x1024"
@@ -1333,7 +1333,7 @@ def test_openai_image_provider_estimates_draft_and_final_lane_costs() -> None:
         height=1024,
         model_id="flux-schnell",
         workflow="text_to_image",
-    ) == 0.009
+    ) == 0.005
     assert provider.estimate_generation_cost(
         width=1024,
         height=1024,
@@ -1379,7 +1379,7 @@ async def test_openai_image_provider_uses_draft_model_when_premium_qa_is_disable
     )
 
     assert result.provider == "openai"
-    assert result.estimated_cost == 0.009
+    assert result.estimated_cost == 0.005
     assert submitted_payload["model"] == "gpt-image-1-mini"
     assert submitted_payload["quality"] == "low"
     assert provider.estimate_generation_cost(
@@ -1387,7 +1387,7 @@ async def test_openai_image_provider_uses_draft_model_when_premium_qa_is_disable
         height=1024,
         model_id="realvis-xl",
         workflow="text_to_image",
-    ) == 0.009
+    ) == 0.005
 
 
 @pytest.mark.asyncio

@@ -86,7 +86,7 @@ export default function LandingPage() {
                   <Zap className="h-7 w-7" />
                </div>
                <h3 className="text-xl font-bold mb-3">Instant Speed</h3>
-               <p className="text-zinc-400">Our dynamic load balancers guarantee generation speeds up to 400% faster than standard public endpoints.</p>
+               <p className="text-zinc-400">Private infrastructure delivering image speeds up to 400% faster than typical AI platforms.</p>
             </div>
 
          </div>

@@ -112,15 +112,15 @@ export default function CommunityPage() {
       {loading && (
         <div className="flex items-center gap-3 text-zinc-500 font-medium py-12 justify-center">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-          Gathering inspirations from the network...
+          Discovering amazing creations…
         </div>
       )}
-      
+
       {!loading && filteredPosts.length === 0 && (
          <div className="text-center py-20">
            <div className="text-zinc-600 text-6xl mb-4">🎨</div>
-           <div className="text-zinc-400 font-semibold text-lg">No community posts deployed yet.</div>
-           <p className="text-zinc-500 mt-2">Be the first to share an art block!</p>
+           <div className="text-zinc-400 font-semibold text-lg">Nothing here yet.</div>
+           <p className="text-zinc-500 mt-2">Be the first to share your work!</p>
          </div>
       )}
 

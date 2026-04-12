@@ -11,42 +11,6 @@ type AssistantPlanChip = {
   tone: AssistantPlanChipTone
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function formatWorkflowLabel(workflow: string) {
-  if (workflow === 'text_to_image') return 'Create plan'
-  if (workflow === 'image_to_image') return 'Image-to-image'
-  if (workflow === 'edit') return 'Edit plan'
-  return workflow
-    .split(/[-_]/g)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ')
-}
-
-function formatModelLabel(model: string) {
-  return model
-    .split(/[-_]/g)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ')
-}
-
-function formatProviderLabel(provider: string) {
-  const normalized = provider.trim().toLowerCase()
-  if (normalized === 'openrouter') return 'OpenRouter'
-  if (normalized === 'openai') return 'OpenAI'
-  if (normalized === 'gemini') return 'Gemini'
-  if (normalized === 'heuristic') return 'Fallback reply'
-  return provider
-}
-
 /* Plan chips completely removed — these were exposing backend metadata to end users.
    No user should ever see "Premium lane unavailable", "Fallback reply", or model IDs. */
 function resolveAssistantPlanChips(_message: ChatMessage): AssistantPlanChip[] {

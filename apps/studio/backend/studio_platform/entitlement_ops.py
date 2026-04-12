@@ -24,6 +24,11 @@ class ResolvedEntitlements:
     extra_credits: int
     credits_remaining: int
 
+    @property
+    def can_clean_exports(self) -> bool:
+        """Backward-compatible alias for older callers using the pluralized flag."""
+        return self.can_clean_export
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "plan": self.plan.value,

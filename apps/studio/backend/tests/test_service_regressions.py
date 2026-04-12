@@ -2635,11 +2635,39 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
         health = await service.health(detail=True)
 
         assert "cost_telemetry" in health
+        assert "ai_control_plane" in health
         telemetry = health["cost_telemetry"]
+        control_plane = health["ai_control_plane"]
         assert telemetry["window_days"] > 0
         assert telemetry["total_spend_usd"] == 1.0
         assert telemetry["event_count"] == 3
         assert telemetry["coverage"]["prompt_improve"] == "cost_telemetry_events"
+        assert control_plane["protected_beta_policy"]["chat_provider"] == get_settings().protected_beta_chat_provider
+        assert control_plane["protected_beta_policy"]["image_provider"] == get_settings().protected_beta_image_provider
+        assert control_plane["contract_freeze"]["product_generation_statuses"] == [
+            "queued",
+            "running",
+            "ready",
+            "failed",
+            "blocked",
+        ]
+        assert "succeeded" in control_plane["contract_freeze"]["internal_job_statuses"]
+        openai_chat = next(
+            item for item in control_plane["chat"]["providers"] if item["provider"] == "openai"
+        )
+        assert openai_chat["standard_model"]["name"] == get_settings().openai_model
+        assert openai_chat["premium_model"]["pricing"]["reference_model"] == "gpt-5.4"
+        assert control_plane["image"]["openai"]["draft_model"]["per_image_usd"]["1024x1024"]["low"] == 0.005
+        assert control_plane["operator_policy"]["current_operator_source"] == "ai_control_plane.surface_matrix"
+        fast_model = next(item for item in control_plane["studio_models"] if item["id"] == "flux-schnell")
+        assert fast_model["default_openai_request_model"] == get_settings().openai_image_draft_model
+        assert fast_model["default_openai_estimated_cost_usd"] == 0.005
+        create_fast = next(item for item in control_plane["surface_matrix"] if item["id"] == "create:flux-schnell")
+        assert create_fast["request_model"] == get_settings().openai_image_draft_model
+        chat_standard = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:standard-assist")
+        assert chat_standard["provider_chain"][0]["provider"] == get_settings().chat_primary_provider
+        prompt_improve = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:prompt-improve")
+        assert prompt_improve["operator_role"] == "prompt_improve"
         provider_totals = {item["provider"]: item["total_spend_usd"] for item in telemetry["providers"]}
         assert provider_totals == {"openai": 0.88, "openrouter": 0.12}
         surfaces = {item["surface"]: item["total_spend_usd"] for item in telemetry["surfaces"]}

@@ -26,7 +26,7 @@ import {
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
+import { APP_VERSION_LABEL } from '@/lib/appVersion'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 

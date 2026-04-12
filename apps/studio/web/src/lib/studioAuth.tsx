@@ -49,7 +49,7 @@ function readAuthSnapshot() {
   return undefined
 }
 
-function writeAuthSnapshot(value: AuthMeResponse | null) {
+function writeAuthSnapshot(_value: AuthMeResponse | null) {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(AUTH_SNAPSHOT_KEY)
 }

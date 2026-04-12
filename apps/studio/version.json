@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.11.52",
+  "build": "2026.04.12.69",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-11",
-  "notes": "Local frontend runtime was lightened with dev-safe rendering, calmer polling, and smaller startup bundles."
+  "releaseDate": "2026-04-12",
+  "notes": "Protected Beta Hardening now trims service-layer sprawl too: operator surface and model catalog assembly moved out of StudioService into a dedicated control-plane module, keeping hidden provider/model truth modular while preserving the same owner health payload."
 }

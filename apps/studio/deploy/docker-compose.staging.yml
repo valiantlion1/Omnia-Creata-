@@ -30,7 +30,7 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     env_file:
-      - .env.staging
+      - ${STAGING_ENV_FILE:-.env.staging}
     environment:
       PORT: 8000
       HOST: 0.0.0.0
@@ -61,7 +61,7 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     env_file:
-      - .env.staging
+      - ${STAGING_ENV_FILE:-.env.staging}
     command: ["python", "scripts/generation_worker.py"]
     environment:
       PORT: 8000

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
@@ -11,8 +12,11 @@ import httpx
 
 from config.env import Environment, get_settings, reveal_secret
 
+from .ai_provider_catalog import chat_model_cost_rates
 from .models import ChatAttachment, ChatMessage, ChatRole
 from .prompt_engineering import analyze_generation_prompt_profile, improve_prompt_candidate
+from .services.launch_readiness import load_provider_smoke_report
+from .versioning import load_version_info
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +69,10 @@ class StudioLLMGateway:
     def __init__(self) -> None:
         self._timeout = httpx.Timeout(18.0, connect=5.0)
         self._provider_health: dict[str, ChatProviderHealthState] = {}
+        self._provider_smoke_fingerprint: tuple[str, str] | None = None
 
     def routing_summary(self) -> dict[str, Any]:
+        self._seed_provider_health_from_smoke_report()
         settings = get_settings()
         return {
             "plan_defaults": {
@@ -626,6 +632,7 @@ class StudioLLMGateway:
         return None
 
     def _provider_skip_reason(self, provider: str) -> str | None:
+        self._seed_provider_health_from_smoke_report()
         if not self._provider_is_configured(provider):
             return "not_configured"
         health = self._provider_health.get(provider)
@@ -641,6 +648,7 @@ class StudioLLMGateway:
         return "cooldown_active"
 
     def _provider_runtime_summary(self, provider: str) -> dict[str, Any]:
+        self._seed_provider_health_from_smoke_report()
         configured = self._provider_is_configured(provider)
         health = self._provider_health.get(provider)
         now = self._utcnow()
@@ -669,6 +677,123 @@ class StudioLLMGateway:
             "last_failure_at": health.last_failure_at.isoformat() if health and health.last_failure_at else None,
             "last_success_at": health.last_success_at.isoformat() if health and health.last_success_at else None,
         }
+
+    def _seed_provider_health_from_smoke_report(self) -> None:
+        settings = get_settings()
+        report = load_provider_smoke_report(settings)
+        if not isinstance(report, dict):
+            self._provider_smoke_fingerprint = None
+            return
+
+        report_build = str(report.get("build") or "").strip()
+        recorded_at_raw = str(report.get("recorded_at") or "").strip()
+        fingerprint = (report_build, recorded_at_raw)
+        if self._provider_smoke_fingerprint == fingerprint:
+            return
+        self._provider_smoke_fingerprint = fingerprint
+
+        current_build = load_version_info().build
+        if not report_build or report_build != current_build:
+            return
+
+        recorded_at = self._parse_report_timestamp(recorded_at_raw) or self._utcnow()
+        results = report.get("results")
+        if not isinstance(results, list):
+            return
+
+        latest_chat_result_by_provider: dict[str, dict[str, Any]] = {}
+        for raw_result in results:
+            if not isinstance(raw_result, dict):
+                continue
+            surface = str(raw_result.get("surface") or "").strip().lower()
+            workflow = str(raw_result.get("workflow") or "").strip().lower()
+            if surface != "chat" and workflow != "chat":
+                continue
+            provider = str(raw_result.get("provider_name") or "").strip().lower()
+            if provider not in {"gemini", "openrouter", "openai"}:
+                continue
+            latest_chat_result_by_provider[provider] = dict(raw_result)
+
+        for provider, raw_result in latest_chat_result_by_provider.items():
+            status = str(raw_result.get("status") or "").strip().lower()
+            if status == "ok":
+                self._record_smoke_provider_success(provider=provider, recorded_at=recorded_at)
+            elif status == "error":
+                self._record_smoke_provider_failure(
+                    provider=provider,
+                    result=raw_result,
+                    recorded_at=recorded_at,
+                )
+
+    def _record_smoke_provider_success(self, *, provider: str, recorded_at: datetime) -> None:
+        health = self._provider_health.setdefault(provider, ChatProviderHealthState())
+        if health.last_failure_at is not None and health.last_failure_at > recorded_at:
+            return
+        health.status = "healthy"
+        health.consecutive_failures = 0
+        health.cooldown_until = None
+        health.last_success_at = recorded_at
+
+    def _record_smoke_provider_failure(
+        self,
+        *,
+        provider: str,
+        result: dict[str, Any],
+        recorded_at: datetime,
+    ) -> None:
+        health = self._provider_health.setdefault(provider, ChatProviderHealthState())
+        if health.last_success_at is not None and health.last_success_at >= recorded_at:
+            return
+        if health.last_failure_at is not None and health.last_failure_at > recorded_at:
+            return
+
+        status_code = self._status_code_from_smoke_result(result)
+        cooldown_seconds = self._cooldown_seconds_for_smoke_status(status_code=status_code)
+        cooldown_until = recorded_at + timedelta(seconds=cooldown_seconds) if cooldown_seconds > 0 else None
+        now = self._utcnow()
+
+        health.status = "cooldown" if cooldown_until is not None and cooldown_until > now else "healthy"
+        health.consecutive_failures = max(health.consecutive_failures, 1)
+        health.cooldown_until = cooldown_until if cooldown_until is not None and cooldown_until > now else None
+        health.last_failure_at = recorded_at
+        health.last_failure_reason = "smoke_report_error"
+        health.last_status_code = status_code
+        health.last_error_class = str(result.get("error_type") or "").strip() or None
+
+    def _status_code_from_smoke_result(self, result: dict[str, Any]) -> int | None:
+        error_text = str(result.get("error") or "").strip()
+        if not error_text:
+            return None
+        match = re.search(r"\b([1-5][0-9]{2})\b", error_text)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    def _cooldown_seconds_for_smoke_status(self, *, status_code: int | None) -> int:
+        if status_code in {400, 401, 403}:
+            return 600
+        if status_code == 429:
+            return 180
+        if status_code is not None and 500 <= status_code <= 599:
+            return 60
+        return 60
+
+    def _parse_report_timestamp(self, value: str) -> datetime | None:
+        if not value:
+            return None
+        normalized = value.strip()
+        if normalized.endswith("Z"):
+            normalized = f"{normalized[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _record_provider_failure(
         self,
@@ -1432,20 +1557,7 @@ class StudioLLMGateway:
         return round(prompt_cost + completion_cost, 6)
 
     def _price_per_million(self, model: str) -> tuple[float | None, float | None]:
-        normalized = model.strip().lower()
-        if normalized.startswith("google/gemini-2.5-flash-lite") or normalized.startswith("gemini-2.5-flash-lite"):
-            return 0.10, 0.40
-        if normalized.startswith("google/gemini-2.5-flash") or normalized.startswith("gemini-2.5-flash"):
-            return 0.30, 2.50
-        if normalized.startswith("google/gemini-2.5-pro") or normalized.startswith("gemini-2.5-pro"):
-            return None, None
-        if normalized.startswith("gpt-4o-mini"):
-            return 0.15, 0.60
-        if normalized.startswith("gpt-4.1-mini"):
-            return 0.40, 1.60
-        if normalized.startswith("gpt-5.4"):
-            return None, None
-        return None, None
+        return chat_model_cost_rates(model)
 
     def _infer_quality_tier_from_model(self, model: str) -> str:
         normalized = model.strip().lower()

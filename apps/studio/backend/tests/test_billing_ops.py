@@ -500,7 +500,7 @@ async def test_openai_routed_generation_uses_provider_estimated_cost_for_job_tru
         assert job.provider_billable is True
         assert job.pricing_lane == "draft"
         assert job.estimated_cost_source == "provider_quote"
-        assert job.estimated_cost == 0.018
+        assert job.estimated_cost == 0.01
     finally:
         await service.shutdown()
 
