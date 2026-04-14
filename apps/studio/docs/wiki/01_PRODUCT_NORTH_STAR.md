@@ -71,6 +71,31 @@ Rules:
 - exact package numbers come from the live catalog, not static docs copy
 - user-facing copy sells product quality, not provider names
 
+## Market Position
+
+Studio should sit between two crowded categories:
+- broad creative suites that bundle AI into a larger design product
+- pure image generators that mostly compete on volume, speed, or unlimited modes
+
+Relevant comparables:
+- Midjourney
+- Adobe Firefly
+- Ideogram
+- Leonardo
+- Krea
+- Runway
+
+Studio should not try to win on:
+- infinite image volume
+- cheapest-per-image marketing
+- broad office-suite style bundling
+
+Studio should try to win on:
+- premium `Chat + Create` continuity
+- project, library, and share durability
+- deterministic reruns and clearer execution control
+- honest degraded-state handling instead of fake premium theater
+
 ## Product Principles
 
 1. `Create` and `Chat` stay distinct unless the user explicitly crosses surfaces.

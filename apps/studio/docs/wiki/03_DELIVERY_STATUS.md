@@ -64,6 +64,34 @@ Studio is not considered ready for public paid exit until all of the following a
 - current-build artefacts stay aligned on the same build number
 - public plan and entitlement truth is server-authoritative
 
+## Market And Economics Reality
+
+As of `2026-04-14`, official market pricing clusters roughly like this:
+- entry creator plans: about `$10-$15/month`
+- serious prosumer plans: about `$20-$35/month`
+- premium/pro plans: about `$60+/month`
+
+Current Studio package assumptions in the economics dossier:
+- `Starter`: `60` credits, currently modeled as `$0`
+- `Pro`: `1200` credits for `$18/month`
+- `Top-up`: `200` credits for `$8`
+- `Top-up`: `800` credits for `$24`
+
+Interpretation:
+- `Pro` is currently priced below much of the serious prosumer band
+- `Starter` only stays economically sane if it remains visibly limited and cost-safe
+- top-ups are currently the healthiest margin instrument in the package mix
+
+Current tension:
+- the product doctrine says Studio is a controlled paid launch, not a broad free playground
+- the current dossier still models `Starter` as free
+- that tension should be resolved deliberately before broad public-paid exit, not ignored in copy
+
+Current cost caveat:
+- OpenAI-first image costs are manageable on draft lanes
+- higher-cost final lanes can compress margin quickly if they become default for low-revenue or free traffic
+- founder signoff is still required before `provider_economics` can close
+
 ## State Language
 
 Use these product-facing states by default:
