@@ -96,12 +96,12 @@ export default function SignupPage() {
 
         <div className="grid flex-1 gap-12 py-12 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="max-w-2xl">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Start free</div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Create account</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl md:leading-[1.02]">
-              Enter Studio, then choose how far you want to go.
+              Enter Studio, then choose your plan.
             </h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
-              Create your account first. After that, you will compare Free and Pro, then move into Studio with the plan that makes sense for you.
+              Create your account first. After that, you can review plans, credits, and upgrades from inside Studio.
             </p>
           </div>
 

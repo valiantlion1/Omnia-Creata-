@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
-from config.env import Settings
+from config.env import Environment, Settings
 
 from .contract_catalog import build_contract_freeze_summary
 from .models import ManualReviewState, StudioState, utc_now
@@ -15,6 +15,7 @@ from .services.launch_readiness import (
     load_provider_smoke_report,
     load_startup_verification_report,
 )
+from .services.provider_economics_dossier import persist_provider_economics_dossier
 
 logger = logging.getLogger(__name__)
 
@@ -156,14 +157,36 @@ def _build_ai_control_plane_fallback(
     }
 
 
+def _is_expected_local_generation_broker_fallback(
+    *,
+    settings: Settings,
+    generation_runtime_mode: str,
+    generation_broker_degraded_reason: str | None,
+) -> bool:
+    if settings.environment != Environment.DEVELOPMENT:
+        return False
+    if generation_runtime_mode not in {"all", "web"}:
+        return False
+    return generation_broker_degraded_reason in {
+        "redis_unavailable_fallback_local_queue",
+        "web_runtime_local_fallback_no_shared_broker",
+    }
+
+
 def derive_overall_health_status(
     *,
+    settings: Settings,
     provider_status: list[dict[str, Any]],
+    generation_runtime_mode: str,
     generation_broker_degraded_reason: str | None,
 ) -> str:
     degraded_states = {"degraded", "unavailable", "error"}
     overall = "degraded" if any(provider.get("status") in degraded_states for provider in provider_status) else "healthy"
-    if generation_broker_degraded_reason is not None:
+    if generation_broker_degraded_reason is not None and not _is_expected_local_generation_broker_fallback(
+        settings=settings,
+        generation_runtime_mode=generation_runtime_mode,
+        generation_broker_degraded_reason=generation_broker_degraded_reason,
+    ):
         return "degraded"
     return overall
 
@@ -218,6 +241,7 @@ async def build_owner_health_detail_extensions(
     generation_broker_payload: Mapping[str, Any],
     build_provider_spend_guardrails_summary,
     build_cost_telemetry_summary,
+    build_public_plan_payload: Callable[[], Mapping[str, Any]],
 ) -> dict[str, Any]:
     security_summary = await load_owner_security_summary(store)
     operator_artifacts = load_owner_health_artifacts(settings)
@@ -242,6 +266,19 @@ async def build_owner_health_detail_extensions(
         logger.warning("Owner health detail cost telemetry failed: %s", exc)
         cost_telemetry = _build_owner_detail_error_payload(
             summary="Cost telemetry is unavailable.",
+            exc=exc,
+        )
+
+    economics_dossier: dict[str, Any] | None
+    try:
+        economics_dossier = persist_provider_economics_dossier(
+            settings,
+            public_plan_payload=build_public_plan_payload(),
+        )
+    except Exception as exc:  # pragma: no cover - exercised through caller behavior tests
+        logger.warning("Owner health detail economics dossier failed: %s", exc)
+        economics_dossier = _build_owner_detail_error_payload(
+            summary="Provider economics dossier is unavailable.",
             exc=exc,
         )
 
@@ -278,6 +315,7 @@ async def build_owner_health_detail_extensions(
             deployment_verification_report=deployment_verification_report,
             runtime_logs=runtime_logs,
             cost_telemetry=cost_telemetry,
+            economics_dossier=economics_dossier,
         )
     except Exception as exc:  # pragma: no cover - exercised through caller behavior tests
         logger.warning("Owner health detail launch readiness failed: %s", exc)
@@ -295,6 +333,7 @@ async def build_owner_health_detail_extensions(
         "runtime_logs": runtime_logs,
         "provider_spend_guardrails": provider_spend_guardrails,
         "cost_telemetry": cost_telemetry,
+        "provider_economics_dossier": economics_dossier,
         "ai_control_plane": ai_control_plane,
         "launch_readiness": launch_readiness,
     }
@@ -302,16 +341,24 @@ async def build_owner_health_detail_extensions(
 
 def build_generation_broker_payload(
     *,
+    settings: Settings,
+    generation_runtime_mode: str,
     generation_broker,
     shared_queue_configured: bool,
     generation_broker_degraded_reason: str | None,
     broker_metrics: dict[str, Any] | None,
     claimed_count: int,
 ) -> dict[str, Any]:
+    advisory_fallback = _is_expected_local_generation_broker_fallback(
+        settings=settings,
+        generation_runtime_mode=generation_runtime_mode,
+        generation_broker_degraded_reason=generation_broker_degraded_reason,
+    )
     return {
         "enabled": generation_broker is not None,
         "configured": shared_queue_configured,
-        "degraded": generation_broker_degraded_reason is not None,
+        "degraded": generation_broker_degraded_reason is not None and not advisory_fallback,
+        "advisory": advisory_fallback,
         "detail": generation_broker_degraded_reason
         or ("shared_queue_active" if generation_broker is not None else "local_queue_only"),
         "kind": generation_broker.__class__.__name__ if generation_broker is not None else None,
@@ -340,6 +387,7 @@ def build_owner_health_payload(
     runtime_logs: Mapping[str, Any] | None = None,
     provider_spend_guardrails: Mapping[str, Any] | None = None,
     cost_telemetry: Mapping[str, Any] | None = None,
+    provider_economics_dossier: Mapping[str, Any] | None = None,
     ai_control_plane: Mapping[str, Any] | None = None,
     launch_readiness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -372,6 +420,8 @@ def build_owner_health_payload(
         payload["provider_spend_guardrails"] = dict(provider_spend_guardrails)
     if cost_telemetry is not None:
         payload["cost_telemetry"] = dict(cost_telemetry)
+    if provider_economics_dossier is not None:
+        payload["provider_economics_dossier"] = dict(provider_economics_dossier)
     if ai_control_plane is not None:
         payload["ai_control_plane"] = dict(ai_control_plane)
     if launch_readiness is not None:

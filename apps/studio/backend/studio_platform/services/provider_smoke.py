@@ -7,7 +7,7 @@ from typing import Any, Optional, Type
 
 from PIL import Image, ImageDraw
 
-from config.env import Settings, get_settings, reveal_secret
+from config.env import Settings, get_settings, has_configured_secret
 from security.redaction import redact_sensitive_text
 
 from ..llm import StudioLLMGateway
@@ -522,11 +522,11 @@ async def run_provider_smoke_suite(
 def _chat_provider_is_configured(settings: Settings, provider_name: str) -> bool:
     normalized = provider_name.strip().lower()
     if normalized == "gemini":
-        return bool(reveal_secret(settings.gemini_api_key).strip())
+        return has_configured_secret(settings.gemini_api_key)
     if normalized == "openrouter":
-        return bool(reveal_secret(settings.openrouter_api_key).strip())
+        return has_configured_secret(settings.openrouter_api_key)
     if normalized == "openai":
-        return bool(reveal_secret(settings.openai_api_key).strip())
+        return has_configured_secret(settings.openai_api_key)
     return False
 
 

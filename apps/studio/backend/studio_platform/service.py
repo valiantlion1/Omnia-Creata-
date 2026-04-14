@@ -77,7 +77,6 @@ _PROVIDER_SPEND_GUARDRAIL_USER_MESSAGE = (
     "Image generation is temporarily unavailable right now. Please try again later."
 )
 
-
 class GenerationCapacityError(ValueError):
     def __init__(
         self,
@@ -89,7 +88,6 @@ class GenerationCapacityError(ValueError):
         super().__init__(message)
         self.queue_full = queue_full
         self.estimated_wait_seconds = estimated_wait_seconds
-
 
 PLAN_CATALOG: Dict[IdentityPlan, PlanCatalogEntry] = {
     IdentityPlan.GUEST: PlanCatalogEntry(
@@ -112,7 +110,7 @@ PLAN_CATALOG: Dict[IdentityPlan, PlanCatalogEntry] = {
     ),
     IdentityPlan.FREE: PlanCatalogEntry(
         id=IdentityPlan.FREE,
-        label="Free",
+        label="Starter",
         monthly_credits=60,
         queue_priority="standard",
         max_incomplete_generations=2,
@@ -188,6 +186,50 @@ CHECKOUT_CATALOG: Dict[CheckoutKind, Dict[str, Any]] = {
         "price_usd": 24,
         "plan": None,
     },
+}
+
+PUBLIC_PLAN_CATALOG: Dict[IdentityPlan, Dict[str, Any]] = {
+    IdentityPlan.FREE: {
+        "public_id": "starter",
+        "summary": "Launch entry access for lighter Create and Chat usage on the same account contract.",
+        "feature_summary": [
+            "Starter monthly credit allowance",
+            "Create and Chat on one identity",
+            "Projects, library, and saved styles",
+            "Upgrade to Pro or add credit top-ups as usage grows",
+        ],
+        "price_usd": 0,
+        "billing_period": None,
+        "checkout_kind": None,
+        "recommended": False,
+        "availability": "included",
+    },
+    IdentityPlan.PRO: {
+        "public_id": "pro",
+        "summary": "Primary paid plan for heavier Create and Chat usage with higher limits and premium chat lanes.",
+        "feature_summary": [
+            "Higher monthly credit allowance",
+            "Priority queue and higher generation caps",
+            "Premium chat modes and image-guided turns",
+            "Clean exports and share links",
+        ],
+        "price_usd": CHECKOUT_CATALOG[CheckoutKind.PRO_MONTHLY]["price_usd"],
+        "billing_period": "month",
+        "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
+        "recommended": True,
+        "availability": "self_serve",
+    },
+}
+
+PUBLIC_TOP_UP_GROUP: Dict[str, Any] = {
+    "id": "top_up",
+    "label": "Credit Top-up",
+    "summary": "Add extra credits without changing your base plan when a project needs more starts.",
+    "feature_summary": [
+        "One-off credit packs",
+        "Keeps the same Create and Chat entitlement contract",
+        "Useful for spikes, retries, and launch-week bursts",
+    ],
 }
 
 class StudioService:
@@ -308,7 +350,6 @@ class StudioService:
     def _uses_local_generation_fallback(self) -> bool:
         return self.generation._uses_local_generation_fallback()
 
-
     async def initialize(self) -> None:
         await self.store.load()
         if self.generation_broker is not None:
@@ -382,26 +423,20 @@ class StudioService:
     def _ensure_generation_maintenance_task(self) -> None:
         return self.generation._ensure_generation_maintenance_task()
 
-
     def _ensure_orphan_cleanup_task(self) -> None:
         return self.generation._ensure_orphan_cleanup_task()
-
 
     async def _generation_maintenance_loop(self) -> None:
         return await self.generation._generation_maintenance_loop()
 
-
     async def _orphan_cleanup_loop(self) -> None:
         return await self.generation._orphan_cleanup_loop()
-
 
     async def _run_generation_maintenance_pass(self) -> bool:
         return await self.generation._run_generation_maintenance_pass()
 
-
     async def _enqueue_generation_job(self, job_id: str, *, priority: str) -> bool:
         return await self.generation._enqueue_generation_job(job_id=job_id, priority=priority)
-
 
     async def _claim_generation_job(
         self,
@@ -412,7 +447,6 @@ class StudioService:
     ) -> str | None:
         return await self.generation._claim_generation_job(job_id=job_id, provider=provider, claim_token=claim_token)
 
-
     async def _refresh_generation_claim(
         self,
         job_id: str,
@@ -422,26 +456,20 @@ class StudioService:
     ) -> bool:
         return await self.generation._refresh_generation_claim(job_id=job_id, claim_token=claim_token, provider=provider)
 
-
     async def _drain_generation_broker_into_dispatcher(self) -> int:
         return await self.generation._drain_generation_broker_into_dispatcher()
-
 
     async def _reconcile_generation_broker_state(self) -> int:
         return await self.generation._reconcile_generation_broker_state()
 
-
     async def _run_scheduled_orphan_cleanup_if_due(self) -> None:
         return await self.generation._run_scheduled_orphan_cleanup_if_due()
-
 
     async def _run_orphan_cleanup_pass(self, *, now: datetime) -> int:
         return await self.generation._run_orphan_cleanup_pass(now=now)
 
-
     async def get_public_identity(self, auth_user: Any | None) -> Dict[str, Any]:
         return await self.identity.get_public_identity(auth_user=auth_user)
-
 
     async def ensure_identity(
         self,
@@ -463,14 +491,11 @@ class StudioService:
     ) -> OmniaIdentity:
         return await self.identity.ensure_identity(user_id=user_id, email=email, display_name=display_name, username=username, desired_plan=desired_plan, owner_mode=owner_mode, root_admin=root_admin, local_access=local_access, accepted_terms=accepted_terms, accepted_privacy=accepted_privacy, accepted_usage_policy=accepted_usage_policy, marketing_opt_in=marketing_opt_in, bio=bio, avatar_url=avatar_url, default_visibility=default_visibility)
 
-
     def _resolve_privileged_email_flags(self, email: str) -> Dict[str, bool]:
         return self.identity._resolve_privileged_email_flags(email=email)
 
-
     def _apply_privileged_identity_overrides(self, identity: OmniaIdentity) -> None:
         return self.identity._apply_privileged_identity_overrides(identity=identity)
-
 
     def _has_unlimited_generation_access(self, identity: OmniaIdentity) -> bool:
         return identity.owner_mode or identity.root_admin or identity.local_access
@@ -478,22 +503,17 @@ class StudioService:
     async def _resolve_billing_state_for_identity(self, identity: OmniaIdentity) -> BillingStateSnapshot:
         return await self.billing._resolve_billing_state_for_identity(identity=identity)
 
-
     def _resolve_billing_state_locked(self, state: StudioState, identity: OmniaIdentity) -> BillingStateSnapshot:
         return self.billing._resolve_billing_state_locked(state=state, identity=identity)
-
 
     def _serialize_credit_snapshot(self, billing_state: BillingStateSnapshot) -> Dict[str, Any]:
         return self.billing._serialize_credit_snapshot(billing_state=billing_state)
 
-
     def _serialize_identity_payload(self, identity: OmniaIdentity) -> Dict[str, Any]:
         return self.identity._serialize_identity_payload(identity=identity)
 
-
     def _serialize_guest_identity_payload(self) -> Dict[str, Any]:
         return self.identity._serialize_guest_identity_payload()
-
 
     def _normalize_reason_code(self, value: str | None, *, fallback: str) -> str:
         normalized = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
@@ -515,7 +535,6 @@ class StudioService:
     ) -> None:
         return self.identity._log_security_event(event=event, level=level)
 
-
     def _apply_identity_moderation_flag_locked(
         self,
         identity: OmniaIdentity,
@@ -524,7 +543,6 @@ class StudioService:
         reason_code: str,
     ) -> Dict[str, Any]:
         return self.identity._apply_identity_moderation_flag_locked(identity=identity, moderation_result=moderation_result, reason_code=reason_code)
-
 
     async def record_generation_moderation_block(
         self,
@@ -542,7 +560,6 @@ class StudioService:
             flagged=True,
         )
 
-
     def _assert_identity_action_allowed(
         self,
         identity: OmniaIdentity,
@@ -552,7 +569,6 @@ class StudioService:
     ) -> None:
         return self.identity._assert_identity_action_allowed(identity=identity, action_code=action_code, action_label=action_label)
 
-
     def serialize_identity(
         self,
         identity: OmniaIdentity,
@@ -560,7 +576,6 @@ class StudioService:
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
         return self.identity.serialize_identity(identity=identity, billing_state=billing_state)
-
 
     def serialize_entitlements(
         self,
@@ -570,7 +585,6 @@ class StudioService:
     ) -> Dict[str, Any]:
         return self.identity.serialize_entitlements(identity=identity, billing_state=billing_state)
 
-
     def serialize_usage_summary(
         self,
         identity: OmniaIdentity,
@@ -579,14 +593,11 @@ class StudioService:
     ) -> Dict[str, Any]:
         return self.identity.serialize_usage_summary(identity=identity, billing_state=billing_state)
 
-
     def _initialize_state_locked(self, state: StudioState) -> None:
         return self.identity._initialize_state_locked(state=state)
 
-
     def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
         return self.identity._migrate_identity_visibility_defaults_locked(state=state)
-
 
     def _backfill_posts_locked(self, state: StudioState) -> None:
         return self.public.backfill_posts_locked(state)
@@ -596,7 +607,6 @@ class StudioService:
 
     def get_public_plan_payload(self) -> Dict[str, Any]:
         return self.identity.get_public_plan_payload()
-
 
     def _post_preview_assets(
         self,
@@ -1070,14 +1080,11 @@ class StudioService:
     ) -> tuple[ChatConversation, List[ChatMessage], ChatMessage, ChatMessage]:
         return await self.chat._resolve_latest_editable_turn()
 
-
     async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
         return await self.generation.list_generations(identity_id=identity_id, project_id=project_id)
 
-
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
         return await self.generation.get_generation(identity_id=identity_id, generation_id=generation_id)
-
 
     async def list_assets(self, identity_id: str, project_id: Optional[str] = None, include_deleted: bool = False) -> List[MediaAsset]:
         return await self.library.list_assets(identity_id, project_id=project_id, include_deleted=include_deleted)
@@ -1232,7 +1239,6 @@ class StudioService:
             viewer_identity_id=viewer_identity_id,
         )
 
-
     async def update_profile(
         self,
         identity_id: str,
@@ -1247,7 +1253,6 @@ class StudioService:
             bio=bio,
             default_visibility=default_visibility,
         )
-
 
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
         return await self.public.get_post_payload(
@@ -1308,18 +1313,14 @@ class StudioService:
     async def get_identity(self, identity_id: str) -> OmniaIdentity:
         return await self.identity.get_identity(identity_id=identity_id)
 
-
     async def get_deleted_identity_tombstone(self, identity_id: str) -> DeletedIdentityTombstone | None:
         return await self.identity.get_deleted_identity_tombstone(identity_id)
-
 
     async def is_identity_deleted(self, identity_id: str) -> bool:
         return await self.identity.is_identity_deleted(identity_id)
 
-
     async def get_identity_by_username(self, username: str) -> OmniaIdentity:
         return await self.identity.get_identity_by_username(username=username)
-
 
     async def create_generation(
         self,
@@ -1339,7 +1340,6 @@ class StudioService:
     ) -> GenerationJob:
         return await self.generation.create_generation(identity_id=identity_id, project_id=project_id, prompt=prompt, negative_prompt=negative_prompt, reference_asset_id=reference_asset_id, model_id=model_id, width=width, height=height, steps=steps, cfg_scale=cfg_scale, seed=seed, aspect_ratio=aspect_ratio, output_count=output_count)
 
-
     async def _persist_generation_job_with_reservation(
         self,
         *,
@@ -1351,7 +1351,6 @@ class StudioService:
         plan_config: PlanCatalogEntry,
     ) -> GenerationJob:
         return await self.generation._persist_generation_job_with_reservation(identity=identity, job=job, project_id=project_id, model_id=model_id, prompt_snapshot=prompt_snapshot, plan_config=plan_config)
-
 
     async def create_share(self, identity_id: str, project_id: Optional[str], asset_id: Optional[str]) -> tuple[ShareLink, str]:
         return await self.public.create_share(identity_id, project_id, asset_id)
@@ -1368,10 +1367,8 @@ class StudioService:
     async def billing_summary(self, identity_id: str) -> Dict[str, Any]:
         return await self.billing.billing_summary(identity_id=identity_id)
 
-
     async def checkout(self, identity_id: str, kind: CheckoutKind) -> Dict[str, Any]:
         return await self.billing.checkout(identity_id=identity_id, kind=kind)
-
 
     async def health(self, detail: bool = False) -> Dict[str, Any]:
         return await self.health_service.health(detail)
@@ -1385,14 +1382,11 @@ class StudioService:
     ) -> ProviderSpendGuardrailStatus | None:
         return await self.billing._provider_spend_guardrail_for_provider(provider_name=provider_name, provider_billable=provider_billable, projected_cost_usd=projected_cost_usd)
 
-
     async def _build_provider_spend_guardrails_summary(self) -> Dict[str, Any]:
         return await self.billing._build_provider_spend_guardrails_summary()
 
-
     async def _build_cost_telemetry_summary(self) -> Dict[str, Any]:
         return await self.billing._build_cost_telemetry_summary()
-
 
     async def _record_cost_telemetry_event(
         self,
@@ -1409,7 +1403,6 @@ class StudioService:
         metadata: Dict[str, Any] | None = None,
     ) -> CostTelemetryEvent | None:
         return await self.billing._record_cost_telemetry_event(source_kind=source_kind, surface=surface, provider=provider, amount_usd=amount_usd, identity_id=identity_id, source_id=source_id, provider_model=provider_model, studio_model=studio_model, billable=billable, metadata=metadata)
-
 
     async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
         return await self.shell.get_settings_payload(identity_id)
@@ -1440,14 +1433,11 @@ class StudioService:
     def _refresh_monthly_credits_locked(self, state: StudioState, identity: OmniaIdentity) -> None:
         return self.billing._refresh_monthly_credits_locked(state=state, identity=identity)
 
-
     async def improve_generation_prompt(self, prompt: str, *, identity_id: str | None = None) -> Dict[str, Any]:
         return await self.generation.improve_generation_prompt(prompt=prompt, identity_id=identity_id)
 
-
     def _fallback_enhanced_prompt(self, prompt: str) -> str:
         return self.generation._fallback_enhanced_prompt(prompt=prompt)
-
 
     def _sanitize_generation_text(
         self,
@@ -1458,7 +1448,6 @@ class StudioService:
     ) -> str:
         return self.generation._sanitize_generation_text(value=value, field_name=field_name, max_length=max_length)
 
-
     async def require_owned_model(self, collection: str, model_id: str, model_type, identity_id: str):
         model = await self.store.get_model(collection, model_id, model_type)
         if model is None or model.identity_id != identity_id:
@@ -1467,7 +1456,6 @@ class StudioService:
 
     async def _process_generation(self, job_id: str) -> None:
         return await self.generation._process_generation(job_id=job_id)
-
 
     async def _update_job_status(
         self,
@@ -1480,18 +1468,14 @@ class StudioService:
     ) -> Optional[GenerationJob]:
         return await self.generation._update_job_status(job_id=job_id, status=status, provider=provider, provider_billable=provider_billable, error=error, error_code=error_code)
 
-
     async def _get_generation_job_snapshot(self, job_id: str) -> Optional[GenerationJob]:
         return await self.generation._get_generation_job_snapshot(job_id=job_id)
-
 
     def _normalize_generation_error_message(self, exc: Exception) -> str:
         return self.generation._normalize_generation_error_message(exc=exc)
 
-
     def _classify_generation_error_code(self, exc: Exception) -> str:
         return self.generation._classify_generation_error_code(exc=exc)
-
 
     def _generation_retry_limit_for_job(
         self,
@@ -1500,7 +1484,6 @@ class StudioService:
         provider_billable: Optional[bool] = None,
     ) -> int:
         return self.generation._generation_retry_limit_for_job(job=job, provider_billable=provider_billable)
-
 
     def _log_generation_event(
         self,
@@ -1517,7 +1500,6 @@ class StudioService:
     ) -> None:
         return self.generation._log_generation_event(event=event, job=job, status=status, provider=provider, error=error, error_code=error_code, started_at=started_at, finished_at=finished_at, level=level)
 
-
     async def _ensure_generation_capacity(
         self,
         *,
@@ -1529,10 +1511,8 @@ class StudioService:
     ) -> None:
         return await self.generation._ensure_generation_capacity(identity=identity, project_id=project_id, model_id=model_id, prompt_snapshot=prompt_snapshot, plan_config=plan_config)
 
-
     def _estimate_queue_wait_seconds(self, queued_jobs: int) -> int:
         return self.generation._estimate_queue_wait_seconds(queued_jobs=queued_jobs)
-
 
     async def _create_asset_from_result(
         self,
@@ -1552,7 +1532,6 @@ class StudioService:
     async def _read_asset_bytes(self, asset: MediaAsset, *, variant: str) -> tuple[bytes, str]:
         return await self.generation._read_asset_bytes(asset=asset, variant=variant)
 
-
     async def _store_asset_payload(
         self,
         *,
@@ -1571,10 +1550,8 @@ class StudioService:
     async def export_identity_data(self, identity_id: str) -> Dict[str, Any]:
         return await self.identity.export_identity_data(identity_id=identity_id)
 
-
     async def permanently_delete_identity(self, identity_id: str) -> bool:
         return await self.identity.permanently_delete_identity(identity_id=identity_id)
-
 
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
         return await self.billing.process_lemonsqueezy_webhook(payload=payload)

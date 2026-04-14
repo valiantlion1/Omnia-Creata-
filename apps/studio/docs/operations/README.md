@@ -13,11 +13,16 @@ Buradaki belgeler su sorulara cevap verir:
   build-by-build degisim tarihi ve "neden degisti?" ozeti
 - [Maintenance Map](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_MAINTENANCE_MAP.md)
   su anki stabil alanlar, dikkat noktalar ve guvenli varsayimlar
+- [Shell Baseline Matrix](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_SHELL_BASELINE_MATRIX.md)
+  `.87` shell baseline ile `.88` completion/closure candidate sonucunu ve `.89+` continuation build'lerinde shell truth'un nasil korundugunu yuzey bazinda ozetler
 
 Bu klasorun mantigi:
 - "bugun ne dogru?" sorusunu cevaplamak
 - tarihsel planlari current truth gibi gostermemek
 - build, verify ve maintenance bilgisini tek yerde toplamak
+
+Aktif urun frame'i `Controlled Public Paid Launch`tir.
+`Protected Beta Hardening` ise hala korunmasi gereken tarihsel/current-build baseline proof olarak okunur.
 
 ## History
 

@@ -22,6 +22,12 @@ npm run dev:desktop
 npm run build
 ```
 
+## Start here
+
+- Docs hub: [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omnia-watch/docs/README.md)
+- Product: [docs/PRODUCT.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omnia-watch/docs/PRODUCT.md)
+- Architecture: [docs/ARCHITECTURE.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omnia-watch/docs/ARCHITECTURE.md)
+
 ## Notes
 
 - The browser product targets `watch.omniacreata.com`.

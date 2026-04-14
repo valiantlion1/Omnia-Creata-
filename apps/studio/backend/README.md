@@ -176,6 +176,9 @@ Once running, visit:
   - `data_authority.record_count`
   - `provider_smoke.recorded_at`
   - `provider_smoke.summary`
+  - `provider_truth.status`
+  - `provider_truth.mix.status`
+  - `provider_truth.economics.status`
   - `launch_readiness.status`
   - `launch_readiness.checks`
   - `ai_control_plane`

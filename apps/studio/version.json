@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.12.86",
+  "build": "2026.04.14.101",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-12",
-  "notes": "Protected-beta shell honesty is tighter again: browser PATCH preflight now reaches post visibility routes, signed-in Settings surfaces either execute or clearly disclose their protected-beta limits, project cards reopen lightbox previews, and landing/billing/explore copy no longer overstate hardware or package truth."
+  "releaseDate": "2026-04-14",
+  "notes": "Phase 1 security hardening now freezes owner authority to stored backend identity truth and adds explicit rate limits around high-risk Studio self-service mutations such as project writes, profile export/delete, asset import, and style mutations."
 }

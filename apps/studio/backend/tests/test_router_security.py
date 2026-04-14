@@ -918,14 +918,19 @@ async def test_public_profile_route_hides_private_usage_and_visibility_defaults(
 @pytest.mark.asyncio
 async def test_healthz_detail_route_requires_owner_mode_and_returns_truth_payload(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
+    await service.ensure_identity(
+        user_id="owner-1",
+        email="owner@example.com",
+        display_name="Owner One",
+        username="owner-1",
+        owner_mode=True,
+        local_access=True,
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         denied = await client.get("/v1/healthz/detail", headers={"X-Test-User": "user-1"})
-        allowed = await client.get(
-            "/v1/healthz/detail",
-            headers={"X-Test-User": "owner-1", "X-Test-Owner-Mode": "true"},
-        )
+        allowed = await client.get("/v1/healthz/detail", headers={"X-Test-User": "owner-1"})
 
     try:
         assert denied.status_code == 403
@@ -954,14 +959,32 @@ async def test_healthz_detail_route_rejects_tombstoned_owner_session(tmp_path: P
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(
-            "/v1/healthz/detail",
-            headers={"X-Test-User": "owner-1", "X-Test-Owner-Mode": "true"},
-        )
+        response = await client.get("/v1/healthz/detail", headers={"X-Test-User": "owner-1"})
 
     try:
         assert response.status_code == 401
         assert response.json() == {"detail": "This session belongs to an account that has been permanently deleted."}
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_healthz_detail_route_rejects_header_only_owner_claim_and_keeps_identity_unprivileged(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/healthz/detail",
+            headers={"X-Test-User": "user-1", "X-Test-Owner-Mode": "true"},
+        )
+
+    try:
+        assert response.status_code == 403
+        identity = await service.get_identity("user-1")
+        assert identity.owner_mode is False
+        assert identity.root_admin is False
+        assert identity.local_access is False
     finally:
         await service.shutdown()
 
@@ -1024,21 +1047,28 @@ async def test_clean_export_route_uses_user_and_ip_rate_limits(
 @pytest.mark.asyncio
 async def test_admin_telemetry_route_requires_root_admin_and_returns_summary(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
+    await service.ensure_identity(
+        user_id="owner-1",
+        email="owner@example.com",
+        display_name="Owner One",
+        username="owner-1",
+        owner_mode=True,
+        local_access=True,
+    )
+    await service.ensure_identity(
+        user_id="root-1",
+        email="root@example.com",
+        display_name="Root One",
+        username="root-1",
+        owner_mode=True,
+        root_admin=True,
+        local_access=True,
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        denied = await client.get(
-            "/v1/admin/telemetry",
-            headers={"X-Test-User": "owner-1", "X-Test-Owner-Mode": "true"},
-        )
-        allowed = await client.get(
-            "/v1/admin/telemetry",
-            headers={
-                "X-Test-User": "root-1",
-                "X-Test-Owner-Mode": "true",
-                "X-Test-Root-Admin": "true",
-            },
-        )
+        denied = await client.get("/v1/admin/telemetry", headers={"X-Test-User": "owner-1"})
+        allowed = await client.get("/v1/admin/telemetry", headers={"X-Test-User": "root-1"})
 
     try:
         assert denied.status_code == 403
@@ -1049,6 +1079,31 @@ async def test_admin_telemetry_route_requires_root_admin_and_returns_summary(tmp
         assert "telemetry" in payload
         assert "event_count" in payload["telemetry"]
         assert payload["total_identities"] >= 1
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_admin_telemetry_route_rejects_header_only_root_admin_claim(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/admin/telemetry",
+            headers={
+                "X-Test-User": "root-1",
+                "X-Test-Owner-Mode": "true",
+                "X-Test-Root-Admin": "true",
+            },
+        )
+
+    try:
+        assert response.status_code == 403
+        identity = await service.get_identity("root-1")
+        assert identity.owner_mode is False
+        assert identity.root_admin is False
+        assert identity.local_access is False
     finally:
         await service.shutdown()
 
@@ -1224,5 +1279,218 @@ async def test_revoke_share_route_returns_sanitized_record(
         assert response.status_code == 200
         assert response.json()["share"]["id"] == "share-1"
         assert "token" not in response.json()["share"]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_project_mutation_routes_use_explicit_rate_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_create_project(identity_id: str, title: str, description: str, surface: str = "compose") -> Project:
+        return Project(id="project-create", workspace_id="ws-user-1", identity_id=identity_id, title=title, description=description, surface=surface)
+
+    async def fake_update_project(identity_id: str, project_id: str, title: str, description: str) -> Project:
+        return Project(id=project_id, workspace_id="ws-user-1", identity_id=identity_id, title=title, description=description)
+
+    async def fake_delete_project(identity_id: str, project_id: str) -> dict:
+        return {"status": "deleted", "project_id": project_id}
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.create_project = fake_create_project  # type: ignore[method-assign]
+    service.update_project = fake_update_project  # type: ignore[method-assign]
+    service.delete_project = fake_delete_project  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        create_response = await client.post(
+            "/v1/projects",
+            headers={"X-Test-User": "user-1"},
+            json={"title": "Campaign", "description": "Spring launch", "surface": "compose"},
+        )
+        update_response = await client.patch(
+            "/v1/projects/project-create",
+            headers={"X-Test-User": "user-1"},
+            json={"title": "Campaign v2", "description": "Updated"},
+        )
+        delete_response = await client.delete("/v1/projects/project-create", headers={"X-Test-User": "user-1"})
+
+    try:
+        assert create_response.status_code == 201
+        assert update_response.status_code == 200
+        assert delete_response.status_code == 200
+        assert any("projects:create" in key and limit == 24 and window == 3600 for key, limit, window in calls)
+        assert any("projects:update" in key and limit == 60 and window == 3600 for key, limit, window in calls)
+        assert any("projects:delete" in key and limit == 12 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_profile_self_service_routes_use_explicit_rate_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_export_identity_data(identity_id: str) -> dict:
+        return {"identity": {"id": identity_id}, "assets": []}
+
+    async def fake_delete_identity(identity_id: str) -> None:
+        return None
+
+    async def fake_update_profile(identity_id: str, display_name=None, bio=None, default_visibility=None) -> None:
+        return None
+
+    async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None) -> dict:
+        target_identity_id = identity_id or username or "user-1"
+        return {"profile": {"id": target_identity_id}, "own_profile": True, "can_edit": True}
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.export_identity_data = fake_export_identity_data  # type: ignore[method-assign]
+    service.permanently_delete_identity = fake_delete_identity  # type: ignore[method-assign]
+    service.update_profile = fake_update_profile  # type: ignore[method-assign]
+    service.get_profile_payload = fake_get_profile_payload  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        export_response = await client.get("/v1/profiles/me/export", headers={"X-Test-User": "user-1"})
+        patch_response = await client.patch(
+            "/v1/profiles/me",
+            headers={"X-Test-User": "user-1"},
+            json={"display_name": "User One"},
+        )
+        delete_response = await client.delete("/v1/profiles/me", headers={"X-Test-User": "user-1"})
+
+    try:
+        assert export_response.status_code == 200
+        assert patch_response.status_code == 200
+        assert delete_response.status_code == 200
+        assert any("profiles:export" in key and limit == 6 and window == 3600 for key, limit, window in calls)
+        assert any("profiles:update" in key and limit == 24 and window == 3600 for key, limit, window in calls)
+        assert any("profiles:delete" in key and limit == 3 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_asset_import_route_uses_user_and_ip_rate_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_import_asset_from_data_url(identity_id: str, project_id: str, data_url: str, title: str) -> MediaAsset:
+        return MediaAsset(
+            id="asset-import",
+            workspace_id="ws-user-1",
+            project_id=project_id,
+            identity_id=identity_id,
+            title=title,
+            prompt="imported",
+            url="stored",
+            metadata={},
+        )
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.import_asset_from_data_url = fake_import_asset_from_data_url  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/assets/import",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "title": "Reference upload",
+                "data_url": "data:image/png;base64," + ("a" * 64),
+            },
+        )
+
+    try:
+        assert response.status_code == 201
+        assert any("assets:import:user-1" in key and limit == 24 and window == 3600 for key, limit, window in calls)
+        assert any("assets:import:ip" in key and limit == 30 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_style_mutation_routes_use_explicit_rate_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_save_style(*args, **kwargs):
+        return object()
+
+    async def fake_save_style_from_prompt(*args, **kwargs):
+        return object()
+
+    async def fake_update_style(*args, **kwargs):
+        return object()
+
+    def fake_serialize_style(style) -> dict:
+        return {"id": "style-1"}
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.save_style = fake_save_style  # type: ignore[method-assign]
+    service.save_style_from_prompt = fake_save_style_from_prompt  # type: ignore[method-assign]
+    service.update_style = fake_update_style  # type: ignore[method-assign]
+    service._serialize_style = fake_serialize_style  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        create_response = await client.post(
+            "/v1/styles",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "title": "Noir",
+                "prompt_modifier": "deep shadows",
+                "description": "",
+                "category": "custom",
+                "favorite": False,
+            },
+        )
+        prompt_response = await client.post(
+            "/v1/styles/from-prompt",
+            headers={"X-Test-User": "user-1"},
+            json={"prompt": "noir portrait", "title": "Noir", "category": "custom"},
+        )
+        patch_response = await client.patch(
+            "/v1/styles/style-1",
+            headers={"X-Test-User": "user-1"},
+            json={"favorite": True},
+        )
+
+    try:
+        assert create_response.status_code == 201
+        assert prompt_response.status_code == 201
+        assert patch_response.status_code == 200
+        assert sum(1 for key, limit, window in calls if "styles:mutate" in key and limit == 40 and window == 3600) == 3
     finally:
         await service.shutdown()

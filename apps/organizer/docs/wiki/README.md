@@ -10,8 +10,10 @@ Use this when:
 - checking naming and product positioning
 
 ## Canonical truth
+- Docs hub: [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/README.md)
 - Product root: [apps/organizer](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer)
-- Planning pack: [NEW PLANS / OmniaOrganizer_Codex_Paketi](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/NEW%20PLANS/OmniaOrganizer_Codex_Paketi)
+- Product notes: [PRODUCT.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/PRODUCT.md)
+- Scope audit: [PLAN_AUDIT_AND_V1_SCOPE.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/PLAN_AUDIT_AND_V1_SCOPE.md)
 - Version manifest: [version.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/version.json)
 - Release ledger: [ORGANIZER_RELEASE_LEDGER.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/operations/ORGANIZER_RELEASE_LEDGER.md)
 - Maintenance map: [ORGANIZER_MAINTENANCE_MAP.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/operations/ORGANIZER_MAINTENANCE_MAP.md)
@@ -25,3 +27,7 @@ Use this when:
 
 ## One-line product summary
 OmniaOrganizer is a grounded mobile file manager for Android phones that helps users browse, find, organize, move, delete, restore, and understand phone storage without turning into a cloud drive or AI gimmick.
+
+## Historical note
+
+`docs/NEW PLANS` and `docs/master-plan` still contain useful older planning material, but they are reference surfaces rather than canonical current truth.

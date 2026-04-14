@@ -28,6 +28,7 @@ import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { usePageMeta } from '@/lib/usePageMeta'
 import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
 /* ─── UI Primitives ──────────────────────────────────────────────────────── */
@@ -86,6 +87,7 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
+  usePageMeta('Settings', 'Customize your Omnia Creata Studio preferences and account.')
   const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
   const queryClient = useQueryClient()
@@ -94,6 +96,7 @@ export default function SettingsPage() {
   const [pendingVisibility, setPendingVisibility] = useState<Visibility | null>(null)
   const activeDefaultVisibility = pendingVisibility ?? auth?.identity.default_visibility ?? 'public'
   const isGMMode = Boolean(auth?.identity.owner_mode)
+  const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
 
   useQuery({
     queryKey: ['settings-bootstrap'],
@@ -168,13 +171,6 @@ export default function SettingsPage() {
       a.click()
     } catch (e) {
       alert('Export failed.')
-    }
-  }
-
-  const handleDelete = async () => {
-    if (confirm('Are you absolutely sure you want to delete your account? All data will be wiped.')) {
-      await studioApi.deleteProfile()
-      await signOut()
     }
   }
 
@@ -280,7 +276,9 @@ export default function SettingsPage() {
                         <div className="mt-1 text-[13px] font-medium text-zinc-400">{auth?.identity.email || 'You are exploring securely'}</div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <StatusPill tone={auth?.guest ? 'neutral' : 'brand'}>{auth?.plan.label ?? 'Free Access'}</StatusPill>
-                          <span className="text-[12px] font-semibold tracking-wide text-zinc-500">{auth?.credits.remaining ?? 0} CREDITS</span>
+                          <span className="text-[12px] font-semibold tracking-wide text-zinc-500">
+                            {hasInternalAccess ? 'OWNER ACCESS' : `${auth?.credits.remaining ?? 0} CREDITS`}
+                          </span>
                         </div>
                     </div>
                   </div>
@@ -304,10 +302,10 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={CreditCard}
                     title="Plan & Billing"
-                    description="View active plan details, manage your payment methods, and purchase more credits."
+                    description="Review your current plan, credits, and checkout availability."
                     action={
                       <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
-                        Manage Plan <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
+                        View Plans <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
                       </Link>
                     }
                   />
@@ -445,14 +443,14 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Key}
                     title="Credentials"
-                    description="Password changes stay with your active sign-in provider during protected beta."
+                    description="Password changes stay with your active sign-in provider."
                     action={<StatusPill tone="neutral">Managed outside Studio</StatusPill>}
                   />
                   <SettingsRow 
                     icon={MonitorSmartphone}
                     title="Active Sessions"
-                    description="Device session management is not exposed in the Studio shell during protected beta."
-                    action={<StatusPill tone="neutral">Protected beta</StatusPill>}
+                    description="Device session management is not exposed in the Studio shell yet."
+                    action={<StatusPill tone="neutral">Unavailable</StatusPill>}
                   />
                 </SettingsCard>
               </div>
@@ -462,12 +460,17 @@ export default function SettingsPage() {
                 <SettingsCard compact>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 md:p-8 bg-red-950/20">
                     <div className="min-w-0">
-                      <h4 className="text-[16px] font-bold text-red-400">Permanently Delete Workspace</h4>
-                      <p className="mt-1.5 text-[13px] leading-relaxed text-red-400/80 max-w-sm">Wiping your account is a terminal action. You will instantly lose your active subscription and your visual history can never be recovered.</p>
+                      <h4 className="text-[16px] font-bold text-red-400">Delete workspace</h4>
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-red-400/80 max-w-sm">
+                        For now, deletion requests go through support so billing, exports, and active workspace state can be handled cleanly.
+                      </p>
                     </div>
-                    <button onClick={handleDelete} className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:scale-105">
-                      <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" /> Erase Account
-                    </button>
+                    <a
+                      href="mailto:support@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
+                      className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:scale-105"
+                    >
+                      <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" /> Contact Support
+                    </a>
                   </div>
                 </SettingsCard>
               </div>
@@ -533,7 +536,7 @@ export default function SettingsPage() {
                   <SettingsRow
                     icon={Users}
                     title="User Management"
-                    description="Workspace account administration stays in backoffice tooling during protected beta."
+                    description="Workspace account administration stays in backoffice tooling."
                     action={<StatusPill tone="neutral">Backoffice only</StatusPill>}
                   />
                   <SettingsRow
@@ -545,7 +548,7 @@ export default function SettingsPage() {
                   <SettingsRow
                     icon={Trash2}
                     title="Clear Sandbox Data"
-                    description="Sandbox cleanup stays manual-only during protected beta to avoid destructive accidental clicks."
+                    description="Sandbox cleanup stays manual-only to avoid destructive accidental clicks."
                     action={<StatusPill tone="neutral">Manual only</StatusPill>}
                     danger
                   />

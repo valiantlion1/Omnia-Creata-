@@ -1,16 +1,16 @@
 # Ecosystem Map
 
-## Active core products
+## Product portfolio
 
-| Product | Path | Current shape |
+| Product | Path | Portfolio role | Current shape |
 | --- | --- | --- |
-| Omnia Creata Studio | `apps/studio` | Web + backend product root |
-| OmniaPixels | `apps/omniapixels` | Backend + mobile + product docs |
-| OmniaOrganizer | `apps/organizer` | Mobile Android root + planning docs |
-| OmniaCompanion | `apps/companion` | Canonical product plan and handoff, implementation pending |
-| Omnia Watch | `apps/omnia-watch` | Web + desktop + shared packages |
-| Prompt Vault | `apps/prompt-vault` | Web + shared packages + Supabase |
-| Control Center | `apps/internal/control-center` | Internal suite seed, implementation pending |
+| Omnia Creata Studio | `apps/studio` | Active primary | Web + backend flagship product root; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/README.md) |
+| Control Center / OCOS | `apps/internal/control-center` | Future internal app | Internal operating-system seed; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/README.md) |
+| OmniaOrganizer | `apps/organizer` | Incubation / secondary review | Mobile Android root plus a docs-consolidation hotspot; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/README.md) |
+| Prompt Vault | `apps/prompt-vault` | Incubation / secondary review | Web + packages + Supabase with docs cleanup still needed; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/README.md) |
+| OmniaPixels | `apps/omniapixels` | Incubation / secondary review | Backend + mobile + preserved migration docs; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omniapixels/docs/README.md) |
+| Omnia Watch | `apps/omnia-watch` | Incubation / secondary review | Web + desktop + shared packages; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omnia-watch/docs/README.md) |
+| OmniaCompanion | `apps/companion` | Planned / hold | Canonical planning root; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/companion/docs/README.md) |
 
 ## Website umbrella
 
@@ -26,3 +26,9 @@
 | SubCompare | `prototypes/subcompare-lab` | Experimental comparison app |
 | Website temp | `prototypes/website-temp` | Non-canonical website starter/scratch area |
 | Web scratch | `prototypes/web-scratch` | Disposable scratch prototype |
+
+## Documentation doctrine
+
+- Root docs carry taxonomy, portfolio roles, global decisions, and repo operations.
+- Product truth lives inside each product root.
+- Historical material survives only when it still adds implementation context; otherwise it should be removed or absorbed into canonical docs.

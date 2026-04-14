@@ -76,8 +76,8 @@ function CatalogCard({
 
       <div className="relative z-20 flex flex-1 flex-col p-6 pt-0">
         <div className="mb-2 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[#7c3aed]" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#7c3aed]">
+          <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-[rgb(var(--primary))]">
             {entry.is_omnia ? 'Omnia Official' : 'Community'}
           </span>
         </div>
@@ -381,7 +381,7 @@ export default function ElementsPage() {
                   : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
               }`}
             >
-              <Icon className={`h-3.5 w-3.5 ${active ? 'text-[#7c3aed]' : ''}`} />
+              <Icon className={`h-3.5 w-3.5 ${active ? 'text-[rgb(var(--primary))]' : ''}`} />
               {cat.label}
             </button>
           )

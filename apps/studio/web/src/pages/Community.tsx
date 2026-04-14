@@ -47,7 +47,15 @@ export default function CommunityPage() {
         p.prompt?.toLowerCase().includes(normalizedSearch) ||
         p.owner_display_name?.toLowerCase().includes(normalizedSearch) ||
         p.title?.toLowerCase().includes(normalizedSearch) ||
-        p.style_tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch))
+        p.style_tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch)) ||
+        p.cover_asset?.display_title?.toLowerCase().includes(normalizedSearch) ||
+        p.cover_asset?.title?.toLowerCase().includes(normalizedSearch) ||
+        p.cover_asset?.derived_tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch)) ||
+        p.preview_assets?.some((asset) =>
+          asset.display_title?.toLowerCase().includes(normalizedSearch) ||
+          asset.title?.toLowerCase().includes(normalizedSearch) ||
+          asset.derived_tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch))
+        )
       )
     : posts
 
@@ -89,9 +97,9 @@ export default function CommunityPage() {
                   ? 'text-white ring-1 ring-white/10'
                   : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
               }`}
-              style={isActive ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(124,58,237,0.05))' } : undefined}
+              style={isActive ? { background: 'linear-gradient(135deg, rgb(var(--primary)/0.2), rgb(var(--primary)/0.05))' } : undefined}
             >
-              <Icon className={`h-4 w-4 ${isActive ? 'text-[#7c3aed]' : ''}`} />
+              <Icon className={`h-4 w-4 ${isActive ? 'text-[rgb(var(--primary))]' : ''}`} />
               {tab.label}
             </button>
           )
@@ -105,7 +113,7 @@ export default function CommunityPage() {
             placeholder="Search prompts, creators, styles..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent text-sm text-white placeholder-zinc-500 outline-none w-40"
+            className="bg-transparent text-sm text-white placeholder-zinc-500 outline-none w-40 sm:w-56"
           />
           {searchQuery ? (
             <button
@@ -116,6 +124,12 @@ export default function CommunityPage() {
               Clear
             </button>
           ) : null}
+        </div>
+
+        <div className="w-full text-[12px] font-medium text-zinc-500">
+          {loading
+            ? 'Refreshing the current feed...'
+            : `${filteredPosts.length} result${filteredPosts.length === 1 ? '' : 's'} in ${tabs.find((tab) => tab.mode === sort)?.label.toLowerCase() ?? 'current'} view${searchQuery ? ` for "${searchQuery}"` : ''}.`}
         </div>
       </section>
 
@@ -128,75 +142,90 @@ export default function CommunityPage() {
       )}
 
       {!loading && filteredPosts.length === 0 && (
-         <div className="text-center py-20">
-           <div className="text-zinc-600 text-6xl mb-4">🎨</div>
-           <div className="text-zinc-400 font-semibold text-lg">
-             {searchQuery ? `No results for "${searchQuery}".` : 'Nothing here yet.'}
-           </div>
-           <p className="text-zinc-500 mt-2">
-             {searchQuery ? 'Try prompt words, creator names, or style tags.' : 'Be the first to share your work!'}
-           </p>
-         </div>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/[0.03] ring-1 ring-white/[0.08] mb-6">
+            <Sparkles className="h-7 w-7 text-zinc-500" />
+          </div>
+          <div className="text-zinc-200 font-semibold text-xl">
+            {searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+          </div>
+          <p className="text-zinc-500 mt-3 max-w-sm text-sm leading-relaxed">
+            {searchQuery ? 'Try different prompt words, creator names, or style tags.' : 'Be the first to create and share your work with the community.'}
+          </p>
+        </div>
       )}
 
       {/* Feed Layout */}
       {!loading && filteredPosts.length > 0 && (
-        <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPosts.map((post) => (
-            <div key={post.id} className="group relative flex flex-col overflow-hidden rounded-[32px] border border-white/[0.05] bg-[#0a0a0c] transition-all duration-500 hover:border-white/[0.15] hover:shadow-[0_12px_45px_rgba(0,0,0,0.5)]">
-              
-              {/* Image Container */}
-              <div className="relative aspect-square w-full overflow-hidden">
-                <img 
-                  src={post.cover_asset?.thumbnail_url || post.cover_asset?.url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80"} 
-                  alt={post.prompt} 
-                  loading="lazy"
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" 
-                />
-                
-                {/* Overlay Gradient */}
-                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                
-                {/* Prompt Overlay */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 translate-y-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                  <p className="line-clamp-3 text-sm font-medium text-white shadow-sm leading-relaxed">{post.prompt || "No prompt available."}</p>
+        <section className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4 [column-fill:_balance]">
+          {filteredPosts.map((post, i) => {
+            const aspectClass = i % 5 === 0 ? 'aspect-[4/5]' : i % 5 === 1 ? 'aspect-square' : i % 5 === 2 ? 'aspect-[5/6]' : i % 5 === 3 ? 'aspect-[3/4]' : 'aspect-square'
+            return (
+              <div key={post.id} className="group relative mb-5 break-inside-avoid overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#0a0a0c] shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-0.5 hover:border-white/[0.12] hover:shadow-[0_16px_48px_rgba(0,0,0,0.6)]">
+
+                {/* Image Container */}
+                <div className={`relative w-full overflow-hidden ${aspectClass}`}>
+                  {post.cover_asset?.thumbnail_url || post.cover_asset?.url ? (
+                    <img
+                      src={post.cover_asset.thumbnail_url || post.cover_asset.url}
+                      alt={post.prompt || post.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-white/[0.03] flex items-center justify-center">
+                      <Sparkles className="h-8 w-8 text-zinc-700" />
+                    </div>
+                  )}
+
+                  {/* Vignette */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+
+                  {/* Prompt Overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-3 opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
+                    <p className="line-clamp-2 text-[13px] font-medium text-white/95 leading-relaxed drop-shadow-md">{post.prompt || post.title}</p>
+                  </div>
+
+                  {/* Style Tags */}
+                  {post.style_tags && post.style_tags.length > 0 && (
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-1 opacity-0 -translate-x-1 transition-all duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+                      {post.style_tags.slice(0, 2).map((tag) => (
+                        <span key={tag} className="rounded-full bg-black/50 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-semibold text-white/80 ring-1 ring-white/10">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Like button */}
+                  <div className="absolute top-3 right-3 opacity-0 translate-x-1 transition-all duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+                    <button
+                      onClick={() => handleLike(post.id, post.viewer_has_liked)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium backdrop-blur-md ring-1 transition-all duration-300 ${
+                        post.viewer_has_liked
+                          ? 'bg-white text-black ring-white shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+                          : 'bg-black/40 text-white/90 ring-white/10 hover:bg-black/60'
+                      }`}
+                    >
+                      <Heart className={`h-3.5 w-3.5 ${post.viewer_has_liked ? 'fill-current text-rose-500' : 'opacity-70'}`} />
+                      <span>{post.like_count || 0}</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Style Tags */}
-                {post.style_tags && post.style_tags.length > 0 && (
-                  <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                    {post.style_tags.slice(0, 2).map((tag) => (
-                      <span key={tag} className="rounded-full bg-black/60 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-semibold text-white/80">{tag}</span>
-                    ))}
+                {/* Author Footer */}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))]/20 text-[11px] font-bold text-[rgb(var(--primary-light))]">
+                      {post.owner_display_name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="text-[13px] font-medium text-zinc-300 truncate">{post.owner_display_name || 'Creator'}</span>
                   </div>
-                )}
-              </div>
-
-              {/* Post Metadata Footer */}
-              <div className="flex items-center justify-between p-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.1] bg-[#7c3aed]/20 text-[#7c3aed]">
-                    {post.owner_display_name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm font-semibold text-zinc-200">{post.owner_display_name || "Unknown Creator"}</span>
-                </div>
-                
-                <div className="flex items-center gap-4 text-zinc-400">
-                  <button
-                    onClick={() => handleLike(post.id, post.viewer_has_liked)}
-                    className={`flex items-center gap-1.5 transition-colors ${post.viewer_has_liked ? 'text-rose-400' : 'hover:text-white'}`}
-                  >
-                    <Heart className={`h-4 w-4 ${post.viewer_has_liked ? 'fill-current' : ''}`} />
-                    <span className="text-xs font-medium">{post.like_count || 0}</span>
-                  </button>
-                  <button className="flex items-center justify-center transition-colors hover:text-white">
-                    <Share2 className="h-4 w-4" />
+                  <button className="flex items-center justify-center text-zinc-600 transition-colors hover:text-zinc-300 ml-2 shrink-0">
+                    <Share2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              
-            </div>
-          ))}
+            )
+          })}
         </section>
       )}
 

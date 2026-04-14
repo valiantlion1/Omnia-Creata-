@@ -305,6 +305,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     plan_label: auth.plan.label,
     progress_percent: auth.plan.monthly_credits > 0 ? ((auth.plan.monthly_credits - auth.credits.monthly_remaining) / auth.plan.monthly_credits) * 100 : 0
   } : undefined)
+  const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
   const usagePercent = usageSummary ? Math.max(0, 100 - usageSummary.progress_percent) : 0
 
   const getItemChildren = (item: NavItem) => {
@@ -333,7 +334,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               onClick={() => setMobileOpen(false)}
               className="rounded-2xl bg-white px-3 py-2 text-center text-[12px] font-semibold text-black transition hover:opacity-90"
             >
-              Start free
+              Create account
             </Link>
           </div>
         </div>
@@ -348,7 +349,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             <div className="mt-1 text-xs text-zinc-500">{auth?.guest ? 'Guest mode' : auth?.plan.label ?? 'Free'}</div>
           </div>
           <div className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-200 ring-1 ring-white/[0.06]">
-            {auth?.credits.remaining ?? 0} credits
+            {hasInternalAccess ? 'Owner access' : `${auth?.credits.remaining ?? 0} credits`}
           </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -426,7 +427,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
       <div className="relative border-t border-white/[0.015] p-2.5">
         {/* Usage bar — always visible for logged-in users */}
-        {!isGuestShell && !collapsed && usageSummary ? (
+        {!isGuestShell && !collapsed && usageSummary && !hasInternalAccess ? (
           <div className="mb-3 space-y-1.5 px-1">
             <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
@@ -437,7 +438,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         ) : null}
-
         {/* User row */}
         <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-2'}`}>
           <Link
@@ -601,7 +601,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             </div>
             <div className="border-t border-white/[0.02] px-4 py-3">
               {/* Usage bar — mobile */}
-              {!isGuestShell && usageSummary ? (
+              {!isGuestShell && usageSummary && !hasInternalAccess ? (
                 <div className="mb-3 space-y-1.5">
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />

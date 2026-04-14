@@ -5,9 +5,11 @@ import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, 
 
 import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
 import { AppPage, SkeletonImageGrid, StatusPill } from '@/components/StudioPrimitives'
+import { usePageMeta } from '@/lib/usePageMeta'
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
 import {
+  getCreativeProfileLabel,
   normalizeJobStatus,
   studioApi,
   type Generation,
@@ -865,6 +867,7 @@ function PendingPreview({
 }
 
 export default function MediaLibraryPage() {
+  usePageMeta('Library', 'Your images, projects, favorites, and deleted items in Omnia Creata Studio.')
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -933,6 +936,10 @@ export default function MediaLibraryPage() {
     mutationFn: (assetId: string) => studioApi.permanentlyDeleteAsset(assetId),
     onSuccess: async () => {
       setConfirmState(null)
+      setNoticeState({
+        title: 'Removed forever',
+        body: 'The selected asset was permanently deleted.',
+      })
       await invalidateLibrary()
     },
   })
@@ -941,6 +948,10 @@ export default function MediaLibraryPage() {
     mutationFn: () => studioApi.emptyTrash(),
     onSuccess: async () => {
       setConfirmState(null)
+      setNoticeState({
+        title: 'Trash emptied',
+        body: 'All deleted assets were permanently removed.',
+      })
       await invalidateLibrary()
     },
   })
@@ -977,6 +988,10 @@ export default function MediaLibraryPage() {
     mutationFn: (projectId: string) => studioApi.deleteProject(projectId),
     onSuccess: async () => {
       setConfirmState(null)
+      setNoticeState({
+        title: 'Project deleted',
+        body: 'The empty project was removed.',
+      })
       await invalidateLibrary()
     },
   })
@@ -1037,7 +1052,10 @@ export default function MediaLibraryPage() {
         title: assetDisplayTitle(asset),
         prompt: asset.prompt || 'Saved Studio result',
         model: String(metadata.model ?? 'Image'),
-        modelLabel: String(metadata.display_model_label ?? metadata.model ?? 'Studio profile'),
+        modelLabel: getCreativeProfileLabel(
+          String(metadata.model ?? ''),
+          String(metadata.display_model_label ?? metadata.model ?? 'Studio profile'),
+        ),
         derivedTags: asset.derived_tags ?? [],
         createdAt: asset.created_at,
         projectId: asset.project_id,
@@ -1139,11 +1157,102 @@ export default function MediaLibraryPage() {
     navigate(`/create?${next.toString()}`)
   }
 
+  const buildStyleModifier = (group: AssetGroup) => {
+    const styleBits = Array.from(
+      new Set(
+        [group.modelLabel, ...group.derivedTags.slice(0, 4)]
+          .map((part) => part?.trim())
+          .filter((part): part is string => Boolean(part)),
+      ),
+    )
+    return styleBits.join(', ')
+  }
+
+  const openStyleWith = (group: AssetGroup) => {
+    const params: Record<string, string> = {
+      model: group.model,
+      projectId: group.projectId,
+    }
+    const styleModifier = buildStyleModifier(group)
+    if (styleModifier) params.style_modifier = styleModifier
+    openComposeWith(params)
+  }
+
+  const openChatWithAsset = (group: AssetGroup, asset: MediaAsset = group.items[0]) => {
+    const next = new URLSearchParams({
+      new: '1',
+      mode: 'Edit',
+      source: 'library',
+      draft: group.prompt
+        ? `Refine this image while keeping the core direction: ${group.prompt.slice(0, 220)}`
+        : 'Refine this image while keeping the original direction.',
+      reference_asset_label: assetDisplayTitle(asset),
+    })
+    if (asset.id) next.set('reference_asset_id', asset.id)
+    const previewUrl = assetPreviewUrl(asset)
+    if (previewUrl) next.set('reference_asset_url', previewUrl)
+    navigate(`/chat?${next.toString()}`)
+  }
+
   const handleMenuError = (error: unknown) => {
     setNoticeState({
       title: 'Action unavailable',
       body: error instanceof Error ? error.message : 'That action could not be completed.',
     })
+  }
+
+  const handleVisibilityChange = async (postId: string, visibility: 'public' | 'private') => {
+    try {
+      await updatePostMutation.mutateAsync({ postId, payload: { visibility } })
+      setNoticeState({
+        title: visibility === 'public' ? 'Image set is public' : 'Image set is private',
+        body:
+          visibility === 'public'
+            ? 'This image set can now appear on public Studio surfaces.'
+            : 'This image set is now hidden from public Studio surfaces.',
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const handleTrashGroup = async (postId: string, title: string) => {
+    try {
+      await trashPostMutation.mutateAsync(postId)
+      setNoticeState({
+        title: 'Moved to Trash',
+        body: `"${title}" was moved to Trash.`,
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const handleRestoreAsset = async (asset: MediaAsset) => {
+    try {
+      await restoreAssetMutation.mutateAsync(asset.id)
+      setNoticeState({
+        title: 'Restored to library',
+        body: `"${assetDisplayTitle(asset)}" is back in your library.`,
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const handleMoveGroup = async (postId: string, projectId: string, title: string) => {
+    try {
+      await movePostMutation.mutateAsync({ postId, projectId })
+      const targetProject = composeProjects.find((project) => project.id === projectId)
+      setNoticeState({
+        title: 'Moved to project',
+        body: targetProject
+          ? `"${title}" now lives in "${targetProject.title}".`
+          : `"${title}" was moved to another project.`,
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
   }
 
   const openPreview = (group: AssetGroup, index: number) => {
@@ -1164,6 +1273,12 @@ export default function MediaLibraryPage() {
     const ids = Array.from(selectedGroups)
     for (const id of ids) {
       try { await trashPostMutation.mutateAsync(id) } catch { /* continue */ }
+    }
+    if (ids.length) {
+      setNoticeState({
+        title: 'Moved to Trash',
+        body: `${ids.length} image set${ids.length > 1 ? 's were' : ' was'} moved to Trash.`,
+      })
     }
     setSelectedGroups(new Set())
   }
@@ -1341,11 +1456,7 @@ export default function MediaLibraryPage() {
                           </button>
                           <button
                             onClick={async () => {
-                              try {
-                                await updatePostMutation.mutateAsync({ postId: group.id, payload: { visibility: 'public' } })
-                              } catch (error) {
-                                handleMenuError(error)
-                              }
+                              await handleVisibilityChange(group.id, 'public')
                             }}
                             className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
                           >
@@ -1353,11 +1464,7 @@ export default function MediaLibraryPage() {
                           </button>
                           <button
                             onClick={async () => {
-                              try {
-                                await trashPostMutation.mutateAsync(group.id)
-                              } catch (error) {
-                                handleMenuError(error)
-                              }
+                              await handleTrashGroup(group.id, group.title)
                             }}
                             className="rounded-full bg-rose-500/[0.1] px-2.5 py-1.5 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/[0.16]"
                           >
@@ -1405,7 +1512,7 @@ export default function MediaLibraryPage() {
                                   </MenuAction>
                                   <MenuAction
                                     onClick={() => {
-                                      openComposeWith({ model: group.model, projectId: group.projectId })
+                                      openStyleWith(group)
                                       setActionMenu(null)
                                     }}
                                   >
@@ -1413,7 +1520,15 @@ export default function MediaLibraryPage() {
                                   </MenuAction>
                                   <MenuAction
                                     onClick={() => {
-                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId, tool: 'regenerate' })
+                                      const leadAsset = group.items[0]
+                                      openComposeWith({
+                                        prompt: group.prompt,
+                                        model: group.model,
+                                        projectId: group.projectId,
+                                        reference_asset_id: leadAsset.id,
+                                        reference_mode: 'optional',
+                                        source: 'library',
+                                      })
                                       setActionMenu(null)
                                     }}
                                   >
@@ -1421,11 +1536,11 @@ export default function MediaLibraryPage() {
                                   </MenuAction>
                                   <MenuAction
                                     onClick={() => {
-                                      openComposeWith({ prompt: `Refine: ${group.prompt.slice(0, 200)}`, model: group.model, projectId: group.projectId, tool: 'edit' })
+                                      openChatWithAsset(group)
                                       setActionMenu(null)
                                     }}
                                   >
-                                    Edit in Create
+                                    Edit in Chat
                                   </MenuAction>
                                   <MenuDivider />
                                 </>
@@ -1433,12 +1548,8 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={async () => {
-                                  try {
-                                    await updatePostMutation.mutateAsync({ postId: group.id, payload: { visibility: 'public' } })
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
+                                  await handleVisibilityChange(group.id, 'public')
+                                  setActionMenu(null)
                                 }}
                               >
                                 Set public
@@ -1446,12 +1557,8 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={async () => {
-                                  try {
-                                    await updatePostMutation.mutateAsync({ postId: group.id, payload: { visibility: 'private' } })
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
+                                  await handleVisibilityChange(group.id, 'private')
+                                  setActionMenu(null)
                                 }}
                               >
                                 Set private
@@ -1469,12 +1576,8 @@ export default function MediaLibraryPage() {
                                 tone="danger"
                                 disabled={menuBusy}
                                 onClick={async () => {
-                                  try {
-                                    await trashPostMutation.mutateAsync(group.id)
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
+                                  await handleTrashGroup(group.id, group.title)
+                                  setActionMenu(null)
                                 }}
                               >
                                 Move to trash
@@ -1867,8 +1970,8 @@ export default function MediaLibraryPage() {
                             <InlineActionMenu>
                               <MenuAction
                                 disabled={menuBusy}
-                                onClick={() => {
-                                  restoreAssetMutation.mutate(asset.id)
+                                onClick={async () => {
+                                  await handleRestoreAsset(asset)
                                   setActionMenu(null)
                                 }}
                               >
@@ -1916,8 +2019,8 @@ export default function MediaLibraryPage() {
                           <InlineActionMenu>
                             <MenuAction
                               disabled={menuBusy}
-                              onClick={() => {
-                                restoreAssetMutation.mutate(asset.id)
+                              onClick={async () => {
+                                await handleRestoreAsset(asset)
                                 setActionMenu(null)
                               }}
                             >
@@ -2018,10 +2121,7 @@ export default function MediaLibraryPage() {
         }}
         onReuseStyle={() => {
           if (!previewState) return
-          openComposeWith({
-            model: previewState.group.model,
-            projectId: previewState.group.projectId,
-          })
+          openStyleWith(previewState.group)
           setPreviewState(null)
         }}
         onMove={() => {
@@ -2035,20 +2135,12 @@ export default function MediaLibraryPage() {
         }}
         onSetVisibility={async (visibility) => {
           if (!previewState) return
-          try {
-            await updatePostMutation.mutateAsync({ postId: previewState.group.id, payload: { visibility } })
-          } catch (error) {
-            handleMenuError(error)
-          }
+          await handleVisibilityChange(previewState.group.id, visibility)
         }}
         onTrash={async () => {
           if (!previewState) return
-          try {
-            await trashPostMutation.mutateAsync(previewState.group.id)
-            setPreviewState(null)
-          } catch (error) {
-            handleMenuError(error)
-          }
+          await handleTrashGroup(previewState.group.id, previewState.group.title)
+          setPreviewState(null)
         }}
       />
       <MovePostDialog
@@ -2058,12 +2150,8 @@ export default function MediaLibraryPage() {
         onClose={() => setMoveState(null)}
         onMove={async (projectId) => {
           if (!moveState) return
-          try {
-            await movePostMutation.mutateAsync({ postId: moveState.postId, projectId })
-            setMoveState(null)
-          } catch (error) {
-            handleMenuError(error)
-          }
+          await handleMoveGroup(moveState.postId, projectId, moveState.title)
+          setMoveState(null)
         }}
       />
     </>

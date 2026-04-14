@@ -32,15 +32,36 @@ if TYPE_CHECKING:
 
 def _lazy_service_constants():
     """Lazy import to break circular dependency with service.py"""
-    from ..service import PLAN_CATALOG, _FOUNDER_EMAILS, _MODERATION_RESET_WINDOW, _TEMP_BLOCK_AFTER_FIVE_STRIKES, _TEMP_BLOCK_AFTER_THREE_STRIKES
-    return PLAN_CATALOG, _FOUNDER_EMAILS, _MODERATION_RESET_WINDOW, _TEMP_BLOCK_AFTER_FIVE_STRIKES, _TEMP_BLOCK_AFTER_THREE_STRIKES
+    from ..service import (
+        CHECKOUT_CATALOG,
+        PLAN_CATALOG,
+        PUBLIC_PLAN_CATALOG,
+        PUBLIC_TOP_UP_GROUP,
+        _FOUNDER_EMAILS,
+        _MODERATION_RESET_WINDOW,
+        _TEMP_BLOCK_AFTER_FIVE_STRIKES,
+        _TEMP_BLOCK_AFTER_THREE_STRIKES,
+    )
+    return (
+        PLAN_CATALOG,
+        CHECKOUT_CATALOG,
+        PUBLIC_PLAN_CATALOG,
+        PUBLIC_TOP_UP_GROUP,
+        _FOUNDER_EMAILS,
+        _MODERATION_RESET_WINDOW,
+        _TEMP_BLOCK_AFTER_FIVE_STRIKES,
+        _TEMP_BLOCK_AFTER_THREE_STRIKES,
+    )
 
 class IdentityService:
     def __init__(self, service: 'StudioService'):
         self.service = service
         # Lazy-loaded to avoid circular import with service.py
-        _pc, _fe, _mrw, _tb5, _tb3 = _lazy_service_constants()
+        _pc, _cc, _ppc, _ptg, _fe, _mrw, _tb5, _tb3 = _lazy_service_constants()
         self._PLAN_CATALOG = _pc
+        self._CHECKOUT_CATALOG = _cc
+        self._PUBLIC_PLAN_CATALOG = _ppc
+        self._PUBLIC_TOP_UP_GROUP = _ptg
         self._FOUNDER_EMAILS = _fe
         self._MODERATION_RESET_WINDOW = _mrw
         self._TEMP_BLOCK_AFTER_THREE_STRIKES = _tb3
@@ -120,9 +141,6 @@ class IdentityService:
             email=auth_user.email or f"{auth_user.id}@omnia.local",
             display_name=getattr(auth_user, "username", None) or "Creator",
             username=(getattr(auth_user, "metadata", {}) or {}).get("username") or None,
-            owner_mode=bool(getattr(auth_user, "metadata", {}).get("owner_mode")),
-            root_admin=bool(getattr(auth_user, "metadata", {}).get("root_admin")),
-            local_access=bool(getattr(auth_user, "metadata", {}).get("local_access")),
             accepted_terms=bool(getattr(auth_user, "metadata", {}).get("accepted_terms")),
             accepted_privacy=bool(getattr(auth_user, "metadata", {}).get("accepted_privacy")),
             accepted_usage_policy=bool(getattr(auth_user, "metadata", {}).get("accepted_usage_policy")),
@@ -543,14 +561,37 @@ class IdentityService:
 
 
     def get_public_plan_payload(self) -> Dict[str, Any]:
+        plan_entries = []
+        for plan_id in (IdentityPlan.FREE, IdentityPlan.PRO):
+            plan = self._PLAN_CATALOG[plan_id]
+            public_meta = self._PUBLIC_PLAN_CATALOG[plan_id]
+            plan_entries.append(
+                {
+                    **plan.model_dump(mode="json"),
+                    "id": public_meta["public_id"],
+                    "entitlement_plan": plan_id.value,
+                    "summary": public_meta["summary"],
+                    "feature_summary": list(public_meta["feature_summary"]),
+                    "price_usd": public_meta["price_usd"],
+                    "billing_period": public_meta["billing_period"],
+                    "checkout_kind": public_meta["checkout_kind"],
+                    "recommended": public_meta["recommended"],
+                    "availability": public_meta["availability"],
+                }
+            )
+
         return {
-            "plans": [plan.model_dump(mode="json") for plan in self._PLAN_CATALOG.values() if plan.id != IdentityPlan.GUEST],
-            "top_ups": [
-                {"kind": kind.value, **meta}
-                for kind, meta in CHECKOUT_CATALOG.items()
-                if meta["plan"] is None
-            ],
-            "featured_plan": IdentityPlan.PRO.value,
+            "operating_mode": "controlled_public_paid_launch",
+            "plans": plan_entries,
+            "top_up": {
+                **self._PUBLIC_TOP_UP_GROUP,
+                "options": [
+                    {"kind": kind.value, **meta}
+                    for kind, meta in self._CHECKOUT_CATALOG.items()
+                    if meta["plan"] is None
+                ],
+            },
+            "featured_plan": self._PUBLIC_PLAN_CATALOG[IdentityPlan.PRO]["public_id"],
         }
 
 

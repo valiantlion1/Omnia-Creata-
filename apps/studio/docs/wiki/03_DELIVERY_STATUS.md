@@ -2,100 +2,89 @@
 
 ## Delivery State
 
-### Historical Sprint Chain
+### Historical Baseline
 
-- Sprint 1: runtime durability
-- Sprint 2: provider routing and quality policy
-- Sprint 3: billing, credits, and entitlement hardening
-- Sprint 4: security, ownership, and abuse hardening
-- Sprint 5: production persistence and data authority
-- Sprint 6: premium chat backbone
-- Sprint 7: live provider verification and launch hardening
-- Sprint 8: deployment and always-on environments
-- Sprint 9: provider reliability and economics
-
-Those sprints are no longer the active planning language.
-They remain the historical path that got Studio to the current beta-hardening phase.
+- `Protected Beta Hardening` is closed as the baseline that got Studio here.
+- That closure still matters operationally because current-build proof must preserve it.
+- It is no longer the main planning target for product direction.
 
 ### Active Now
 
-- `Protected Beta Hardening`
+- `Controlled Public Paid Launch`
 
-## What "Done" Means
+This is the current working frame for Studio.
+
+## What "Done" Means Now
 
 Work is only done when:
 - the current build behavior is proven, not inferred
-- route-level regressions protect the signed-in shell
-- operator artefacts agree on the same build
-- staging proof exists for the current build
-- wiki, release ledger, maintenance map, and version manifest all tell the same story
+- `Create` and `Chat` still share one commercial and ownership contract
+- account, entitlement, and billing truth come from the server, not frontend guesses
+- provider truth stays honest about what is truly launch-grade versus merely configured
+- wiki, operations docs, and the current build manifest tell the same story
 
 ## Current Product Reality
 
 Already strong:
-- auth and ownership are materially safer
-- generation runtime is durable enough for serious local rehearsal
-- billing, entitlements, and asset protection are much harder to corrupt
-- launch-readiness and owner truth exist as first-class backend/operator surfaces
+- auth, ownership, and export paths are materially safer
+- generation runtime, asset persistence, and project/library surfaces are real product behavior
+- billing and entitlement summaries are first-class backend payloads
+- launch-readiness, provider smoke, and staging verification exist as operator truth surfaces
 
 Still open:
-- launch-grade provider proof for protected beta must stay narrow and explicit
-- current-build image proof still matters more than provider config alone
-- staging closure depends on Docker bring-up, owner verify, and artefact sync staying truthful
-- public-paid readiness remains a later stage, not the current acceptance target
+- `provider_mix`
+- `image_public_paid_usage`
+- `provider_economics`
 
-## Protected Beta Hardening Outcome So Far
+Those remain real launch gates.
+They should be solved honestly, not narrated away.
 
-Key outcomes already landed:
-- signed-in route contracts are harder to break accidentally
-- startup verification, provider smoke, and deployment verification can now be compared as one truth chain
-- staging truth no longer depends on reading only one runtime root
-- owner verification can inspect the same launch gate humans read from `/v1/healthz/detail`
-- protected-beta provider policy is intentionally simplified:
-  - chat: `OpenAI` only counts as launch-grade
-  - image: `OpenAI gpt-image-1-mini` is the protected-beta default
-  - owner-only premium image QA stays explicit and optional
-- this protected-beta lane lock is temporary proof policy, not the final public-paid provider strategy
-- hidden operator mapping for `surface -> tier -> provider -> model` should now come from `ai_control_plane.surface_matrix`, not scattered notes
+## Current Launch Doctrine
+
+Studio is now described as:
+- Omnia Creata's flagship product
+- a premium creative product, not a generic chatbot
+- two linked surfaces: `Create` and `Chat`
+- a controlled public paid launch, not a waitlist-first beta shell
+
+Commercial defaults:
+- `Starter`
+- `Pro`
+- `Credit Top-up`
+
+Exact plan pricing and package values must come from the backend catalog.
+The frontend should present that truth, not invent its own packaging story.
+
+## Public Paid Exit Criteria
+
+Studio is not considered ready for public paid exit until all of the following are true:
+- `Create -> result -> library/project -> share` feels stable and honest
+- `Chat -> in-chat generation -> create handoff -> result persistence` stays stable
+- degraded or blocked provider states are visible instead of hidden behind premium-sounding copy
+- current-build artefacts stay aligned on the same build number
+- public plan and entitlement truth is server-authoritative
 
 ## State Language
 
-Use these two state layers deliberately:
+Use these product-facing states by default:
+- `queued`
+- `running`
+- `ready`
+- `failed`
+- `blocked`
 
-- signed-in/library-facing contract:
-  - `queued`
-  - `running`
-  - `ready`
-  - `failed`
-  - `blocked`
-- internal worker/job lifecycle:
-  - `queued`
-  - `running`
-  - `succeeded`
-  - `failed`
-  - `retryable_failed`
-  - `cancelled`
-  - `timed_out`
-
-The second layer exists for backend recovery and queue logic.
-The first layer is the product contract and should be the default language in UI, planning, and operator summaries unless lower-level debugging is the real topic.
-
-## Readiness Language
-
-Use these terms consistently:
+Use these release stages deliberately:
 - `local alpha`
-  - stable for local rehearsal, but not a deployment proof
+  stable enough for local rehearsal
 - `protected beta`
-  - current acceptance target
-  - requires truthful local + staging proof on the same build
+  closed baseline that still must remain true on current builds
 - `public paid platform`
-  - later stage
-  - requires stronger resilience and economics than protected beta
+  current active exit target
 
 ## Immediate Planning Rule
 
 Current rule:
-- stay inside `Protected Beta Hardening`
-- sequence work as `contract -> truth sync -> provider proof -> closure`
-- do not open new large backend features until `closure_ready=true`
-- treat wiki as strategy memory and operations docs as historical/operator memory
+- stay inside `Controlled Public Paid Launch`
+- sequence work as `catalog truth -> surface completion -> provider truth -> proof sync`
+- do not open new large product surfaces until the launch-critical chain is tighter
+- treat protected-beta closure as preserved baseline proof, not as the active story the product tells

@@ -1,5 +1,8 @@
 # Operations And Releases
 
+This file explains Studio's operational truth and closure discipline.
+Treat `Controlled Public Paid Launch` as the active product frame, and read protected-beta language here as preserved baseline/closure logic rather than the main product story.
+
 ## Operational Truth
 
 Studio operational truth lives in these files:
@@ -132,7 +135,7 @@ Use it for:
 - durable product meaning
 - architecture boundaries
 - planning standards
-- sprint truth
+- current launch truth
 
 ## Health Of The Documentation System
 

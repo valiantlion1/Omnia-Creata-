@@ -8,6 +8,7 @@ import { useLightbox } from '@/components/Lightbox'
 import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
 import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { usePageMeta } from '@/lib/usePageMeta'
 import {
   normalizeJobStatus,
   studioApi,
@@ -32,6 +33,7 @@ async function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function ProjectPage() {
+  usePageMeta('Project', 'Project workspace in Omnia Creata Studio.')
   const { projectId = '' } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const { openLightbox } = useLightbox()

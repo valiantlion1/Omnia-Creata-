@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Crown, Heart, Lock, Sparkles, X, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe, Heart, Layers, Lock, Search, Sparkles, Star, Users, X, Zap } from 'lucide-react'
 
 import { AppPage, ButtonChip, SkeletonMasonry, StatusPill } from '@/components/StudioPrimitives'
 import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
+import { usePageMeta } from '@/lib/usePageMeta'
 
 function metadataString(metadata: Record<string, unknown>, key: string) {
   const value = metadata[key]
@@ -33,9 +34,9 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
           <Sparkles className="h-6 w-6 text-white" />
         </div>
 
-        <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
-          Create a free account to continue
-        </h3>
+          <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
+            Create an account to continue
+          </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
           Sign up to like images, create your own, save favorites, and join the community. It takes less than a minute.
         </p>
@@ -45,7 +46,7 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
             to="/signup"
             className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90"
           >
-            Sign up for free
+            Create account
           </Link>
           <Link
             to="/login"
@@ -59,13 +60,28 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
   )
 }
 
-/* ─── welcome pricing overlay ─── */
-function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+/* ─── welcome overlay ─── */
+function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
-  const miniTiers = [
-    { id: 'free', label: 'Free', icon: Sparkles, price: '$0', credits: '150', features: ['All core features', 'Standard quality', 'Community access'], style: 'outline' as const },
-    { id: 'pro', label: 'Pro', icon: Zap, price: 'TBD', credits: '2,500', features: ['Premium models', 'Priority processing', 'Commercial use'], style: 'gradient' as const },
-    { id: 'creator', label: 'Creator', icon: Crown, price: 'TBD', credits: '5,000', features: ['Early features', '4096px maximum', 'Ultra-fast rendering', 'API access'], style: 'white' as const },
+  const quickPointers = [
+    {
+      id: 'explore',
+      label: 'Explore for direction',
+      body: 'Browse community work and Studio references when you want ideas before you start.',
+      icon: Sparkles,
+    },
+    {
+      id: 'create',
+      label: 'Create for direct runs',
+      body: 'Use Create when you already know what you want and need a fast, controlled image run.',
+      icon: Zap,
+    },
+    {
+      id: 'save',
+      label: 'Save what matters',
+      body: 'Keep strong outputs in your library so you can return, refine, and share without losing the thread.',
+      icon: Heart,
+    },
   ]
 
   return (
@@ -86,37 +102,23 @@ function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () =
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] bg-gradient-to-br from-cyan-500/20 to-blue-600/20">
             <Sparkles className="h-6 w-6 text-cyan-400" />
           </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">Welcome to OmniaCreata</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">Choose a plan to get started. You can always change later.</p>
+          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">Welcome to Studio</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+            Your account is ready. Start with the surface that matches your intent, then keep anything worth revisiting inside your library.
+          </p>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {miniTiers.map((tier) => {
-            const isPro = tier.id === 'pro'
+          {quickPointers.map((item) => {
+            const Icon = item.icon
             return (
               <div
-                key={tier.id}
-                className={`rounded-[20px] border p-5 transition ${
-                  isPro
-                    ? 'border-cyan-500/30 bg-gradient-to-b from-cyan-950/20 to-transparent'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12]'
-                }`}
+                key={item.id}
+                className="rounded-[20px] border border-white/[0.06] bg-white/[0.02] p-5 transition hover:border-white/[0.12]"
               >
-                <tier.icon className={`h-5 w-5 ${isPro ? 'text-cyan-400' : 'text-white'}`} />
-                <div className="mt-3 text-lg font-semibold text-white">{tier.label}</div>
-                <div className="mt-1 flex items-baseline gap-1">
-                  <span className={`text-2xl font-bold ${isPro ? 'text-cyan-400' : 'text-white'}`}>{tier.price}</span>
-                  {tier.price !== '$0' && tier.price !== 'TBD' ? <span className="text-xs text-zinc-500">/mo</span> : null}
-                </div>
-                <div className="mt-1 text-xs text-zinc-500">{tier.credits} credits/month</div>
-                <ul className="mt-4 space-y-2">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-xs text-zinc-400">
-                      <Check className={`h-3 w-3 ${isPro ? 'text-cyan-400' : 'text-zinc-600'}`} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                <Icon className="h-5 w-5 text-cyan-400" />
+                <div className="mt-3 text-lg font-semibold text-white">{item.label}</div>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">{item.body}</p>
               </div>
             )
           })}
@@ -124,12 +126,18 @@ function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () =
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
-            to="/subscription"
+            to="/create"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90"
           >
-            Compare plans <ArrowRight className="h-4 w-4" />
+            Open Create
+          </Link>
+          <Link
+            to="/chat"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
+          >
+            Open Chat
           </Link>
           <button
             onClick={onClose}
@@ -139,13 +147,13 @@ function WelcomePricingOverlay({ open, onClose }: { open: boolean; onClose: () =
           </button>
         </div>
 
-        <div className="mt-4 text-center text-[10px] text-zinc-600">Pricing is subject to change during the alpha period.</div>
       </div>
     </div>
   )
 }
 
 type ExploreSort = 'trending' | 'newest' | 'top' | 'styles'
+type GalleryTab = 'community' | 'showcase' | 'atmospheres'
 
 const sortOptions: Array<{ id: ExploreSort; label: string }> = [
   { id: 'trending', label: 'Trending' },
@@ -153,6 +161,150 @@ const sortOptions: Array<{ id: ExploreSort; label: string }> = [
   { id: 'top', label: 'Top liked' },
   { id: 'styles', label: 'Styles' },
 ]
+
+const galleryTabs: Array<{ id: GalleryTab; label: string; icon: typeof Globe; desc: string }> = [
+  { id: 'community', label: 'Community', icon: Globe, desc: 'Live creator feed' },
+  { id: 'showcase', label: 'Showcase', icon: Star, desc: 'Curated references' },
+  { id: 'atmospheres', label: 'Atmospheres', icon: Layers, desc: 'Mood & style boards' },
+]
+
+type ShowcaseReference = {
+  id: string
+  src: string
+  label: string
+  tag: string
+  prompt: string
+  likes: number
+  createdAt: string
+}
+
+const showcaseReferences: ShowcaseReference[] = [
+  {
+    id: 'showcase-neon-cityscape',
+    src: '/atmosphere/showcase-01-neon-cityscape.png',
+    label: 'Neon Cityscape',
+    tag: 'Environments',
+    prompt: 'Cinematic illustration of a neon cityscape drenched in rain and reflected light.',
+    likes: 248,
+    createdAt: '2026-04-11T18:00:00Z',
+  },
+  {
+    id: 'showcase-editorial-portrait',
+    src: '/atmosphere/showcase-02-editorial-portrait.png',
+    label: 'Editorial Portrait',
+    tag: 'Photography',
+    prompt: 'Fashion illustration portrait with polished lighting and editorial framing.',
+    likes: 214,
+    createdAt: '2026-04-10T14:15:00Z',
+  },
+  {
+    id: 'showcase-architecture',
+    src: '/atmosphere/showcase-03-architecture.png',
+    label: 'Architecture',
+    tag: 'Structures',
+    prompt: 'Architectural illustration study with premium surfaces and clean depth cues.',
+    likes: 162,
+    createdAt: '2026-04-09T09:20:00Z',
+  },
+  {
+    id: 'showcase-fantasy-art',
+    src: '/atmosphere/showcase-04-fantasy-dragon.png',
+    label: 'Fantasy Art',
+    tag: 'Creatures',
+    prompt: 'Fantasy illustration of a dragon in a dramatic atmospheric scene.',
+    likes: 273,
+    createdAt: '2026-04-12T11:30:00Z',
+  },
+  {
+    id: 'showcase-product-photo',
+    src: '/atmosphere/showcase-05-product-photo.png',
+    label: 'Product Photo',
+    tag: 'Commercial',
+    prompt: 'Commercial illustration with premium product styling and controlled highlights.',
+    likes: 131,
+    createdAt: '2026-04-08T08:45:00Z',
+  },
+  {
+    id: 'showcase-luxury-interior',
+    src: '/atmosphere/showcase-06-luxury-interior.png',
+    label: 'Luxury Interior',
+    tag: 'Architecture',
+    prompt: 'Interior design illustration with luxury tones, warm materials, and clean composition.',
+    likes: 188,
+    createdAt: '2026-04-07T16:10:00Z',
+  },
+  {
+    id: 'showcase-fashion-editorial',
+    src: '/atmosphere/showcase-07-fashion-editorial.png',
+    label: 'Fashion Editorial',
+    tag: 'Fashion',
+    prompt: 'High fashion editorial illustration with bold styling and dramatic contrast.',
+    likes: 196,
+    createdAt: '2026-04-11T10:00:00Z',
+  },
+  {
+    id: 'showcase-anime-art',
+    src: '/atmosphere/showcase-08-anime-warrior.png',
+    label: 'Anime Art',
+    tag: 'Characters',
+    prompt: 'Anime illustration with bold linework, strong silhouettes, and expressive color.',
+    likes: 205,
+    createdAt: '2026-04-12T15:40:00Z',
+  },
+  {
+    id: 'showcase-scifi-city',
+    src: '/atmosphere/showcase-09-scifi-cityscape.png',
+    label: 'Sci-Fi City',
+    tag: 'Futuristic',
+    prompt: 'Sci-fi illustration of a futuristic city with layered depth and luminous accents.',
+    likes: 224,
+    createdAt: '2026-04-09T20:00:00Z',
+  },
+  {
+    id: 'showcase-food-photography',
+    src: '/atmosphere/showcase-10-food-photography.png',
+    label: 'Food Photography',
+    tag: 'Culinary',
+    prompt: 'Editorial food illustration with tactile detail and appetizing composition.',
+    likes: 119,
+    createdAt: '2026-04-06T13:00:00Z',
+  },
+  {
+    id: 'showcase-nature-macro',
+    src: '/atmosphere/showcase-11-nature-macro.png',
+    label: 'Nature Macro',
+    tag: 'Details',
+    prompt: 'Macro nature illustration with fine detail, glow, and layered atmosphere.',
+    likes: 177,
+    createdAt: '2026-04-05T10:35:00Z',
+  },
+]
+
+type AtmosphereReference = {
+  id: string
+  src: string
+  label: string
+  mood: string
+}
+
+const atmosphereReferences: AtmosphereReference[] = [
+  { id: 'atm-01', src: '/atmosphere/atmosphere-01-brutalist.png', label: 'Brutalist', mood: 'Industrial · Concrete · Urban' },
+  { id: 'atm-02', src: '/atmosphere/atmosphere-02-conservatory.png', label: 'Conservatory', mood: 'Organic · Glass · Lush' },
+  { id: 'atm-03', src: '/atmosphere/atmosphere-03-skyline-garden.png', label: 'Skyline Garden', mood: 'Elevated · Verdant · City' },
+  { id: 'atm-04', src: '/atmosphere/atmosphere-04-snow-leopard.png', label: 'Snow Leopard', mood: 'Wild · Alpine · Pristine' },
+  { id: 'atm-05', src: '/atmosphere/atmosphere-05-desert-courtyard.png', label: 'Desert Courtyard', mood: 'Arid · Sun-baked · Serene' },
+  { id: 'atm-06', src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp', label: 'Volcanic Fragrance', mood: 'Raw · Elemental · Intense' },
+  { id: 'atm-07', src: '/atmosphere/atmosphere-07-observatory.webp', label: 'Observatory', mood: 'Cosmic · Precise · Vast' },
+  { id: 'atm-08', src: '/atmosphere/atmosphere-08-glass-fins.webp', label: 'Glass Fins', mood: 'Architectural · Translucent · Light' },
+  { id: 'atm-09', src: '/atmosphere/atmosphere-09-snow-leopard.webp', label: 'Snow Leopard II', mood: 'Arctic · Textured · Silent' },
+  { id: 'atm-10', src: '/atmosphere/atmosphere-10-elven-ward.webp', label: 'Elven Ward', mood: 'Fantasy · Ancient · Luminous' },
+]
+
+function matchesExploreQuery(query: string, ...parts: Array<string | null | undefined>) {
+  if (!query.trim()) return true
+  const normalized = query.trim().toLowerCase()
+  return parts.some((value) => value?.toLowerCase().includes(normalized))
+}
 
 function PostCard({
   post,
@@ -197,13 +349,11 @@ function PostCard({
             <div className={`w-full bg-white/[0.03] ${aspectClass}`} />
           )}
 
-          {/* Vignette & Gradient overlay mapping */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 opacity-60 transition duration-500 group-hover:opacity-100" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 opacity-0 transition duration-500 translate-y-4 group-hover:translate-y-0 group-hover:opacity-100">
             <div className="line-clamp-2 text-sm font-semibold tracking-tight text-white/95 leading-relaxed drop-shadow-md">
               {post.prompt ? post.prompt : post.title}
             </div>
-            
             <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5">
               <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
                 <span className="font-bold text-white/90 drop-shadow-sm">@{post.owner_username}</span>
@@ -369,7 +519,7 @@ function ExploreLightbox({
 
         <aside className="flex min-h-0 flex-col justify-between gap-5 rounded-[22px] bg-[#0d1117] p-4 ring-1 ring-white/[0.05] md:ml-1">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-600">Explore</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-600">Gallery</div>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">{post.title}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
               <Link to={`/u/${post.owner_username}`} className="font-medium text-white transition hover:text-zinc-300">
@@ -409,7 +559,7 @@ function ExploreLightbox({
                 onClick={onClose}
                 className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
               >
-                Back to Explore
+                Back to Gallery
               </button>
             </div>
           </div>
@@ -420,16 +570,19 @@ function ExploreLightbox({
 }
 
 export default function DashboardPage() {
+  usePageMeta('Gallery', 'Discover AI-generated art, curated showcases, and creative atmospheres on Omnia Creata.')
   const location = useLocation()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const { openLightbox } = useLightbox()
+
+  const [galleryTab, setGalleryTab] = useState<GalleryTab>('community')
   const [sort, setSort] = useState<ExploreSort>('trending')
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedPost, setSelectedPost] = useState<PublicPost | null>(null)
   const [authPromptOpen, setAuthPromptOpen] = useState(false)
-  const canUseAccount = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
-  // Welcome pricing overlay — show once after first signup
+  const canUseAccount = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isNewUser = new URLSearchParams(location.search).get('welcome') === '1'
   const [showWelcome, setShowWelcome] = useState(false)
   useEffect(() => {
@@ -457,20 +610,24 @@ export default function DashboardPage() {
     },
   })
 
-  const [searchQuery, setSearchQuery] = useState('')
-
+  const normalizedSearch = searchQuery.trim().toLowerCase()
   const posts = postsQuery.data?.posts ?? []
-  
+
   const filteredPosts = useMemo(() => {
-    if (!searchQuery.trim()) return posts
-    const lowerQuery = searchQuery.toLowerCase()
-    return posts.filter((p: PublicPost) => 
-      p.prompt?.toLowerCase().includes(lowerQuery) || 
-      p.title?.toLowerCase().includes(lowerQuery) ||
-      p.style_tags?.some((tag: string) => tag.toLowerCase().includes(lowerQuery)) ||
-      p.owner_display_name?.toLowerCase().includes(lowerQuery)
+    return posts.filter((post: PublicPost) =>
+      matchesExploreQuery(
+        normalizedSearch,
+        post.prompt,
+        post.title,
+        post.owner_display_name,
+        post.owner_username,
+        ...post.style_tags,
+        post.cover_asset?.display_title,
+        post.cover_asset?.title,
+        ...(post.cover_asset?.derived_tags ?? []),
+      ),
     )
-  }, [posts, searchQuery])
+  }, [normalizedSearch, posts])
 
   const handleLike = (post: PublicPost) => {
     if (!canUseAccount) {
@@ -481,129 +638,187 @@ export default function DashboardPage() {
     toggleLikeMutation.mutate(post)
   }
 
+  const handleTabChange = (tab: GalleryTab) => {
+    setGalleryTab(tab)
+    setSearchQuery('')
+  }
+
   return (
-    <AppPage className="max-w-[1500px] gap-8 py-8">
-      <div className="relative isolate px-6 pt-10 pb-8 text-center sm:pt-16 sm:pb-12 rounded-[32px] overflow-hidden border border-white/[0.04] bg-[#0c0d12]/50 shadow-[0_4px_30px_rgba(0,0,0,0.4)] backdrop-blur-2xl">
-        <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-          <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[rgb(var(--primary-light))] to-[rgb(var(--accent))] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }}></div>
+    <AppPage className="max-w-[1500px] gap-0 py-8">
+
+      {/* ── Gallery Header ── */}
+      <section className="px-1 pb-8">
+        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-600 mb-4">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span>Omnia Creata</span>
+        </div>
+        <h1
+          className="text-4xl font-bold tracking-tight sm:text-5xl"
+          style={{
+            background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
+        >
+          Gallery
+        </h1>
+        <p className="mt-3 text-base text-zinc-400 max-w-xl">
+          Discover AI art from the community, explore curated showcases, and browse visual atmosphere references.
+        </p>
+      </section>
+
+      {/* ── Tab Bar ── */}
+      <section className="mb-8 flex flex-wrap items-center gap-3 border-b border-white/[0.06] pb-5">
+        <div className="flex items-center gap-1.5">
+          {galleryTabs.map((tab) => {
+            const Icon = tab.icon
+            const isActive = galleryTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                  isActive
+                    ? 'text-white ring-1 ring-white/10 shadow-[0_2px_16px_rgba(0,0,0,0.3)]'
+                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+                }`}
+                style={isActive ? { background: 'linear-gradient(135deg, rgb(var(--primary)/0.25), rgb(var(--primary)/0.08))' } : undefined}
+              >
+                <Icon className={`h-4 w-4 ${isActive ? 'text-[rgb(var(--primary-light))]' : ''}`} />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
 
-        <div className="mx-auto max-w-2xl">
-          <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500 mb-4">Discover & Inspire</div>
-          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl drop-shadow-sm">
-            Limitless <span style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)) 0%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Creation</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-zinc-400">
-            Explore breathtaking imagery generated by the OmniaCreata community. Find inspiration for your next masterpiece.
-          </p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-6">
-            <div className="relative flex w-full max-w-xl items-center gap-3 rounded-full border border-white/[0.08] bg-black/40 px-5 py-4 backdrop-blur-xl transition-all focus-within:border-white/20 focus-within:bg-black/60 focus-within:shadow-[0_0_40px_rgb(var(--primary-light)/0.15)]">
-              <Sparkles className="h-5 w-5 text-zinc-400 shrink-0" />
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by prompt, title, style or creator..."
-                className="bg-transparent border-none outline-none text-[15px] font-medium text-white placeholder:text-zinc-600 w-full"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="shrink-0 p-1 rounded-full text-zinc-500 hover:text-white transition">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* Community sort + search */}
+        {galleryTab === 'community' && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
               {sortOptions.map((option) => (
                 <button key={option.id} onClick={() => setSort(option.id)}>
-                  <ButtonChip active={sort === option.id} className="min-w-[80px] text-[13px] py-2 border-white/5 bg-white/5 hover:bg-white/10">
+                  <ButtonChip active={sort === option.id} className="text-[12px] py-1.5 px-3 border-white/5 bg-white/[0.03] hover:bg-white/[0.07]">
                     {option.label}
                   </ButtonChip>
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-      </div>
-
-      <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
-      <WelcomePricingOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
-
-      {postsQuery.isLoading ? (
-        <SkeletonMasonry count={12} />
-      ) : filteredPosts.length ? (
-        <section className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
-          {filteredPosts.map((post: PublicPost, index: number) => (
-            <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} index={index} onOpen={setSelectedPost} />
-          ))}
-        </section>
-      ) : (
-        <section>
-          <div className="rounded-[32px] border border-white/[0.08] p-10 text-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, rgba(11,12,16,0.6), rgba(11,12,16,0.9))', backdropFilter: 'blur(12px)' }}>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.05),transparent_60%)]" />
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] shadow-lg relative z-10 ring-1 ring-[rgb(var(--primary-light)/0.2)]" style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.1), rgb(var(--accent)/0.1))' }}>
-              <Sparkles className="h-8 w-8 drop-shadow-md" style={{ color: 'rgb(var(--primary-light))' }} />
+            <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.02] px-3.5 py-2">
+              <Search className="h-3.5 w-3.5 text-zinc-600 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search prompts, creators, styles..."
+                className="bg-transparent text-[13px] text-white placeholder:text-zinc-600 outline-none w-44 sm:w-52"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="text-zinc-600 hover:text-white transition shrink-0">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <div className="mt-6 text-2xl font-bold tracking-tight text-white relative z-10">Community gallery is warming up</div>
-            <p className="mx-auto mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 relative z-10">
-              Be the first to publish — or get inspired by these stunning images made with OmniaCreata.
-            </p>
           </div>
-          <div className="mt-8 columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
-            {[
-              { src: '/atmosphere/showcase-01-neon-cityscape.png', label: 'Neon Cityscape', tag: 'Environments' },
-              { src: '/atmosphere/showcase-02-editorial-portrait.png', label: 'Editorial Portrait', tag: 'Photography' },
-              { src: '/atmosphere/showcase-03-architecture.png', label: 'Architecture', tag: 'Structures' },
-              { src: '/atmosphere/showcase-04-fantasy-dragon.png', label: 'Fantasy Art', tag: 'Creatures' },
-              { src: '/atmosphere/showcase-05-product-photo.png', label: 'Product Photo', tag: 'Commercial' },
-              { src: '/atmosphere/showcase-06-luxury-interior.png', label: 'Luxury Interior', tag: 'Architecture' },
-              { src: '/atmosphere/showcase-08-anime-warrior.png', label: 'Anime Art', tag: 'Characters' },
-              { src: '/atmosphere/showcase-09-scifi-cityscape.png', label: 'Sci-Fi City', tag: 'Futuristic' },
-              { src: '/atmosphere/showcase-10-food-photography.png', label: 'Food Photography', tag: 'Culinary' },
-              { src: '/atmosphere/showcase-11-nature-macro.png', label: 'Nature Macro', tag: 'Details' },
-            ].map((img, i) => (
-              <div key={img.src} className="group relative mb-6 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.3)] rounded-[26px]">
+        )}
+      </section>
+
+      {/* ── Community Tab ── */}
+      {galleryTab === 'community' && (
+        <section className="space-y-6">
+          {postsQuery.isLoading ? (
+            <SkeletonMasonry count={12} />
+          ) : filteredPosts.length > 0 ? (
+            <>
+              <div className="text-[12px] text-zinc-600 font-medium">
+                {filteredPosts.length} result{filteredPosts.length === 1 ? '' : 's'}
+                {searchQuery ? ` for "${searchQuery}"` : ''}
+                {' '}· {sortOptions.find((o) => o.id === sort)?.label ?? 'Trending'}
+              </div>
+              <div className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
+                {filteredPosts.map((post: PublicPost, index: number) => (
+                  <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} index={index} onOpen={setSelectedPost} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-[20px] mb-6 ring-1 ring-white/[0.08]"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.08), rgb(var(--accent)/0.08))' }}
+              >
+                <Users className="h-7 w-7 text-zinc-500" />
+              </div>
+              <div className="text-xl font-semibold text-zinc-200">
+                {searchQuery ? `No results for "${searchQuery}"` : 'Community gallery is warming up'}
+              </div>
+              <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
+                {searchQuery
+                  ? 'Try different prompt words, creator names, or style tags.'
+                  : 'Be the first to create and share your work with the community.'}
+              </p>
+              {!searchQuery && (
+                <Link
+                  to="/create"
+                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
+                >
+                  Start Creating
+                </Link>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Showcase Tab ── */}
+      {galleryTab === 'showcase' && (
+        <section className="space-y-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="space-y-0.5">
+              <div className="text-sm font-semibold text-white">Curated References</div>
+              <div className="text-[12px] text-zinc-600">{showcaseReferences.length} hand-selected Studio outputs</div>
+            </div>
+          </div>
+          <div className="columns-2 gap-4 md:columns-3 xl:columns-4 [column-fill:_balance]">
+            {showcaseReferences.map((item, i) => (
+              <div key={item.id} className="group relative mb-5 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.25)] rounded-[24px]">
                 <button
                   type="button"
-                  onClick={() => openLightbox(img.src, img.label, {
-                    title: img.label,
+                  onClick={() => openLightbox(item.src, item.label, {
+                    title: item.label,
                     authorName: 'OmniaCreata',
                     authorUsername: 'studio',
-                    prompt: `A beautiful ${img.label.toLowerCase()} generated by OmniaCreata Studio.`,
+                    prompt: item.prompt,
                   })}
-                  className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04] w-full text-left block cursor-zoom-in"
+                  className="relative overflow-hidden rounded-[24px] bg-[#111216] border border-white/[0.04] w-full text-left block cursor-zoom-in"
                 >
                   <img
-                    src={img.src}
-                    alt={img.label}
+                    src={item.src}
+                    alt={item.label}
                     loading="lazy"
                     className={`w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04] ${
                       i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-square' : 'aspect-[5/6]'
                     }`}
                   />
-                  
-                  {/* Vignette & Gradient */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 opacity-60 transition duration-500 group-hover:opacity-100" />
-                  
-                  {/* Details Overlay */}
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 opacity-0 transition duration-500 translate-y-4 group-hover:translate-y-0 group-hover:opacity-100">
-                    <div className="line-clamp-2 text-sm font-semibold tracking-tight text-white/95 leading-relaxed drop-shadow-md">
-                      {img.label}
-                    </div>
-                    <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5">
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
-                        <span className="font-bold text-white/90 drop-shadow-sm">Showcase</span>
-                        <span className="opacity-50">·</span>
-                        <span>OmniaCreata</span>
-                      </div>
-                    </div>
+
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/85 opacity-50 transition duration-500 group-hover:opacity-100" />
+
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-4 opacity-0 transition duration-500 translate-y-3 group-hover:translate-y-0 group-hover:opacity-100">
+                    <div className="text-[13px] font-semibold text-white/95 leading-snug drop-shadow-md">{item.label}</div>
+                    <div className="mt-1 text-[11px] text-zinc-400">{item.prompt.slice(0, 60)}…</div>
                   </div>
-                  
+
                   <div className="pointer-events-none absolute left-3 top-3 opacity-0 -translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
-                    <StatusPill tone="brand" className="border-white/10 bg-black/40 backdrop-blur-md text-white/90 ring-1 ring-white/10 shadow-[0_0_15px_rgb(var(--primary-light)/0.3)]">
-                      {img.tag}
+                    <StatusPill tone="brand" className="border-white/10 bg-black/50 backdrop-blur-md text-white/90 ring-1 ring-white/10">
+                      {item.tag}
                     </StatusPill>
+                  </div>
+
+                  <div className="pointer-events-none absolute right-3 top-3 opacity-0 translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
+                    <div className="flex items-center gap-1 rounded-full bg-black/50 backdrop-blur-md px-2.5 py-1 text-[11px] text-zinc-300 ring-1 ring-white/10">
+                      <Heart className="h-3 w-3 opacity-70" />
+                      <span>{item.likes}</span>
+                    </div>
                   </div>
                 </button>
               </div>
@@ -612,6 +827,53 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {/* ── Atmospheres Tab ── */}
+      {galleryTab === 'atmospheres' && (
+        <section className="space-y-6">
+          <div className="space-y-0.5">
+            <div className="text-sm font-semibold text-white">Atmosphere Boards</div>
+            <div className="text-[12px] text-zinc-600">Visual mood references for prompt direction and style exploration</div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {atmosphereReferences.map((atm) => (
+              <button
+                key={atm.id}
+                type="button"
+                onClick={() => openLightbox(atm.src, atm.label, { title: atm.label, prompt: atm.mood })}
+                className="group relative overflow-hidden rounded-[20px] border border-white/[0.04] bg-[#0d0e12] cursor-zoom-in transition-all duration-500 hover:-translate-y-0.5 hover:border-white/[0.12] hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+              >
+                <div className="aspect-[3/4] w-full overflow-hidden">
+                  <img
+                    src={atm.src}
+                    alt={atm.label}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+                  />
+                </div>
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
+                <div className="absolute inset-x-0 bottom-0 p-3.5 text-left">
+                  <div className="text-[13px] font-semibold text-white leading-tight">{atm.label}</div>
+                  <div className="mt-1 text-[10px] text-zinc-500 leading-relaxed">{atm.mood}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="rounded-[20px] border border-white/[0.04] bg-white/[0.015] p-5 flex items-start gap-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-zinc-400">
+              <Layers className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-zinc-300">Using atmospheres in your prompts</div>
+              <p className="mt-1 text-[12px] text-zinc-500 leading-relaxed max-w-2xl">
+                Each atmosphere captures a distinct visual language. Click any board to view it full-size, then use the mood tags as prompt keywords — combine multiple atmospheres to build layered, unique styles.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
+      <WelcomeOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
       <ExploreLightbox post={selectedPost} open={Boolean(selectedPost)} onClose={() => setSelectedPost(null)} />
     </AppPage>
   )

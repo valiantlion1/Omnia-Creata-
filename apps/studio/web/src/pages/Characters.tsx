@@ -103,6 +103,15 @@ export default function CharactersPage() {
           <div key={`skel-${i}`} className="min-h-[420px] rounded-[32px] border border-white/[0.06] bg-white/[0.02] animate-pulse" />
         ))}
 
+        {/* Empty State */}
+        {!loading && personas.length === 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center rounded-[32px] border border-white/[0.06] bg-white/[0.02] py-20 px-6 text-center">
+            <Users className="h-12 w-12 text-zinc-600 mb-4" />
+            <div className="text-lg font-semibold text-zinc-300">No characters yet</div>
+            <p className="mt-2 text-sm text-zinc-500 max-w-sm">Create your first character to give your AI a unique voice, style, and personality.</p>
+          </div>
+        )}
+
         {/* Character Cards */}
         {!loading && personas.map((card) => (
           <div key={card.id} className="group relative flex min-h-[420px] cursor-pointer flex-col overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#0e0f12] transition-all duration-300 hover:border-[rgba(124,58,237,0.3)] hover:shadow-[0_8px_40px_rgba(124,58,237,0.15)]">
@@ -118,8 +127,8 @@ export default function CharactersPage() {
             
             <div className="relative z-20 flex flex-1 flex-col p-6 pt-0">
               <div className="mb-2 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-[#7c3aed]" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#7c3aed]">{card.is_default ? 'Built-in' : 'Custom'}</span>
+                <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-[rgb(var(--primary))]">{card.is_default ? 'Built-in' : 'Custom'}</span>
               </div>
               <h3 className="text-2xl font-bold text-white">{card.name}</h3>
               <p className="mt-3 flex-1 text-sm leading-relaxed text-zinc-400">{card.description}</p>

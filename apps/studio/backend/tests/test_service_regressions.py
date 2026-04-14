@@ -2957,8 +2957,10 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
         health = await service.health()
         assert snapshot.generations[job.id].status in {JobStatus.RUNNING, JobStatus.SUCCEEDED}
         assert service._generation_maintenance_task is not None
-        assert health["status"] == "degraded"
+        assert health["status"] == "healthy"
         assert health["generation_broker"]["enabled"] is False
+        assert health["generation_broker"]["advisory"] is True
+        assert health["generation_broker"]["degraded"] is False
         assert (
             health["generation_broker"]["detail"]
             == "web_runtime_local_fallback_no_shared_broker"
@@ -2991,12 +2993,45 @@ async def test_worker_runtime_mode_starts_maintenance_without_recovered_jobs(tmp
 
 
 @pytest.mark.asyncio
-async def test_service_health_reports_degraded_runtime_when_redis_broker_is_unavailable(tmp_path: Path):
+async def test_service_health_treats_dev_redis_fallback_as_advisory_when_local_queue_can_process(
+    tmp_path: Path,
+):
     settings = get_settings()
+    original_environment = settings.environment
     original_redis_url = settings.redis_url
     service: StudioService | None = None
 
     try:
+        settings.environment = Environment.DEVELOPMENT
+        settings.redis_url = "redis://127.0.0.1:6399/0"
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        await service.initialize()
+
+        health = await service.health()
+
+        assert health["status"] == "healthy"
+        assert health["generation_broker"]["configured"] is True
+        assert health["generation_broker"]["enabled"] is False
+        assert health["generation_broker"]["degraded"] is False
+        assert health["generation_broker"]["advisory"] is True
+        assert health["generation_broker"]["detail"] == "redis_unavailable_fallback_local_queue"
+    finally:
+        settings.environment = original_environment
+        settings.redis_url = original_redis_url
+        if service is not None:
+            await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_service_health_keeps_redis_fallback_degraded_outside_development(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_redis_url = settings.redis_url
+    service: StudioService | None = None
+
+    try:
+        settings.environment = Environment.STAGING
         settings.redis_url = "redis://127.0.0.1:6399/0"
         store = StudioStateStore(tmp_path / "state.json")
         service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -3008,8 +3043,10 @@ async def test_service_health_reports_degraded_runtime_when_redis_broker_is_unav
         assert health["generation_broker"]["configured"] is True
         assert health["generation_broker"]["enabled"] is False
         assert health["generation_broker"]["degraded"] is True
+        assert health["generation_broker"]["advisory"] is False
         assert health["generation_broker"]["detail"] == "redis_unavailable_fallback_local_queue"
     finally:
+        settings.environment = original_environment
         settings.redis_url = original_redis_url
         if service is not None:
             await service.shutdown()

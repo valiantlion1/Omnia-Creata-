@@ -1,48 +1,73 @@
 # OmniaCreata Studio (OCS)
 
-OmniaCreata Studio is the flagship visual generation and creative production product in the Omnia Creata ecosystem.
+OmniaCreata Studio is the flagship creative product in the Omnia Creata ecosystem.
+
+It is not a generic chatbot, a provider demo shell, or a random prompt playground.
+
+Studio has two intentional product surfaces:
+- `Create` = deterministic visual execution
+- `Chat` = premium multimodal creative copilot
 
 ## Current Snapshot
 
-- Studio is in `Protected Beta Hardening`.
-- The working target is a trustworthy protected beta, not a broad public paid launch yet.
-- Backend/operator truth is being locked around one contract, one artefact chain, and one Docker staging proof.
-- Backend spine modularization is active too: `contract_catalog.py`, `model_catalog_ops.py`, `operator_control_plane_ops.py`, and `owner_health_ops.py` now carry more of the hidden truth that used to sprawl inside `StudioService`.
-- Protected-beta provider policy is intentionally narrow for now:
-  - chat: `OpenAI` is the only launch-grade lane
-  - image: `OpenAI gpt-image-1-mini` is the default protected-beta lane
-  - premium image QA stays owner-gated behind explicit opt-in
-- This is a temporary protected-beta proof policy, not a permanent public-live vendor lock.
-- The hidden operator source for `surface -> tier -> provider -> model` truth is now `ai_control_plane.surface_matrix` inside owner health detail.
+- Active frame: `Controlled Public Paid Launch`
+- `Protected Beta Hardening` is the closed baseline that got Studio here; it is no longer the main planning target
+- Public launch doctrine: broad public access, self-serve account flow, controlled capacity, and honest paid-product truth
+- Commercial packaging is `Starter`, `Pro`, and `Credit Top-up`
+- Exact package numbers and checkout availability come from the server-authoritative catalog, not hardcoded UI copy
+- `Create` and `Chat` launch together and share one account, billing, and entitlement contract
+- `OCOS` is future internal operating-system work; it is not a Studio deliverable in this wave
+
+## Current Launch Gaps
+
+Protected-beta closure is already a baseline win.
+
+The real public-paid blockers still visible in backend/operator truth are:
+- `provider_mix`
+- `image_public_paid_usage`
+- `provider_economics`
+
+Studio should not pretend those are solved before the current build proves them.
 
 ## Repo Wiki
 
-The Studio repo now includes a dedicated wiki memory layer:
-
+Studio keeps a repo-native context pack and wiki here:
 - [Studio Wiki Index](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/README.md)
 
 Use it for:
 - product direction
+- current launch frame
 - architecture boundaries
-- sprint status
-- engineering standards
-- release/operations orientation
+- delivery status
+- planning order
 
-## Product layout
+## Product Layout
 
 ```text
-web/         Vite/React front-end
+web/         Vite/React frontend
 backend/     Python service and provider orchestration
 assets/      Product assets and references
 config/      Product configuration
-ops/         Product operational material
+ops/         Product operational scripts
 deploy/      Protected staging and always-on deployment pack
+docs/        Canonical Studio docs, wiki, and operations memory
 ```
+
+## Read First
+
+Human orientation:
+1. [Docs Hub](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/README.md)
+2. [Product North Star](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/01_PRODUCT_NORTH_STAR.md)
+3. [Delivery Status](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/03_DELIVERY_STATUS.md)
+
+AI / IDE orientation:
+1. [AI Context Pack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md)
+2. [Version Manifest](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/version.json)
+3. [Release Ledger](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_RELEASE_LEDGER.md)
+4. [Maintenance Map](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_MAINTENANCE_MAP.md)
 
 ## Notes
 
-- Studio was cleaned in-place; its working code was not re-homed into a new product root.
-- Generated frontend and backend artifacts were moved to local quarantine instead of remaining in source.
-- Internal code name: OCS
-- First bounded deployment guidance now lives in [deploy/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/README.md).
-- Protected-beta closure discipline now lives in [apps/studio/ops/verify-protected-beta.ps1](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/ops/verify-protected-beta.ps1) plus the local/staging verify scripts.
+- Studio was cleaned in place; it was not moved into a new product root.
+- Runtime logs and operator artefacts stay outside the repo under `%LOCALAPPDATA%\\OmniaCreata\\Studio\\...`
+- Current-build proof still matters more than launch copy. If docs, UI, and operator truth disagree, fix the conflict explicitly.

@@ -12,6 +12,12 @@ temp/
 backups/
 archive/_cold-storage/
 .tmp.driveupload/
+archive/imports/
+audit/
+
+# Local agent / editor workspace state
+.claude/
+.codex/
 
 # Dependencies and build output
 node_modules/
@@ -73,4 +79,5 @@ PackageCache/
 
 # Runtime app state
 apps/studio/backend/data/
-apps/studio/**/*.zip
+apps/studio/auth.json
+*.zip

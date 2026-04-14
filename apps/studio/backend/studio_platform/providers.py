@@ -16,7 +16,7 @@ from urllib.parse import quote
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
-from config.env import Environment, get_settings, reveal_secret
+from config.env import Environment, configured_secret_value, get_settings, has_configured_secret
 from security.redaction import redact_sensitive_text
 
 from .ai_provider_catalog import (
@@ -1566,7 +1566,7 @@ class ProviderRegistry:
         self._enable_demo_generation_fallback = bool(settings.enable_demo_generation_fallback)
         providers_by_name: dict[str, StudioImageProvider | None] = {
             "openai": OpenAIImageProvider(
-                reveal_secret(settings.openai_api_key),
+                configured_secret_value(settings.openai_api_key),
                 draft_image_model=settings.openai_image_draft_model,
                 image_model=settings.openai_image_model,
                 premium_qa_enabled=(
@@ -1574,9 +1574,13 @@ class ProviderRegistry:
                     or bool(settings.openai_image_premium_qa_enabled)
                 ),
             ),
-            "fal": FalProvider(reveal_secret(settings.fal_api_key)),
-            "runware": RunwareProvider(reveal_secret(settings.runware_api_key)),
-            "huggingface": HuggingFaceImageProvider(reveal_secret(settings.huggingface_token)) if settings.huggingface_token else None,
+            "fal": FalProvider(configured_secret_value(settings.fal_api_key)),
+            "runware": RunwareProvider(configured_secret_value(settings.runware_api_key)),
+            "huggingface": (
+                HuggingFaceImageProvider(configured_secret_value(settings.huggingface_token))
+                if has_configured_secret(settings.huggingface_token)
+                else None
+            ),
             "pollinations": PollinationsProvider(enabled=True) if settings.enable_pollinations else None,
             "demo": DemoImageProvider() if self._enable_demo_generation_fallback else None,
         }

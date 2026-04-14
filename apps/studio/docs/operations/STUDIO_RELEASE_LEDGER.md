@@ -18,6 +18,173 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.14.101`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `Controlled Public Paid Launch` Phase 1 needed a real authority freeze before more surface work. Studio already had decent security coverage, but two gaps were still too soft for a truthful launch path: owner/admin access could still be influenced by auth metadata during bootstrap, and several authenticated self-service mutation routes had no explicit rate-limit contract yet.
+- What:
+  owner-only backend truth is now stricter. Auth/session bootstrap no longer upgrades an identity into `owner_mode`, `root_admin`, or `local_access` from request/session metadata alone; owner surfaces now trust stored backend identity truth plus founder-email overrides instead of header or token claims by themselves.
+  Router hardening also made high-risk mutation limits explicit. Project create/update/delete, profile export/update/delete, asset import, and style mutations now have server-side rate limits so account abuse, bulk scraping, and repeated destructive actions are bounded by contract instead of best effort.
+  Regression coverage expanded with dedicated router-security tests that prove two things: header-only owner/root-admin claims fail closed, and the new mutation routes actually consume the intended limits.
+
+### `0.6.0-alpha` / build `2026.04.14.100`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Create generation admission and persistence were already real, but the end of the flow still felt too weak: once a render finished, the toast mostly acted like a notification instead of a product handoff. Worse, compose draft projects were treated like a dead-end special case, so a finished Create run could bounce the user back to generic Library instead of reopening the actual project that held the new result.
+- What:
+  Create toast actions now close that gap. Finished and in-progress runs can reopen their real destination again via `Open project` or `Open library`, and the draft compose project no longer breaks the result chain just because it is system-managed in lists.
+  Successful Create runs also gained a direct `Copy share link` action that mints a project share on demand when the active plan allows sharing. This keeps `Create -> result -> project -> share` inside the same surface instead of forcing the user to manually hunt through Library or Project first.
+
+### `0.6.0-alpha` / build `2026.04.14.99`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.98` economics signoff artÄ±k yazili note istiyordu ama hala bir eksik vardi: current build note + build pin olsa bile gercek maliyet arastirma paketi olmadan `provider_economics` tarafi teorik olarak kapanabiliyordu. Bu da OpenAI-first launch kararini gercek economics dossier yerine env/config seviyesinde tasimaya devam ediyordu.
+- What:
+  backend artik current-build `provider_economics_dossier` uretiyor ve owner health detail icinde rapor olarak sakliyor. Dossier OpenAI-first pricing basis'i, Studio public package varsayimlari, lane bazli credit impact ozeti, safe/risky generation summary, ve founder signoff snapshot'ini tek current-build artefact'ta topluyor.
+  provider economics truth de buna gore sertlesti: `pass` icin artik matching signoff build + explicit note yetmiyor; dossier current build ile eslesmeli ve `complete=true` olmalı. Aksi halde economics state acikca `missing_dossier` veya `stale_dossier` olarak warning kaliyor.
+  owner/operator truth genislestirildi: launch readiness artik dossier durumunu provider economics altinda tasiyor, owner health detail de top-level `provider_economics_dossier` summary veriyor. Bu wave yeni provider acmiyor, `provider_mix` ve `image_public_paid_usage` blocker'larini yumusatmiyor; yalnizca OpenAI-first truth ve cost exit contract'ini gercek current-build arastirma artefact'ina bagliyor.
+
+### `0.6.0-alpha` / build `2026.04.14.98`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.97` redundancy truth daha netti, ama `provider_economics` tarafinda hala bir gri alan vardi: current build ile eslesen bir boolean signoff, note/policy metni bos olsa bile `pass` sayilabiliyordu. Bu da explicit economics signoff yerine "config dogru gorunuyor" hissi uretebiliyordu.
+- What:
+  provider economics contract'i artik daha sert: `pass` icin yalnizca `PUBLIC_PAID_PROVIDER_ECONOMICS_READY=true` ve matching build yetmiyor, ayrica explicit bir signoff note da gerekiyor. Note yoksa current build bile warning olarak kaliyor ve economics signoff state'i `missing_note` diye acikca gorunuyor.
+  Buna uygun provider-truth ve launch-readiness regression coverage de eklendi; yani public-paid stage ancak current build economics signoff'u yazili policy/cost ozetiyle geldiyse `ready` tarafina gecebilir.
+  `.98` proof zinciri de current build'e tasindi: protected-beta verify shard'lari ile frontend `type-check` / `build` gecti, local verify `.98` pass verdi ve backend health `healthy` kaldi, live provider smoke `.98` `ok=3 / skipped=4 / error=0` yazdi, ve protected staging `.98` healthy rebuild edildi. Owner-token staging closure yine ayri bir explicit run gerektirecek; owner detail olmadan `closure_ready=true` current build icin yeniden alinmadi.
+
+### `0.6.0-alpha` / build `2026.04.13.97`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.96` local backend health problemni cozmustu, ama public-paid backend truth hala bazi farkli redundancy gap'lerini ayni cumleyle anlatiyordu. Ozellikle chat tarafinda "ikinci paid lane hic yok" ile "backup lane var ama current build'de kanitlanmamis" ayrimi, image tarafinda da "managed backup yok" ile "configured backup var ama smoke proof'u yok" ayrimi operator tarafinda yeterince temiz okunmuyordu.
+- What:
+  provider truth artik bu reason'lari daha durust ayiriyor. Chat resilience truth'u tek proven paid lane kaldiysa, configured backup lane'lerin current build'de hala unproven oldugunu ayrica soyluyor; ikinci lane hic yoksa onu da ayri bir reason olarak veriyor.
+  image resilience ve `image_public_paid_usage` truth'u da benzer sekilde ayrildi: managed backup hic yoksa baska, configured backup lane var ama current-build smoke ile kanitlanmadiysa baska reason uretiliyor. Boylece `provider_mix` ve `image_public_paid_usage` blocker'lari ayni `blocked` sonucu verse bile, operator/artifact tarafinda neden bloke olduklari daha net okunuyor.
+  Bu wave yeni provider lane acmiyor ve launch gate'i yumusatmiyor; yalnizca mevcut blocker truth'unu daha hedefli hale getiriyor. Current-build proof zinciri `.97`ye tasindi: protected-beta verify shard'lari ile frontend `type-check` / `build` gecti, local verify `.97` pass verdi ve backend health `healthy` kaldi, live provider smoke `.97` `ok=3 / skipped=4 / error=0` yazdi, ve protected staging `.97` healthy rebuild edildi. Owner-token staging closure ise yine ayri bir explicit run gerektiriyor; owner detail olmadan `closure_ready=true` current build icin yeniden alinmadi.
+
+### `0.6.0-alpha` / build `2026.04.13.96`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.95` wave arayuzu tekrar Omnia guardrail'larina cekti ama local backend health hala `degraded` gorunuyordu. Somut neden crash ya da provider failure degildi; local development'ta beklenen queue fallback path'i, yani Redis/shared broker yokken backend'in yerel kuyrukla devam etmesi, top-level health durumunu da gereksiz yere degraded'e indiriyordu.
+- What:
+  Backend health truth artik development fallback ile gercek runtime bozulmasini ayiriyor. Local development'ta `redis_unavailable_fallback_local_queue` ve `web_runtime_local_fallback_no_shared_broker` reason'lari, generation yerel kuyrukla calismaya devam ediyorsa top-level health'i tek basina degraded yapmiyor.
+  Ayni reason'lar staging/production tarafinda hala degraded olarak sayiliyor; yani launch truth yumusatilmadi, sadece local operator signal'i daha dogru hale getirildi. Generation broker payload'i da bu ayirimi tasiyor: local dev fallback artik advisory olarak isaretlenebiliyor, gercek degradation ile karismiyor.
+  `.96` proof zinciri de yenilendi: protected-beta verify shard'lari ile frontend `type-check` / `build` tekrar gecti, local verify `.96` pass verdi ve backend health artik `healthy`, live provider smoke `.96` `ok=3 / skipped=4 / error=0` yazdi, ve protected staging `.96` healthy rebuild edildi. Ancak owner bearer token olmadan staging verify advisory warning olarak kaldi; `closure_ready=true` current build icin yine yeniden alinmadi.
+
+### `0.6.0-alpha` / build `2026.04.13.95`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.94` doctrine ve context-pack cleanup'i dogru yone gitse de arayuz copy'si birkac yerde fazla launch-anlatili, webby ve gergin kaldi. Ozellikle Billing, Documentation, Dashboard welcome overlay, Chat input altindaki billing hint, ve shell/settings owner-state copy'leri Studio'nun app-first guardrail'larindan daha cok rollout notu gibi okunuyordu.
+- What:
+  Bu wave layoutlari yeniden tasarlamiyor; var olan Studio yuzeylerini sakinlestiriyor. Chat altindaki gereksiz plan-hint paneli kaldirildi, Create internal-access banner'i silindi, Dashboard onboarding overlay'i yeniden urun odakli hale getirildi, Billing hero/root-state dili daha sakinlestirildi, Documentation hero ve policy copy'si daha grounded hale getirildi, ve Settings ile global shell icindeki owner/internal labels daha az bagiran bir tona cekildi.
+  Controlled Public Paid Launch doctrine'i korunuyor; backend-authoritative billing/catalog truth'u geri alinmadi. Yapilan is, doctrine'i app yuzeyine fazla anlatmadan tasimak ve Studio'yu repo icindeki Omnia UI guardrail'larina daha iyi uydurmak.
+  `.95` verification zinciri de ayni build'e tasindi: protected-beta verify shard'lari ile frontend `type-check` / `build` tekrar gecti, local verify `.95` pass verdi ama backend health `degraded` kaldi, live provider smoke `.95` `ok=3 / skipped=4 / error=0` yazdi, ve protected staging topology `.95`e rebuild edildi. Ancak owner bearer token olmadan staging verify hala advisory warning olarak kaldi; `closure_ready=true` current build icin yeniden alinmadi.
+
+### `0.6.0-alpha` / build `2026.04.13.94`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.93` provider auth ve public-plan truth tarafini daha durust hale getirmisti, ama Studio'nun canonical baglam paketi hala protected-beta merkezli konusuyordu. README, wiki, roadmap, delivery status, ve bazi shell copy'leri aktif urun hikayesini gecmiste kapanmis baseline uzerinden anlatiyor; bu da gelecekteki AI handoff'lari ve launch kararlarini gereksiz bulandiriyordu.
+- What:
+  Studio'nun canonical context pack'i artik `Controlled Public Paid Launch` frame'ine sabitlendi. README, wiki index, AI context pack, product north star, delivery status, roadmap, ve operations girisleri Studio'yu Omnia Creata'nin flagship urunu olarak, `Create + Chat` birlesik urun contract'i olarak, ve `Starter / Pro / Credit Top-up` server-authored commercial catalog'u uzerinden anlatıyor.
+  user-facing drift de daraltildi: Billing zaten backend katalog truth'unu gosterirken Chat ayni commercial contract'i hatirlatan bir billing hint kazandi, Create/Login/Signup/Shell CTA'lari ve Dashboard/Documentation/Settings copy'leri stale `Start free` veya aktif `protected beta` tiyatrosundan uzaklastirildi.
+  bu wave yeni feature acmiyor; protected-beta baseline korunuyor ama aktif urun hikayesi artik broad public paid launch'a donuk. Kalan launch gate'ler acikca ayni kaliyor: `provider_mix`, `image_public_paid_usage`, ve `provider_economics`. `.94` build, bu doctrine ve context-pack hizasini current manifest ve ops memory uzerinde kanonik hale getiriyor.
+  `.94` verification zinciri de yenilendi: protected-beta verify script shardlari ve frontend build tekrar gecti, local verify `.94` pass verdi (backend health hala `degraded`), live provider smoke `.94` `ok=3 / skipped=4 / error=0` yazdi, ve protected staging bring-up + verify `.94` build'ine tasindi. Ancak owner bearer token env'de hazir olmadigi icin staging verify advisory warning olarak kaldi ve `closure_ready=true` yeniden kanitlanamadi; bu current-build blocker olarak durustce kaydedildi.
+
+### `0.6.0-alpha` / build `2026.04.13.93`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.92` public-paid truth daha durusttu ama env tarafinda bir yalanci-configuration sorunu kalmisti: Gemini ve OpenRouter gibi lane'ler obvious placeholder key tasidiklarinda bile "configured" sayilabiliyor, smoke raporlarindaki `400/401`ler de gercekte olmayan aktif premium lane bozuklugu gibi owner/operator truth'una sizabiliyordu. Bu, "gercekten bozuk provider" ile "hic configure edilmemis provider" farkini bulandiriyordu.
+- What:
+  provider secret handling artik daha sert: obvious placeholder key'ler routing, provider smoke, moderation, image provider registry, ve launch-readiness/provider-truth tarafinda `not_configured` sayiliyor. Boylece fake configured state, sahte cooldown, ve gereksiz auth-failure gürültüsü current truth'u saptirmiyor.
+  chat tarafinda bir contract cleanup da yapildi: Gemini chat request'i artik `x-goog-api-key` header'i ile gidiyor; yani current backend path official header-auth seklini kullaniyor, query-string key tasimiyor.
+  buna uygun focused regression coverage eklendi: placeholder secret'lerin configured sayilmadigi, smoke seed'inin not-configured lane'e cooldown enjekte etmedigi, Gemini request'inin header auth kullandigi, ve provider registry'nin placeholder token'lari gercek provider gibi yuklemedigi testlerle kilitlendi.
+  current-build proof zinciri `.93`e tasindi: local verify `.93`, provider smoke `.93`, ve protected staging owner verify `.93` ayni snapshot'a yenilendi; protected-beta closure current build'de korunurken public-paid tarafinda kalan blocker'lar artik daha durust bir provider auth truth'una dayaniyor.
+
+### `0.6.0-alpha` / build `2026.04.13.92`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.91` refactor'i launch-readiness monolith'ini ciddi sekilde daraltti ama public-paid phase icinde hala bir karar tasmasi vardi: generic `provider_smoke` check'i, chat/image/mix/economics truth'u zaten daha hassas sekilde karar verdigi halde, public-paid stage'e bir kez daha hard blocker olarak giriyordu. Bu da opsiyonel lane veya fallback smoke drift'ini gercek paid-readiness gap'i ile gereksiz karistirabiliyordu.
+- What:
+  public-paid phase artik `provider_smoke`'u duplicate blocker gibi kullanmiyor; generic smoke sonucu current-build operator sinyali olarak warning seviyesinde kaliyor, ama hard blocker karari `chat_public_paid_usage`, `image_public_paid_usage`, ve `provider_mix` truth'undan geliyor.
+  buna uygun regression coverage de eklendi: yeni test, public-paid chat/image/mix/economics truth'u temizken opsiyonel bir provider smoke error'u oldugunda stage'in `blocked` degil `needs_attention` kalmasini kilitliyor. Boylece protected-beta/public-paid ayrimi daha net, operator warning dili de daha durust.
+  current-build proof zinciri `.92`ye tasindi: local verify `.92`, provider smoke `.92`, ve protected staging owner verify `.92` ayni snapshot'a yenilendi; protected-beta closure current build'de korunurken public-paid tarafinda generic smoke'in rolü artik daha hassas.
+
+### `0.6.0-alpha` / build `2026.04.13.91`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.90` public-paid truth daha durusttu ama backend tarafinda hala bir yapisal tasma vardi: `launch_readiness.py` hem smoke persistence, hem provider truth, hem mix/economics kararlari, hem de operator-facing readiness assembly tasiyordu. Bu durum test yazmayi da zorlastiriyordu; provider truth edge case'leri tek basina hedeflemek yerine tum launch-readiness context'ini kurmak gerekiyordu.
+- What:
+  provider classification, smoke lookup, economics/mix truth, ve chat/image provider report mantigi artik ayri `services/provider_truth.py` modulunde duruyor; `launch_readiness.py` ise operator-facing readiness assembly ve gate hesaplamasina geri cekildi. Public contract degismedi; refactor davranis degil sorumluluk siniri tasidi.
+  buna paralel focused regression coverage eklendi: `test_provider_truth.py` wrong-build smoke, stale signoff, free-tier-only lane, managed backup eksigi ve mix/economics edge case'lerini artik direkt moduler seviyede kilitliyor. LLM gateway testleri de smoke-seeding yan etkisinden izole edilerek tekrar deterministik hale getirildi.
+  docs/operator truth da buna gore hizalandi ve current-build proof zinciri `.91`a tasindi: local verify `.91` pass, live provider smoke `.91` current-build report'u `ok=3 / skipped=2 / error=2` ile OpenAI lane'lerini gecerken OpenRouter/Gemini drift'ini durustce kaydediyor, ve protected staging owner verify `.91` icin tekrar `closure_ready=true` veriyor. Protected-beta gate kapali kalirken public-paid blocker'lar hala durustce gorunuyor.
+
+### `0.6.0-alpha` / build `2026.04.13.90`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.89` operator truth daha netti ama public-paid readiness kararinda iki sey hala birbirine karisiyordu: protected-beta secili chat lane ile broader paid redundancy ayni truth gibi davranabiliyor, economics warning'i de explicit current-build signoff yerine dolayli config cikarimlarina yaslanabiliyordu
+- What:
+  `launch_readiness` artik chat tarafinda iki ayri seyi ayri ayri soyluyor: protected-beta gate halen secili lane'in current-build smoke/health truth'una bakiyor, ama `provider_mix` icin broader paid chat redundancy artik tum gercek paid lane'ler ve current-build smoke proof'u uzerinden hesaplanıyor
+  provider economics truth'u da ayrildi: surface-level cost class bilgisi korunuyor ama `provider_economics` artik ancak explicit current-build signoff varsa `pass` oluyor; aksi halde tekil bir warning olarak kaliyor ve mix blocker'larina gomulmuyor
+  bu wave yeni feature acmiyor; `.90` icin env example'lari economics signoff alanlariyla genisletildi, readiness regression testleri yeni contract'a gore guncellendi, ve local/provider/staging artefact refresh zinciri current build uzerinde yeniden kosuldu
+  current-build proof artik `.90`ta hizali: local verify `.90` pass, live provider smoke `.90` report'u OpenAI image/chat lane'lerini gecirirken OpenRouter/Gemini auth-config drift'ini durustce error olarak kaydediyor, ve protected staging owner verify `.90` icin `closure_ready=true` veriyor
+
+### `0.6.0-alpha` / build `2026.04.13.89`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.88` protected-beta closure proof gercekti ama public-paid readiness truth'u hala cok toplu ve biraz kaygandi; staging owner report'unda `image_public_paid_usage` blocker'i pozitif bir cumleyle gorunebiliyor, `provider_mix` blocker'i de economics warning'iyle gereksiz ic ice kalabiliyordu
+- What:
+  `launch_readiness` public-paid truth contract'i dar ama daha durust hale geldi: chat ve image tarafi artik ayri `public_paid_usage_summary` reason'lari uretiyor, provider-mix truth'u economics truth'tan ayriliyor, ve public-paid phase blocker listesi artik protected-beta olumlu cumleleri blocker diye gostermiyor
+  bu wave yeni feature acmiyor; `.88` protected-beta closure baseline'ini korurken sonraki operator kararlarini `image_public_paid_usage`, `provider_mix`, ve `provider_economics` arasindaki farki daha net gorecek sekilde sikilastiriyor
+  current-build zinciri de `.89`a tasindi: version/ledger/maintenance bookkeeping current build ile hizalandi, hedefli readiness testleri yeniden kosuldu, ve local/provider/staging artefact'leri artik daha net ayrilmis public-paid readiness reason'lariyla `.89` build'ine senkron
+
+### `0.6.0-alpha` / build `2026.04.13.88`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.87` shell baseline genel olarak saglamdi, ama current-build artefact zinciri hala stale raporlara dayanıyordu ve birkac gorunen shell izi daha gercek urun durumundan daha ileride konusuyordu; ozellikle Billing status/activity dili ile enterprise CTA, current build closure proof yenilenmeden once dar bir completion wave istiyordu
+- What:
+  gorunen shell yuzeyleri `.87` baseline matrix ile tekrar sabitlendi ve `.88` wave bu kalan drift'i daraltti: Billing artık fake processing tiyatrosu yapmiyor, current plan durumu protected-beta truth ile gorunuyor, ham provider/activity etiketleri daha urun diline cekildi, ve enterprise card dead self-serve button yerine gercek bir pilot-contact yoluna dondu
+  shell copy de bir adim daha dogrulasti: Explore hero metni public gallery'nin gercek durumunu anlatacak sekilde guncellendi ve signed-in/internal shell ordinary customer metering gibi davranan son yerlerde de daha durust hale geldi
+  en onemlisi current-build operator zinciri artik `.88`te yeniden hizali: local verify `.88` pass, provider smoke `.88` pass, protected staging owner verify `.88` pass-with-warnings ve `closure_ready=true`, yani stale `.84/.86` artefact'leri closure kaniti olmaktan cikti
+
+### `0.6.0-alpha` / build `2026.04.13.87`
+- Date: `2026-04-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  protected-beta closure proof was stronger than the visible shell experience; Explore still behaved like a decorative placeholder when the public gallery was empty, Create still carried unnecessary surface clutter around ratio selection and lane naming, and several signed-in library/help/billing surfaces were still too ambiguous about what really works today
+- What:
+  Explore now behaves honestly in both directions: search and sort drive the actual rendered result set, curated showcase fallback follows those same controls, result counts are visible, and a real empty state appears when neither live public posts nor showcase references match the current query
+  Create and Library are cleaner and more truthful too: the ratio selector is now a compact single chooser with six standard formats, the redundant `My Images` CTA is gone, image-set actions now distinguish `Reuse prompt`, `Reuse style`, `Create variations`, and `Edit in Chat`, and those handoffs land on the intended Studio surface instead of pretending different actions are the same
+  user-facing shell copy is closer to current product truth across Billing, Help, Settings, and the shared shell itself: internal-access accounts no longer masquerade as ordinary metered customers, protected-beta-only controls disclose their limits, and help/policy text now reads like an honest protected-beta operating guide instead of a faux-final public launch contract
+
 ### `0.6.0-alpha` / build `2026.04.12.86`
 - Date: `2026-04-12`
 - Codename: `Foundation`

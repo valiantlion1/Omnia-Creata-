@@ -269,6 +269,39 @@ async def test_run_chat_provider_smoke_case_reports_success() -> None:
         settings.gemini_api_key = original_gemini_api_key
 
 
+def test_build_default_smoke_cases_still_allow_provider_selection_even_if_runtime_key_is_placeholder() -> None:
+    cases = build_default_smoke_cases(
+        selected_provider="gemini",
+        selected_surface="chat",
+        include_failure_probe=False,
+    )
+
+    assert len(cases) == 1
+    assert cases[0].provider_name == "gemini"
+
+
+@pytest.mark.asyncio
+async def test_run_chat_provider_smoke_case_skips_placeholder_configured_secret() -> None:
+    settings = get_settings()
+    original_gemini_api_key = settings.gemini_api_key
+    settings.gemini_api_key = "your_gemini_api_key_here"
+    try:
+        result = await run_chat_provider_smoke_case(
+            FakeGateway(),
+            ProviderSmokeCase(
+                label="gemini-chat",
+                provider_name="gemini",
+                workflow="chat",
+                surface="chat",
+                prompt="Return the token STUDIO_SMOKE_OK",
+            ),
+        )
+        assert result.status == "skipped"
+        assert result.error == "Provider is not configured in this environment"
+    finally:
+        settings.gemini_api_key = original_gemini_api_key
+
+
 @pytest.mark.asyncio
 async def test_run_chat_provider_smoke_case_redacts_sensitive_error_text() -> None:
     settings = get_settings()

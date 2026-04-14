@@ -5,7 +5,7 @@
 ## 1) Zip + repo birlikte inceleme ozeti
 
 Incelenen iki ana kaynak:
-- Root: `OmniaOrganizer.zip`
+- Archive import: `archive/imports/OmniaOrganizer.zip`
 - Repo: `apps/organizer/docs/*` ve `apps/organizer/mobile/android/*`
 
 Sonuc:
@@ -22,7 +22,7 @@ Sonuc:
 - Bilgi buyuk olcude tekrarli, formatlar farkli.
 
 ### Sadece zipte olan
-- Root `OmniaOrganizer.zip`
+- Archive import `archive/imports/OmniaOrganizer.zip`
 - Nested `OmniaOrganizer/OmniaOrganizer.zip`
 
 ## 3) Tekrar, cakisma, sisme noktaları

@@ -193,9 +193,6 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 email=current.email or f"{current.id}@omnia.local",
                 display_name=getattr(current, "username", None) or current.email or "Omnia User",
                 username=metadata.get("username") or None,
-                owner_mode=bool(metadata.get("owner_mode")),
-                root_admin=bool(metadata.get("root_admin")),
-                local_access=bool(metadata.get("local_access")),
                 accepted_terms=bool(metadata.get("accepted_terms")),
                 accepted_privacy=bool(metadata.get("accepted_privacy")),
                 accepted_usage_policy=bool(metadata.get("accepted_usage_policy")),
@@ -208,9 +205,6 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def _require_owner(auth_user: Optional[AuthUser]) -> AuthUser:
         current = _require_auth(auth_user)
         await _ensure_identity_for_auth_user(current)
-        metadata = getattr(current, "metadata", {}) or {}
-        if current.role == UserRole.ADMIN or metadata.get("owner_mode"):
-            return current
         try:
             identity = await service.get_identity(current.id)
         except KeyError:
@@ -549,8 +543,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return {"projects": [project.model_dump(mode="json") for project in projects]}
 
     @router.post("/projects", status_code=status.HTTP_201_CREATED)
-    async def post_project(payload: ProjectCreateRequest, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def post_project(
+        payload: ProjectCreateRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "projects:create", limit=24, identifier=auth_user.id, window_seconds=3600)
         project = await service.create_project(auth_user.id, payload.title, payload.description, payload.surface)
         return project.model_dump(mode="json")
 
@@ -587,9 +586,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def patch_project(
         project_id: str,
         payload: ProjectUpdateRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "projects:update", limit=60, identifier=auth_user.id, window_seconds=3600)
         try:
             project = await service.update_project(
                 auth_user.id,
@@ -604,8 +605,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return project.model_dump(mode="json")
 
     @router.delete("/projects/{project_id}")
-    async def delete_project(project_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def delete_project(
+        project_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "projects:delete", limit=12, identifier=auth_user.id, window_seconds=3600)
         try:
             return await service.delete_project(auth_user.id, project_id)
         except KeyError:
@@ -651,8 +657,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     @router.get("/profiles/me/export")
-    async def export_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def export_my_profile(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "profiles:export", limit=6, identifier=auth_user.id, window_seconds=3600)
         try:
             data = await service.export_identity_data(identity_id=auth_user.id)
             return data
@@ -660,8 +670,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     @router.delete("/profiles/me")
-    async def delete_my_profile(current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def delete_my_profile(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "profiles:delete", limit=3, identifier=auth_user.id, window_seconds=3600)
         try:
             await service.permanently_delete_identity(identity_id=auth_user.id)
             return {"status": "deleted"}
@@ -671,9 +685,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.patch("/profiles/me")
     async def patch_my_profile(
         payload: ProfileUpdateRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "profiles:update", limit=24, identifier=auth_user.id, window_seconds=3600)
         try:
             await service.update_profile(
                 auth_user.id,
@@ -951,9 +967,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/assets/import", status_code=status.HTTP_201_CREATED)
     async def import_asset(
         payload: AssetImportRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "assets:import", limit=24, identifier=auth_user.id, window_seconds=3600)
+        await _consume_rate_limit(request, "assets:import:ip", limit=30, window_seconds=3600)
         try:
             asset = await service.import_asset_from_data_url(
                 identity_id=auth_user.id,
@@ -1308,9 +1327,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/styles", status_code=status.HTTP_201_CREATED)
     async def post_style(
         payload: StyleSaveRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "styles:mutate", limit=40, identifier=auth_user.id, window_seconds=3600)
         try:
             style = await service.save_style(
                 auth_user.id,
@@ -1330,9 +1351,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/styles/from-prompt", status_code=status.HTTP_201_CREATED)
     async def post_style_from_prompt(
         payload: StyleFromPromptRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "styles:mutate", limit=40, identifier=auth_user.id, window_seconds=3600)
         try:
             style = await service.save_style_from_prompt(
                 auth_user.id,
@@ -1348,9 +1371,11 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def patch_style(
         style_id: str,
         payload: StyleUpdateRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "styles:mutate", limit=40, identifier=auth_user.id, window_seconds=3600)
         try:
             style = await service.update_style(auth_user.id, style_id, favorite=payload.favorite)
         except KeyError:

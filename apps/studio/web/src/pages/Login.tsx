@@ -106,7 +106,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <Link to="/signup" className="text-sm text-zinc-300 transition hover:text-white">
-            Start free
+            Create account
           </Link>
         </div>
 

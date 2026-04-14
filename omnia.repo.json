@@ -2,7 +2,7 @@
   "version": 1,
   "name": "Omnia Creata",
   "topLevel": {
-    "apps": "Active core products",
+    "apps": "Product and internal app roots",
     "website": "Web properties umbrella",
     "packages": "Shared cross-product code and contracts",
     "design": "Brand, figma, and export material",
@@ -17,7 +17,7 @@
     {
       "id": "studio",
       "path": "apps/studio",
-      "status": "active",
+      "status": "active-primary",
       "surfaces": [
         "web",
         "backend",
@@ -29,7 +29,7 @@
     {
       "id": "omniapixels",
       "path": "apps/omniapixels",
-      "status": "active",
+      "status": "incubation",
       "surfaces": [
         "backend",
         "mobile",
@@ -42,7 +42,7 @@
     {
       "id": "organizer",
       "path": "apps/organizer",
-      "status": "active",
+      "status": "incubation",
       "surfaces": [
         "mobile",
         "docs"
@@ -51,7 +51,7 @@
     {
       "id": "companion",
       "path": "apps/companion",
-      "status": "planned-core",
+      "status": "hold-planned",
       "surfaces": [
         "docs"
       ]
@@ -59,7 +59,7 @@
     {
       "id": "omnia-watch",
       "path": "apps/omnia-watch",
-      "status": "active",
+      "status": "incubation",
       "surfaces": [
         "web",
         "desktop",
@@ -72,7 +72,7 @@
     {
       "id": "prompt-vault",
       "path": "apps/prompt-vault",
-      "status": "active",
+      "status": "incubation",
       "surfaces": [
         "web",
         "packages",
@@ -83,7 +83,7 @@
     {
       "id": "control-center",
       "path": "apps/internal/control-center",
-      "status": "active",
+      "status": "future-internal",
       "surfaces": [
         "web",
         "worker",

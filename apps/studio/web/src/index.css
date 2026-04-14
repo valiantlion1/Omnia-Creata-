@@ -227,3 +227,31 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* ═══════════════════════════════════════════════════
+   Generation animations
+   ═══════════════════════════════════════════════════ */
+
+/* Scanning light sweep — used in GenerationPending */
+@keyframes oc-gen-scan {
+  0%   { transform: translateY(-120%); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateY(220%); opacity: 0; }
+}
+
+/* Soft pulsing glow for generation state */
+@keyframes oc-gen-glow {
+  0%, 100% { opacity: 0.12; }
+  50%       { opacity: 0.28; }
+}
+
+/* Image reveal — blur fades out as image loads */
+@keyframes oc-img-reveal {
+  from { opacity: 0; filter: blur(16px); transform: scale(1.04); }
+  to   { opacity: 1; filter: blur(0px);  transform: scale(1); }
+}
+
+.animate-gen-reveal {
+  animation: oc-img-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

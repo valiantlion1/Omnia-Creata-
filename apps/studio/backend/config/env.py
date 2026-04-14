@@ -23,6 +23,63 @@ def reveal_secret(value: SecretStr | str | None) -> str:
     return str(value)
 
 
+def is_placeholder_secret_value(value: SecretStr | str | None) -> bool:
+    """Treat obvious example placeholders as effectively unset."""
+    normalized = reveal_secret(value).strip().strip("\"'").lower()
+    if not normalized:
+        return False
+
+    exact_placeholders = {
+        "changeme",
+        "change-me",
+        "change_me",
+        "replace-me",
+        "replace_me",
+        "replace-with-real-value",
+        "replace_with_real_value",
+        "placeholder",
+        "your-api-key",
+        "your_api_key",
+        "your-api-key-here",
+        "your_api_key_here",
+        "your-key-here",
+        "your_key_here",
+        "your-token-here",
+        "your_token_here",
+        "your-secret-here",
+        "your_secret_here",
+    }
+    if normalized in exact_placeholders:
+        return True
+
+    looks_like_wrapped_placeholder = normalized.startswith("<") and normalized.endswith(">")
+    if looks_like_wrapped_placeholder:
+        return True
+
+    token_markers = ("key", "token", "secret", "password", "credential")
+    if "placeholder" in normalized:
+        return True
+    if "replace" in normalized and any(marker in normalized for marker in token_markers):
+        return True
+    if "your" in normalized and "here" in normalized and any(marker in normalized for marker in token_markers):
+        return True
+    return False
+
+
+def has_configured_secret(value: SecretStr | str | None) -> bool:
+    normalized = reveal_secret(value).strip()
+    if not normalized:
+        return False
+    return not is_placeholder_secret_value(normalized)
+
+
+def configured_secret_value(value: SecretStr | str | None) -> str:
+    normalized = reveal_secret(value).strip()
+    if not normalized or is_placeholder_secret_value(normalized):
+        return ""
+    return normalized
+
+
 class Environment(str, Enum):
     DEVELOPMENT = "development"
     STAGING = "staging"
@@ -87,6 +144,9 @@ class Settings(BaseSettings):
     openrouter_daily_hard_cap_usd: Optional[float] = None
     owner_cost_telemetry_window_days: int = 30
     owner_cost_telemetry_recent_event_limit: int = 20
+    public_paid_provider_economics_ready: bool = False
+    public_paid_provider_economics_ready_build: Optional[str] = None
+    public_paid_provider_economics_ready_note: Optional[str] = None
 
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""

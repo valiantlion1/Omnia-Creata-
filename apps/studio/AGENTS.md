@@ -23,7 +23,7 @@ Keep the product feeling:
 1. `Create` and `Chat` remain distinct surfaces unless explicitly redirected by the user.
 2. Backend stability beats feature sprawl.
 3. Security, ownership, billing, and runtime behavior are server-authoritative.
-4. Free users may be constrained, but must not receive humiliatingly bad product quality.
+4. Starter or lower-tier users may be constrained, but must not receive humiliatingly bad product quality.
 5. Degraded/fallback behavior must be explicit in backend metadata, never silent magic.
 6. Do not redesign the UI unless the user explicitly asks for UI work.
 
@@ -40,8 +40,11 @@ Historical backend hardening chain:
 Current active frame:
 - The broad end-to-end review is complete.
 - Sprint 8 and Sprint 9 are now part of the historical chain.
-- `Protected Beta Hardening` is the active working frame.
-- Do not drift back into random feature work before contract truth, artefact sync, provider proof, and closure are materially stronger.
+- `Protected Beta Hardening` is now the closed baseline, not the active planning target.
+- `Controlled Public Paid Launch` is the active working frame.
+- Do not drift into random feature work; the main path is catalog truth, launch-critical surface completion, provider honesty, and current-build proof sync.
+- `Starter`, `Pro`, and `Credit Top-up` are the launch packaging ids; exact numbers belong to the server-authoritative catalog, not hardcoded shell copy.
+- `OCOS` is future internal operating-system work and should not silently enter Studio scope during this frame.
 - `main` is the only official Studio continuation branch. If Studio work appears on OOFM/Organizer branches again, recover `apps/studio/**` path-by-path instead of merging those branches wholesale.
 - Sprint 6 is complete, but its chat-quality guardrails remain active and should not be eroded by later changes.
 - Sprint 7 is complete, but its launch-readiness and smoke-reporting surfaces should be kept honest; do not treat them as vanity status panels.

@@ -2,101 +2,103 @@
 
 ## Planning Philosophy
 
-Studio should now be planned around release-shaping gates, not endless new sprint names.
+Studio should now be planned around launch doctrine and current-build proof, not endless sprint renaming.
 
 Each planning step should answer:
-- what contract is being protected
-- what operator truth is being tightened
-- what proof is missing today
-- what would count as closure on the current build
+- what product contract is being tightened
+- what launch blocker is being reduced
+- what server-authoritative truth is being exposed
+- what proof is still missing on the current build
 
 ## Active Track
 
-### Protected Beta Hardening
+### Controlled Public Paid Launch
 
 Sequence:
-- `contract`
-- `truth sync`
-- `provider proof`
-- `closure`
+- `catalog truth`
+- `surface completion`
+- `provider truth`
+- `proof sync`
 
 Purpose:
-- reduce backend/ops spaghetti risk before scale
-- keep one canonical signed-in contract
-- keep one artefact chain for the current build
-- prove Docker staging and owner verification on the same truth surface
+- ship Studio as a paid global product without pretending resilience that does not exist yet
+- keep `Create` and `Chat` under one commercial contract
+- keep pricing, entitlement, and usage truth server-authored
+- preserve protected-beta closure while moving the product story forward
 
 ## Near-Term Order
 
-### 1. Contract
+### 1. Catalog Truth
 
-- keep `/v1/assets`, `/v1/projects`, `/v1/settings/bootstrap`, `/v1/auth/me`, and `/v1/healthz/detail` stable
-- avoid silent alias drift
-- add route-level regressions before changing shared payloads
+- keep public plans and top-up packaging server-authoritative
+- use stable package ids: `starter`, `pro`, `top_up`
+- keep exact price and credit amounts in backend/catalog truth, not hardcoded UI copy
+- make Billing the canonical user-facing place to read current commercial truth
 
-### 2. Truth Sync
+### 2. Surface Completion
 
-- keep `version`, `local verify`, `provider smoke`, and `protected staging verify` on the same build
-- mirror smoke/startup artefacts into the staging runtime root
-- keep runtime logs classified as operator artefacts, not repo content
+- keep `Create -> result -> library/project -> share` stable
+- keep `Chat -> in-chat generation -> create handoff -> result persistence` stable
+- ensure Chat and Create feel like one product with two surfaces, not two unrelated apps
+- keep degraded and blocked states honest in user-facing copy
 
-### 3. Provider Proof
+### 3. Provider Truth
 
-- protected-beta chat lane: `OpenAI`
-- protected-beta image lane: `OpenAI gpt-image-1-mini`
-- owner-only premium image QA remains explicit
-- other providers may exist as backups or experiments, but they do not count as launch-grade proof until they are deliberately promoted
-- this narrow provider lock only exists for protected-beta proof; public-paid provider strategy stays open until after closure
-- operator-facing `surface -> tier -> provider -> model` truth should live in `ai_control_plane.surface_matrix`, not in scattered docs or terminal memory
+- treat `OpenAI` as the current launch-grade primary lane
+- only promote backup or secondary providers when they are truly proven
+- do not let optional provider config masquerade as resilience
+- keep `provider_mix`, `image_public_paid_usage`, and `provider_economics` visible until they are actually closed
 
-### 4. Closure
+### 4. Proof Sync
 
-- local restart on current build
-- local verify
-- provider smoke
-- staging bring-up
-- owner-token staging verify
-- truth-sync confirmation
-- `closure_ready=true`
+- keep `version.json`, release ledger, and maintenance map on the same build
+- keep local verify, provider smoke, and staging verify aligned to that build
+- preserve `closure_ready=true` for the protected-beta baseline while public-paid gates remain explicit
 
-## Historical Sprint Map
+## What Not To Do
 
-The Sprint 1-9 chain remains useful as history, but it is no longer the active planning frame.
+- do not open new top-level Studio surfaces in this wave
+- do not build OCOS inside Studio scope
+- do not turn public-launch planning into a fake enterprise theater story
+- do not hide provider weakness behind vague premium copy
+- do not let frontend packaging drift away from backend catalog truth
 
-- Sprint 8 explains how deployment/staging arrived
-- Sprint 9 explains why provider truth and economics became first-class
-- the active system now uses `Protected Beta Hardening` as the working frame
+## Historical Note
+
+The older sprint chain and `Protected Beta Hardening` work still matter as history.
+
+Use them for:
+- understanding why Studio hardened the way it did
+- reading old operator and backend decisions
+- tracing closure-proof logic
+
+Do not use them as the current product planning language.
 
 ## Rules
 
-1. Do not start a new large backend feature while `Protected Beta Hardening` is still open.
-2. Prefer one current truth source over several half-overlapping summaries.
-3. If a bug fits one of the standard classes, document it that way:
-   - contract drift
-   - route integration gap
-   - provider/config fragility
-   - environment/staging drift
-   - UI/backend truth mismatch
-4. A passing test shard is not closure on its own; the artefact chain still has to prove the current build.
-5. Public-paid planning should remain downstream of protected-beta closure, not compete with it.
+1. Prefer one current truth source over several overlapping summaries.
+2. Public product copy should speak in launch terms, not stale protected-beta framing.
+3. If a blocker depends on provider or economics truth, keep it explicit rather than smoothing it over in docs.
+4. A passing test shard is not enough on its own; build and operator proof still matter.
+5. `Create + Chat` stay together as the launch-critical Studio surface until public paid exit is stronger.
 
 ## Backlog Shape
 
-### Before Protected Beta Closure
+### Before Public Paid Exit
 
-- current-build provider proof
-- staging truth and owner verification
-- current-build artefact sync
-- backend contract freeze
+- commercial catalog truth
+- Create and Chat launch chain completion
+- honest provider and economics truth
+- current-build proof sync
 
-### After Protected Beta Closure
+### After Public Paid Exit
 
-- broader provider economics decisions
-- public-paid resilience
-- launch polish and operator UX
+- broader resilience promotion
+- richer commercial packaging
+- deeper analytics and operator workflows
 
 ### Later
 
 - wider modality expansion
-- deeper analytics
-- broader team workflows
+- more advanced collaboration
+- future OCOS integration points outside current Studio scope

@@ -2,6 +2,10 @@
 
 OCOS is the OmniaCreata internal incident operating system.
 
+Current portfolio role:
+- future internal app
+- not the active cleanup or implementation wave while Studio remains the primary product path
+
 This workspace is the control plane for hosted operator flows that must remain
 available when local development machines are offline. v0 is Studio-first and
 ships three coordinated surfaces:
@@ -13,6 +17,12 @@ ships three coordinated surfaces:
 - `supabase/`: schema and migrations for incident state
 - `docs/`: architecture, policy, and runbook format
 - `docs/wiki/`: repo-native memory for product intent, dashboards, reporting, and roadmap
+
+## Start here
+
+- Docs hub: [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/README.md)
+- Product: [docs/PRODUCT.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/PRODUCT.md)
+- Wiki: [docs/wiki/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/README.md)
 
 ## Product rules
 

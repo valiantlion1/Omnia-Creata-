@@ -5,19 +5,19 @@
 OmniaCreata Studio is not a generic AI tool.
 
 It is a premium-feeling creative product with two intentional surfaces:
-- `Create`: deterministic image generation and visual execution
+- `Create`: deterministic visual execution
 - `Chat`: premium multimodal creative copilot
 
-The product promise is not just "generate images."
+The real promise is not just "generate images."
 
 The real promise is:
 - think with the user
 - shape the idea
 - preserve creative continuity
-- generate or edit from the same product surface
+- execute from one product contract
 - feel controlled instead of chaotic
 
-## User Promise
+## Product Promise
 
 Studio should feel like:
 - a creative director
@@ -29,7 +29,7 @@ Studio should not feel like:
 - a cheap chatbot
 - a random prompt playground
 - a loose provider demo
-- separate disconnected tools pretending to be one product
+- two disconnected tools pretending to be one product
 
 ## Surface Roles
 
@@ -56,6 +56,21 @@ It owns:
 - follow-up refinement
 - handoff into Create/Edit without losing context
 
+## Commercial Shape
+
+Studio launches as one creative account contract.
+
+Current package ids:
+- `Starter`
+- `Pro`
+- `Credit Top-up`
+
+Rules:
+- Create and Chat share one billing and entitlement truth
+- account, plan, and credit logic stay server-authoritative
+- exact package numbers come from the live catalog, not static docs copy
+- user-facing copy sells product quality, not provider names
+
 ## Product Principles
 
 1. `Create` and `Chat` stay distinct unless the user explicitly crosses surfaces.
@@ -63,25 +78,28 @@ It owns:
 3. Degraded behavior is allowed, but never hidden.
 4. Premium feel comes from consistency, not only model quality.
 5. Follow-up continuity is a product requirement, not a nice-to-have.
-6. Auth, ownership, billing, moderation, and runtime must remain server-authoritative.
+6. Billing, ownership, moderation, and runtime stay server-authoritative.
+7. Launch honesty beats fake resilience theater.
 
-## V1 Standard
+## V1 Launch Standard
 
-Studio V1 should be considered healthy only when:
+Studio V1 should only be considered healthy when:
 - auth is stable
 - generation runtime is durable
 - billing and entitlements are trustworthy
 - share and asset ownership are secure
 - chat feels like a real creative copilot
 - create and chat handoff keeps execution context
+- library/project ownership feels durable
 
 ## Public Launch Standard
 
-Public launch should not happen just because the app "works."
+Public launch should not happen just because the app works.
 
 Public launch should happen when:
-- chat is strong enough to be the differentiator
+- the commercial catalog is honest and server-authored
+- Create and Chat feel like one product contract
 - generation quality is predictable enough to protect trust
-- logs and operational visibility are strong enough to debug real usage
-- degraded states are honest
-- local-only fragility is no longer part of the user experience
+- degraded states are explicit
+- provider blockers are visible instead of masked
+- current-build proof supports the launch claim

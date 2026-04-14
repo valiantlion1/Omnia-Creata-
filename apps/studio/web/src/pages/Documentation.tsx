@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type ElementType } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, Sparkles, HelpCircle, ShieldCheck, FileText, Lock, ShieldAlert, Mail } from 'lucide-react'
+import { ChevronDown, FileText, HelpCircle, Lock, Mail, ShieldAlert, ShieldCheck, Sparkles } from 'lucide-react'
 
 import { useStudioAuth } from '@/lib/studioAuth'
 import { AppPage, LegalFooter } from '@/components/StudioPrimitives'
@@ -13,110 +13,102 @@ const sections: HelpSection[] = [
   {
     id: 'getting-started',
     label: 'Getting started',
-    title: 'How it works',
-    intro: 'Omnia Creata is an AI image studio. Browse, create, chat, and organize — all in one place.',
+    title: 'How Studio works right now',
+    intro: 'Studio brings Explore, Create, Chat, Library, and account controls into one creative workspace.',
     items: [
-      { title: 'Explore', body: 'Browse public creations, trending styles, and community work. No account needed.' },
-      { title: 'Create', body: 'Describe what you want, and we\'ll generate it. You can fine-tune settings like aspect ratio and model if you want, or just hit Generate.' },
-      { title: 'Chat', body: 'Have a conversation with AI to get prompt ideas, refine images, or explore creative directions. You can upload photos and ask for edits right in the chat.' },
-      { title: 'Library', body: 'All your images are saved automatically. Organize them into projects, mark favorites, and manage everything from one place.' },
-      { title: 'Profile', body: 'Your public portfolio. Choose what to share and what stays private.' },
-      { title: 'Plans', body: 'See pricing, compare plans, and manage your subscription anytime.' },
+      { title: 'Explore', body: 'Browse public creations, creator profiles, and style references. Public browsing stays open even if you are not signed in.' },
+      { title: 'Create', body: 'Write a prompt, choose a creative profile, pick a ratio, and start an image run. Create is the deterministic image surface and stays separate from Chat.' },
+      { title: 'Chat', body: 'Use Chat as the creative copilot for direction, refinement, and edit handoffs. It can carry selected images in for critique or follow-up editing, but it is not the same surface as Create.' },
+      { title: 'Library', body: 'Completed, blocked, failed, and deleted outputs are surfaced separately so the shell does not pretend every run delivered a successful final image.' },
+      { title: 'Projects and sharing', body: 'Projects keep related image sets together. Public or private state depends on the current truth of each post and asset, not on shell shortcuts alone.' },
+      { title: 'Plans and settings', body: 'Billing, visibility, diagnostics, and account controls appear where they are available for your account.' },
     ],
   },
   {
     id: 'faq',
     label: 'FAQ',
     title: 'Common questions',
-    intro: 'Quick answers to the things people ask most.',
+    intro: 'Quick answers based on the current Studio shell.',
     items: [
-      { title: 'Do I need an account?', body: 'Not to browse. You can explore public work and read about pricing without signing up. Creating images requires a free account.' },
-      { title: 'Is it free?', body: 'Yes — free accounts get a monthly credit allowance. Paid plans include more credits and features like commercial usage rights.' },
-      { title: 'How do credits work?', body: 'Each image costs a few credits depending on the model and quality. Your credits reset monthly, and you can always upgrade for more.' },
-      { title: 'Can I use images commercially?', body: 'Pro and Creator plans include commercial rights. Free tier images are for personal use. Check the Usage Policy for details.' },
-      { title: 'Can I keep my work private?', body: 'Absolutely. Set any image as private, or change your default visibility in Settings.' },
-      { title: 'How do I delete my account?', body: 'Go to Settings → Account → Delete Account. All your data will be permanently removed within 30 days.' },
-      { title: 'Is there an API?', body: 'Coming soon for Creator plan members. Join the waitlist from your dashboard.' },
+      { title: 'Do I need an account?', body: 'Not for public browsing. You do need an account for Create, Chat, Library, and other signed-in surfaces.' },
+      { title: 'Is pricing final?', body: 'Plan and credit amounts come from the live catalog for your environment and can change over time.' },
+      { title: 'How do credits work?', body: 'Metered accounts spend credits according to the active generation lane. Internal owner accounts may show protected-beta access instead of normal customer metering.' },
+      { title: 'Can I use outputs commercially?', body: 'Review your current plan and policy language before using outputs for paid or client work.' },
+      { title: 'Can I keep work private?', body: 'Yes, where the shell and account state allow it. Visibility controls follow the real post and profile truth, and blocked or deleted items are not treated like ordinary public assets.' },
+      { title: 'How do I delete my account?', body: 'Account deletion currently remains a support-assisted path. Reach out before assuming instant self-serve deletion is available for your account.' },
+      { title: 'Is there an API?', body: 'No public API is part of the current Studio launch scope.' },
     ],
   },
   {
     id: 'safety',
     label: 'Safety',
-    title: 'Safety & moderation',
-    intro: 'We take content safety seriously. Here\'s how we keep the platform safe for everyone.',
+    title: 'Safety and moderation',
+    intro: 'Studio should keep moderation and blocked states visible instead of masking them as success.',
     items: [
-      { title: 'Content moderation', body: 'All generated content goes through automated safety checks. Violations may be flagged, blocked, or removed.' },
-      { title: 'What\'s not allowed', body: 'Violence, exploitation, hate speech, harassment, illegal content, and non-consensual intimate imagery are strictly prohibited.' },
-      { title: 'Intellectual property', body: 'Respect copyrights, trademarks, and likeness rights. Don\'t create content designed to infringe on others\' work.' },
-      { title: 'Deepfakes', body: 'Creating realistic depictions of real people without their consent is prohibited.' },
-      { title: 'Minor safety', body: 'Any content involving minors in inappropriate contexts is absolutely prohibited and will result in immediate, permanent action.' },
-      { title: 'Reporting', body: 'See something wrong? Report it through the app or email safety@omniacreata.com. We investigate every report.' },
+      { title: 'Blocked outputs stay blocked', body: 'If a prompt or output is blocked, Studio should show that honestly instead of presenting it like a successful render.' },
+      { title: 'What is not allowed', body: 'Violence, exploitation, hate speech, harassment, illegal content, non-consensual intimate imagery, and attempts to bypass safety systems are not allowed.' },
+      { title: 'Real people and likeness', body: 'Do not use Studio to create deceptive, abusive, or non-consensual depictions of real people.' },
+      { title: 'Minor safety', body: 'Any unsafe content involving minors is prohibited and escalated immediately.' },
+      { title: 'Rights and ownership', body: 'Respect copyright, trademark, and likeness rights. Do not use Studio to mass-copy protected works or impersonate creators.' },
+      { title: 'Reporting', body: 'If something looks unsafe or abusive, contact safety@omniacreata.com and include the relevant link or context.' },
     ],
   },
   {
     id: 'terms',
     label: 'Terms of Service',
-    title: 'Terms of Service',
+    title: 'Studio Terms Snapshot',
     lastUpdated: 'April 2026',
-    intro: 'By using Omnia Creata, you agree to these legally binding terms.',
+    intro: 'This is a short summary of how Studio operates today.',
     items: [
-      { title: '1. Acceptance of Terms', body: 'By accessing or using the Omnia Creata platform, including our website, mobile applications, APIs, and associated services (collectively the "Service"), you agree to be bound by these Terms of Service. If you do not agree to all the terms and conditions, you may not access the Service. These terms constitute a legally binding agreement between you and Omnia Creata. We reserve the right to update or modify these terms at any time without prior notice, and your continued use of the platform after any such changes constitutes your acceptance of the new terms.' },
-      { title: '2. Eligibility and Account Registration', body: 'To access certain features of the Service, you must register for an account. By creating an account, you represent and warrant that you are at least 18 years of age, or the applicable age of majority in your jurisdiction, and possess the legal capacity to enter into a binding contract. You are entirely responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account or any other breach of security.' },
-      { title: '3. Description of Services', body: 'Omnia Creata provides a platform offering artificial intelligence-based creative tools, including but not limited to image generation, conversational AI interfaces for prompt engineering, image library management, and public galleries. We continually innovate and may add, alter, or remove features, capabilities, or underlying models at our sole discretion without notice or liability. We do not guarantee that any specific generative model, feature, or service level will be available at all times.' },
-      { title: '4. Credits and Subscription Billing', body: 'Certain features require the use of "Credits" or an active premium subscription. Free-tier accounts may receive a limited allocation of credits that refresh periodically. Paid subscription plans are billed in advance on a recurring basis (e.g., monthly or annually). All fees are non-refundable unless legally mandated by your jurisdiction. If you exhaust your credit balance, you will not be able to generate new media until your next billing cycle or until you purchase a top-up. We reserve the right to modify our pricing structure, credit consumption rates, and subscription tiers at any time.' },
-      { title: '5. Intellectual Property and Content Ownership', body: 'You retain all ownership rights to the original text prompts, reference images, and other content you submit to the Service ("User Content"). Subject to these terms and your subscription tier, you are granted a license to use the images generated by the Service. Free tier outputs are strictly limited to personal, non-commercial use. Users on upgraded plans (e.g., Pro, Creator) receive a broad commercial license to use their generated outputs. However, due to the nature of machine learning, Omnia Creata does not guarantee that the generated images are entirely unique or free from third-party copyright claims. You are solely responsible for ensuring your use of the generated content does not infringe upon any third-party rights.' },
-      { title: '6. Acceptable Use and Platform Conduct', body: 'You agree not to use the Service in any manner that is illegal, harmful, threatening, abusive, defamatory, or otherwise objectionable. You are strictly prohibited from reverse-engineering the platform, scraping data, attempting to bypass safety filters, or using the Service to generate deepfakes, disinformation, or sexually explicit material. Violation of these rules will result in immediate account termination without refund and possible legal action.' },
-      { title: '7. Limitation of Liability and Disclaimers', body: 'THE SERVICE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. Omnia Creata specifically disclaims any warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall Omnia Creata, its directors, employees, or partners be liable for any indirect, incidental, special, consequential, or punitive damages arising out of your use or inability to use the Service, including but not limited to loss of profits, data, or goodwill.' },
-      { title: '8. Termination and Modification of Service', body: 'We reserve the right to suspend or terminate your account and access to the Service at our sole discretion, without notice or liability, for any reason, including but not limited to a breach of these Terms. Upon termination, your right to use the Service will immediately cease. Sections of these Terms that by their nature should survive termination shall survive, including ownership provisions, warranty disclaimers, indemnity, and limitations of liability.' },
+      { title: '1. Launch status', body: 'Studio is live but still evolving. Features, models, plan packaging, and shell behavior may change as the product matures.' },
+      { title: '2. Account responsibility', body: 'Keep control of your sign-in method and do not share access. You are responsible for activity that runs through your workspace.' },
+      { title: '3. Output responsibility', body: 'You are responsible for how you use prompts, uploads, and outputs. Studio can help create media, but it does not replace your own review for rights, suitability, or client use.' },
+      { title: '4. Availability and suspension', body: 'We may limit, block, or suspend access where safety, abuse, billing, or platform integrity requires it. Live access is not a guarantee of uninterrupted service.' },
     ],
   },
   {
     id: 'privacy',
     label: 'Privacy',
-    title: 'Privacy Policy',
+    title: 'Studio Privacy Snapshot',
     lastUpdated: 'April 2026',
-    intro: 'How we handle, store, and process your data.',
+    intro: 'Studio stores the information needed to run the product, keep your account working, and preserve your workspace.',
     items: [
-      { title: '1. Information We Collect', body: 'When you use Omnia Creata, we collect several types of information. Personal Information: This includes your name, email address, payment details, and profile information provided during account creation. User Content: We store the text prompts, reference images, chat histories, and the final generated images associated with your account. Automatically Collected Data: We automatically capture technical data such as your IP address, browser type, device information, operating system, and usage statistics (e.g., interaction timestamps, clicked links, and feature usage) through cookies and similar tracking technologies.' },
-      { title: '2. How We Use Your Information', body: 'We use the collected data to provide, maintain, and improve our services. Specifically, we use your information to: authenticate your identity, process subscription payments, deliver the AI image generation features, provide customer support, and communicate essential service updates. Additionally, we may use aggregated or anonymized interaction data and prompts to train, fine-tune, or otherwise improve our underlying machine learning models and content moderation systems, unless you have explicitly opted out through an eligible enterprise agreement.' },
-      { title: '3. Data Sharing and Disclosure', body: 'Omnia Creata acts as a custodian of your data and does not sell your personal information to third parties. We only share data with trusted third-party service providers acting on our behalf to facilitate operations, such as cloud hosting providers, payment processors (e.g., Stripe), and analytics platforms. We may also disclose your information if required by law, subpoena, or other legal process, or if we believe in good faith that such disclosure is necessary to protect the rights, property, or safety of Omnia Creata, our users, or the public.' },
-      { title: '4. User Content Visibility and Storage', body: 'Images generated on Omnia Creata are stored securely in our cloud infrastructure. By default, your generated images and associated prompts may be accessible in public galleries or community feeds to foster a collaborative creative environment. You maintain the ability to set specific images, or your entire account, to "Private" mode depending on your subscription tier. Private images are not surfaced in public timelines, but remain stored on our servers to allow you to manage your library.' },
-      { title: '5. Data Security Measures', body: 'We implement robust, industry-standard technical and organizational measures designed to secure your personal information from accidental loss, unauthorized access, alteration, or disclosure. This includes encryption in transit (HTTPS) and encryption at rest. However, no data transmission over the internet or out-of-band storage system is guaranteed to be 100% secure, and you acknowledge that you provide your information at your own risk.' },
-      { title: '6. Your Rights and Data Deletion', body: 'Depending on your jurisdiction (such as under the GDPR or CCPA), you may have the right to request access to, correction of, or deletion of your personal data. You can initiate a complete account deletion directly from the Settings menu. Upon confirming account deletion, all personal data, user content, and billing records (except those required for legal or tax compliance) will be permanently and irreversibly wiped from our production systems within 30 days.' },
-      { title: '7. Cookies and Tracking Technologies', body: 'We use essential cookies to maintain your login session and secure your account. We also utilize optional analytics and performance cookies to understand how our platform is used, track feature engagement, and improve load times. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent, but some parts of the platform may not function properly without essential cookies.' },
+      { title: '1. What we keep', body: 'Studio stores account identity, prompts, uploads, chat history, generated assets, and the operational metadata needed to run those workflows.' },
+      { title: '2. Why we keep it', body: 'We use that data to authenticate you, run Create and Chat, maintain your library, support billing and safety checks, and improve product reliability.' },
+      { title: '3. Visibility controls', body: 'Public and private state is part of the product truth. Public work can appear in Explore and profile surfaces; private work should stay out of those surfaces unless the state changes.' },
+      { title: '4. Export and deletion', body: 'Export and deletion paths exist, but some account-level destructive actions are still support-assisted.' },
+      { title: '5. Security', body: 'We aim to keep account and asset data protected in transit and at rest, but no live creative platform should be treated as zero-risk or as a substitute for your own security judgment.' },
     ],
   },
   {
     id: 'usage-policy',
     label: 'Usage Policy',
-    title: 'Acceptable Use',
+    title: 'Studio Usage Rules',
     lastUpdated: 'April 2026',
-    intro: 'Comprehensive rules for using Omnia Creata responsibly.',
+    intro: 'These rules apply in the live product today.',
     items: [
-      { title: '1. Overview and Core Philosophy', body: 'Omnia Creata is built to be a safe, inspiring, and professional environment for creators of all backgrounds. This Acceptable Use Policy establishes the boundaries of what is permitted on the platform. By utilizing our AI models, chat interfaces, and community features, you agree to abide by these guidelines. We rely on a combination of automated moderation systems and human review to enforce these rules.' },
-      { title: '2. Prohibited Content Categories', body: 'You are strictly prohibited from generating, uploading, or attempting to generate any of the following: (a) Explicit Content: Sexually explicit material, pornography, or non-consensual intimate imagery. (b) Violence and Gore: Gratuitous violence, extreme gore, bodily harm, or content that promotes self-harm. (c) Hate Speech: Content that demeans, attacks, or discriminates against individuals or groups based on race, religion, sexual orientation, disability, or gender identity. (d) Illegal Acts: Content that encourages, depicts, or facilitates illegal activities, terrorism, or the sale of illicit goods.' },
-      { title: '3. Disinformation and Deepfakes', body: 'Omnia Creata must not be used to deceive the public or manipulate discourse. You may not generate realistic depictions of public figures, politicians, or private individuals in compromising, false, or defamatory situations ("deepfakes"). You are prohibited from generating mock news imagery, fabricated historical events, or any content designed to spread systemic disinformation, interfere with elections, or cause public panic.' },
-      { title: '4. Intellectual Property Takedown and Respect', body: 'You may not use the Service to intentionally mass-reproduce copyrighted works, protected characters, or registered trademarks without authorization. If we receive a valid DMCA takedown notice or similar legal claim regarding content you have generated and made public, we will remove the content immediately and may issue a strike against your account.' },
-      { title: '5. Technical Abuse and Exploitation', body: 'You may not use automated scripts, bots, or scraping tools to access the Service outside of our official API (if permitted by your plan). Attempting to "jailbreak" or bypass our safety filters, probing our network infrastructure for vulnerabilities, or using the Service in a way that disproportionately burdens our computing resources is strictly prohibited.' },
-      { title: '6. Commercial Rights and Tier Restrictions', body: 'Outputs generated on the Free tier are provided under a strict Personal Use license. You may not sell, license, or monetize these outputs in any direct or indirect manner. To use generated media in commercial environments, advertisements, product designs, or client work, you must maintain an active Pro or Creator subscription at the time the material is generated.' },
-      { title: '7. Policy Enforcement and Appeals', body: 'We employ automated safety systems that may proactively block prompts or blur images deemed to be in violation of this policy. Repeated attempts to breach these systems will result in an automatic account suspension. Severe violations (such as attempting to generate CSAM) will result in immediate permanent expulsion and reporting to the National Center for Missing & Exploited Children (NCMEC) or relevant authorities. If you believe your prompt was incorrectly flagged, you may contact support for a manual review.' },
+      { title: '1. Unsafe content', body: 'Do not use Studio for sexual exploitation, child abuse material, graphic violence, harassment, hate content, or illegal activity.' },
+      { title: '2. Deception and deepfakes', body: 'Do not use Studio to create deceptive real-person imagery, disinformation, or non-consensual manipulations.' },
+      { title: '3. Rights abuse', body: 'Do not intentionally mass-copy copyrighted works, protected characters, or trademarks without permission.' },
+      { title: '4. Technical abuse', body: 'Do not attack, scrape, automate against, or try to bypass the platform in unsupported ways.' },
+      { title: '5. Enforcement', body: 'Prompts or outputs may be blocked, hidden, removed, or escalated when they violate policy or threaten platform safety.' },
     ],
   },
   {
     id: 'contact',
     label: 'Contact',
     title: 'Get in touch',
-    intro: 'We\'re here to help.',
+    intro: 'We are here to help.',
     items: [
-      { title: 'Support', body: 'Questions or issues? Email support@omniacreata.com.' },
-      { title: 'Safety reports', body: 'Report content violations or abuse at safety@omniacreata.com.' },
-      { title: 'Business', body: 'Partnership or press inquiries: business@omniacreata.com.' },
-      { title: 'Legal', body: 'Legal notices: legal@omniacreata.com.' },
+      { title: 'Support', body: 'Questions, bug reports, or account help: support@omniacreata.com.' },
+      { title: 'Safety reports', body: 'Unsafe content, abuse, or moderation concerns: safety@omniacreata.com.' },
+      { title: 'Business', body: 'Partnership, pilot, or early team access requests: business@omniacreata.com.' },
+      { title: 'Legal and policy', body: 'Policy or legal questions: legal@omniacreata.com.' },
     ],
   },
 ]
 
-const sectionIcons: Record<HelpSectionId, React.ElementType> = {
+const sectionIcons: Record<HelpSectionId, ElementType> = {
   'getting-started': Sparkles,
   'faq': HelpCircle,
   'safety': ShieldCheck,
@@ -126,7 +118,6 @@ const sectionIcons: Record<HelpSectionId, React.ElementType> = {
   'contact': Mail,
 }
 
-/* ─── Accordion Item ─── */
 function AccordionItem({ item, defaultOpen = false }: { item: HelpItem; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -169,31 +160,29 @@ export default function DocumentationPage() {
               <Link to="/subscription" className="transition hover:text-white">Pricing</Link>
               <Link to="/help" className="text-white font-medium">Help</Link>
               <Link to="/login" className="transition hover:text-white">Log in</Link>
-              <Link to="/signup" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.2)]">Start Free</Link>
+              <Link to="/signup" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.2)]">Create account</Link>
             </nav>
           </div>
         </header>
       )}
 
       <AppPage className="max-w-[1200px] gap-10 py-10">
-        {/* Header Section */}
-        <section className="relative overflow-hidden rounded-[32px] border border-white/[0.06] bg-[#111216] p-10 md:p-14 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+        <section className="relative overflow-hidden rounded-[32px] border border-white/[0.06] bg-[#111216] p-10 shadow-[0_24px_80px_rgba(0,0,0,0.5)] md:p-14">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.04),transparent_50%)]" />
           <div className="relative z-10 max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light)/0.3)] bg-[rgb(var(--primary-light)/0.1)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--primary-light))] backdrop-blur-md mb-6">
-              Support Center
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light)/0.3)] bg-[rgb(var(--primary-light)/0.1)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--primary-light))] backdrop-blur-md">
+              Help & policy
             </div>
-            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl lg:text-6xl text-balance">
-              How can we help you create?
+            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl text-balance break-words">
+              Help that stays grounded
             </h1>
-            <p className="mt-6 text-[16px] leading-[1.8] text-zinc-400 max-w-2xl">
-              Everything you need to know about using Omnia Creata to its fullest potential, along with our policies and contact information.
+            <p className="mt-6 max-w-2xl text-[16px] leading-[1.8] text-zinc-400">
+              Use this page for product basics, account questions, and the current policy snapshots.
             </p>
           </div>
         </section>
 
-        <div className="grid gap-12 xl:grid-cols-[240px_minmax(0,1fr)] items-start mt-6">
-          {/* Sticky Sidebar Navigation */}
+        <div className="mt-6 grid items-start gap-12 xl:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="hidden xl:block sticky top-28 w-full">
             <div className="space-y-1 rounded-[20px] border border-white/[0.04] bg-[#111216]/50 p-2 backdrop-blur-md">
               {sections.map((section) => {
@@ -212,10 +201,11 @@ export default function DocumentationPage() {
             </div>
           </aside>
 
-          {/* Content Sections */}
           <div className="space-y-16 lg:space-y-24">
             {sections.map((section) => {
               const Icon = sectionIcons[section.id]
+              const isPolicySection = section.id === 'terms' || section.id === 'privacy' || section.id === 'usage-policy'
+
               return (
                 <section key={section.id} id={section.id} className="scroll-mt-32">
                   <div className="flex items-start gap-4 md:items-center">
@@ -231,23 +221,22 @@ export default function DocumentationPage() {
                       </h2>
                     </div>
                   </div>
-                  
-                  {section.lastUpdated && (
+
+                  {section.lastUpdated ? (
                     <div className="mt-4 text-[12px] font-medium text-zinc-500">
                       Last updated: {section.lastUpdated}
                     </div>
-                  )}
-                  
+                  ) : null}
+
                   <p className="mt-4 max-w-3xl text-[15px] leading-relaxed text-zinc-400">
                     {section.intro}
                   </p>
 
                   <div className="mt-8">
-                    {/* Collapsible Accordions for Legal, Simple Grid for Regular Help */}
-                    {['terms', 'privacy', 'usage-policy'].includes(section.id) ? (
+                    {isPolicySection ? (
                       <div className="rounded-[20px] border border-white/[0.06] bg-[#0c0d12]/50 px-6 backdrop-blur-md">
-                        {section.items.map((item, i) => (
-                          <AccordionItem key={item.title} item={item} defaultOpen={i === 0} />
+                        {section.items.map((item, index) => (
+                          <AccordionItem key={item.title} item={item} defaultOpen={index === 0} />
                         ))}
                       </div>
                     ) : (
@@ -267,7 +256,7 @@ export default function DocumentationPage() {
           </div>
         </div>
 
-        {!canRenderWithShell && <LegalFooter />}
+        {!canRenderWithShell ? <LegalFooter /> : null}
       </AppPage>
     </>
   )

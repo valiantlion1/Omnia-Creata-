@@ -6,6 +6,7 @@ import { Grid2X2, List, Settings } from 'lucide-react'
 import { EditTextDialog, EmptyState, StatusPill } from '@/components/StudioPrimitives'
 import { studioApi, type ProfilePayload, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { usePageMeta } from '@/lib/usePageMeta'
 
 type ViewMode = 'grid' | 'list'
 
@@ -121,6 +122,7 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
 }
 
 export default function AccountPage() {
+  usePageMeta('Profile', 'Your Omnia Creata Studio profile and public creations.')
   const { username } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const [view, setView] = useState<ViewMode>('grid')

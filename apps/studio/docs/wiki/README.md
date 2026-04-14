@@ -1,101 +1,67 @@
 # OmniaCreata Studio Wiki
 
-This wiki is the repo-native memory for Studio.
-
-Before diving into wiki pages, humans should usually start from:
-- [Docs Hub](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/README.md)
-- [Master Plan TR](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/MASTER_PLAN_TR.md)
+This wiki is the canonical Studio context layer.
 
 Use it to answer five questions fast:
-
-1. What is Studio supposed to be?
-2. What has already been stabilized?
-3. What is being built right now?
-4. What standards are non-negotiable?
-5. How should future work be planned and judged?
+1. What is Studio?
+2. What phase is it in?
+3. What launch gaps still matter?
+4. What rules are non-negotiable?
+5. What should be worked on next?
 
 ## Start Here
 
 - [AI Context Pack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md)
-  En kisa AI / IDE baglam ozetidir.
+  The fastest low-token Studio orientation layer
 - [Product North Star](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/01_PRODUCT_NORTH_STAR.md)
-  Studio'nun ne oldugunu ve ne olmadigini anlatir.
+  What Studio is and what it should never collapse into
 - [System Architecture](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/02_SYSTEM_ARCHITECTURE.md)
-  Ana backend ve urun yuzeylerinin mimari sinirlarini anlatir.
+  Main backend boundaries and product surfaces
 - [Delivery Status](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/03_DELIVERY_STATUS.md)
-  Su anki fazi ve aktif calisma cizgisini ozetler.
+  Current phase, closed baseline, and live blocker set
 - [Engineering Standards](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/04_ENGINEERING_STANDARDS.md)
-  Muhendislik kurallarini ve degisim disiplinini anlatir.
+  Change discipline and product consistency rules
 - [Operations And Releases](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/05_OPERATIONS_AND_RELEASES.md)
-  Release, verify ve operator bakisinin mantigini anlatir.
+  Release and verification orientation
 - [Roadmap And Planning](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/06_ROADMAP_AND_PLANNING.md)
-  Yol haritasi ve planlama mantigini toplar.
-- [End-To-End Review 2026-04-07](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/07_END_TO_END_REVIEW_2026_04_07.md)
-  Tarihsel review snapshot'idir; current build truth yerine gecmez.
+  What comes next and in what order
 
 ## Canonical Use
 
-This wiki is the planning and orientation layer.
-
-Use it for:
+Use this wiki for:
 - product intent
+- launch doctrine
 - architecture boundaries
-- sprint context
-- engineering rules
-- launch discipline
-- AI/IDE context compression
+- delivery phase
+- planning order
+- future-AI-readable context
 
-Do not use it as the only source for operational truth.
+Do not use it as the only operator truth source.
 
-Operational truth still lives in:
+Current build and operator truth still live in:
 - [Version Manifest](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/version.json)
 - [Release Ledger](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_RELEASE_LEDGER.md)
 - [Maintenance Map](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_MAINTENANCE_MAP.md)
-- [Agent Rules](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/AGENTS.md)
+- [Studio Agent Rules](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/AGENTS.md)
 
 ## Current Snapshot
 
-- Studio is a premium creative product with two distinct surfaces: `Create` and `Chat`.
-- Sprint 1 through Sprint 7 are complete.
-- The broad end-to-end review is complete.
-- Sprint 8 and Sprint 9 now belong to the historical sprint chain.
-- The active hardening track is `Protected Beta Hardening`.
-- Current priorities are:
-  - freeze signed-in/backend contracts
-  - keep local verify, provider smoke, and staging verify on the same build
-  - prove one protected-beta chat lane and one protected-beta image lane
-  - close staging truth without drifting into new feature work
-- protected-beta provider policy is intentionally temporary; use owner health detail `ai_control_plane` as the hidden operator map until public-paid provider strategy is chosen
-- Build discipline, release bookkeeping, auth hardening, runtime durability, routing, billing, security, and persistence foundations already exist.
+- Studio is a premium creative product with two distinct surfaces: `Create` and `Chat`
+- `Protected Beta Hardening` is closed as the baseline that got Studio here
+- The active frame is `Controlled Public Paid Launch`
+- Current launch packaging ids are `Starter`, `Pro`, and `Credit Top-up`
+- Exact package numbers belong to the backend catalog, not static docs copy
+- Current public-paid blockers remain:
+  - `provider_mix`
+  - `image_public_paid_usage`
+  - `provider_economics`
+- `OCOS` is future internal operating-system work and is intentionally out of current Studio scope
 
-## AI And IDE Use
+## Historical Context
 
-If another AI model or coding IDE assistant needs fast Studio context:
-- start with [AI Context Pack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/00_AI_CONTEXT_PACK.md)
-- then read only the nearest wiki pages for the task
-- then inspect the exact touched files
-
-This is the intended low-token orientation path.
-
-## Existing Reference Docs
-
-These older documents still matter and should be linked, not forgotten:
+These documents still matter, but they are background rather than canonical current truth:
 - [Reference Docs Hub](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/reference/README.md)
-- [PRODUCT.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/reference/PRODUCT.md)
-- [STUDIO_EXECUTION_PLAN.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/reference/STUDIO_EXECUTION_PLAN.md)
-- [STUDIO_REMAINING_WORK.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/reference/STUDIO_REMAINING_WORK.md)
-- [LOCAL_OWNER_MODE.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/reference/LOCAL_OWNER_MODE.md)
+- [MASTER_PLAN_TR.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/MASTER_PLAN_TR.md)
+- [End-To-End Review 2026-04-07](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/07_END_TO_END_REVIEW_2026_04_07.md)
 
-Use reference docs when you need historical context.
-Do not use them as the primary answer for current build truth.
-
-## Update Rules
-
-When Studio changes meaningfully:
-- update this wiki if the change affects product direction, architecture, standards, or planning
-- update `version.json`
-- update the release ledger
-- update the maintenance map
-- keep footer-visible build/version aligned
-
-If a future plan contradicts this wiki, the conflict should be resolved explicitly in the wiki rather than silently drifting in code.
+Use historical docs for background, not for deciding the current phase or launch target.

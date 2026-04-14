@@ -3,6 +3,7 @@ import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSessio
 const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000')).replace(/\/$/, '')
 
 export type IdentityPlan = 'guest' | 'free' | 'pro'
+export type CommercialPlanId = 'starter' | 'pro' | 'top_up'
 export type JobStatus =
   | 'queued'
   | 'running'
@@ -85,15 +86,32 @@ export type SignupPayload = PasswordAuthPayload & {
 }
 
 export type PublicPlansPayload = {
-  plans: PlanInfo[]
-  top_ups: Array<{
-    kind: CheckoutKind
-    label: string
-    credits: number
-    price_usd: number
-    plan: IdentityPlan | null
+  operating_mode: string
+  plans: Array<Omit<PlanInfo, 'id'> & {
+    id: Exclude<CommercialPlanId, 'top_up'>
+    entitlement_plan: Exclude<IdentityPlan, 'guest'>
+    summary: string
+    feature_summary: string[]
+    price_usd: number | null
+    billing_period: 'month' | null
+    checkout_kind: CheckoutKind | null
+    recommended: boolean
+    availability: 'included' | 'self_serve'
   }>
-  featured_plan: IdentityPlan
+  top_up: {
+    id: 'top_up'
+    label: string
+    summary: string
+    feature_summary: string[]
+    options: Array<{
+      kind: CheckoutKind
+      label: string
+      credits: number
+      price_usd: number
+      plan: IdentityPlan | null
+    }>
+  }
+  featured_plan: Exclude<CommercialPlanId, 'top_up'>
 }
 
 export type ImprovedPromptResponse = {
@@ -650,6 +668,16 @@ export type GenerationCreditGuideEntry = {
 export type BillingSummary = {
   plan: PlanInfo
   subscription_status: string
+  entitlements: {
+    can_access_chat: boolean
+    premium_chat: boolean
+    allowed_chat_modes: string[]
+    chat_message_limit: number
+    max_chat_attachments: number
+    can_clean_export: boolean
+    can_share_links: boolean
+    can_generate: boolean
+  }
   credits: {
     remaining: number
     gross_remaining: number
@@ -837,7 +865,13 @@ export const studioApi = {
   listPresets: () => apiFetch<{ presets: PresetEntry[] }>('/presets'),
   getBillingSummary: () => apiFetch<BillingSummary>('/billing/summary'),
   checkout: (kind: CheckoutKind) =>
-    apiFetch<{ status: string; provider: string; kind: CheckoutKind; identity: AuthMeResponse }>('/billing/checkout', {
+    apiFetch<{
+      status: string
+      provider: string
+      kind: CheckoutKind
+      identity?: AuthMeResponse
+      checkout_url?: string | null
+    }>('/billing/checkout', {
       method: 'POST',
       body: JSON.stringify({ kind }),
     }),

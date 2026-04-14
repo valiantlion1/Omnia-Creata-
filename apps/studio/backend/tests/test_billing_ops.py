@@ -341,6 +341,40 @@ async def test_billing_summary_reports_reserved_and_available_credits(
 
 
 @pytest.mark.asyncio
+async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) -> None:
+    service, _, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        payload = service.get_public_plan_payload()
+
+        assert payload["operating_mode"] == "controlled_public_paid_launch"
+        assert payload["featured_plan"] == "pro"
+
+        starter = next(entry for entry in payload["plans"] if entry["id"] == "starter")
+        pro = next(entry for entry in payload["plans"] if entry["id"] == "pro")
+
+        assert starter["entitlement_plan"] == "free"
+        assert starter["label"] == "Starter"
+        assert starter["price_usd"] == 0
+        assert starter["checkout_kind"] is None
+        assert starter["availability"] == "included"
+
+        assert pro["entitlement_plan"] == "pro"
+        assert pro["label"] == "Pro"
+        assert pro["price_usd"] == 18
+        assert pro["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
+        assert pro["availability"] == "self_serve"
+
+        assert payload["top_up"]["id"] == "top_up"
+        assert len(payload["top_up"]["options"]) == 2
+        assert {option["kind"] for option in payload["top_up"]["options"]} == {
+            CheckoutKind.TOP_UP_SMALL.value,
+            CheckoutKind.TOP_UP_LARGE.value,
+        }
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_standard_lane_generation_reserves_and_settles_discounted_credits(
     tmp_path: Path,
     _web_runtime_mode: None,

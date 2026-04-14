@@ -197,6 +197,78 @@ def test_openrouter_request_body_no_longer_price_sorts_provider_fallbacks():
     assert "provider" not in body
 
 
+@pytest.mark.asyncio
+async def test_gemini_request_uses_header_auth_instead_of_query_key(monkeypatch):
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original_gemini_api_key = settings.gemini_api_key
+    settings.gemini_api_key = "gemini-key"
+
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "candidates": [
+                    {"content": {"parts": [{"text": "ok"}]}}
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 1,
+                    "candidatesTokenCount": 1,
+                },
+            }
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
+
+    try:
+        result = await gateway._chat_with_gemini(
+            model="gemini-2.5-flash",
+            system_prompt="You are helpful.",
+            history=(),
+            current_message="Hello",
+            attachments=(),
+            temperature=0.3,
+            max_output_tokens=64,
+        )
+    finally:
+        settings.gemini_api_key = original_gemini_api_key
+
+    assert result is not None
+    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    assert captured["headers"]["x-goog-api-key"] == "gemini-key"
+    assert "?key=" not in captured["url"]
+
+
+def test_provider_is_configured_rejects_placeholder_secret():
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original_openrouter_api_key = settings.openrouter_api_key
+    settings.openrouter_api_key = "your_openrouter_api_key_here"
+    try:
+        assert gateway._provider_is_configured("openrouter") is False
+    finally:
+        settings.openrouter_api_key = original_openrouter_api_key
+
+
 def test_openai_request_body_uses_responses_api_message_shape():
     gateway = StudioLLMGateway()
     attachments = [
@@ -424,6 +496,7 @@ async def test_generate_chat_reply_puts_rate_limited_provider_on_cooldown_and_sk
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gateway = StudioLLMGateway()
+    monkeypatch.setattr(gateway, "_seed_provider_health_from_smoke_report", lambda: None)
     settings = get_settings()
     original = {
         "gemini_api_key": settings.gemini_api_key,
@@ -497,6 +570,7 @@ async def test_improve_prompt_skips_provider_models_while_provider_is_on_cooldow
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gateway = StudioLLMGateway()
+    monkeypatch.setattr(gateway, "_seed_provider_health_from_smoke_report", lambda: None)
     settings = get_settings()
     original = {
         "gemini_api_key": settings.gemini_api_key,
@@ -569,6 +643,7 @@ async def test_improve_prompt_can_fall_back_to_openai_when_openrouter_is_unavail
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gateway = StudioLLMGateway()
+    monkeypatch.setattr(gateway, "_seed_provider_health_from_smoke_report", lambda: None)
     settings = get_settings()
     original = {
         "openrouter_api_key": settings.openrouter_api_key,
@@ -674,6 +749,46 @@ def test_routing_summary_hydrates_chat_provider_cooldown_from_current_build_smok
         assert summary["providers"]["openrouter"]["last_status_code"] == 401
         assert summary["providers"]["openrouter"]["last_failure_reason"] == "smoke_report_error"
         assert summary["providers"]["openrouter"]["cooldown_remaining_seconds"] > 0
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.openrouter_api_key = original_openrouter_api_key
+
+
+def test_routing_summary_ignores_smoke_failures_for_placeholder_secret(
+    tmp_path,
+) -> None:
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_openrouter_api_key = settings.openrouter_api_key
+
+    try:
+        settings.studio_runtime_root = str(tmp_path / "runtime-root")
+        settings.openrouter_api_key = "your_openrouter_api_key_here"
+        persist_provider_smoke_report(
+            settings,
+            selected_provider="openrouter",
+            selected_surface="chat",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "openrouter-chat-premium-smoke",
+                    "provider_name": "openrouter",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "error",
+                    "error_type": "HTTPStatusError",
+                    "error": "Client error '401 Unauthorized' for url 'https://openrouter.ai/api/v1/chat/completions'",
+                }
+            ],
+        )
+
+        summary = gateway.routing_summary()
+
+        assert summary["providers"]["openrouter"]["configured"] is False
+        assert summary["providers"]["openrouter"]["status"] == "not_configured"
+        assert summary["providers"]["openrouter"]["last_status_code"] is None
+        assert summary["providers"]["openrouter"]["last_failure_reason"] is None
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.openrouter_api_key = original_openrouter_api_key

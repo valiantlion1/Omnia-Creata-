@@ -22,6 +22,6 @@ for (const [key, value] of Object.entries(manifest.topLevel)) {
   console.log(`${key.padEnd(12)} ${value}`);
 }
 
-printSection("Core products", manifest.coreApps);
+printSection("Product roots", manifest.coreApps);
 printSection("Website properties", manifest.websiteProperties);
 printSection("Prototype areas", manifest.prototypeAreas);

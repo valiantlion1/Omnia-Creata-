@@ -212,6 +212,32 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
         settings.enable_demo_generation_fallback = original_demo
 
 
+def test_provider_registry_treats_placeholder_huggingface_token_as_unconfigured() -> None:
+    settings = provider_module.get_settings()
+    original_hf = settings.huggingface_token
+    original_openai = settings.openai_api_key
+    original_pollinations = settings.enable_pollinations
+    original_fal = settings.fal_api_key
+    original_runware = settings.runware_api_key
+    original_demo = settings.enable_demo_generation_fallback
+    try:
+        settings.huggingface_token = "your_huggingface_token_here"
+        settings.openai_api_key = None
+        settings.enable_pollinations = False
+        settings.fal_api_key = None
+        settings.runware_api_key = None
+        settings.enable_demo_generation_fallback = False
+        registry = ProviderRegistry()
+        assert all(provider.name != "huggingface" for provider in registry.providers)
+    finally:
+        settings.huggingface_token = original_hf
+        settings.openai_api_key = original_openai
+        settings.enable_pollinations = original_pollinations
+        settings.fal_api_key = original_fal
+        settings.runware_api_key = original_runware
+        settings.enable_demo_generation_fallback = original_demo
+
+
 def test_provider_registry_disables_demo_fallback_by_default() -> None:
     settings = provider_module.get_settings()
     original_demo = settings.enable_demo_generation_fallback

@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Brain, Eye, ImageOff, Loader2, MessageCircle, Paperclip, Send, Wand2, X } from 'lucide-react'
+import { ImageOff, Lightbulb, Loader2, MessageCircle, MoreHorizontal, Paintbrush, Paperclip, Plus, Search, Send, Trash2, Wand2, X } from 'lucide-react'
 
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
@@ -150,6 +150,24 @@ function toPendingAttachmentFromChat(attachment: ChatAttachment): PendingAttachm
     asset_id: attachment.asset_id,
     label: attachment.label,
     previewUrl: attachment.url,
+    file: null,
+  }
+}
+
+function resolveRequestedComposeMode(value: string | null): ComposeMode | null {
+  if (!value) return null
+  return composeModes.includes(value as ComposeMode) ? (value as ComposeMode) : null
+}
+
+function toPendingAttachmentFromSearchParams(searchParams: URLSearchParams): PendingAttachment | null {
+  const previewUrl = searchParams.get('reference_asset_url')
+  if (!previewUrl) return null
+  return {
+    id: crypto.randomUUID(),
+    kind: 'image',
+    asset_id: searchParams.get('reference_asset_id'),
+    label: searchParams.get('reference_asset_label') || 'Reference image',
+    previewUrl,
     file: null,
   }
 }
@@ -438,35 +456,64 @@ function ProgressiveImage({ src, alt, onOpen }: { src: string; alt: string; onOp
         src={src}
         alt={alt}
         onLoad={() => setLoaded(true)}
-        className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-500 ease-out ${
-          loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
-        }`}
+        className={`absolute inset-0 h-full w-full object-cover ${loaded ? 'animate-gen-reveal' : 'opacity-0'}`}
       />
       {onOpen ? <LightboxTrigger onClick={onOpen} /> : null}
     </div>
   )
 }
 
-/** Pending generation: warm conversational loading state */
+/** Pending generation: animated preview card */
 function GenerationPending({ title }: { title: string }) {
   return (
     <div className="max-w-[360px]">
-      <div className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] p-5">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex h-8 w-8 items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" style={{ animationDuration: '2s' }} />
-            <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
-          </div>
-          <div className="text-[14px] font-medium text-zinc-300">Painting your vision…</div>
-        </div>
-        <div className="relative overflow-hidden rounded-2xl bg-white/[0.03] border border-white/[0.04]">
+      <div className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] overflow-hidden">
+        {/* Generating image placeholder */}
+        <div className="relative overflow-hidden bg-[#0a0b0f]">
           <div className="aspect-[4/5] w-full" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.06)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute inset-x-0 top-0 h-full bg-gradient-to-b from-white/[0.08] to-transparent animate-[shimmer_2.5s_ease-in-out_infinite]" style={{ transform: 'translateY(-100%)' }} />
+
+          {/* Layered gradient base — looks like a blurry forming image */}
+          <div className="pointer-events-none absolute inset-0">
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'radial-gradient(ellipse at 35% 30%, rgb(var(--primary)/0.18), transparent 60%), radial-gradient(ellipse at 70% 70%, rgb(var(--accent)/0.10), transparent 55%)',
+                animation: 'oc-gen-glow 3s ease-in-out infinite',
+              }}
+            />
+            <div
+              className="absolute inset-0 opacity-60"
+              style={{
+                background: 'radial-gradient(ellipse at 60% 20%, rgb(var(--primary-light)/0.12), transparent 50%)',
+                animation: 'oc-gen-glow 4s ease-in-out infinite reverse',
+              }}
+            />
+          </div>
+
+          {/* Scan line sweep */}
+          <div
+            className="pointer-events-none absolute inset-x-0 h-32"
+            style={{
+              background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 60%, transparent)',
+              animation: 'oc-gen-scan 2.4s ease-in-out infinite',
+            }}
+          />
+
+          {/* Noise grain overlay */}
+          <div className="pointer-events-none absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 128 128' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")", backgroundSize: '128px 128px' }} />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.2)] animate-ping" style={{ animationDuration: '1.8s' }} />
+            <div className="relative h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 8px rgb(var(--primary-light)/0.8)' }} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[12px] font-medium text-zinc-400 truncate">{title}</div>
+            <div className="text-[10px] text-zinc-600 mt-0.5">Generating…</div>
           </div>
         </div>
-        <div className="mt-3 text-[13px] text-zinc-500 truncate">{title}</div>
       </div>
     </div>
   )
@@ -510,10 +557,10 @@ function GenerationBlocked({
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
-    { emoji: '🎨', label: 'Create an image', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
-    { emoji: '✏️', label: 'Edit a photo', value: 'I want to edit a photo - let me upload it first' },
-    { emoji: '💡', label: 'Help me with a prompt', value: 'Help me write a prompt for a futuristic city skyline at night' },
-    { emoji: '🔍', label: 'Analyze an image', value: 'Analyze this image and tell me what you see' },
+    { Icon: Wand2, label: 'Create an image', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
+    { Icon: Paintbrush, label: 'Edit a photo', value: 'I want to edit a photo - let me upload it first' },
+    { Icon: Lightbulb, label: 'Help me with a prompt', value: 'Help me write a prompt for a futuristic city skyline at night' },
+    { Icon: Search, label: 'Analyze an image', value: 'Analyze this image and tell me what you see' },
   ]
 
   return (
@@ -523,13 +570,17 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
         <div className="h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.03),transparent_60%)] blur-[80px]" />
       </div>
 
+      <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/[0.04] ring-1 ring-white/[0.08] mb-6">
+        <MessageCircle className="h-6 w-6 text-zinc-300" />
+      </div>
+
       <h2 className="relative z-10 text-3xl font-semibold tracking-tight text-white md:text-[2.75rem] md:leading-[1.15]">
         What would you like to create?
       </h2>
       <p className="relative z-10 mt-4 max-w-md text-center text-[15px] leading-relaxed text-zinc-400">
         Describe what you imagine, upload a photo to transform, or just ask for ideas.
       </p>
-      
+
       <div className="relative z-10 mt-10 flex flex-wrap justify-center gap-2.5 max-w-lg">
         {suggestions.map((s) => (
           <button
@@ -537,7 +588,7 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
             onClick={() => onHint(s.value)}
             className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 text-[13px] font-medium text-zinc-300 transition-all duration-200 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.12] active:scale-[0.97]"
           >
-            <span>{s.emoji}</span>
+            <s.Icon className="h-3.5 w-3.5 opacity-70" />
             <span>{s.label}</span>
           </button>
         ))}
@@ -570,6 +621,8 @@ export default function ChatPage() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [visualMessages, setVisualMessages] = useState<ChatVisualMessage[]>([])
   const [conversationProjects, setConversationProjects] = useState<Record<string, string>>({})
+  const [conversationMenuOpen, setConversationMenuOpen] = useState(false)
+  const conversationMenuRef = useRef<HTMLDivElement | null>(null)
 
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isPageVisible = usePageVisibility()
@@ -582,17 +635,55 @@ export default function ChatPage() {
   }, [searchParams])
 
   useEffect(() => {
+    const requestedMode = resolveRequestedComposeMode(searchParams.get('mode'))
+    if (requestedMode) setComposeMode(requestedMode)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!conversationMenuOpen) return
+    const handleOutside = (e: MouseEvent) => {
+      if (conversationMenuRef.current && !conversationMenuRef.current.contains(e.target as Node)) {
+        setConversationMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [conversationMenuOpen])
+
+  useEffect(() => {
     const requestedConversation = searchParams.get('conversation')
     if (requestedConversation) setActiveConversationId(requestedConversation)
   }, [searchParams])
 
   useEffect(() => {
+    const requestedAttachment = toPendingAttachmentFromSearchParams(searchParams)
+    if (!requestedAttachment) return
+    setPendingAttachments((current) => {
+      const matchesCurrent = current.length === 1
+        && current[0].asset_id === requestedAttachment.asset_id
+        && current[0].previewUrl === requestedAttachment.previewUrl
+        && current[0].label === requestedAttachment.label
+      if (matchesCurrent) {
+        releasePendingAttachment(requestedAttachment)
+        return current
+      }
+      current.forEach(releasePendingAttachment)
+      return [requestedAttachment]
+    })
+  }, [searchParams])
+
+  useEffect(() => {
     if (!requestedNewConversation) return
+    const requestedMode = resolveRequestedComposeMode(searchParams.get('mode'))
+    const requestedAttachment = toPendingAttachmentFromSearchParams(searchParams)
     autoCreateRequestRef.current = null
     shouldSnapToBottomRef.current = false
     setActiveConversationId(null)
-    setComposeMode('Think')
-    setPendingAttachments([])
+    setComposeMode(requestedMode ?? 'Think')
+    setPendingAttachments((current) => {
+      current.forEach(releasePendingAttachment)
+      return requestedAttachment ? [requestedAttachment] : []
+    })
     if (!searchParams.get('draft')) {
       setDraft('')
     }
@@ -667,9 +758,16 @@ export default function ChatPage() {
     enabled: canLoadPrivate && Boolean(activeConversationId) && !requestedNewConversation,
     staleTime: 10_000,
   })
-
   const createConversationMutation = useMutation({
     mutationFn: (payload?: { title?: string; model?: string }) => studioApi.createConversation(payload),
+  })
+
+  const deleteConversationMutation = useMutation({
+    mutationFn: () => studioApi.deleteConversation(activeConversationId!),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      navigate('/chat', { replace: true })
+    },
   })
 
   const sendMessageMutation = useMutation({
@@ -1168,8 +1266,43 @@ export default function ChatPage() {
           <div className="flex items-center gap-2">
             {auth?.guest ? (
               <Link to="/signup" className="rounded-full bg-white px-4 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90">
-                Start free
+                Create account
               </Link>
+            ) : null}
+            {!auth?.guest ? (
+              <div ref={conversationMenuRef} className="relative">
+                <button
+                  onClick={() => setConversationMenuOpen((v) => !v)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-200"
+                  title="Conversation options"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                {conversationMenuOpen && (
+                  <div className="absolute right-0 top-10 z-50 min-w-[192px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#0e0f14] shadow-[0_16px_48px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+                    <button
+                      onClick={() => { setConversationMenuOpen(false); navigate('/chat?new=1') }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/[0.05] hover:text-white"
+                    >
+                      <Plus className="h-4 w-4 opacity-60" />
+                      New conversation
+                    </button>
+                    {activeConversationId ? (
+                      <>
+                        <div className="mx-3 my-1 h-px bg-white/[0.05]" />
+                        <button
+                          onClick={() => { setConversationMenuOpen(false); deleteConversationMutation.mutate() }}
+                          disabled={deleteConversationMutation.isPending}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-400 transition hover:bg-rose-500/[0.08] hover:text-rose-300 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-4 w-4 opacity-70" />
+                          Delete conversation
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             ) : null}
           </div>
         </div>
@@ -1262,15 +1395,15 @@ export default function ChatPage() {
                 <div className="flex flex-wrap gap-2 border-b border-white/[0.04] px-4 py-3">
                   {pendingAttachments.map((att) => (
                     <div key={att.id} className="group relative">
-                      {att.kind === 'image' ? (
-                        <img src={att.previewUrl} alt={att.label} className="h-16 w-16 rounded-xl object-cover ring-1 ring-white/10 shadow-md transition group-hover:brightness-110" loading="lazy" />
-                      ) : (
-                        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-white/[0.04] text-[11px] font-medium text-zinc-400 ring-1 ring-white/10 shadow-md">
-                          {att.label.split('.').pop()?.toUpperCase()}
-                        </div>
-                      )}
                       <button
-                        onClick={() => setPendingAttachments((c) => c.filter((a) => a.id !== att.id))}
+                        type="button"
+                        onClick={() => openLightbox(att.previewUrl, att.label)}
+                        className="block h-16 w-16 overflow-hidden rounded-xl ring-1 ring-white/10 shadow-md transition-all duration-200 hover:ring-white/30 hover:shadow-[0_4px_20px_rgba(0,0,0,0.5)] cursor-zoom-in"
+                      >
+                        <img src={att.previewUrl} alt={att.label} className="h-full w-full object-cover transition group-hover:brightness-110" loading="lazy" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPendingAttachments((c) => c.filter((a) => a.id !== att.id)) }}
                         className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-zinc-300 ring-1 ring-white/20 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:bg-zinc-800 hover:text-white"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -1280,8 +1413,8 @@ export default function ChatPage() {
                 </div>
               ) : null}
 
-              {/* Input row */}
-              <div className="flex items-end gap-2 px-3 py-2.5">
+              {/* Textarea */}
+              <div className="px-4 pt-4 pb-1">
                 <input
                   id="studio-chat-attachments"
                   name="attachments"
@@ -1292,15 +1425,6 @@ export default function ChatPage() {
                   className="hidden"
                   onChange={handleUploadChange}
                 />
-
-                <button
-                  onClick={handleUploadClick}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white"
-                  title="Attach image"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-
                 <textarea
                   id="studio-chat-draft"
                   name="message"
@@ -1309,15 +1433,26 @@ export default function ChatPage() {
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  placeholder={auth?.guest ? 'Sign in to start chatting...' : 'Message Studio...'}
-                  className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-relaxed text-white outline-none placeholder:text-zinc-500"
+                  placeholder={auth?.guest ? 'Create an account to start chatting...' : 'Message Studio...'}
+                  className="max-h-[200px] min-h-[40px] w-full resize-none bg-transparent text-[15px] leading-relaxed text-white outline-none placeholder:text-zinc-500"
                 />
+              </div>
+
+              {/* Bottom toolbar */}
+              <div className="flex items-center justify-between gap-2 px-3 pb-3">
+                <button
+                  onClick={handleUploadClick}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-300"
+                  title="Attach image"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
 
                 <button
                   onClick={handleSend}
                   disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || isConversationBootstrapPending}
-                  className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-all duration-300 hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:saturate-0"
-                  style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgb(var(--primary-light)/0.3)' }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-all duration-300 hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:saturate-0"
+                  style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 16px rgb(var(--primary-light)/0.2)' }}
                   title="Send"
                 >
                   {sendMessageMutation.isPending || isConversationBootstrapPending ? (
@@ -1329,37 +1464,9 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Mode Switcher + hint row */}
-            <div className="mt-2 flex items-center justify-between gap-3 px-1">
-              {/* Mode Switcher Pills */}
-              <div className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] p-1">
-                {([
-                  { mode: 'Think' as ComposeMode, icon: Brain, tip: 'Prompt help & creative suggestions' },
-                  { mode: 'Vision' as ComposeMode, icon: Eye, tip: 'Generate or analyze images' },
-                  { mode: 'Edit' as ComposeMode, icon: Wand2, tip: 'Edit & refine existing images' },
-                ] as const).map(({ mode, icon: Icon, tip }) => {
-                  const isActive = composeMode === mode
-                  return (
-                    <button
-                      key={mode}
-                      onClick={() => setComposeMode(mode)}
-                      title={tip}
-                      className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-bold tracking-wide transition-all duration-300 ${
-                        isActive
-                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-white shadow-[0_0_16px_rgb(var(--primary-light)/0.3)]'
-                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span>{mode}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Submit hint */}
-              <span className="text-[11px] text-zinc-600">Enter to send · Shift+Enter for new line</span>
-            </div>
+            <p className="mt-2 text-center text-[11px] text-zinc-600">
+              AI can make mistakes. Always verify important information.
+            </p>
           </div>
 
           {/* Error toast */}

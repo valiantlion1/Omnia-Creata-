@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, Dices, Image as ImageIcon, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import {
+  getCreativeProfileDescription,
+  getCreativeProfileLabel,
   describeGenerationLaneTrust,
   formatGenerationGuideSummary,
   isTerminalJobStatus,
@@ -101,11 +103,15 @@ const PLACEHOLDER_PROMPTS = [
 /* ─── Aspect presets ───────────────────────────────── */
 
 const aspectPresets = {
-  '1:1':  { width: 1024, height: 1024, label: 'Square',    aspect: 'aspect-square' },
-  '16:9': { width: 1280, height: 720,  label: 'Landscape', aspect: 'aspect-video' },
-  '4:5':  { width: 1024, height: 1280, label: 'Portrait',  aspect: 'aspect-[4/5]' },
-  '3:4':  { width: 960,  height: 1280, label: 'Vertical',  aspect: 'aspect-[3/4]' },
+  '1:1':  { width: 1024, height: 1024, label: 'Square', aspect: 'aspect-square' },
+  '16:9': { width: 1280, height: 720, label: 'Landscape', aspect: 'aspect-video' },
+  '9:16': { width: 720, height: 1280, label: 'Story', aspect: 'aspect-[9/16]' },
+  '4:5':  { width: 1024, height: 1280, label: 'Portrait', aspect: 'aspect-[4/5]' },
+  '3:4':  { width: 960, height: 1280, label: 'Editorial portrait', aspect: 'aspect-[3/4]' },
+  '2:3':  { width: 1024, height: 1536, label: 'Poster', aspect: 'aspect-[2/3]' },
 } as const
+
+const aspectOrder: Array<keyof typeof aspectPresets> = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
 
 /* ─── Toast types ──────────────────────────────────── */
 
@@ -117,6 +123,7 @@ type GenerationToast = {
   projectId: string
   error: string | null
   dismissed: boolean
+  notice: string | null
 }
 
 function isTerminalStatus(status: JobStatus) {
@@ -160,6 +167,7 @@ function mapGenerationToToast(generation: Generation, projectId: string): Genera
     projectId,
     error: generation.error,
     dismissed: false,
+    notice: null,
   }
 }
 
@@ -170,16 +178,7 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
 }
 
 function getProprietaryModelName(id: string, originalLabel: string): string {
-  const lower = id.toLowerCase()
-  if (lower.includes('flux-schnell') || lower.includes('flux.1-schnell')) return 'Fast'
-  if (lower.includes('sdxl') || lower.includes('stable-diffusion-xl') || lower.includes('base')) return 'Standard'
-  if (lower.includes('realvis')) return 'Premium'
-  if (lower.includes('juggernaut')) return 'Pro'
-  
-  if (lower.includes('flux-dev') || lower.includes('flux.1-dev')) return 'Standard'
-  if (lower.includes('flux-pro') || lower.includes('flux.1-pro')) return 'Pro'
-  if (lower.includes('stable-diffusion-3') || lower.includes('sd3')) return 'HD'
-  return originalLabel
+  return getCreativeProfileLabel(id, originalLabel)
 }
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
@@ -225,16 +224,21 @@ export default function CreatePage() {
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(requestedProjectId ?? null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
+  const [ratioPickerOpen, setRatioPickerOpen] = useState(false)
+  const [ratioPickerDirection, setRatioPickerDirection] = useState<'down' | 'up'>('down')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [seed, setSeed] = useState<number | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
+  const [sharingToastId, setSharingToastId] = useState<string | null>(null)
   const { history: promptHistory, push: pushPromptHistory } = usePromptHistory()
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
   const modelPickerButtonRef = useRef<HTMLButtonElement | null>(null)
+  const ratioPickerRef = useRef<HTMLDivElement | null>(null)
+  const ratioPickerButtonRef = useRef<HTMLButtonElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   /* ─── Queries ─────────────────────────────────── */
@@ -282,7 +286,16 @@ export default function CreatePage() {
     [pendingGenerationJobs],
   )
   const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
+  const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
   const activeAspect = aspectPresets[aspectRatio]
+  const orderedAspectOptions = useMemo(
+    () =>
+      aspectOrder.map((ratio) => ({
+        ratio,
+        ...aspectPresets[ratio],
+      })),
+    [],
+  )
   const prefillSource = searchParams.get('source')
   const prefillReferenceMode = searchParams.get('reference_mode')
   const requiresChatReference = prefillSource === 'chat' && prefillReferenceMode === 'required'
@@ -342,13 +355,25 @@ export default function CreatePage() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!modelPickerRef.current) return
-      if (modelPickerRef.current.contains(event.target as Node)) return
-      setModelPickerOpen(false)
+      if (modelPickerRef.current && !modelPickerRef.current.contains(event.target as Node)) {
+        setModelPickerOpen(false)
+      }
+      if (ratioPickerRef.current && !ratioPickerRef.current.contains(event.target as Node)) {
+        setRatioPickerOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!ratioPickerOpen) return
+    const trigger = ratioPickerButtonRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const estimatedHeight = Math.min(Math.max(orderedAspectOptions.length * 68 + 16, 180), 380)
+    setRatioPickerDirection(window.innerHeight - rect.bottom < estimatedHeight + 24 ? 'up' : 'down')
+  }, [orderedAspectOptions.length, ratioPickerOpen])
 
   /* ─── Auto-resize textarea ────────────────────── */
 
@@ -472,6 +497,36 @@ export default function CreatePage() {
     )
   }, [])
 
+  const setToastNotice = useCallback((jobId: string, notice: string | null) => {
+    setGenerationToasts((current) =>
+      current.map((job) => (job.id === jobId ? { ...job, notice } : job)),
+    )
+  }, [])
+
+  const openToastDestination = useCallback((job: GenerationToast) => {
+    if (job.projectId) {
+      navigate(`/projects/${job.projectId}`)
+      return
+    }
+    navigate('/library/images')
+  }, [navigate])
+
+  const handleCopyProjectShareLink = useCallback(async (job: GenerationToast) => {
+    if (!job.projectId) return
+    setSharingToastId(job.id)
+    setToastNotice(job.id, null)
+    try {
+      const response = await studioApi.createShare({ project_id: job.projectId })
+      const shareUrl = `${window.location.origin}${response.url}`
+      await navigator.clipboard.writeText(shareUrl)
+      setToastNotice(job.id, 'Project share link copied.')
+    } catch (error) {
+      setToastNotice(job.id, error instanceof Error ? error.message : 'Unable to copy project share link.')
+    } finally {
+      setSharingToastId((current) => (current === job.id ? null : current))
+    }
+  }, [setToastNotice])
+
   useEffect(() => {
     if (!visibleToasts.length) return
     const completed = visibleToasts.filter((job) => isTerminalStatus(job.status))
@@ -582,11 +637,11 @@ export default function CreatePage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Create</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Write a prompt, pick a model, choose a ratio, and generate. Your creations land straight in your Library.
+            Write a prompt, pick a creative profile, choose a ratio, and generate. Create is the direct image workspace inside Studio.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-              Start free
+              Create account
             </Link>
             <Link to="/login" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
               Log in
@@ -801,7 +856,7 @@ export default function CreatePage() {
                         title="Randomize seed"
                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
                       >
-                        🎲
+                        <Dices className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -862,7 +917,7 @@ export default function CreatePage() {
           </div>
 
           {/* Credit Warning */}
-          {runtimeCredits < 10 && (
+          {!hasUnlimitedCredits && runtimeCredits < 10 && (
             <div className="mx-6 mb-2 flex items-center gap-2 rounded-xl bg-amber-400/10 px-4 py-2.5 text-[12px] font-semibold text-amber-400 ring-1 ring-amber-400/20">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               Only {runtimeCredits} credits remaining.
@@ -872,28 +927,63 @@ export default function CreatePage() {
 
           {/* Controls bar */}
           <div className="relative z-20 flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
-            {/* Left: aspect ratio buttons and model picker */}
+            {/* Left: aspect ratio picker and model picker */}
             <div className="flex flex-wrap items-center gap-2">
-              {(Object.entries(aspectPresets) as Array<[keyof typeof aspectPresets, (typeof aspectPresets)[keyof typeof aspectPresets]]>).map(([ratio, config]) => {
-                const active = aspectRatio === ratio
-                return (
-                  <button
-                    key={ratio}
-                    onClick={() => setAspectRatio(ratio)}
-                    title={`${ratio} — ${config.label}`}
-                    className={`group relative flex h-14 w-12 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl transition-all duration-300 ${
-                      active
-                        ? 'bg-[rgb(var(--primary-light)/0.15)] shadow-[0_0_20px_rgb(var(--primary-light)/0.15)] ring-1 ring-[rgb(var(--primary-light)/0.4)]'
-                        : 'bg-white/[0.03] ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:ring-white/[0.1]'
-                    }`}
-                  >
-                    <div className="flex h-[22px] w-[22px] items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
-                      <div className={`border-2 ${config.aspect} ${active ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.2)]' : 'border-zinc-400'} w-full rounded-sm`} />
+              <div ref={ratioPickerRef} className="relative">
+                <button
+                  ref={ratioPickerButtonRef}
+                  onClick={() => setRatioPickerOpen((value) => !value)}
+                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
+                >
+                  <div className="flex h-[22px] w-[22px] items-center justify-center opacity-90">
+                    <div className={`border-2 ${activeAspect.aspect} w-full rounded-sm border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.18)]`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold text-white">
+                      {aspectRatio} · {activeAspect.label}
                     </div>
-                    <span className={`text-[9px] font-bold tracking-wider ${active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'}`}>{ratio}</span>
-                  </button>
-                )
-              })}
+                    <div className="truncate text-[11px] text-zinc-500">
+                      {activeAspect.width} × {activeAspect.height}
+                    </div>
+                  </div>
+                  <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${ratioPickerOpen ? 'rotate-180 text-white' : ''}`} />
+                </button>
+
+                {ratioPickerOpen ? (
+                  <div className={`${ratioPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(380px, calc(100vh - 48px))' }}>
+                    {orderedAspectOptions.map((option) => {
+                      const active = option.ratio === aspectRatio
+                      return (
+                        <button
+                          key={option.ratio}
+                          onClick={() => {
+                            setAspectRatio(option.ratio)
+                            setRatioPickerOpen(false)
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
+                            active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-white/[0.04]">
+                              <div className={`border-2 ${option.aspect} w-5 rounded-sm ${active ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.2)]' : 'border-zinc-400'}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-semibold tracking-wide">
+                                {option.ratio} · {option.label}
+                              </div>
+                              <div className="mt-1 text-[11px] leading-5 text-zinc-500">
+                                {option.width} × {option.height}
+                              </div>
+                            </div>
+                          </div>
+                          {active ? <Check className="h-4 w-4 text-white" /> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
 
               <div className="mx-2 hidden h-6 w-px bg-white/[0.06] sm:block" />
 
@@ -905,7 +995,7 @@ export default function CreatePage() {
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select model'}
+                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select creative profile'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -928,7 +1018,9 @@ export default function CreatePage() {
                               {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
                               <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
                             </div>
-                            <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">{entry.description}</div>
+                            <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">
+                              {getCreativeProfileDescription(entry.id, entry.description)}
+                            </div>
                           </div>
                         </button>
                       )
@@ -977,13 +1069,6 @@ export default function CreatePage() {
         </div>
 
         {/* ── Shortcut hint ──────────────────────── */}
-        <div className="mt-4 flex items-center justify-end text-[11px] text-zinc-600">
-          <Link to="/library/images" className="flex items-center gap-1.5 text-zinc-400 transition hover:text-white">
-            <ImageIcon className="h-3.5 w-3.5" />
-            My Images
-          </Link>
-        </div>
-
       </AppPage>
 
       {/* ── Toast stack ──────────────────────────── */}
@@ -994,29 +1079,11 @@ export default function CreatePage() {
               key={job.id}
               role="button"
               tabIndex={0}
-              onClick={() => {
-                if (!isTerminalStatus(job.status)) {
-                  navigate('/library/images')
-                  return
-                }
-                if (job.projectId && job.projectId !== draftProjectId) {
-                  navigate(`/projects/${job.projectId}`)
-                  return
-                }
-                navigate('/library/images')
-              }}
+              onClick={() => openToastDestination(job)}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return
                 event.preventDefault()
-                if (!isTerminalStatus(job.status)) {
-                  navigate('/library/images')
-                  return
-                }
-                if (job.projectId && job.projectId !== draftProjectId) {
-                  navigate(`/projects/${job.projectId}`)
-                  return
-                }
-                navigate('/library/images')
+                openToastDestination(job)
               }}
               className="pointer-events-auto animate-toast cursor-pointer overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#17181d]/95 shadow-[0_18px_56px_rgba(0,0,0,0.38)] backdrop-blur-xl"
             >
@@ -1049,6 +1116,33 @@ export default function CreatePage() {
                 </div>
 
                 <div className="mt-1.5 text-[12px] leading-5 text-zinc-400">{getToastDescription(job)}</div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      openToastDestination(job)
+                    }}
+                    className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    {job.projectId ? 'Open project' : 'Open library'}
+                  </button>
+                  {normalizeJobStatus(job.status) === 'succeeded' && job.projectId && auth?.plan.share_links ? (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void handleCopyProjectShareLink(job)
+                      }}
+                      disabled={sharingToastId === job.id}
+                      className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {sharingToastId === job.id ? 'Copying...' : 'Copy share link'}
+                    </button>
+                  ) : null}
+                </div>
+                {job.notice ? (
+                  <div className="mt-2 text-[11px] leading-5 text-zinc-500">{job.notice}</div>
+                ) : null}
               </div>
             </div>
           ))}

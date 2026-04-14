@@ -17,6 +17,7 @@ Companion remains a core product root in `apps/`, but implementation has not bee
 
 The canonical planning set lives in:
 
+- [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/companion/docs/README.md)
 - `docs/PRODUCT.md`
 - `docs/BOUNDARIES.md`
 - `docs/ROADMAP.md`

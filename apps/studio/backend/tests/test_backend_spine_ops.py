@@ -67,6 +67,7 @@ def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
         generation_routing={"default_strategy": "free-first"},
         chat_routing={"primary_provider": "openai"},
         data_authority={"mode": "sqlite"},
+        provider_economics_dossier={"report_kind": "provider_economics_dossier", "build": "2026.04.14.99"},
         ai_control_plane={"surface_matrix": [], "contract_freeze": {}},
         launch_readiness=launch_readiness,
     )
@@ -76,6 +77,7 @@ def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
     assert payload["provider_truth"] == launch_readiness["provider_truth"]
     assert payload["platform_readiness"] == launch_readiness["platform_readiness"]
     assert payload["truth_sync"] == launch_readiness["truth_sync"]
+    assert payload["provider_economics_dossier"]["report_kind"] == "provider_economics_dossier"
 
 
 def test_build_owner_ai_control_plane_keeps_surface_matrix_and_contract_freeze() -> None:

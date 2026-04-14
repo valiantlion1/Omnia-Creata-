@@ -51,6 +51,8 @@ class HealthService:
         )
         shared_queue_configured = bool((self.service.settings.redis_url or "").strip())
         generation_broker_payload = build_generation_broker_payload(
+            settings=self.service.settings,
+            generation_runtime_mode=self.service._generation_runtime_mode,
             generation_broker=self.service.generation_broker,
             shared_queue_configured=shared_queue_configured,
             generation_broker_degraded_reason=self.service._generation_broker_degraded_reason,
@@ -58,7 +60,9 @@ class HealthService:
             claimed_count=claimed_count,
         )
         overall_status = derive_overall_health_status(
+            settings=self.service.settings,
             provider_status=provider_status,
+            generation_runtime_mode=self.service._generation_runtime_mode,
             generation_broker_degraded_reason=self.service._generation_broker_degraded_reason,
         )
 
@@ -77,6 +81,7 @@ class HealthService:
                 generation_broker_payload=generation_broker_payload,
                 build_provider_spend_guardrails_summary=self.service._build_provider_spend_guardrails_summary,
                 build_cost_telemetry_summary=self.service._build_cost_telemetry_summary,
+                build_public_plan_payload=self.service.get_public_plan_payload,
             )
 
         return build_owner_health_payload(

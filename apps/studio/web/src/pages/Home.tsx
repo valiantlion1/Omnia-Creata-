@@ -142,7 +142,7 @@ export default function HomePage() {
   const showcaseParallax = useParallax(0.12)
 
   const cta = isAuthenticated ? '/studio' : '/signup'
-  const ctaLabel = isAuthenticated ? 'Open Studio' : 'Start Creating — Free'
+  const ctaLabel = isAuthenticated ? 'Open Studio' : 'Create account'
 
   return (
     <div className="min-h-screen bg-[#07111a] text-white overflow-x-hidden">
@@ -382,7 +382,7 @@ export default function HomePage() {
                   Your next image is one prompt away.
                 </h2>
                 <p className="mt-4 text-base text-white/80">
-                  Sign up for free and start generating in under a minute. No credit card required.
+                  Create an account and open Studio in under a minute.
                 </p>
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
                   <Link to={cta} className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-[0.97] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">

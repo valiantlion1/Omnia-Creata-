@@ -10,7 +10,7 @@ from typing import Any, Optional, Sequence
 
 import httpx
 
-from config.env import Environment, get_settings, reveal_secret
+from config.env import Environment, configured_secret_value, get_settings, has_configured_secret
 
 from .ai_provider_catalog import chat_model_cost_rates
 from .models import ChatAttachment, ChatMessage, ChatRole
@@ -615,11 +615,11 @@ class StudioLLMGateway:
     def _provider_is_configured(self, provider: str) -> bool:
         settings = get_settings()
         if provider == "gemini":
-            return bool(settings.gemini_api_key)
+            return has_configured_secret(settings.gemini_api_key)
         if provider == "openrouter":
-            return bool(settings.openrouter_api_key)
+            return has_configured_secret(settings.openrouter_api_key)
         if provider == "openai":
-            return bool(settings.openai_api_key)
+            return has_configured_secret(settings.openai_api_key)
         return False
 
     def _resolve_explicit_openai_model(self, normalized: str, requested_model: str | None) -> str | None:
@@ -715,6 +715,8 @@ class StudioLLMGateway:
             latest_chat_result_by_provider[provider] = dict(raw_result)
 
         for provider, raw_result in latest_chat_result_by_provider.items():
+            if not self._provider_is_configured(provider):
+                continue
             status = str(raw_result.get("status") or "").strip().lower()
             if status == "ok":
                 self._record_smoke_provider_success(provider=provider, recorded_at=recorded_at)
@@ -1057,7 +1059,7 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        gemini_api_key = reveal_secret(settings.gemini_api_key)
+        gemini_api_key = configured_secret_value(settings.gemini_api_key)
         if not gemini_api_key:
             return None
 
@@ -1074,10 +1076,7 @@ class StudioLLMGateway:
             )
         contents.append({"role": "user", "parts": self._build_gemini_user_parts(current_message, attachments)})
 
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{model}:generateContent?key={gemini_api_key}"
-        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         body = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
@@ -1088,9 +1087,13 @@ class StudioLLMGateway:
                 "responseMimeType": "text/plain",
             },
         }
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": gemini_api_key,
+        }
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(url, json=body)
+            response = await client.post(url, json=body, headers=headers)
             response.raise_for_status()
 
         payload = response.json()
@@ -1128,7 +1131,7 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        openrouter_api_key = reveal_secret(settings.openrouter_api_key)
+        openrouter_api_key = configured_secret_value(settings.openrouter_api_key)
         if not openrouter_api_key:
             return None
 
@@ -1187,7 +1190,7 @@ class StudioLLMGateway:
         max_output_tokens: int,
     ) -> LLMResult | None:
         settings = get_settings()
-        openai_api_key = reveal_secret(settings.openai_api_key)
+        openai_api_key = configured_secret_value(settings.openai_api_key)
         if not openai_api_key:
             return None
 

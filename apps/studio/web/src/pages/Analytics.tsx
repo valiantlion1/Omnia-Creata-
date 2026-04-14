@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
 
           <section className="grid gap-6 lg:grid-cols-3">
             <div className="col-span-2 flex min-h-[400px] flex-col rounded-[32px] border border-white/[0.08] bg-[#0e0f12] p-8 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#7c3aed] to-transparent opacity-50" />
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[rgb(var(--primary))] to-transparent opacity-50" />
               <h3 className="text-lg font-semibold text-white mb-6">API Provider Utilization</h3>
               <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-6">
                 <div className="flex flex-col items-center text-center text-zinc-500 gap-3">
