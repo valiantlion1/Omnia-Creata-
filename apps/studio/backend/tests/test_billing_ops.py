@@ -6,9 +6,16 @@ import pytest
 
 import studio_platform.providers as provider_module
 from config.env import get_settings
-from studio_platform.billing_ops import calculate_generation_final_charge, resolve_billing_state
+from studio_platform.billing_ops import (
+    build_paddle_webhook_receipt,
+    calculate_generation_final_charge,
+    checkout_catalog_kind_to_plan,
+    resolve_billing_state,
+)
+from studio_platform.generation_ops import consume_credits_locked
 from studio_platform.models import (
     CheckoutKind,
+    CreditLedgerEntry,
     CreditEntryType,
     GenerationJob,
     GenerationOutput,
@@ -148,14 +155,20 @@ async def _seed_identity_project(
     store: StudioStateStore,
     *,
     plan: IdentityPlan = IdentityPlan.FREE,
-    monthly_remaining: int = 60,
+    monthly_remaining: int | None = None,
     monthly_allowance: int | None = None,
-    extra_credits: int = 0,
+    extra_credits: int | None = None,
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE,
     owner_mode: bool = False,
     root_admin: bool = False,
     local_access: bool = False,
 ) -> tuple[OmniaIdentity, Project]:
+    if monthly_remaining is None:
+        monthly_remaining = 0 if plan == IdentityPlan.FREE else PLAN_CATALOG[plan].monthly_credits
+    if extra_credits is None:
+        extra_credits = 60 if plan == IdentityPlan.FREE else 0
+    if subscription_status == SubscriptionStatus.NONE and plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}:
+        subscription_status = SubscriptionStatus.ACTIVE
     identity = OmniaIdentity(
         id="user-1",
         email="user@example.com",
@@ -347,28 +360,36 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         payload = service.get_public_plan_payload()
 
         assert payload["operating_mode"] == "controlled_public_paid_launch"
-        assert payload["featured_plan"] == "pro"
+        assert payload["featured_subscription"] == "pro"
 
-        starter = next(entry for entry in payload["plans"] if entry["id"] == "starter")
-        pro = next(entry for entry in payload["plans"] if entry["id"] == "pro")
+        free_account = payload["free_account"]
+        creator = next(entry for entry in payload["subscriptions"] if entry["id"] == "creator")
+        pro = next(entry for entry in payload["subscriptions"] if entry["id"] == "pro")
 
-        assert starter["entitlement_plan"] == "free"
-        assert starter["label"] == "Starter"
-        assert starter["price_usd"] == 0
-        assert starter["checkout_kind"] is None
-        assert starter["availability"] == "included"
+        assert free_account["entitlement_plan"] == "free"
+        assert free_account["label"] == "Free Account"
+        assert free_account["price_usd"] == 0
+        assert free_account["checkout_kind"] is None
+        assert free_account["availability"] == "included"
+
+        assert creator["entitlement_plan"] == "creator"
+        assert creator["label"] == "Creator"
+        assert creator["price_usd"] == 12
+        assert creator["checkout_kind"] == CheckoutKind.CREATOR_MONTHLY.value
+        assert creator["availability"] == "self_serve"
 
         assert pro["entitlement_plan"] == "pro"
         assert pro["label"] == "Pro"
-        assert pro["price_usd"] == 18
+        assert pro["price_usd"] == 24
         assert pro["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
         assert pro["availability"] == "self_serve"
 
-        assert payload["top_up"]["id"] == "top_up"
-        assert len(payload["top_up"]["options"]) == 2
-        assert {option["kind"] for option in payload["top_up"]["options"]} == {
-            CheckoutKind.TOP_UP_SMALL.value,
-            CheckoutKind.TOP_UP_LARGE.value,
+        assert payload["wallet"]["free_account_can_buy_credit_packs"] is True
+        assert payload["wallet"]["free_image_generation_included"] is False
+        assert len(payload["credit_packs"]) == 2
+        assert {option["kind"] for option in payload["credit_packs"]} == {
+            CheckoutKind.CREDIT_PACK_SMALL.value,
+            CheckoutKind.CREDIT_PACK_LARGE.value,
         }
     finally:
         await service.shutdown()
@@ -421,7 +442,8 @@ async def test_standard_lane_generation_reserves_and_settles_discounted_credits(
         assert settled.final_credit_cost == 3
         assert settled.credit_charge_policy == "standard_discount"
         assert settled.credit_status == "settled"
-        assert updated_identity.monthly_credits_remaining == 57
+        assert updated_identity.monthly_credits_remaining == 0
+        assert updated_identity.extra_credits == 57
         assert not any(entry.entry_type == CreditEntryType.TOP_UP for entry in snapshot.credit_ledger.values())
         assert any(
             entry.entry_type == CreditEntryType.GENERATION_SPEND and entry.amount == -3
@@ -489,6 +511,56 @@ async def test_managed_generation_consumes_monthly_then_extra_credits(
         assert settled.credit_charge_policy == "managed_full"
         assert updated_identity.monthly_credits_remaining == 0
         assert updated_identity.extra_credits == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_wallet_backed_free_generation_prefers_runware_launch_lane_when_available(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(
+            name="runware",
+            rollout_tier="primary",
+            billable=True,
+            workflows=("text_to_image",),
+        ),
+        _FakeProvider(name="huggingface", rollout_tier="standard", billable=False),
+        _FakeProvider(name="pollinations", rollout_tier="standard", billable=False),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.FREE,
+            monthly_remaining=0,
+            monthly_allowance=0,
+            extra_credits=60,
+        )
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait with luxury fashion lighting",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=17,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        assert job.provider == "runware"
+        assert job.provider_candidates[0] == "runware"
+        assert job.routing_strategy == "wallet-managed"
+        assert job.routing_reason == "premium_intent_managed_preferred"
+        assert job.selected_quality_tier == "premium"
+        assert job.degraded is False
     finally:
         await service.shutdown()
 
@@ -583,7 +655,8 @@ async def test_demo_generation_is_free_and_releases_credit_hold(
         assert settled.final_credit_cost == 0
         assert settled.credit_charge_policy == "degraded_free"
         assert settled.credit_status == "released"
-        assert updated_identity.monthly_credits_remaining == 60
+        assert updated_identity.monthly_credits_remaining == 0
+        assert updated_identity.extra_credits == 60
         assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in snapshot.credit_ledger.values())
     finally:
         await service.shutdown()
@@ -629,7 +702,8 @@ async def test_failed_generation_releases_reservation_without_spend(
         assert failed.status == JobStatus.FAILED
         assert failed.credit_status == "released"
         assert failed.final_credit_cost == 0
-        assert updated_identity.monthly_credits_remaining == 60
+        assert updated_identity.monthly_credits_remaining == 0
+        assert updated_identity.extra_credits == 60
         assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in snapshot.credit_ledger.values())
     finally:
         await service.shutdown()
@@ -840,7 +914,7 @@ async def test_create_generation_blocks_when_billable_provider_daily_hard_cap_is
 
 
 @pytest.mark.asyncio
-async def test_create_generation_filters_blocked_billable_fallback_candidates(
+async def test_create_generation_blocks_when_selected_billable_route_is_guardrail_blocked(
     tmp_path: Path,
     _web_runtime_mode: None,
 ) -> None:
@@ -893,9 +967,9 @@ async def test_create_generation_filters_blocked_billable_fallback_candidates(
             aspect_ratio="1:1",
             output_count=1,
         )
-
         assert job.provider == "openai"
         assert job.provider_candidates == ["openai"]
+        assert job.routing_reason == "premium_intent_managed_preferred"
     finally:
         settings.environment = original_environment
         settings.provider_spend_guardrails_enabled = original_enabled
@@ -1021,7 +1095,7 @@ async def test_process_generation_filters_blocked_billable_fallback_candidates_b
             aspect_ratio="1:1",
             output_count=1,
         )
-        assert job.provider_candidates[:2] == ["openai", "fal"]
+        assert job.provider_candidates[:2] == ["fal", "openai"]
 
         spent_job = GenerationJob(
             workspace_id=identity.workspace_id,
@@ -1076,9 +1150,10 @@ async def test_active_reservation_blocks_over_admission(
     try:
         identity, project = await _seed_identity_project(
             store,
-            plan=IdentityPlan.FREE,
-            monthly_remaining=5,
-            monthly_allowance=60,
+            plan=IdentityPlan.CREATOR,
+            monthly_remaining=0,
+            monthly_allowance=0,
+            extra_credits=5,
         )
         first_job = await service.create_generation(
             identity_id=identity.id,
@@ -1118,7 +1193,7 @@ async def test_active_reservation_blocks_over_admission(
 
 
 @pytest.mark.asyncio
-async def test_subscription_cancelled_keeps_pro_entitlements_until_expired(
+async def test_subscription_cancelled_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
     tmp_path: Path,
     _web_runtime_mode: None,
 ) -> None:
@@ -1132,11 +1207,12 @@ async def test_subscription_cancelled_keeps_pro_entitlements_until_expired(
             extra_credits=150,
             subscription_status=SubscriptionStatus.ACTIVE,
         )
-        await service.process_lemonsqueezy_webhook(
+        await service.process_paddle_webhook(
             {
-                "data": {"id": "sub-1", "type": "subscriptions", "attributes": {"status": "cancelled"}},
-                "meta": {
-                    "event_name": "subscription_cancelled",
+                "event_type": "subscription.canceled",
+                "data": {
+                    "id": "sub-1",
+                    "type": "subscription",
                     "custom_data": {
                         "identity_id": identity.id,
                         "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
@@ -1151,8 +1227,11 @@ async def test_subscription_cancelled_keeps_pro_entitlements_until_expired(
 
         assert updated_identity.plan == IdentityPlan.PRO
         assert updated_identity.subscription_status == SubscriptionStatus.CANCELED
-        assert summary["entitlements"]["premium_chat"] is True
-        assert summary["credits"]["monthly_remaining"] == 700
+        assert summary["plan"]["id"] == IdentityPlan.FREE.value
+        assert summary["account_tier"] == IdentityPlan.FREE.value
+        assert summary["subscription_tier"] is None
+        assert summary["entitlements"]["premium_chat"] is False
+        assert summary["credits"]["monthly_remaining"] == 0
         assert summary["credits"]["extra_credits"] == 150
         assert summary["generation_credit_guide"]["available_to_spend"] == summary["credits"]["available_to_spend"]
     finally:
@@ -1174,11 +1253,13 @@ async def test_subscription_expired_clamps_to_free_without_granting_new_monthly_
             extra_credits=150,
             subscription_status=SubscriptionStatus.CANCELED,
         )
-        await service.process_lemonsqueezy_webhook(
+        await service.process_paddle_webhook(
             {
-                "data": {"id": "sub-1", "type": "subscriptions", "attributes": {"status": "expired"}},
-                "meta": {
-                    "event_name": "subscription_expired",
+                "event_type": "subscription.updated",
+                "data": {
+                    "id": "sub-1",
+                    "type": "subscription",
+                    "status": "expired",
                     "custom_data": {
                         "identity_id": identity.id,
                         "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
@@ -1194,8 +1275,90 @@ async def test_subscription_expired_clamps_to_free_without_granting_new_monthly_
         assert updated_identity.plan == IdentityPlan.FREE
         assert updated_identity.subscription_status == SubscriptionStatus.CANCELED
         assert summary["entitlements"]["premium_chat"] is False
-        assert summary["credits"]["monthly_remaining"] == 60
+        assert summary["credits"]["monthly_remaining"] == 0
         assert summary["credits"]["extra_credits"] == 150
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_subscription_past_due_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    service, store, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        identity, _ = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.PRO,
+            monthly_remaining=700,
+            monthly_allowance=1200,
+            extra_credits=150,
+            subscription_status=SubscriptionStatus.ACTIVE,
+        )
+        await service.process_paddle_webhook(
+            {
+                "event_type": "subscription.updated",
+                "data": {
+                    "id": "sub-1",
+                    "type": "subscription",
+                    "status": "past_due",
+                    "custom_data": {
+                        "identity_id": identity.id,
+                        "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
+                    },
+                },
+            }
+        )
+
+        summary = await service.billing_summary(identity.id)
+        snapshot = await store.snapshot()
+        updated_identity = snapshot.identities[identity.id]
+
+        assert updated_identity.plan == IdentityPlan.PRO
+        assert updated_identity.subscription_status == SubscriptionStatus.PAST_DUE
+        assert summary["plan"]["id"] == IdentityPlan.FREE.value
+        assert summary["account_tier"] == IdentityPlan.FREE.value
+        assert summary["subscription_tier"] is None
+        assert summary["entitlements"]["premium_chat"] is False
+        assert summary["credits"]["monthly_remaining"] == 0
+        assert summary["credits"]["extra_credits"] == 150
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_inactive_paid_subscription_cannot_start_pro_only_generation_lane(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    service, store, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        identity, project = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.PRO,
+            monthly_remaining=700,
+            monthly_allowance=1200,
+            extra_credits=150,
+            subscription_status=SubscriptionStatus.CANCELED,
+        )
+
+        with pytest.raises(PermissionError, match="This model requires Pro"):
+            await service.create_generation(
+                identity_id=identity.id,
+                project_id=project.id,
+                prompt="hero poster with dramatic lighting",
+                negative_prompt="",
+                reference_asset_id=None,
+                model_id="juggernaut-xl",
+                width=1024,
+                height=1024,
+                steps=28,
+                cfg_scale=6.5,
+                seed=91,
+                aspect_ratio="1:1",
+                output_count=1,
+            )
     finally:
         await service.shutdown()
 
@@ -1216,13 +1379,11 @@ async def test_subscription_renewal_resets_allowance_and_is_idempotent(
             subscription_status=SubscriptionStatus.CANCELED,
         )
         payload = {
+            "event_type": "subscription.updated",
             "data": {
                 "id": "sub-1",
-                "type": "subscriptions",
-                "attributes": {"status": "active", "renewal": "2026-04-06"},
-            },
-            "meta": {
-                "event_name": "subscription_payment_success",
+                "type": "subscription",
+                "status": "active",
                 "custom_data": {
                     "identity_id": identity.id,
                     "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
@@ -1230,8 +1391,8 @@ async def test_subscription_renewal_resets_allowance_and_is_idempotent(
             },
         }
 
-        await service.process_lemonsqueezy_webhook(payload)
-        await service.process_lemonsqueezy_webhook(payload)
+        await service.process_paddle_webhook(payload)
+        await service.process_paddle_webhook(payload)
 
         snapshot = await store.snapshot()
         updated_identity = snapshot.identities[identity.id]
@@ -1241,12 +1402,72 @@ async def test_subscription_renewal_resets_allowance_and_is_idempotent(
 
         assert updated_identity.plan == IdentityPlan.PRO
         assert updated_identity.subscription_status == SubscriptionStatus.ACTIVE
-        assert updated_identity.monthly_credits_remaining == 1200
+        assert updated_identity.monthly_credits_remaining == 42
         assert updated_identity.extra_credits == 80
         assert len(snapshot.billing_webhook_receipts) == 1
-        assert len(renewal_entries) == 1
+        assert len(renewal_entries) == 0
     finally:
         await service.shutdown()
+
+
+def test_credit_pack_checkout_kind_is_not_treated_as_subscription_plan() -> None:
+    with pytest.raises(ValueError):
+        checkout_catalog_kind_to_plan(CheckoutKind.CREDIT_PACK_SMALL)
+
+
+def test_consume_credits_locked_raises_on_credit_underflow() -> None:
+    identity = OmniaIdentity(
+        id="user-underflow",
+        email="underflow@example.com",
+        display_name="Underflow",
+        username="underflow",
+        workspace_id="ws-underflow",
+        plan=IdentityPlan.FREE,
+        monthly_credits_remaining=10,
+        monthly_credit_allowance=10,
+        extra_credits=5,
+    )
+
+    with pytest.raises(ValueError):
+        consume_credits_locked(identity, 20)
+
+
+def test_paddle_webhook_receipt_fingerprint_includes_event_id() -> None:
+    now = utc_now()
+    receipt_a = build_paddle_webhook_receipt(
+        payload={
+            "event_id": "evt_1",
+            "event_type": "transaction.completed",
+            "data": {"id": "txn-1", "type": "transaction", "attributes": {}},
+        },
+        identity_id="user-1",
+        checkout_kind=CheckoutKind.CREDIT_PACK_SMALL,
+        now=now,
+    )
+    receipt_b = build_paddle_webhook_receipt(
+        payload={
+            "event_id": "evt_2",
+            "event_type": "transaction.completed",
+            "data": {"id": "txn-1", "type": "transaction", "attributes": {}},
+        },
+        identity_id="user-1",
+        checkout_kind=CheckoutKind.CREDIT_PACK_SMALL,
+        now=now,
+    )
+
+    assert receipt_a.id != receipt_b.id
+
+
+def test_legacy_checkout_kind_aliases_still_parse() -> None:
+    entry = CreditLedgerEntry(
+        identity_id="user-1",
+        amount=200,
+        entry_type=CreditEntryType.TOP_UP,
+        description="Legacy top-up",
+        checkout_kind="top_up_small",
+    )
+
+    assert entry.checkout_kind == CheckoutKind.CREDIT_PACK_SMALL
 
 
 @pytest.mark.asyncio

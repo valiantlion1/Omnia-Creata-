@@ -2,8 +2,8 @@ import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSessio
 
 const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000')).replace(/\/$/, '')
 
-export type IdentityPlan = 'guest' | 'free' | 'pro'
-export type CommercialPlanId = 'starter' | 'pro' | 'top_up'
+export type IdentityPlan = 'guest' | 'free' | 'creator' | 'pro'
+export type CommercialPlanId = 'free_account' | 'creator' | 'pro' | 'credit_packs'
 export type JobStatus =
   | 'queued'
   | 'running'
@@ -15,7 +15,7 @@ export type JobStatus =
   | 'pending'
   | 'processing'
   | 'completed'
-export type CheckoutKind = 'pro_monthly' | 'top_up_small' | 'top_up_large'
+export type CheckoutKind = 'creator_monthly' | 'pro_monthly' | 'credit_pack_small' | 'credit_pack_large'
 export type Visibility = 'public' | 'private'
 export type ProjectSurface = 'compose' | 'chat'
 
@@ -62,6 +62,20 @@ export type AuthMeResponse = {
   identity: IdentityPayload
   credits: CreditSummary
   plan: PlanInfo
+  entitlements?: BillingSummary['entitlements']
+  feature_entitlements?: BillingSummary['entitlements']
+  wallet_balance?: number
+  wallet?: BillingSummary['wallet']
+  account_tier?: Exclude<IdentityPlan, 'guest'>
+  subscription_tier?: Extract<IdentityPlan, 'creator' | 'pro'> | null
+  usage_caps?: {
+    can_generate: boolean
+    can_share_links: boolean
+    can_clean_export: boolean
+    chat_message_limit: number
+    max_chat_attachments: number
+    max_incomplete_generations: number
+  }
 }
 
 export type DemoLoginResponse = {
@@ -87,8 +101,63 @@ export type SignupPayload = PasswordAuthPayload & {
 
 export type PublicPlansPayload = {
   operating_mode: string
-  plans: Array<Omit<PlanInfo, 'id'> & {
-    id: Exclude<CommercialPlanId, 'top_up'>
+  free_account: Omit<PlanInfo, 'id'> & {
+    id: 'free_account'
+    entitlement_plan: 'free'
+    summary: string
+    feature_summary: string[]
+    price_usd: number | null
+    billing_period: 'month' | null
+    checkout_kind: null
+    recommended: false
+    availability: 'included' | 'self_serve'
+  }
+  subscriptions: Array<Omit<PlanInfo, 'id'> & {
+    id: 'creator' | 'pro'
+    entitlement_plan: Extract<IdentityPlan, 'creator' | 'pro'>
+    summary: string
+    feature_summary: string[]
+    price_usd: number | null
+    billing_period: 'month' | null
+    checkout_kind: CheckoutKind | null
+    recommended: boolean
+    availability: 'included' | 'self_serve'
+  }>
+  credit_packs: Array<{
+    kind: CheckoutKind
+    label: string
+    credits: number
+    price_usd: number
+    plan: IdentityPlan | null
+    billing_provider?: string
+    kind_group?: string
+  }>
+  wallet: {
+    contract: string
+    free_account_can_buy_credit_packs: boolean
+    image_generation_requires_credits_or_included_allowance: boolean
+    spend_order: string
+    free_image_generation_included: boolean
+  }
+  entitlements: Record<string, {
+    can_generate: boolean
+    can_share_links: boolean
+    can_clean_export: boolean
+    chat_message_limit: number
+    max_chat_attachments: number
+    max_incomplete_generations: number
+  }>
+  usage_caps: {
+    verified_account_required_for_generation: boolean
+    captcha_required_for_sensitive_flows: boolean
+    free_ai_chat_limited: boolean
+    free_image_generation_included: boolean
+    wallet_credit_purchase_allowed: boolean
+    credit_reserve_required_before_generation: boolean
+  }
+  featured_subscription: 'creator' | 'pro'
+  plans?: Array<Omit<PlanInfo, 'id'> & {
+    id: 'free_account' | 'creator' | 'pro'
     entitlement_plan: Exclude<IdentityPlan, 'guest'>
     summary: string
     feature_summary: string[]
@@ -98,8 +167,8 @@ export type PublicPlansPayload = {
     recommended: boolean
     availability: 'included' | 'self_serve'
   }>
-  top_up: {
-    id: 'top_up'
+  top_up?: {
+    id: 'credit_packs'
     label: string
     summary: string
     feature_summary: string[]
@@ -109,9 +178,11 @@ export type PublicPlansPayload = {
       credits: number
       price_usd: number
       plan: IdentityPlan | null
+      billing_provider?: string
+      kind_group?: string
     }>
   }
-  featured_plan: Exclude<CommercialPlanId, 'top_up'>
+  featured_plan?: 'creator' | 'pro'
 }
 
 export type ImprovedPromptResponse = {
@@ -410,6 +481,7 @@ export type MediaAsset = {
   protection_state?: 'protected' | 'blocked'
   can_open?: boolean
   can_export_clean?: boolean
+  visibility?: Visibility
   metadata: Record<string, unknown>
   created_at: string
   deleted_at: string | null
@@ -678,6 +750,16 @@ export type BillingSummary = {
     can_share_links: boolean
     can_generate: boolean
   }
+  feature_entitlements?: {
+    can_access_chat: boolean
+    premium_chat: boolean
+    allowed_chat_modes: string[]
+    chat_message_limit: number
+    max_chat_attachments: number
+    can_clean_export: boolean
+    can_share_links: boolean
+    can_generate: boolean
+  }
   credits: {
     remaining: number
     gross_remaining: number
@@ -689,6 +771,19 @@ export type BillingSummary = {
     spend_order: string
     unlimited: boolean
   }
+  wallet: {
+    balance: number
+    wallet_balance: number
+    included_monthly_allowance: number
+    included_monthly_remaining: number
+    reserved_total: number
+    available_to_spend: number
+    spend_order: string
+    unlimited: boolean
+  }
+  wallet_balance: number
+  account_tier: Exclude<IdentityPlan, 'guest'>
+  subscription_tier: Extract<IdentityPlan, 'creator' | 'pro'> | null
   generation_credit_guide: {
     available_to_spend: number
     reserved_total: number
@@ -702,6 +797,8 @@ export type BillingSummary = {
     credits: number
     price_usd: number
     plan: IdentityPlan | null
+    billing_provider?: string
+    kind_group?: string
   }>
   recent_activity: Array<{
     id: string

@@ -22,15 +22,22 @@ from .models import (
     SubscriptionStatus,
 )
 
-LEMONSQUEEZY_SUPPORTED_EVENTS = frozenset(
+PADDLE_SUPPORTED_EVENTS = frozenset(
     {
-        "order_created",
-        "subscription_created",
-        "subscription_payment_success",
-        "subscription_cancelled",
-        "subscription_expired",
+        "transaction.completed",
+        "subscription.created",
+        "subscription.activated",
+        "subscription.updated",
+        "subscription.paused",
+        "subscription.canceled",
+        "subscription.cancelled",
+        "subscription.resumed",
+        "subscription.past_due",
+        "subscription.expired",
     }
 )
+
+_PAID_SUBSCRIPTION_PLANS = frozenset({IdentityPlan.CREATOR, IdentityPlan.PRO})
 
 ACTIVE_CREDIT_HOLD_STATUSES = frozenset(
     {
@@ -70,8 +77,20 @@ class BillingStateSnapshot:
 
 
 @dataclass(slots=True)
-class LemonSqueezyWebhookMutationResult:
+class BillingWebhookMutationResult:
     upgraded_email: Optional[str] = None
+
+
+def resolve_effective_plan(
+    *,
+    identity: OmniaIdentity,
+    plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
+) -> IdentityPlan:
+    if identity.owner_mode or identity.root_admin or identity.local_access:
+        return identity.plan
+    if identity.plan in _PAID_SUBSCRIPTION_PLANS and identity.subscription_status != SubscriptionStatus.ACTIVE:
+        return IdentityPlan.FREE
+    return identity.plan
 
 
 def resolve_billing_state(
@@ -81,10 +100,14 @@ def resolve_billing_state(
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
 ) -> BillingStateSnapshot:
     monthly_remaining = max(int(identity.monthly_credits_remaining or 0), 0)
+    effective_plan = resolve_effective_plan(identity=identity, plan_catalog=plan_catalog)
     monthly_allowance = max(
         int(identity.monthly_credit_allowance or 0),
         int(plan_catalog[identity.plan].monthly_credits),
     )
+    if effective_plan != identity.plan:
+        monthly_allowance = int(plan_catalog[effective_plan].monthly_credits)
+        monthly_remaining = min(monthly_remaining, monthly_allowance)
     extra_credits = max(int(identity.extra_credits or 0), 0)
     gross_remaining = monthly_remaining + extra_credits
     unlimited = bool(identity.owner_mode or identity.root_admin or identity.local_access)
@@ -105,8 +128,8 @@ def resolve_billing_state(
         monthly_allowance=monthly_allowance,
         extra_credits=extra_credits,
         unlimited=unlimited,
-        effective_plan=identity.plan,
-        subscription_active=identity.subscription_status == SubscriptionStatus.ACTIVE,
+        effective_plan=effective_plan,
+        subscription_active=identity.subscription_status == SubscriptionStatus.ACTIVE and identity.plan in _PAID_SUBSCRIPTION_PLANS,
     )
 
 
@@ -148,7 +171,25 @@ def build_billing_summary(
         "plan": plan_catalog[billing_state.effective_plan].model_dump(mode="json"),
         "subscription_status": identity.subscription_status.value,
         "entitlements": dict(entitlements or {}),
+        "feature_entitlements": dict(entitlements or {}),
         "credits": billing_state.credits_dict(),
+        "wallet": {
+            "balance": billing_state.extra_credits,
+            "wallet_balance": billing_state.extra_credits,
+            "included_monthly_allowance": billing_state.monthly_allowance,
+            "included_monthly_remaining": billing_state.monthly_remaining,
+            "reserved_total": billing_state.reserved_total,
+            "available_to_spend": billing_state.available_to_spend,
+            "spend_order": billing_state.spend_order,
+            "unlimited": billing_state.unlimited,
+        },
+        "wallet_balance": billing_state.extra_credits,
+        "account_tier": billing_state.effective_plan.value,
+        "subscription_tier": (
+            billing_state.effective_plan.value
+            if billing_state.effective_plan in _PAID_SUBSCRIPTION_PLANS and billing_state.subscription_active
+            else None
+        ),
         "generation_credit_guide": dict(generation_credit_guide or {}),
         "checkout_options": [
             {"kind": kind.value, **meta}
@@ -158,20 +199,19 @@ def build_billing_summary(
     }
 
 
-def build_lemonsqueezy_checkout_url(
+def build_paddle_checkout_url(
     *,
-    store_id: str,
+    base_url: str,
     identity_id: str,
     email: str,
     kind: CheckoutKind,
 ) -> str:
     params = {
-        "checkout[custom][identity_id]": identity_id,
-        "checkout[custom][checkout_kind]": kind.value,
-        "checkout[email]": email,
+        "identity_id": identity_id,
+        "checkout_kind": kind.value,
+        "email": email,
     }
-    variant_id = "pro_subscription" if kind == CheckoutKind.PRO_MONTHLY else "credit_pack"
-    return f"https://{store_id}.lemonsqueezy.com/checkout/buy/{variant_id}?{urlencode(params)}"
+    return f"{base_url.rstrip('/')}?{urlencode(params)}"
 
 
 def _apply_top_up_paid(
@@ -184,7 +224,7 @@ def _apply_top_up_paid(
     ledger_prefix: str,
     ledger_suffix: str,
     now: datetime,
-) -> LemonSqueezyWebhookMutationResult:
+) -> BillingWebhookMutationResult:
     current.extra_credits += amount
     current.updated_at = now
     state.identities[current.id] = current
@@ -195,7 +235,7 @@ def _apply_top_up_paid(
         description=description,
         checkout_kind=checkout_kind,
     )
-    return LemonSqueezyWebhookMutationResult()
+    return BillingWebhookMutationResult()
 
 
 def _apply_subscription_activated(
@@ -207,26 +247,27 @@ def _apply_subscription_activated(
     ledger_prefix: str,
     ledger_suffix: str,
     now: datetime,
-) -> LemonSqueezyWebhookMutationResult:
+) -> BillingWebhookMutationResult:
     upgraded_email: Optional[str] = None
-    pro_allowance = int(plan_catalog[IdentityPlan.PRO].monthly_credits)
-    if current.plan != IdentityPlan.PRO:
+    allowance = int(plan_catalog[checkout_catalog_kind_to_plan(checkout_kind)].monthly_credits)
+    next_plan = checkout_catalog_kind_to_plan(checkout_kind)
+    if current.plan != next_plan:
         upgraded_email = current.email
-    current.plan = IdentityPlan.PRO
+    current.plan = next_plan
     current.subscription_status = SubscriptionStatus.ACTIVE
-    current.monthly_credit_allowance = pro_allowance
-    current.monthly_credits_remaining = max(current.monthly_credits_remaining, pro_allowance)
+    current.monthly_credit_allowance = allowance
+    current.monthly_credits_remaining = max(current.monthly_credits_remaining, allowance)
     current.last_credit_refresh_at = now
     current.updated_at = now
     state.identities[current.id] = current
     state.credit_ledger[f"{ledger_prefix}_{ledger_suffix}"] = CreditLedgerEntry(
         identity_id=current.id,
-        amount=pro_allowance,
+        amount=allowance,
         entry_type=CreditEntryType.SUBSCRIPTION,
-        description="Pro Upgrade",
+        description=f"{plan_catalog[next_plan].label} activation",
         checkout_kind=checkout_kind,
     )
-    return LemonSqueezyWebhookMutationResult(upgraded_email=upgraded_email)
+    return BillingWebhookMutationResult(upgraded_email=upgraded_email)
 
 
 def _apply_subscription_renewed(
@@ -238,23 +279,24 @@ def _apply_subscription_renewed(
     ledger_prefix: str,
     ledger_suffix: str,
     now: datetime,
-) -> LemonSqueezyWebhookMutationResult:
-    pro_allowance = int(plan_catalog[IdentityPlan.PRO].monthly_credits)
-    current.plan = IdentityPlan.PRO
+) -> BillingWebhookMutationResult:
+    next_plan = checkout_catalog_kind_to_plan(checkout_kind)
+    allowance = int(plan_catalog[next_plan].monthly_credits)
+    current.plan = next_plan
     current.subscription_status = SubscriptionStatus.ACTIVE
-    current.monthly_credit_allowance = pro_allowance
-    current.monthly_credits_remaining = pro_allowance
+    current.monthly_credit_allowance = allowance
+    current.monthly_credits_remaining = allowance
     current.last_credit_refresh_at = now
     current.updated_at = now
     state.identities[current.id] = current
     state.credit_ledger[f"{ledger_prefix}_{ledger_suffix}"] = CreditLedgerEntry(
         identity_id=current.id,
-        amount=pro_allowance,
+        amount=allowance,
         entry_type=CreditEntryType.SUBSCRIPTION,
-        description="Pro Renewal",
+        description=f"{plan_catalog[next_plan].label} renewal",
         checkout_kind=checkout_kind,
     )
-    return LemonSqueezyWebhookMutationResult()
+    return BillingWebhookMutationResult()
 
 
 def _apply_subscription_deactivated(
@@ -264,7 +306,7 @@ def _apply_subscription_deactivated(
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
     finalize: bool,
     now: datetime,
-) -> LemonSqueezyWebhookMutationResult:
+) -> BillingWebhookMutationResult:
     current.subscription_status = SubscriptionStatus.CANCELED
     if finalize:
         free_allowance = int(plan_catalog[IdentityPlan.FREE].monthly_credits)
@@ -274,7 +316,7 @@ def _apply_subscription_deactivated(
         current.last_credit_refresh_at = now
     current.updated_at = now
     state.identities[current.id] = current
-    return LemonSqueezyWebhookMutationResult()
+    return BillingWebhookMutationResult()
 
 
 def apply_demo_checkout(
@@ -288,7 +330,7 @@ def apply_demo_checkout(
 ) -> OmniaIdentity:
     current = state.identities[identity_id]
     ledger_suffix = str(int(now.timestamp()))
-    if config["plan"] == IdentityPlan.PRO:
+    if config["plan"] in _PAID_SUBSCRIPTION_PLANS:
         _apply_subscription_activated(
             state=state,
             current=current,
@@ -312,24 +354,32 @@ def apply_demo_checkout(
     return state.identities[identity_id].model_copy(deep=True)
 
 
-def is_supported_lemonsqueezy_event(event_name: str) -> bool:
-    return event_name in LEMONSQUEEZY_SUPPORTED_EVENTS
+def checkout_catalog_kind_to_plan(kind: CheckoutKind) -> IdentityPlan:
+    if kind == CheckoutKind.CREATOR_MONTHLY:
+        return IdentityPlan.CREATOR
+    if kind == CheckoutKind.PRO_MONTHLY:
+        return IdentityPlan.PRO
+    raise ValueError(f"Checkout kind {kind.value} is not a subscription plan.")
 
 
-def build_lemonsqueezy_webhook_receipt(
+def is_supported_paddle_event(event_name: str) -> bool:
+    return event_name in PADDLE_SUPPORTED_EVENTS
+
+
+def build_paddle_webhook_receipt(
     *,
     payload: Dict[str, Any],
     identity_id: str,
     checkout_kind: CheckoutKind | None,
     now: datetime,
 ) -> BillingWebhookReceipt:
-    meta = payload.get("meta", {}) or {}
     data = payload.get("data", {}) or {}
-    resource_type = str(data.get("type") or "unknown")
-    resource_id = str(data.get("id") or identity_id or "unknown")
-    event_name = str(meta.get("event_name") or "unknown")
+    resource_type = str(data.get("type") or payload.get("event_type") or "unknown")
+    resource_id = str(data.get("id") or payload.get("event_id") or identity_id or "unknown")
+    event_name = str(payload.get("event_type") or "unknown")
     fingerprint_payload = {
-        "provider": "lemonsqueezy",
+        "provider": "paddle",
+        "event_id": str(payload.get("event_id") or ""),
         "event_name": event_name,
         "resource_type": resource_type,
         "resource_id": resource_id,
@@ -341,7 +391,8 @@ def build_lemonsqueezy_webhook_receipt(
         json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     return BillingWebhookReceipt(
-        id=f"lemonsqueezy_{fingerprint}",
+        id=f"paddle_{fingerprint}",
+        provider="paddle",
         event_name=event_name,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -351,7 +402,7 @@ def build_lemonsqueezy_webhook_receipt(
     )
 
 
-def apply_lemonsqueezy_webhook_event(
+def apply_paddle_webhook_event(
     *,
     state: StudioState,
     identity_id: str,
@@ -361,21 +412,21 @@ def apply_lemonsqueezy_webhook_event(
     checkout_catalog: Mapping[CheckoutKind, Dict[str, Any]],
     checkout_kind: CheckoutKind | None = None,
     receipt_id: str | None = None,
-) -> LemonSqueezyWebhookMutationResult:
+) -> BillingWebhookMutationResult:
     current = state.identities.get(identity_id)
     if current is None:
-        return LemonSqueezyWebhookMutationResult()
+        raise KeyError(f"Identity {identity_id} not found for Paddle webhook.")
 
     ledger_suffix = receipt_id or str(int(now.timestamp()))
+    payload_config = checkout_catalog.get(checkout_kind) if checkout_kind is not None else None
 
-    if event_name == "order_created":
-        checkout_config = checkout_catalog.get(checkout_kind) if checkout_kind is not None else None
-        if checkout_kind in {CheckoutKind.TOP_UP_SMALL, CheckoutKind.TOP_UP_LARGE} and checkout_config is not None:
+    if event_name == "transaction.completed":
+        if checkout_kind in {CheckoutKind.CREDIT_PACK_SMALL, CheckoutKind.CREDIT_PACK_LARGE} and payload_config is not None:
             return _apply_top_up_paid(
                 state=state,
                 current=current,
-                amount=int(checkout_config["credits"]),
-                description=str(checkout_config["label"]),
+                amount=int(payload_config["credits"]),
+                description=str(payload_config["label"]),
                 checkout_kind=checkout_kind,
                 ledger_prefix="webhook_topup",
                 ledger_suffix=ledger_suffix,
@@ -384,37 +435,41 @@ def apply_lemonsqueezy_webhook_event(
 
         current.updated_at = now
         state.identities[current.id] = current
-        return LemonSqueezyWebhookMutationResult()
+        return BillingWebhookMutationResult()
 
-    if event_name == "subscription_created":
+    if event_name in {"subscription.created", "subscription.activated", "subscription.resumed"} and checkout_kind is not None:
         return _apply_subscription_activated(
             state=state,
             current=current,
             plan_catalog=plan_catalog,
-            checkout_kind=checkout_kind or CheckoutKind.PRO_MONTHLY,
+            checkout_kind=checkout_kind,
             ledger_prefix="webhook_upgrade",
             ledger_suffix=ledger_suffix,
             now=now,
         )
 
-    if event_name == "subscription_payment_success":
-        return _apply_subscription_renewed(
-            state=state,
-            current=current,
-            plan_catalog=plan_catalog,
-            checkout_kind=checkout_kind or CheckoutKind.PRO_MONTHLY,
-            ledger_prefix="webhook_renewal",
-            ledger_suffix=ledger_suffix,
-            now=now,
-        )
+    if event_name == "subscription.updated" and current.plan in _PAID_SUBSCRIPTION_PLANS:
+        if checkout_kind in {CheckoutKind.CREATOR_MONTHLY, CheckoutKind.PRO_MONTHLY}:
+            synced_plan = checkout_catalog_kind_to_plan(checkout_kind)
+            current.plan = synced_plan
+            current.monthly_credit_allowance = int(plan_catalog[synced_plan].monthly_credits)
+        current.subscription_status = SubscriptionStatus.ACTIVE
+        current.updated_at = now
+        state.identities[current.id] = current
+        return BillingWebhookMutationResult()
 
-    if event_name in ("subscription_cancelled", "subscription_expired"):
+    if event_name in {"subscription.paused", "subscription.canceled", "subscription.cancelled", "subscription.expired", "subscription.past_due"}:
+        if event_name == "subscription.past_due":
+            current.subscription_status = SubscriptionStatus.PAST_DUE
+            current.updated_at = now
+            state.identities[current.id] = current
+            return BillingWebhookMutationResult()
         return _apply_subscription_deactivated(
             state=state,
             current=current,
             plan_catalog=plan_catalog,
-            finalize=event_name == "subscription_expired",
+            finalize=event_name == "subscription.expired",
             now=now,
         )
 
-    return LemonSqueezyWebhookMutationResult()
+    return BillingWebhookMutationResult()

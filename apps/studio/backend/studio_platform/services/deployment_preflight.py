@@ -49,20 +49,20 @@ def _protected_beta_chat_provider(env_values: dict[str, str]) -> str:
     value = (
         env_values.get("PROTECTED_BETA_CHAT_PROVIDER")
         or env_values.get("CHAT_PRIMARY_PROVIDER")
-        or "openai"
+        or "gemini"
     )
     normalized = value.strip().lower()
     if normalized in {"gemini", "openrouter", "openai"}:
         return normalized
-    return "openai"
+    return "gemini"
 
 
 def _protected_beta_image_provider(env_values: dict[str, str]) -> str:
-    value = env_values.get("PROTECTED_BETA_IMAGE_PROVIDER") or "openai"
+    value = env_values.get("PROTECTED_BETA_IMAGE_PROVIDER") or "runware"
     normalized = value.strip().lower()
     if normalized in {"openai", "fal", "runware"}:
         return normalized
-    return "openai"
+    return "runware"
 
 
 def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:

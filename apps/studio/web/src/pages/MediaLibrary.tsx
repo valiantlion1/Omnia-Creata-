@@ -178,7 +178,7 @@ function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{resolvedTitle}</div>
@@ -220,7 +220,7 @@ function NoticeDialog({
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{state.title}</div>
@@ -267,7 +267,7 @@ function RenameDialog({
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{heading}</div>
@@ -432,93 +432,86 @@ function AssetLightbox({
           ) : null}
         </div>
 
-        <div className="space-y-4 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md">
-          <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Image preview</div>
-          <div className="text-2xl font-semibold tracking-[-0.04em] text-white">{state.group.title}</div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-            <span>{formatDate(asset.created_at)}</span>
-            <span>/</span>
-            <span>{state.group.modelLabel}</span>
-            <span>/</span>
-            <span>
-              Variation {state.index + 1} of {state.group.items.length}
-            </span>
+        <div className="space-y-5 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md" style={{ boxShadow: 'var(--border-glow), 0 16px 60px rgba(0,0,0,0.5)' }}>
+          <div>
+            <div className="text-xl font-semibold tracking-[-0.03em] text-white">{state.group.title}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-zinc-400">
+              <span>{formatDate(asset.created_at)}</span>
+              {state.group.items.length > 1 && (
+                <>
+                  <span className="text-zinc-600">·</span>
+                  <span>Variation {state.index + 1} of {state.group.items.length}</span>
+                </>
+              )}
+            </div>
           </div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-600">{state.group.projectTitle}</div>
-          <div className="max-h-[15rem] overflow-auto pr-1 text-sm leading-7 text-zinc-300">{state.group.prompt}</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="max-h-[10rem] overflow-auto pr-1 text-[13px] leading-6 text-zinc-400">{state.group.prompt}</div>
+
+          {/* Primary actions */}
+          <div className="space-y-2">
             {!isChatOrigin ? (
-              <>
-                <button
-                  onClick={onReusePrompt}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
-                  disabled={busy}
-                >
-                  Reuse prompt
-                </button>
+              <button
+                onClick={onReusePrompt}
+                className="w-full rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
+                disabled={busy}
+              >
+                Reuse prompt
+              </button>
+            ) : null}
+            <div className="flex gap-2">
+              {!isChatOrigin ? (
                 <button
                   onClick={onReuseStyle}
-                  className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-50"
                   disabled={busy}
                 >
                   Reuse style
                 </button>
-              </>
-            ) : null}
+              ) : null}
+              <button
+                onClick={onMove}
+                className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-50"
+                disabled={busy}
+              >
+                Move
+              </button>
+              {!isChatOrigin ? (
+                <button
+                  onClick={onOpenProject}
+                  className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1]"
+                >
+                  Project
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Visibility & danger */}
+          <div className="flex items-center gap-2 border-t border-white/[0.06] pt-3">
             <button
-              onClick={onMove}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => onSetVisibility(asset.visibility === 'public' ? 'private' : 'public')}
+              className="rounded-full bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-white disabled:opacity-50"
               disabled={busy}
             >
-              Move
+              {asset.visibility === 'public' ? 'Make private' : 'Make public'}
             </button>
-            <button
-              onClick={() => onSetVisibility('public')}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={busy}
-            >
-              Set public
-            </button>
-            <button
-              onClick={() => onSetVisibility('private')}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={busy}
-            >
-              Set private
-            </button>
+            <div className="flex-1" />
             <button
               onClick={onTrash}
-              className="rounded-full bg-rose-500/[0.12] px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-500/[0.18] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full px-3 py-1.5 text-[11px] font-medium text-rose-400/80 transition hover:bg-rose-500/[0.08] hover:text-rose-300 disabled:opacity-50"
               disabled={busy}
             >
-              Move to trash
+              Delete
             </button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {!isChatOrigin ? (
-              <button
-                onClick={onOpenProject}
-                className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
-              >
-                Open project
-              </button>
-            ) : null}
-            <button
-              onClick={onClose}
-              className="rounded-full bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
-            >
-              Close
-            </button>
-          </div>
+
           {canStep ? (
-            <div className="grid grid-cols-5 gap-2 pt-2">
+            <div className="grid grid-cols-5 gap-2 border-t border-white/[0.06] pt-3">
               {state.group.items.map((item, index) => (
                 <button
                   key={item.id}
                   onClick={() => onSelect(index)}
-                  className={`overflow-hidden rounded-[16px] ring-1 transition ${
-                    state.index === index ? 'ring-white/40' : 'ring-white/6 hover:ring-white/20'
-                  }`}
+                  className={`overflow-hidden rounded-[14px] ring-1 transition ${state.index === index ? 'ring-white/40 shadow-glow-sm' : 'ring-white/6 hover:ring-white/20'}`}
                 >
                   <ProtectedAssetImage
                     sources={assetPreviewSources(item)}
@@ -554,7 +547,7 @@ function MovePostDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[24px] bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/[0.05]">
+      <div className="w-full max-w-lg rounded-[24px] bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/[0.05]" style={{ boxShadow: 'var(--border-glow), 0 24px 90px rgba(0,0,0,0.5)' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">Move image set</div>
@@ -598,7 +591,7 @@ function MovePostDialog({
 
 function InlineActionMenu({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl">
+    <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl" style={{ boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.48)' }}>
       <div className="space-y-1">{children}</div>
     </div>
   )
@@ -711,7 +704,7 @@ function Toolbar({
     <section className="border-b border-white/[0.06] pb-2">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white md:text-[2.1rem]">{title}</h1>
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white font-display md:text-[2.1rem]">{title}</h1>
           <p className="mt-1 text-sm text-zinc-500">{description}</p>
           {filters ? <div className="mt-2">{filters}</div> : null}
         </div>
@@ -753,7 +746,7 @@ function EmptyInline({
         compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'
       }`}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111216]/60 text-zinc-300 ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.05)] backdrop-blur-md">{icon}</div>
+      <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111216]/60 text-zinc-300 ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(124,58,237,0.15)] backdrop-blur-md">{icon}</div>
       <div className="text-base font-semibold text-white">{title}</div>
       <div className={`text-sm leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
     </section>
@@ -789,7 +782,7 @@ function PendingPreview({
         <div className="relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
           {isBlocked || isFailed ? (
             <>
-              <div className={`aspect-[16/9] w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
+              <div className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/40 backdrop-blur-xl">
                  <div className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
                    {isBlocked ? <Lock className="h-5 w-5 text-amber-300/90" /> : <ImageOff className="h-5 w-5 text-rose-400/80" />}
@@ -807,7 +800,7 @@ function PendingPreview({
             </>
           ) : (
             <>
-              <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+              <div className="aspect-square w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]" />
               <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.06)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
               <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm">
                 <div className="relative flex h-8 w-8 items-center justify-center">
@@ -1330,7 +1323,7 @@ export default function MediaLibraryPage() {
                   <div className="text-sm font-medium text-white">In progress</div>
                   <StatusPill tone="brand">{pendingGenerations.length} running</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {pendingGenerations.map((generation) => (
                     <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="generating" />
                   ))}
@@ -1344,17 +1337,17 @@ export default function MediaLibraryPage() {
                   <div className="text-sm font-medium text-white">Blocked</div>
                   <StatusPill tone="warning">{blockedGroups.length} locked</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {blockedGroups.map((group) => {
                     const asset = group.items[0]
                     return (
-                      <div key={group.id} className={activeView === 'grid' ? 'space-y-3' : 'group flex items-center gap-4 py-3'}>
-                        <div className={`relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] ${activeView === 'grid' ? '' : 'h-20 w-16 shrink-0'}`}>
+                      <div key={group.id} className={activeView === 'grid' ? 'space-y-2' : 'group flex items-center gap-4 py-3'}>
+                        <div className={`relative overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] ${activeView === 'grid' ? '' : 'h-14 w-14 shrink-0'}`}>
                           <ProtectedAssetImage
                             sources={assetPreviewSources(asset)}
                             alt={group.title}
-                            className={`${activeView === 'grid' ? 'aspect-[4/5] w-full' : 'h-full w-full'} object-cover blur-[12px] saturate-50`}
-                            fallbackClassName={`${activeView === 'grid' ? 'aspect-[4/5] w-full' : 'h-full w-full'} flex items-center justify-center bg-[#111216] text-zinc-600`}
+                            className={`${activeView === 'grid' ? 'aspect-square w-full' : 'h-full w-full'} object-cover blur-[12px] saturate-50`}
+                            fallbackClassName={`${activeView === 'grid' ? 'aspect-square w-full' : 'h-full w-full'} flex items-center justify-center bg-[#111216] text-zinc-600`}
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c0d12]/35 backdrop-blur-md">
                             <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-500/20">
@@ -1365,8 +1358,7 @@ export default function MediaLibraryPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[13px] font-semibold text-white">{group.title}</div>
-                          <div className="mt-1 text-[11px] text-amber-300/90">Protected preview only</div>
-                          <div className="mt-1 truncate text-[11px] text-zinc-500">{group.projectTitle}</div>
+                          <div className="mt-0.5 text-[11px] text-amber-300/80">Content blocked</div>
                         </div>
                       </div>
                     )
@@ -1381,7 +1373,7 @@ export default function MediaLibraryPage() {
                   <div className="text-sm font-medium text-white">Failed</div>
                   <StatusPill tone="danger">{failedGenerations.length} failed</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
                   {failedGenerations.map((generation) => (
                     <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="failed" />
                   ))}
@@ -1402,12 +1394,12 @@ export default function MediaLibraryPage() {
             ) : filteredImageGroups.length ? (
               <section className="space-y-4">
                 {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="group border-b border-white/[0.06] pb-3.5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-3">
+                  <section key={group.id} className="group border-b border-white/[0.06] pb-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <button
                           onClick={() => toggleGroupSelect(group.id)}
-                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ${
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ${
                             selectedGroups.has(group.id)
                               ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white'
                               : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30 hover:bg-white/[0.06]'
@@ -1419,220 +1411,159 @@ export default function MediaLibraryPage() {
                           </svg>
                         </button>
                         <div className="min-w-0">
-                        <div className="text-base font-semibold text-white">{group.title}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
-                          <span>{formatDate(group.createdAt)}</span>
-                          <span>/</span>
-                          <span>{group.modelLabel}</span>
-                          <span>/</span>
-                          <span>{group.items.length} variation{group.items.length > 1 ? 's' : ''}</span>
-                        </div>
-                        <div
-                          className="mt-1 max-w-2xl text-[13px] leading-5 text-zinc-500"
-                          style={{ display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                        >
-                          {group.prompt}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                          <button
-                            onClick={() => openPreview(group, 0)}
-                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
-                          >
-                            Open
-                          </button>
-                          {!group.isChatOrigin ? (
-                            <button
-                              onClick={() => openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })}
-                              className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
-                            >
-                              Reuse prompt
-                            </button>
-                          ) : null}
-                          <button
-                            onClick={() => setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })}
-                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
-                          >
-                            Move
-                          </button>
-                          <button
-                            onClick={async () => {
-                              await handleVisibilityChange(group.id, 'public')
-                            }}
-                            className="rounded-full bg-white/[0.05] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.1]"
-                          >
-                            Public
-                          </button>
-                          <button
-                            onClick={async () => {
-                              await handleTrashGroup(group.id, group.title)
-                            }}
-                            className="rounded-full bg-rose-500/[0.1] px-2.5 py-1.5 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/[0.16]"
-                          >
-                            Trash
-                          </button>
-                        </div>
+                          <div className="truncate text-[15px] font-semibold text-white">{group.title}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                            <span>{formatDate(group.createdAt)}</span>
+                            {group.items.length > 1 && (
+                              <>
+                                <span className="text-zinc-600">·</span>
+                                <span>{group.items.length} variations</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-start gap-2">
-                        {group.isChatOrigin ? (
-                          <div className="pt-0.5 text-[13px] text-zinc-400">{group.projectTitle}</div>
-                        ) : (
-                          <Link to={`/projects/${group.projectId}`} className="pt-0.5 text-[13px] text-white transition hover:text-zinc-200">
-                            {group.projectTitle}
-                          </Link>
-                        )}
-                        <div className="relative" data-library-menu-root="true">
-                          <button
-                            onClick={() => setActionMenu((current) => (current === `post:${group.id}` ? null : `post:${group.id}`))}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
-                            title="Image set actions"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                          {actionMenu === `post:${group.id}` ? (
-                            <InlineActionMenu>
-                              <MenuAction
-                                disabled={menuBusy}
-                                onClick={() => {
-                                  setRenameState({ kind: 'post', id: group.id, title: group.title })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Rename
-                              </MenuAction>
-                              {!group.isChatOrigin ? (
-                                <>
-                                  <MenuAction
-                                    onClick={() => {
-                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
-                                      setActionMenu(null)
-                                    }}
-                                  >
-                                    Reuse prompt
-                                  </MenuAction>
-                                  <MenuAction
-                                    onClick={() => {
-                                      openStyleWith(group)
-                                      setActionMenu(null)
-                                    }}
-                                  >
-                                    Reuse style
-                                  </MenuAction>
-                                  <MenuAction
-                                    onClick={() => {
-                                      const leadAsset = group.items[0]
-                                      openComposeWith({
-                                        prompt: group.prompt,
-                                        model: group.model,
-                                        projectId: group.projectId,
-                                        reference_asset_id: leadAsset.id,
-                                        reference_mode: 'optional',
-                                        source: 'library',
-                                      })
-                                      setActionMenu(null)
-                                    }}
-                                  >
-                                    Create variations
-                                  </MenuAction>
-                                  <MenuAction
-                                    onClick={() => {
-                                      openChatWithAsset(group)
-                                      setActionMenu(null)
-                                    }}
-                                  >
-                                    Edit in Chat
-                                  </MenuAction>
-                                  <MenuDivider />
-                                </>
-                              ) : null}
-                              <MenuAction
-                                disabled={menuBusy}
-                                onClick={async () => {
-                                  await handleVisibilityChange(group.id, 'public')
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Set public
-                              </MenuAction>
-                              <MenuAction
-                                disabled={menuBusy}
-                                onClick={async () => {
-                                  await handleVisibilityChange(group.id, 'private')
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Set private
-                              </MenuAction>
-                              <MenuAction
-                                onClick={() => {
-                                  setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Move to project
-                              </MenuAction>
-                              <MenuDivider />
-                              <MenuAction
-                                tone="danger"
-                                disabled={menuBusy}
-                                onClick={async () => {
-                                  await handleTrashGroup(group.id, group.title)
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Move to trash
-                              </MenuAction>
-                            </InlineActionMenu>
-                          ) : null}
-                        </div>
+                      <div className="relative" data-library-menu-root="true">
+                        <button
+                          onClick={() => setActionMenu((current) => (current === `post:${group.id}` ? null : `post:${group.id}`))}
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                          title="Actions"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {actionMenu === `post:${group.id}` ? (
+                          <InlineActionMenu>
+                            <MenuAction
+                              onClick={() => {
+                                openPreview(group, 0)
+                                setActionMenu(null)
+                              }}
+                            >
+                              Open
+                            </MenuAction>
+                            <MenuAction
+                              disabled={menuBusy}
+                              onClick={() => {
+                                setRenameState({ kind: 'post', id: group.id, title: group.title })
+                                setActionMenu(null)
+                              }}
+                            >
+                              Rename
+                            </MenuAction>
+                            {!group.isChatOrigin ? (
+                              <>
+                                <MenuAction
+                                  onClick={() => {
+                                    openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Reuse prompt
+                                </MenuAction>
+                                <MenuAction
+                                  onClick={() => {
+                                    openStyleWith(group)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Reuse style
+                                </MenuAction>
+                                <MenuAction
+                                  onClick={() => {
+                                    const leadAsset = group.items[0]
+                                    openComposeWith({
+                                      prompt: group.prompt,
+                                      model: group.model,
+                                      projectId: group.projectId,
+                                      reference_asset_id: leadAsset.id,
+                                      reference_mode: 'optional',
+                                      source: 'library',
+                                    })
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Create variations
+                                </MenuAction>
+                                <MenuAction
+                                  onClick={() => {
+                                    openChatWithAsset(group)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Edit in Chat
+                                </MenuAction>
+                                <MenuDivider />
+                              </>
+                            ) : null}
+                            <MenuAction
+                              onClick={() => {
+                                setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })
+                                setActionMenu(null)
+                              }}
+                            >
+                              Move to project
+                            </MenuAction>
+                            <MenuDivider />
+                            <MenuAction
+                              tone="danger"
+                              disabled={menuBusy}
+                              onClick={async () => {
+                                await handleTrashGroup(group.id, group.title)
+                                setActionMenu(null)
+                              }}
+                            >
+                              Move to trash
+                            </MenuAction>
+                          </InlineActionMenu>
+                        ) : null}
                       </div>
                     </div>
 
                     {activeView === 'grid' ? (
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      <div className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                         {group.items.map((asset) => (
-                          <div key={asset.id} className="space-y-1.5">
-                            <button
-                              onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
-                              className="block w-full overflow-hidden rounded-[20px] bg-white/[0.03] text-left"
-                            >
-                              <ProtectedAssetImage
-                                sources={assetPreviewSources(asset)}
-                                alt={assetDisplayTitle(asset)}
-                                className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
-                                fallbackClassName="flex aspect-[4/5] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                              />
-                            </button>
-                            <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
-                              <span>V{variantOrder(asset) + 1}</span>
-                              <span className="truncate">{assetDisplayTitle(asset)}</span>
-                            </div>
-                          </div>
+                          <button
+                            key={asset.id}
+                            onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
+                            className="group/card relative overflow-hidden rounded-[18px] bg-white/[0.03] text-left ring-1 ring-white/[0.05] transition-all duration-300 hover:ring-white/[0.12] hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] hover:-translate-y-0.5"
+                          >
+                            <ProtectedAssetImage
+                              sources={assetPreviewSources(asset)}
+                              alt={assetDisplayTitle(asset)}
+                              className="aspect-square w-full object-cover transition duration-500 group-hover/card:scale-[1.04]"
+                              fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                            />
+                            {group.items.length > 1 && (
+                              <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white/80 backdrop-blur-sm">
+                                V{variantOrder(asset) + 1}
+                              </div>
+                            )}
+                          </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-4 divide-y divide-white/[0.06]">
+                      <div className="mt-3 space-y-1">
                         {group.items.map((asset) => (
-                          <div key={asset.id} className="flex items-center gap-4 py-3">
-                            <button
-                              onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
-                              className="block h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03] text-left"
-                            >
+                          <button
+                            key={asset.id}
+                            onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
+                            className="flex w-full items-center gap-4 rounded-xl px-2 py-2.5 text-left transition-all duration-200 hover:bg-white/[0.03]"
+                          >
+                            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.06]">
                               <ProtectedAssetImage
                                 sources={assetPreviewSources(asset)}
                                 alt={assetDisplayTitle(asset)}
                                 className="h-full w-full object-cover"
                                 fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                               />
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-white">{assetDisplayTitle(asset)}</div>
-                              <div className="mt-1 text-xs text-zinc-500">Variation {variantOrder(asset) + 1}</div>
                             </div>
-                            <Link to={`/projects/${asset.project_id}`} className="text-sm text-white transition hover:text-zinc-200">
-                              Open
-                            </Link>
-                          </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[13px] font-medium text-white">{assetDisplayTitle(asset)}</div>
+                              {group.items.length > 1 && (
+                                <div className="mt-0.5 text-[11px] text-zinc-500">Variation {variantOrder(asset) + 1}</div>
+                              )}
+                            </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -1646,7 +1577,7 @@ export default function MediaLibraryPage() {
             {/* Bulk action bar */}
             {selectedGroups.size > 0 && (
               <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
-                <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-[#16181f]/95 px-6 py-3.5 shadow-[0_8px_48px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.1] backdrop-blur-xl">
+                <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-[#16181f]/95 px-6 py-3.5 shadow-[0_8px_48px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.1] backdrop-blur-xl" style={{ boxShadow: 'var(--border-glow), 0 8px 48px rgba(0,0,0,0.7)' }}>
                   <span className="text-sm font-semibold text-white">{selectedGroups.size} selected</span>
                   <div className="h-4 w-px bg-white/[0.12]" />
                   <button
@@ -1890,7 +1821,7 @@ export default function MediaLibraryPage() {
               )
             ) : (
               <section className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(255,255,255,0.04)] backdrop-blur-md mb-5">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(124,58,237,0.12)] backdrop-blur-md mb-5">
                   <Folder className="h-7 w-7" />
                 </div>
                 <h3 className="text-lg font-bold text-white tracking-tight">No projects yet</h3>

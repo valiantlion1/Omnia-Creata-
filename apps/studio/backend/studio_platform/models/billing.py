@@ -19,9 +19,22 @@ class CreditEntryType(str, Enum):
 
 
 class CheckoutKind(str, Enum):
+    CREATOR_MONTHLY = "creator_monthly"
     PRO_MONTHLY = "pro_monthly"
-    TOP_UP_SMALL = "top_up_small"
-    TOP_UP_LARGE = "top_up_large"
+    CREDIT_PACK_SMALL = "credit_pack_small"
+    CREDIT_PACK_LARGE = "credit_pack_large"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            legacy_map = {
+                "starter_monthly": cls.CREATOR_MONTHLY,
+                "top_up_small": cls.CREDIT_PACK_SMALL,
+                "top_up_large": cls.CREDIT_PACK_LARGE,
+            }
+            return legacy_map.get(normalized)
+        return None
 
 
 class CreditLedgerEntry(BaseModel):
@@ -37,7 +50,7 @@ class CreditLedgerEntry(BaseModel):
 
 class BillingWebhookReceipt(BaseModel):
     id: str
-    provider: str = "lemonsqueezy"
+    provider: str = "paddle"
     event_name: str
     resource_type: str
     resource_id: str

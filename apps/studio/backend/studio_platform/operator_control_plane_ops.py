@@ -52,6 +52,11 @@ def build_operator_studio_model_catalog(
                         identity_plan=IdentityPlan.FREE,
                         providers=providers,
                     ),
+                    "creator": build_model_route_preview(
+                        model=model,
+                        identity_plan=IdentityPlan.CREATOR,
+                        providers=providers,
+                    ),
                     "pro": build_model_route_preview(
                         model=model,
                         identity_plan=IdentityPlan.PRO,
@@ -88,6 +93,10 @@ def build_operator_surface_matrix(
                 "free_route": {
                     "provider": free_route["planned_provider"],
                     "pricing_lane": free_route["pricing_lane"],
+                },
+                "creator_route": {
+                    "provider": model["route_previews"]["creator"]["planned_provider"],
+                    "pricing_lane": model["route_previews"]["creator"]["pricing_lane"],
                 },
                 "pro_route": {
                     "provider": pro_route["planned_provider"],
@@ -186,6 +195,7 @@ def _build_chat_surface_matrix_entry(
         requested_model=requested_model,
         mode=mode,
         attachments=(),
+        identity_plan=IdentityPlan.PRO if premium_chat else IdentityPlan.CREATOR,
         premium_chat=premium_chat,
         prompt_profile=prompt_profile,
         detail_score=detail_score,

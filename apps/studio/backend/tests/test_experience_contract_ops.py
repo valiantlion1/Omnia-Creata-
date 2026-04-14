@@ -152,3 +152,22 @@ def test_build_model_route_preview_marks_unavailable_when_no_provider_is_configu
 
     assert preview["planned_provider"] is None
     assert preview["render_experience"]["state"] == "unavailable"
+
+
+def test_build_model_route_preview_prefers_runware_for_wallet_backed_free_accounts() -> None:
+    registry = _registry_with(
+        _FakeProvider(name="runware", rollout_tier="primary", billable=True),
+        _FakeProvider(name="pollinations", rollout_tier="fallback", billable=False),
+        _FakeProvider(name="huggingface", rollout_tier="fallback", billable=False),
+    )
+
+    preview = build_model_route_preview(
+        model=_model(),
+        identity_plan=IdentityPlan.FREE,
+        providers=registry,
+        wallet_backed=True,
+    )
+
+    assert preview["planned_provider"] == "runware"
+    assert preview["pricing_lane"] == "draft"
+    assert preview["render_experience"]["state"] == "ready"

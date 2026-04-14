@@ -108,6 +108,7 @@ class Settings(BaseSettings):
 
     # Model Configuration
     huggingface_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    gemini_free_model: str = "gemini-2.5-flash-lite"
     gemini_model: str = "gemini-2.5-flash"
     gemini_premium_model: str = "gemini-2.5-pro"
     openrouter_model: str = "google/gemini-2.5-flash"
@@ -117,15 +118,15 @@ class Settings(BaseSettings):
     openai_image_draft_model: str = "gpt-image-1-mini"
     openai_image_model: str = "gpt-image-1.5"
     openai_image_premium_qa_enabled: bool = False
-    chat_primary_provider: str = "openrouter"
-    chat_fallback_provider: str = "openai"
-    protected_beta_chat_provider: str = "openai"
-    protected_beta_image_provider: str = "openai"
+    chat_primary_provider: str = "gemini"
+    chat_fallback_provider: str = "openrouter"
+    protected_beta_chat_provider: str = "gemini"
+    protected_beta_image_provider: str = "runware"
     protected_beta_image_require_final_lane: bool = False
-    gemini_service_tier: str = "free"
+    gemini_service_tier: str = "paid"
     openrouter_service_tier: str = "paid"
     openai_service_tier: str = "paid"
-    generation_provider_strategy: str = "free-first"
+    generation_provider_strategy: str = "managed-first"
     provider_spend_guardrails_enabled: bool = True
     provider_spend_emergency_disabled: str = ""
     billable_provider_daily_soft_cap_usd: Optional[float] = None
@@ -147,6 +148,17 @@ class Settings(BaseSettings):
     public_paid_provider_economics_ready: bool = False
     public_paid_provider_economics_ready_build: Optional[str] = None
     public_paid_provider_economics_ready_note: Optional[str] = None
+    creator_monthly_credits: int = 400
+    pro_monthly_credits: int = 1200
+    credit_pack_small_credits: int = 200
+    credit_pack_large_credits: int = 800
+    creator_monthly_price_usd: float = 12.0
+    pro_monthly_price_usd: float = 24.0
+    credit_pack_small_price_usd: float = 8.0
+    credit_pack_large_price_usd: float = 24.0
+    free_account_chat_message_limit: int = 12
+    creator_chat_message_limit: int = 120
+    pro_chat_message_limit: int = 200
 
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
@@ -195,7 +207,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 10
 
-    # LemonSqueezy Configuration
+    # Paddle Configuration
+    paddle_api_key: Optional[SecretStr] = None
+    paddle_webhook_secret: Optional[SecretStr] = None
+    paddle_checkout_base_url: Optional[str] = None
+    paddle_environment: str = "sandbox"
+
+    # Legacy LemonSqueezy Configuration (deprecated; preserved for migration reads only)
     lemonsqueezy_api_key: Optional[SecretStr] = None
     lemonsqueezy_webhook_secret: Optional[SecretStr] = None
     lemonsqueezy_store_id: Optional[str] = None
@@ -356,12 +374,31 @@ class Settings(BaseSettings):
         "generation_maintenance_interval_seconds",
         "owner_cost_telemetry_window_days",
         "owner_cost_telemetry_recent_event_limit",
+        "creator_monthly_credits",
+        "pro_monthly_credits",
+        "credit_pack_small_credits",
+        "credit_pack_large_credits",
+        "free_account_chat_message_limit",
+        "creator_chat_message_limit",
+        "pro_chat_message_limit",
     )
     @classmethod
     def validate_generation_runtime_limits(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("Generation runtime limits must be positive")
         return v
+
+    @field_validator(
+        "creator_monthly_price_usd",
+        "pro_monthly_price_usd",
+        "credit_pack_small_price_usd",
+        "credit_pack_large_price_usd",
+    )
+    @classmethod
+    def validate_catalog_prices(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("Catalog prices cannot be negative")
+        return round(float(value), 2)
 
     @field_validator("generation_runtime_mode")
     @classmethod
@@ -425,6 +462,14 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"free-first", "balanced", "managed-first"}:
             raise ValueError("GENERATION_PROVIDER_STRATEGY must be one of: free-first, balanced, managed-first")
+        return normalized
+
+    @field_validator("paddle_environment")
+    @classmethod
+    def validate_paddle_environment(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"sandbox", "production"}:
+            raise ValueError("PADDLE_ENVIRONMENT must be either sandbox or production")
         return normalized
 
     @model_validator(mode="after")

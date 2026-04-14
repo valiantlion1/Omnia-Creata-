@@ -26,7 +26,7 @@ class ShellService:
         compose_draft = await self.service.projects.get_or_create_draft_project(identity.id, surface="compose")
         chat_draft = await self.service.projects.get_or_create_draft_project(identity.id, surface="chat")
         models = [
-            self.serialize_model_catalog_for_identity(identity=identity, model=model)
+            self.serialize_model_catalog_for_identity(identity=identity, model=model, billing_state=billing_state)
             for model in await self.list_models_for_identity(identity)
         ]
         return build_settings_bootstrap_payload(
@@ -55,15 +55,17 @@ class ShellService:
         *,
         identity: OmniaIdentity,
         model: ModelCatalogEntry,
+        billing_state=None,
     ) -> dict[str, Any]:
         return serialize_model_catalog_for_identity(
             identity=identity,
             model=model,
             providers=self.service.providers,
+            billing_state=billing_state,
         )
 
-    def validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
-        validate_model_for_identity(identity=identity, model=model)
+    def validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry, *, billing_state=None) -> None:
+        validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
 
     def validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
         validate_dimensions_for_model(width=width, height=height, model=model)

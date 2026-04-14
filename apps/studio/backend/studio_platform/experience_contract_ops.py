@@ -90,6 +90,7 @@ def build_model_route_preview(
     providers: ProviderRegistry,
     workflow: str = "text_to_image",
     has_reference_image: bool = False,
+    wallet_backed: bool = False,
 ) -> dict[str, Any]:
     routing_decision = providers.plan_generation_route(
         plan=identity_plan,
@@ -97,6 +98,7 @@ def build_model_route_preview(
         model_id=model.id,
         workflow=workflow,
         has_reference_image=has_reference_image,
+        wallet_backed=wallet_backed,
     )
     provider_estimated_cost = providers.estimate_generation_cost(
         provider_name=routing_decision.selected_provider,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .billing_ops import BillingStateSnapshot
 from .creative_profile_ops import attach_creative_profile, resolve_creative_profile
 from .experience_contract_ops import build_model_route_preview
 from .models import IdentityPlan, ModelCatalogEntry, OmniaIdentity
@@ -36,7 +37,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         id="realvis-xl",
         label="Premium",
         description="Advanced engine tuned for photorealism and cinematic renders.",
-        min_plan=IdentityPlan.PRO,
+        min_plan=IdentityPlan.CREATOR,
         credit_cost=12,
         estimated_cost=0.015,
         max_width=1536,
@@ -83,7 +84,9 @@ def serialize_model_catalog_for_identity(
     identity: OmniaIdentity,
     model: ModelCatalogEntry,
     providers,
+    billing_state: BillingStateSnapshot | None = None,
 ) -> dict[str, Any]:
+    effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
     creative_profile = resolve_creative_profile(
         model_id=model.id,
         pricing_lane=None,
@@ -91,8 +94,9 @@ def serialize_model_catalog_for_identity(
     )
     route_preview = build_model_route_preview(
         model=model,
-        identity_plan=identity.plan,
+        identity_plan=effective_plan,
         providers=providers,
+        wallet_backed=effective_plan == IdentityPlan.FREE and max(int(identity.extra_credits or 0), 0) > 0,
     )
     serialized = model.model_dump(mode="json")
     serialized["label"] = creative_profile.label
@@ -106,10 +110,19 @@ def serialize_model_catalog_for_identity(
     return serialized
 
 
-def validate_model_for_identity(*, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
-    if identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO:
+def validate_model_for_identity(
+    *,
+    identity: OmniaIdentity,
+    model: ModelCatalogEntry,
+    billing_state: BillingStateSnapshot | None = None,
+) -> None:
+    effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
+    if effective_plan == IdentityPlan.FREE and model.min_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}:
+        required_label = "Creator" if model.min_plan == IdentityPlan.CREATOR else "Pro"
+        raise PermissionError(f"This model requires {required_label}")
+    if effective_plan == IdentityPlan.CREATOR and model.min_plan == IdentityPlan.PRO:
         raise PermissionError("This model requires Pro")
-    if identity.plan == IdentityPlan.GUEST:
+    if effective_plan == IdentityPlan.GUEST:
         raise PermissionError("Guests cannot generate images")
 
 

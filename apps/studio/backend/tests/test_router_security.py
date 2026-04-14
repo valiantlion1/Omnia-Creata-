@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import hmac
+import json
 
 import httpx
 import pytest
 from fastapi import FastAPI, Request
+from pydantic import SecretStr
 
 from config.env import Environment, get_settings
 import studio_platform.router as router_module
@@ -1113,9 +1117,9 @@ async def test_billing_checkout_route_refuses_demo_activation_outside_developmen
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
     original_environment = settings.environment
-    original_store_id = settings.lemonsqueezy_store_id
+    original_checkout_url = settings.paddle_checkout_base_url
     settings.environment = Environment.STAGING
-    settings.lemonsqueezy_store_id = None
+    settings.paddle_checkout_base_url = None
 
     transport = httpx.ASGITransport(app=app)
     try:
@@ -1130,7 +1134,7 @@ async def test_billing_checkout_route_refuses_demo_activation_outside_developmen
         assert response.json() == {"detail": "Billing checkout is not configured for this environment"}
     finally:
         settings.environment = original_environment
-        settings.lemonsqueezy_store_id = original_store_id
+        settings.paddle_checkout_base_url = original_checkout_url
         await service.shutdown()
 
 
@@ -1220,10 +1224,80 @@ async def test_demo_login_refuses_pro_plan_outside_development(tmp_path: Path) -
             )
 
         assert response.status_code == 403
-        assert response.json() == {"detail": "Demo Pro login is only available in local development."}
+        assert response.json() == {"detail": "Demo login is only available in local development."}
     finally:
         settings.environment = original_environment
         settings.enable_demo_auth = original_enable_demo_auth
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_demo_login_refuses_even_free_plan_outside_development(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enable_demo_auth = settings.enable_demo_auth
+    settings.environment = Environment.STAGING
+    settings.enable_demo_auth = True
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/demo-login",
+                json={
+                    "email": "demo@example.com",
+                    "display_name": "Demo User",
+                    "plan": "free",
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Demo login is only available in local development."}
+    finally:
+        settings.environment = original_environment
+        settings.enable_demo_auth = original_enable_demo_auth
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_secret = settings.paddle_webhook_secret
+    settings.paddle_webhook_secret = SecretStr("whsec_test")
+    received_payloads: list[dict] = []
+
+    async def fake_process_paddle_webhook(payload: dict) -> None:
+        received_payloads.append(payload)
+
+    monkeypatch.setattr(service, "process_paddle_webhook", fake_process_paddle_webhook)
+
+    payload = {"event_id": "evt_1", "event_type": "transaction.completed", "data": {"id": "txn-1", "type": "transaction"}}
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    timestamp = "1713139200"
+    signature = hmac.new(b"whsec_test", timestamp.encode("utf-8") + b":" + payload_bytes, hashlib.sha256).hexdigest()
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/webhooks/paddle",
+                content=payload_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "Paddle-Signature": f"ts={timestamp};h1={signature}",
+                },
+            )
+
+        assert response.status_code == 200
+        assert received_payloads == [payload]
+    finally:
+        settings.paddle_webhook_secret = original_secret
         await service.shutdown()
 
 
@@ -1279,6 +1353,68 @@ async def test_revoke_share_route_returns_sanitized_record(
         assert response.status_code == 200
         assert response.json()["share"]["id"] == "share-1"
         assert "token" not in response.json()["share"]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_persona_create_route_uses_rate_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/personas",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "name": "Studio Critic",
+                "description": "Focused reviewer",
+                "system_prompt": "Be sharp and useful.",
+            },
+        )
+
+    try:
+        assert response.status_code == 201
+        assert any("personas:create" in key and limit == 12 for key, limit, _ in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_export_route_uses_ip_rate_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_list_public_posts(sort: str, viewer_identity_id: str | None):
+        return [{"id": "post-1", "thumbnail_url": "https://example.com/image.png", "prompt": "sunset", "owner_display_name": "User", "like_count": 4}]
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.list_public_posts = fake_list_public_posts  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/public/export")
+
+    try:
+        assert response.status_code == 200
+        assert any("public:export" in key and limit == 20 and window == 60 for key, limit, window in calls)
     finally:
         await service.shutdown()
 

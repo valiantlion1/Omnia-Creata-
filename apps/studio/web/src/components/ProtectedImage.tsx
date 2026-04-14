@@ -63,23 +63,18 @@ export function ProtectedImage({
 /** Standalone watermark badge — can be used as an overlay inside any relative container */
 export function WatermarkBadge({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   return (
-    <div
-      className={`pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1.5 rounded-full bg-black/65 backdrop-blur-sm ring-1 ring-white/[0.08] ${
-        size === 'md' ? 'px-3 py-1.5' : 'px-2 py-1'
+    <img
+      src="/omnia-crest.png"
+      alt=""
+      draggable={false}
+      className={`pointer-events-none absolute bottom-2.5 right-2.5 select-none ${
+        size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
       }`}
-    >
-      <img
-        src="/omnia-crest.png"
-        alt=""
-        draggable={false}
-        className={size === 'md' ? 'h-5 w-5' : 'h-3.5 w-3.5'}
-        style={{ pointerEvents: 'none' } as CSSProperties}
-      />
-      <span
-        className={`font-bold tracking-[0.1em] text-white/60 ${size === 'md' ? 'text-[10px]' : 'text-[8px]'}`}
-      >
-        OMNIA
-      </span>
-    </div>
+      style={{
+        pointerEvents: 'none',
+        opacity: 0.4,
+        filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))',
+      } as CSSProperties}
+    />
   )
 }

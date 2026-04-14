@@ -60,13 +60,16 @@ It owns:
 
 Studio launches as one creative account contract.
 
-Current package ids:
-- `Starter`
+Current launch catalog shape:
+- `Free Account`
+- `Creator`
 - `Pro`
-- `Credit Top-up`
+- `Credit Packs`
 
 Rules:
 - Create and Chat share one billing and entitlement truth
+- subscription tier and wallet balance are separate truths
+- free accounts may buy credits, but free image generation is not included at launch
 - account, plan, and credit logic stay server-authoritative
 - exact package numbers come from the live catalog, not static docs copy
 - user-facing copy sells product quality, not provider names

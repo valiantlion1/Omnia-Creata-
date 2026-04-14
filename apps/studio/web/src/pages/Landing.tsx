@@ -48,13 +48,13 @@ export default function LandingPage() {
 
       {/* Hero */}
       <main className="relative z-10 mx-auto flex max-w-[1000px] flex-col items-center justify-center px-6 pb-24 pt-24 text-center md:px-8 md:pt-32">
-        <div className="mb-8 flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light)/0.3)] bg-[rgb(var(--primary-light)/0.08)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--primary-light))] backdrop-blur-md">
+        <div className="mb-8 flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light)/0.3)] bg-[rgb(var(--primary-light)/0.08)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--primary-light))] backdrop-blur-md animate-pulse" style={{ animationDuration: '3s' }}>
           <Sparkles className="h-3.5 w-3.5" />
           <span>Protected Beta</span>
         </div>
 
         <h1
-          className="mb-6 text-4xl font-black leading-[1.08] tracking-tighter sm:text-5xl md:text-6xl lg:text-8xl"
+          className="mb-6 text-4xl font-black leading-[1.08] tracking-tighter font-display sm:text-5xl md:text-6xl lg:text-8xl"
           style={{
             background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 100%)',
             WebkitBackgroundClip: 'text',
@@ -75,7 +75,7 @@ export default function LandingPage() {
         <div className="flex flex-col items-center gap-4 sm:flex-row">
           <button
             onClick={() => navigate('/signup')}
-            className="group flex items-center gap-2.5 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-8 py-4 text-base font-bold shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all hover:scale-105 active:scale-[0.98]"
+            className="group flex items-center gap-2.5 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-8 py-4 text-base font-bold shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all hover:scale-105 hover:shadow-[0_0_50px_rgba(124,58,237,0.4),0_0_80px_-16px_rgba(99,102,241,0.3)] active:scale-[0.98]"
           >
             Start Creating Free
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
@@ -100,7 +100,7 @@ export default function LandingPage() {
               { icon: MessageSquare, label: 'Chat', desc: 'Creative copilot' },
               { icon: ImageIcon, label: 'Library', desc: 'Manage outputs' },
             ].map((item) => (
-              <div key={item.label} className="flex flex-col items-center gap-3 rounded-[20px] border border-white/[0.04] bg-white/[0.02] p-5 transition hover:border-white/[0.08] hover:bg-white/[0.04]">
+              <div key={item.label} className="flex flex-col items-center gap-3 rounded-[20px] border border-white/[0.04] bg-white/[0.02] p-5 transition hover:border-white/[0.08] hover:bg-white/[0.04]" style={{ boxShadow: 'var(--border-glow), inset 0 0 40px -20px rgba(124,58,237,0.06)' }}>
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06] text-zinc-300">
                   <item.icon className="h-5 w-5" />
                 </div>
@@ -120,7 +120,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">What makes Studio different</h2>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]">
+            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]" style={{ boxShadow: 'var(--border-glow)' }}>
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(var(--primary))]/15 text-[rgb(var(--primary-light))]">
                 <Layers className="h-7 w-7" />
               </div>
@@ -128,7 +128,7 @@ export default function LandingPage() {
               <p className="text-sm leading-relaxed text-zinc-400">Move between Explore, Create, Chat, and Library with one signed-in creative workspace.</p>
             </div>
 
-            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]">
+            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]" style={{ boxShadow: 'var(--border-glow)' }}>
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(var(--accent))]/15 text-[rgb(var(--accent-light))]">
                 <ShieldCheck className="h-7 w-7" />
               </div>
@@ -136,7 +136,7 @@ export default function LandingPage() {
               <p className="text-sm leading-relaxed text-zinc-400">Signed-in routes, sharing, and owner diagnostics are hardened to behave honestly before broader rollout.</p>
             </div>
 
-            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]">
+            <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]" style={{ boxShadow: 'var(--border-glow)' }}>
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
                 <Zap className="h-7 w-7" />
               </div>
@@ -151,7 +151,7 @@ export default function LandingPage() {
       <section className="relative z-10 border-t border-white/[0.04] bg-[#060608] py-20">
         <div className="mx-auto max-w-[700px] px-6 text-center">
           <h2
-            className="text-3xl font-bold tracking-tight md:text-4xl"
+            className="text-3xl font-bold tracking-tight md:text-4xl font-display"
             style={{
               background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 100%)',
               WebkitBackgroundClip: 'text',

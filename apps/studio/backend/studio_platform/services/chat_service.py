@@ -376,6 +376,7 @@ class ChatService:
             history=history,
             content=llm_input_content,
             attachments=attachments,
+            identity_plan=identity.plan,
             premium_chat=premium_chat,
             intent_kind=intent.kind,
             prompt_profile=intent.prompt_profile,

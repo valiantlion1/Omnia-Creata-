@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
-from config.env import get_settings
+from config.env import Environment, get_settings, reveal_secret
 
 from .asset_import_ops import parse_data_url_image
 from .asset_storage import ResolvedAssetDelivery, build_asset_storage_registry
@@ -89,62 +89,82 @@ class GenerationCapacityError(ValueError):
         self.queue_full = queue_full
         self.estimated_wait_seconds = estimated_wait_seconds
 
-PLAN_CATALOG: Dict[IdentityPlan, PlanCatalogEntry] = {
-    IdentityPlan.GUEST: PlanCatalogEntry(
-        id=IdentityPlan.GUEST,
-        label="Guest",
-        monthly_credits=0,
-        queue_priority="browse-only",
-        max_incomplete_generations=0,
-        generation_submit_window_seconds=60,
-        generation_submit_limit=0,
-        max_resolution="preview only",
-        can_access_chat=False,
-        premium_chat=False,
-        chat_modes=[],
-        chat_message_limit=0,
-        max_chat_attachments=0,
-        clean_exports=False,
-        share_links=False,
-        can_generate=False,
-    ),
-    IdentityPlan.FREE: PlanCatalogEntry(
-        id=IdentityPlan.FREE,
-        label="Starter",
-        monthly_credits=60,
-        queue_priority="standard",
-        max_incomplete_generations=2,
-        generation_submit_window_seconds=60,
-        generation_submit_limit=4,
-        max_resolution="1024x1024",
-        can_access_chat=True,
-        premium_chat=False,
-        chat_modes=["think"],
-        chat_message_limit=25,
-        max_chat_attachments=0,
-        clean_exports=False,
-        share_links=False,
-        can_generate=True,
-    ),
-    IdentityPlan.PRO: PlanCatalogEntry(
-        id=IdentityPlan.PRO,
-        label="Pro",
-        monthly_credits=1200,
-        queue_priority="priority",
-        max_incomplete_generations=6,
-        generation_submit_window_seconds=60,
-        generation_submit_limit=12,
-        max_resolution="1536x1536",
-        can_access_chat=True,
-        premium_chat=True,
-        chat_modes=["think", "vision", "edit"],
-        chat_message_limit=200,
-        max_chat_attachments=4,
-        clean_exports=True,
-        share_links=True,
-        can_generate=True,
-    ),
-}
+def build_plan_catalog(settings=None) -> Dict[IdentityPlan, PlanCatalogEntry]:
+    settings = settings or get_settings()
+    return {
+        IdentityPlan.GUEST: PlanCatalogEntry(
+            id=IdentityPlan.GUEST,
+            label="Guest",
+            monthly_credits=0,
+            queue_priority="browse-only",
+            max_incomplete_generations=0,
+            generation_submit_window_seconds=60,
+            generation_submit_limit=0,
+            max_resolution="preview only",
+            can_access_chat=False,
+            premium_chat=False,
+            chat_modes=[],
+            chat_message_limit=0,
+            max_chat_attachments=0,
+            clean_exports=False,
+            share_links=False,
+            can_generate=False,
+        ),
+        IdentityPlan.FREE: PlanCatalogEntry(
+            id=IdentityPlan.FREE,
+            label="Free Account",
+            monthly_credits=0,
+            queue_priority="standard",
+            max_incomplete_generations=1,
+            generation_submit_window_seconds=60,
+            generation_submit_limit=2,
+            max_resolution="1024x1024",
+            can_access_chat=True,
+            premium_chat=False,
+            chat_modes=["think"],
+            chat_message_limit=settings.free_account_chat_message_limit,
+            max_chat_attachments=0,
+            clean_exports=False,
+            share_links=False,
+            can_generate=True,
+        ),
+        IdentityPlan.CREATOR: PlanCatalogEntry(
+            id=IdentityPlan.CREATOR,
+            label="Creator",
+            monthly_credits=settings.creator_monthly_credits,
+            queue_priority="standard",
+            max_incomplete_generations=4,
+            generation_submit_window_seconds=60,
+            generation_submit_limit=8,
+            max_resolution="1024x1024",
+            can_access_chat=True,
+            premium_chat=False,
+            chat_modes=["think", "vision"],
+            chat_message_limit=settings.creator_chat_message_limit,
+            max_chat_attachments=2,
+            clean_exports=False,
+            share_links=True,
+            can_generate=True,
+        ),
+        IdentityPlan.PRO: PlanCatalogEntry(
+            id=IdentityPlan.PRO,
+            label="Pro",
+            monthly_credits=settings.pro_monthly_credits,
+            queue_priority="priority",
+            max_incomplete_generations=6,
+            generation_submit_window_seconds=60,
+            generation_submit_limit=12,
+            max_resolution="1536x1536",
+            can_access_chat=True,
+            premium_chat=True,
+            chat_modes=["think", "vision", "edit"],
+            chat_message_limit=settings.pro_chat_message_limit,
+            max_chat_attachments=4,
+            clean_exports=True,
+            share_links=True,
+            can_generate=True,
+        ),
+    }
 
 PRESET_CATALOG: List[Dict[str, Any]] = [
     {
@@ -167,70 +187,124 @@ PRESET_CATALOG: List[Dict[str, Any]] = [
     },
 ]
 
-CHECKOUT_CATALOG: Dict[CheckoutKind, Dict[str, Any]] = {
-    CheckoutKind.PRO_MONTHLY: {
-        "label": "Pro monthly",
-        "credits": 1200,
-        "price_usd": 18,
-        "plan": IdentityPlan.PRO,
-    },
-    CheckoutKind.TOP_UP_SMALL: {
-        "label": "Top-up 200",
-        "credits": 200,
-        "price_usd": 8,
-        "plan": None,
-    },
-    CheckoutKind.TOP_UP_LARGE: {
-        "label": "Top-up 800",
-        "credits": 800,
-        "price_usd": 24,
-        "plan": None,
-    },
-}
+def build_checkout_catalog(settings=None) -> Dict[CheckoutKind, Dict[str, Any]]:
+    settings = settings or get_settings()
+    return {
+        CheckoutKind.CREATOR_MONTHLY: {
+            "label": "Creator monthly",
+            "credits": settings.creator_monthly_credits,
+            "price_usd": settings.creator_monthly_price_usd,
+            "plan": IdentityPlan.CREATOR,
+            "billing_provider": "paddle",
+            "kind_group": "subscription",
+        },
+        CheckoutKind.PRO_MONTHLY: {
+            "label": "Pro monthly",
+            "credits": settings.pro_monthly_credits,
+            "price_usd": settings.pro_monthly_price_usd,
+            "plan": IdentityPlan.PRO,
+            "billing_provider": "paddle",
+            "kind_group": "subscription",
+        },
+        CheckoutKind.CREDIT_PACK_SMALL: {
+            "label": f"Credit pack {settings.credit_pack_small_credits}",
+            "credits": settings.credit_pack_small_credits,
+            "price_usd": settings.credit_pack_small_price_usd,
+            "plan": None,
+            "billing_provider": "paddle",
+            "kind_group": "credit_pack",
+        },
+        CheckoutKind.CREDIT_PACK_LARGE: {
+            "label": f"Credit pack {settings.credit_pack_large_credits}",
+            "credits": settings.credit_pack_large_credits,
+            "price_usd": settings.credit_pack_large_price_usd,
+            "plan": None,
+            "billing_provider": "paddle",
+            "kind_group": "credit_pack",
+        },
+    }
 
-PUBLIC_PLAN_CATALOG: Dict[IdentityPlan, Dict[str, Any]] = {
-    IdentityPlan.FREE: {
-        "public_id": "starter",
-        "summary": "Launch entry access for lighter Create and Chat usage on the same account contract.",
-        "feature_summary": [
-            "Starter monthly credit allowance",
-            "Create and Chat on one identity",
-            "Projects, library, and saved styles",
-            "Upgrade to Pro or add credit top-ups as usage grows",
-        ],
-        "price_usd": 0,
-        "billing_period": None,
-        "checkout_kind": None,
-        "recommended": False,
-        "availability": "included",
-    },
-    IdentityPlan.PRO: {
-        "public_id": "pro",
-        "summary": "Primary paid plan for heavier Create and Chat usage with higher limits and premium chat lanes.",
-        "feature_summary": [
-            "Higher monthly credit allowance",
-            "Priority queue and higher generation caps",
-            "Premium chat modes and image-guided turns",
-            "Clean exports and share links",
-        ],
-        "price_usd": CHECKOUT_CATALOG[CheckoutKind.PRO_MONTHLY]["price_usd"],
-        "billing_period": "month",
-        "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
-        "recommended": True,
-        "availability": "self_serve",
-    },
-}
 
-PUBLIC_TOP_UP_GROUP: Dict[str, Any] = {
-    "id": "top_up",
-    "label": "Credit Top-up",
-    "summary": "Add extra credits without changing your base plan when a project needs more starts.",
-    "feature_summary": [
-        "One-off credit packs",
-        "Keeps the same Create and Chat entitlement contract",
-        "Useful for spikes, retries, and launch-week bursts",
-    ],
-}
+def build_public_plan_catalog(
+    settings=None,
+    *,
+    checkout_catalog: Dict[CheckoutKind, Dict[str, Any]] | None = None,
+) -> Dict[IdentityPlan, Dict[str, Any]]:
+    settings = settings or get_settings()
+    checkout_catalog = checkout_catalog or build_checkout_catalog(settings)
+    return {
+        IdentityPlan.FREE: {
+            "public_id": "free_account",
+            "summary": "Free accounts get limited Studio chat and may buy wallet credits, but image generation is never bundled for free at launch.",
+            "feature_summary": [
+                "Limited Studio AI chat",
+                "No bundled image generation credits",
+                "Can buy wallet credit packs without a subscription",
+                "Projects, library, and saved styles stay on the same account",
+            ],
+            "price_usd": 0,
+            "billing_period": None,
+            "checkout_kind": None,
+            "recommended": False,
+            "availability": "included",
+        },
+        IdentityPlan.CREATOR: {
+            "public_id": "creator",
+            "summary": "Paid everyday plan for Create plus Chat with recurring credits and a durable wallet-backed workflow.",
+            "feature_summary": [
+                "Recurring monthly credits",
+                "Standard Studio chat",
+                "Core Create, Library, Project, and share workflow",
+                "Add wallet credit packs for heavier bursts",
+            ],
+            "price_usd": checkout_catalog[CheckoutKind.CREATOR_MONTHLY]["price_usd"],
+            "billing_period": "month",
+            "checkout_kind": CheckoutKind.CREATOR_MONTHLY.value,
+            "recommended": False,
+            "availability": "self_serve",
+        },
+        IdentityPlan.PRO: {
+            "public_id": "pro",
+            "summary": "Premium subscription for higher limits, premium chat lanes, and the strongest Studio execution path.",
+            "feature_summary": [
+                "Larger recurring monthly credits",
+                "Premium chat lanes",
+                "Higher generation and queue limits",
+                "Clean exports and fuller sharing access",
+            ],
+            "price_usd": checkout_catalog[CheckoutKind.PRO_MONTHLY]["price_usd"],
+            "billing_period": "month",
+            "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
+            "recommended": True,
+            "availability": "self_serve",
+        },
+    }
+
+
+def build_public_credit_pack_group(settings=None) -> Dict[str, Any]:
+    settings = settings or get_settings()
+    return {
+        "id": "credit_packs",
+        "label": "Credit Packs",
+        "summary": "One-off wallet credits for free, Creator, or Pro accounts whenever usage spikes past the included allowance.",
+        "feature_summary": [
+            "Wallet balance is separate from subscription tier",
+            "Free accounts may buy packs without subscribing",
+            "Credits are reserved before generation starts",
+        ],
+        "defaults": {
+            "small_credits": settings.credit_pack_small_credits,
+            "large_credits": settings.credit_pack_large_credits,
+        },
+    }
+
+
+PLAN_CATALOG: Dict[IdentityPlan, PlanCatalogEntry] = build_plan_catalog()
+CHECKOUT_CATALOG: Dict[CheckoutKind, Dict[str, Any]] = build_checkout_catalog()
+PUBLIC_PLAN_CATALOG: Dict[IdentityPlan, Dict[str, Any]] = build_public_plan_catalog(
+    checkout_catalog=CHECKOUT_CATALOG,
+)
+PUBLIC_TOP_UP_GROUP: Dict[str, Any] = build_public_credit_pack_group()
 
 class StudioService:
     def __init__(
@@ -248,9 +322,14 @@ class StudioService:
         self.media_url_prefix = media_url_prefix.rstrip("/")
         settings = get_settings()
         self.settings = settings
-        self.plan_catalog = PLAN_CATALOG
+        self.plan_catalog = build_plan_catalog(settings)
         self.preset_catalog = PRESET_CATALOG
-        self.checkout_catalog = CHECKOUT_CATALOG
+        self.checkout_catalog = build_checkout_catalog(settings)
+        self.public_plan_catalog = build_public_plan_catalog(
+            settings,
+            checkout_catalog=self.checkout_catalog,
+        )
+        self.public_credit_pack_group = build_public_credit_pack_group(settings)
         self._generation_runtime_mode = settings.generation_runtime_mode
         minimum_claim_lease = max(30, settings.generation_maintenance_interval_seconds * 3)
         self._generation_claim_lease_seconds = min(
@@ -260,7 +339,10 @@ class StudioService:
         self._worker_id = (
             f"{socket.gethostname()}:{os.getpid()}:{self._generation_runtime_mode}:{uuid4().hex[:8]}"
         )
-        self._asset_token_secret = settings.jwt_secret.get_secret_value() if settings.jwt_secret else "omnia-creata-local-dev-secret-2026"
+        configured_asset_secret = reveal_secret(settings.jwt_secret).strip()
+        if not configured_asset_secret and settings.environment != Environment.DEVELOPMENT:
+            raise RuntimeError("JWT secret must be configured outside local development.")
+        self._asset_token_secret = configured_asset_secret or "omnia-creata-local-dev-secret-2026"
         self._asset_token_ttl_seconds = 3600
         self.asset_protection = GeneratedAssetProtectionPipeline(secret=self._asset_token_secret)
         self.asset_storage = build_asset_storage_registry(settings, media_dir)
@@ -533,7 +615,7 @@ class StudioService:
         level: int = logging.INFO,
         **fields: Any,
     ) -> None:
-        return self.identity._log_security_event(event=event, level=level)
+        return self.identity._log_security_event(event=event, level=level, **fields)
 
     def _apply_identity_moderation_flag_locked(
         self,
@@ -1062,7 +1144,16 @@ class StudioService:
         parent_message_id: str,
         premium_chat: bool,
     ) -> ChatMessage:
-        return await self.chat._build_assistant_message()
+        return await self.chat._build_assistant_message(
+            identity=identity,
+            conversation=conversation,
+            history=history,
+            content=content,
+            attachments=attachments,
+            requested_model=requested_model,
+            parent_message_id=parent_message_id,
+            premium_chat=premium_chat,
+        )
 
     def _messages_before_turn(self, messages: List[ChatMessage], user_message_id: str) -> List[ChatMessage]:
         return self.chat._messages_before_turn(messages=messages, user_message_id=user_message_id)
@@ -1078,7 +1169,12 @@ class StudioService:
         user_message_id: str | None = None,
         assistant_message_id: str | None = None,
     ) -> tuple[ChatConversation, List[ChatMessage], ChatMessage, ChatMessage]:
-        return await self.chat._resolve_latest_editable_turn()
+        return await self.chat._resolve_latest_editable_turn(
+            identity_id=identity_id,
+            conversation_id=conversation_id,
+            user_message_id=user_message_id,
+            assistant_message_id=assistant_message_id,
+        )
 
     async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
         return await self.generation.list_generations(identity_id=identity_id, project_id=project_id)
@@ -1421,11 +1517,18 @@ class StudioService:
         *,
         identity: OmniaIdentity,
         model: ModelCatalogEntry,
+        billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
-        return self.shell.serialize_model_catalog_for_identity(identity=identity, model=model)
+        return self.shell.serialize_model_catalog_for_identity(identity=identity, model=model, billing_state=billing_state)
 
-    def _validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry) -> None:
-        self.shell.validate_model_for_identity(identity, model)
+    def _validate_model_for_identity(
+        self,
+        identity: OmniaIdentity,
+        model: ModelCatalogEntry,
+        *,
+        billing_state: BillingStateSnapshot | None = None,
+    ) -> None:
+        self.shell.validate_model_for_identity(identity, model, billing_state=billing_state)
 
     def _validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
         self.shell.validate_dimensions_for_model(width, height, model)
@@ -1553,5 +1656,8 @@ class StudioService:
     async def permanently_delete_identity(self, identity_id: str) -> bool:
         return await self.identity.permanently_delete_identity(identity_id=identity_id)
 
+    async def process_paddle_webhook(self, payload: Dict[str, Any]) -> None:
+        return await self.billing.process_paddle_webhook(payload=payload)
+
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
-        return await self.billing.process_lemonsqueezy_webhook(payload=payload)
+        return await self.billing.process_paddle_webhook(payload=payload)

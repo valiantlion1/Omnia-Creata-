@@ -120,7 +120,8 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[15vh] px-4 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setOpen(false)}>
       <div 
-        className="w-full max-w-[640px] overflow-hidden rounded-[24px] glass-card shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] bg-[#0c0d12]/95 backdrop-blur-3xl animate-in zoom-in-95 duration-200"
+        className="w-full max-w-[640px] overflow-hidden rounded-[24px] glass-card shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.06] bg-[#0c0d12]/96 backdrop-blur-3xl animate-in zoom-in-95 duration-200"
+        style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-white/[0.08] px-5 py-4">
@@ -154,8 +155,8 @@ export function CommandPalette() {
                 return (
                   <button
                     key={cmd.id}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
-                      isSelected ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/[0.04]'
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all ${
+                      isSelected ? 'bg-white/10 text-white shadow-[0_0_16px_-4px_rgba(124,58,237,0.25)]' : 'text-zinc-400 hover:bg-white/[0.04]'
                     }`}
                     onClick={() => {
                       cmd.action()

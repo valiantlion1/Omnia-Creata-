@@ -76,10 +76,15 @@ function LightboxModal({ image, onClose }: { image: LightboxPayload; onClose: ()
 
         {/* Watermark — only for other users' content */}
         {!isOwn && !isStudio && image.metadata?.authorUsername && (
-          <div className="pointer-events-none absolute bottom-7 left-7 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 backdrop-blur-md ring-1 ring-white/[0.07]">
-            <span className="text-[10px] font-bold tracking-[0.18em] text-white/60">OMNIACREATA</span>
-            <span className="h-2.5 w-px bg-white/20" />
-            <span className="text-[11px] text-white/50">@{image.metadata.authorUsername}</span>
+          <div className="pointer-events-none absolute bottom-7 left-7 flex items-center gap-2.5 select-none">
+            <img
+              src="/omnia-crest.png"
+              alt=""
+              draggable={false}
+              className="h-7 w-7"
+              style={{ opacity: 0.35, filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }}
+            />
+            <span className="text-[11px] text-white/30">@{image.metadata.authorUsername}</span>
           </div>
         )}
       </div>

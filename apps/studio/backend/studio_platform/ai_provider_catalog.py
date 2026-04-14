@@ -312,12 +312,16 @@ def build_ai_control_plane_summary(
         "chat": {
             "primary_provider": settings.chat_primary_provider,
             "fallback_provider": settings.chat_fallback_provider,
+            "free_account_provider": "gemini",
+            "free_account_model": settings.gemini_free_model,
             "providers": chat_providers,
             "multimodal_policy": chat_routing.get("multimodal_policy"),
         },
         "image": {
             "default_strategy": generation_routing.get("default_strategy"),
             "protected_beta_provider": settings.protected_beta_image_provider,
+            "standard_provider_preference": "runware",
+            "edit_reference_provider_preference": "openai",
             "openai": image_providers[0],
         },
         "surface_matrix": [dict(item) for item in (surface_matrix or ())],

@@ -101,6 +101,100 @@ async def test_export_identity_data_uses_store_snapshot(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_service_build_assistant_message_forwards_all_arguments(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-forward",
+        email="forward@example.com",
+        display_name="Forward User",
+        username="forward",
+        workspace_id="ws-forward",
+    )
+    conversation = ChatConversation(
+        id="conv-forward",
+        workspace_id=identity.workspace_id,
+        identity_id=identity.id,
+        title="Forward",
+    )
+    message = ChatMessage(
+        id="assistant-msg",
+        conversation_id=conversation.id,
+        identity_id=identity.id,
+        role=ChatRole.ASSISTANT,
+        content="ok",
+    )
+    captured: dict[str, object] = {}
+
+    async def fake_build_assistant_message(**kwargs):
+        captured.update(kwargs)
+        return message
+
+    service.chat._build_assistant_message = fake_build_assistant_message  # type: ignore[method-assign]
+
+    try:
+        result = await service._build_assistant_message(
+            identity=identity,
+            conversation=conversation,
+            history=[],
+            content="hello",
+            attachments=[],
+            requested_model="studio-assist",
+            parent_message_id="user-msg",
+            premium_chat=True,
+        )
+
+        assert result.id == "assistant-msg"
+        assert captured["identity"] == identity
+        assert captured["conversation"] == conversation
+        assert captured["requested_model"] == "studio-assist"
+        assert captured["premium_chat"] is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_service_log_security_event_forwards_fields(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    captured: dict[str, object] = {}
+
+    def fake_log_security_event(event: str, *, level: int, **fields):
+        captured["event"] = event
+        captured["level"] = level
+        captured["fields"] = fields
+
+    service.identity._log_security_event = fake_log_security_event  # type: ignore[method-assign]
+
+    try:
+        service._log_security_event("share_denied", identity_id="user-1", reason="blocked")
+        assert captured["event"] == "share_denied"
+        assert captured["fields"] == {"identity_id": "user-1", "reason": "blocked"}
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_service_requires_jwt_secret_outside_local_development(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_jwt_secret = settings.jwt_secret
+    settings.environment = Environment.STAGING
+    settings.jwt_secret = None
+
+    try:
+        with pytest.raises(RuntimeError, match="JWT secret must be configured"):
+            service = StudioService(StudioStateStore(tmp_path / "state.json"), ProviderRegistry(), tmp_path / "media")
+            await service.initialize()
+    finally:
+        settings.environment = original_environment
+        settings.jwt_secret = original_jwt_secret
+
+
+@pytest.mark.asyncio
 async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
     settings = get_settings()
     original_supabase_url = settings.supabase_url
@@ -190,15 +284,15 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
             amount=200,
             entry_type=CreditEntryType.TOP_UP,
             description="Top-up",
-            checkout_kind=CheckoutKind.TOP_UP_SMALL,
+            checkout_kind=CheckoutKind.CREDIT_PACK_SMALL,
         )
         webhook_receipt = BillingWebhookReceipt(
             id="receipt-1",
-            event_name="order_created",
-            resource_type="orders",
+            event_name="transaction.completed",
+            resource_type="transactions",
             resource_id="order-1",
             identity_id=identity.id,
-            checkout_kind=CheckoutKind.TOP_UP_SMALL,
+            checkout_kind=CheckoutKind.CREDIT_PACK_SMALL,
         )
 
         await store.mutate(
@@ -315,8 +409,8 @@ async def test_delete_project_removes_project_bound_shares(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
     settings = get_settings()
-    original_store_id = settings.lemonsqueezy_store_id
-    settings.lemonsqueezy_store_id = "demo-store"
+    original_checkout_url = settings.paddle_checkout_base_url
+    settings.paddle_checkout_base_url = "https://checkout.paddle.test/omnia"
 
     try:
         store = StudioStateStore(tmp_path / "state.json")
@@ -342,20 +436,21 @@ async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
 
         payload = await service.checkout(identity.id, CheckoutKind.PRO_MONTHLY)
 
-        assert payload["provider"] == "lemonsqueezy"
-        assert "/checkout/buy/pro_subscription" in payload["checkout_url"]
-        assert "checkout%5Bcustom%5D%5Bcheckout_kind%5D=pro_monthly" in payload["checkout_url"]
+        assert payload["provider"] == "paddle"
+        assert payload["checkout_url"].startswith("https://checkout.paddle.test/omnia?")
+        assert "checkout_kind=pro_monthly" in payload["checkout_url"]
+        assert "identity_id=user-1" in payload["checkout_url"]
     finally:
-        settings.lemonsqueezy_store_id = original_store_id
+        settings.paddle_checkout_base_url = original_checkout_url
 
 
 @pytest.mark.asyncio
 async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Path):
     settings = get_settings()
     original_environment = settings.environment
-    original_store_id = settings.lemonsqueezy_store_id
+    original_checkout_url = settings.paddle_checkout_base_url
     settings.environment = Environment.STAGING
-    settings.lemonsqueezy_store_id = None
+    settings.paddle_checkout_base_url = None
     service: StudioService | None = None
 
     try:
@@ -386,7 +481,7 @@ async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Pa
         if service is not None:
             await service.shutdown()
         settings.environment = original_environment
-        settings.lemonsqueezy_store_id = original_store_id
+        settings.paddle_checkout_base_url = original_checkout_url
 
 
 @pytest.mark.asyncio
@@ -976,7 +1071,7 @@ async def test_get_public_share_rejects_trashed_asset_share(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_lemonsqueezy_subscription_webhook_activates_pro_plan(tmp_path: Path):
+async def test_paddle_subscription_webhook_activates_pro_plan(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
@@ -998,12 +1093,14 @@ async def test_lemonsqueezy_subscription_webhook_activates_pro_plan(tmp_path: Pa
         )
     )
 
-    await service.process_lemonsqueezy_webhook(
+    await service.process_paddle_webhook(
         {
-            "meta": {
-                "event_name": "subscription_created",
+            "event_type": "subscription.created",
+            "data": {
+                "id": "sub-1",
+                "type": "subscription",
                 "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.PRO_MONTHLY.value},
-            }
+            },
         }
     )
     snapshot = await store.snapshot()
@@ -1016,7 +1113,7 @@ async def test_lemonsqueezy_subscription_webhook_activates_pro_plan(tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_lemonsqueezy_topup_webhook_uses_checkout_kind_credit_amount(tmp_path: Path):
+async def test_paddle_credit_pack_webhook_uses_checkout_kind_credit_amount(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
@@ -1028,8 +1125,8 @@ async def test_lemonsqueezy_topup_webhook_uses_checkout_kind_credit_amount(tmp_p
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
         extra_credits=0,
     )
     await store.mutate(
@@ -1042,12 +1139,14 @@ async def test_lemonsqueezy_topup_webhook_uses_checkout_kind_credit_amount(tmp_p
         )
     )
 
-    await service.process_lemonsqueezy_webhook(
+    await service.process_paddle_webhook(
         {
-            "meta": {
-                "event_name": "order_created",
-                "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.TOP_UP_LARGE.value},
-            }
+            "event_type": "transaction.completed",
+            "data": {
+                "id": "txn-1",
+                "type": "transaction",
+                "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.CREDIT_PACK_LARGE.value},
+            },
         }
     )
 
@@ -1057,13 +1156,13 @@ async def test_lemonsqueezy_topup_webhook_uses_checkout_kind_credit_amount(tmp_p
     assert updated.plan == IdentityPlan.FREE
     assert updated.extra_credits == 800
     assert any(
-        entry.checkout_kind == CheckoutKind.TOP_UP_LARGE and entry.amount == 800
+        entry.checkout_kind == CheckoutKind.CREDIT_PACK_LARGE and entry.amount == 800
         for entry in snapshot.credit_ledger.values()
     )
 
 
 @pytest.mark.asyncio
-async def test_lemonsqueezy_duplicate_topup_webhook_is_idempotent(tmp_path: Path):
+async def test_paddle_duplicate_credit_pack_webhook_is_idempotent(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
@@ -1075,8 +1174,8 @@ async def test_lemonsqueezy_duplicate_topup_webhook_is_idempotent(tmp_path: Path
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
         extra_credits=0,
     )
     await store.mutate(
@@ -1090,26 +1189,75 @@ async def test_lemonsqueezy_duplicate_topup_webhook_is_idempotent(tmp_path: Path
     )
 
     payload = {
-        "data": {"id": "order-1", "type": "orders"},
-        "meta": {
-            "event_name": "order_created",
-            "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.TOP_UP_SMALL.value},
+        "event_type": "transaction.completed",
+        "data": {
+            "id": "txn-1",
+            "type": "transaction",
+            "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.CREDIT_PACK_SMALL.value},
         },
     }
 
-    await service.process_lemonsqueezy_webhook(payload)
-    await service.process_lemonsqueezy_webhook(payload)
+    await service.process_paddle_webhook(payload)
+    await service.process_paddle_webhook(payload)
 
     snapshot = await store.snapshot()
     updated = snapshot.identities[identity.id]
 
     assert updated.extra_credits == 200
     assert len(snapshot.billing_webhook_receipts) == 1
-    assert sum(1 for entry in snapshot.credit_ledger.values() if entry.checkout_kind == CheckoutKind.TOP_UP_SMALL) == 1
+    assert sum(1 for entry in snapshot.credit_ledger.values() if entry.checkout_kind == CheckoutKind.CREDIT_PACK_SMALL) == 1
 
 
 @pytest.mark.asyncio
-async def test_lemonsqueezy_pro_checkout_order_waits_for_subscription_event(tmp_path: Path):
+async def test_paddle_webhook_requires_identity_custom_data(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    try:
+        with pytest.raises(ValueError):
+            await service.process_paddle_webhook(
+                {
+                    "event_type": "transaction.completed",
+                    "data": {
+                        "id": "txn-1",
+                        "type": "transaction",
+                        "custom_data": {},
+                    },
+                }
+            )
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_unknown_identity_fails_closed(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    try:
+        with pytest.raises(KeyError):
+            await service.process_paddle_webhook(
+                {
+                    "event_type": "transaction.completed",
+                    "event_id": "evt_missing",
+                    "data": {
+                        "id": "txn-1",
+                        "type": "transaction",
+                        "custom_data": {
+                            "identity_id": "missing-user",
+                            "checkout_kind": CheckoutKind.CREDIT_PACK_SMALL.value,
+                        },
+                    },
+                }
+            )
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_paddle_pro_checkout_transaction_waits_for_subscription_event(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
@@ -1121,8 +1269,8 @@ async def test_lemonsqueezy_pro_checkout_order_waits_for_subscription_event(tmp_
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
         extra_credits=0,
     )
     await store.mutate(
@@ -1135,11 +1283,12 @@ async def test_lemonsqueezy_pro_checkout_order_waits_for_subscription_event(tmp_
         )
     )
 
-    await service.process_lemonsqueezy_webhook(
+    await service.process_paddle_webhook(
         {
-            "data": {"id": "order-1", "type": "orders"},
-            "meta": {
-                "event_name": "order_created",
+            "event_type": "transaction.completed",
+            "data": {
+                "id": "txn-1",
+                "type": "transaction",
                 "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.PRO_MONTHLY.value},
             },
         }
@@ -1154,15 +1303,16 @@ async def test_lemonsqueezy_pro_checkout_order_waits_for_subscription_event(tmp_
     assert not any(entry.entry_type == CreditEntryType.TOP_UP for entry in order_snapshot.credit_ledger.values())
 
     payload = {
-        "data": {"id": "sub-1", "type": "subscriptions"},
-        "meta": {
-            "event_name": "subscription_created",
+        "event_type": "subscription.created",
+        "data": {
+            "id": "sub-1",
+            "type": "subscription",
             "custom_data": {"identity_id": identity.id, "checkout_kind": CheckoutKind.PRO_MONTHLY.value},
         },
     }
 
-    await service.process_lemonsqueezy_webhook(payload)
-    await service.process_lemonsqueezy_webhook(payload)
+    await service.process_paddle_webhook(payload)
+    await service.process_paddle_webhook(payload)
 
     snapshot = await store.snapshot()
     updated = snapshot.identities[identity.id]
@@ -1188,9 +1338,9 @@ async def test_create_generation_enforces_recent_submit_burst_limit(tmp_path: Pa
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
-        extra_credits=0,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -1305,6 +1455,10 @@ async def test_create_generation_persists_reference_asset_in_prompt_snapshot(tmp
         display_name="User One",
         username="userone",
         workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -1581,8 +1735,9 @@ async def test_free_plan_chat_rejects_premium_modes_and_attachments(tmp_path: Pa
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
 
@@ -1625,8 +1780,9 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
 
@@ -1656,6 +1812,7 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert flux_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
     assert billing_summary["entitlements"]["can_access_chat"] is True
     assert billing_summary["credits"]["credits_remaining"] == 60
+    assert billing_summary["wallet_balance"] == 60
     flux_lane = next(
         entry
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
@@ -2371,8 +2528,9 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -2412,14 +2570,14 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         assert job.requested_quality_tier == "standard"
         assert job.selected_quality_tier == "standard"
         assert job.degraded is False
-        assert job.routing_strategy == "free-first"
-        assert job.routing_reason == "free_standard_default"
+        assert job.routing_strategy == "wallet-managed"
+        assert job.routing_reason == "wallet_fallback_route"
         assert job.prompt_profile == "stylized_illustration"
         assert job.provider_candidates[:2] == ["huggingface", "pollinations"]
-        assert health["generation_routing"]["plan_defaults"]["free"] == "free-first"
-        assert health["generation_routing"]["plan_defaults"]["pro"] == "balanced"
+        assert health["generation_routing"]["plan_defaults"]["free"] == "wallet_managed"
+        assert health["generation_routing"]["plan_defaults"]["pro"] == "runware_first_premium_caps"
         assert health["generation_routing"]["demo_policy"] == "degraded_only_last_resort"
-        assert health["chat_routing"]["plan_defaults"]["free"] == "standard"
+        assert health["chat_routing"]["plan_defaults"]["free"] == "limited"
         assert health["chat_routing"]["plan_defaults"]["pro"] == "premium"
         assert health["chat_routing"]["multimodal_policy"] == "configured_provider_order"
     finally:
@@ -2427,7 +2585,7 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
 
 
 @pytest.mark.asyncio
-async def test_create_generation_prefers_openai_for_free_accounts_in_development_when_available(tmp_path: Path):
+async def test_create_generation_keeps_fallback_route_for_wallet_backed_free_accounts_when_runware_is_unavailable(tmp_path: Path):
     class _RoutingProvider:
         def __init__(self, *, name: str, rollout_tier: str, billable: bool = False) -> None:
             self.name = name
@@ -2487,8 +2645,9 @@ async def test_create_generation_prefers_openai_for_free_accounts_in_development
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
-        monthly_credits_remaining=60,
-        monthly_credit_allowance=60,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -2523,14 +2682,14 @@ async def test_create_generation_prefers_openai_for_free_accounts_in_development
             output_count=1,
         )
 
-        assert job.provider == "openai"
+        assert job.provider == "huggingface"
         assert job.requested_quality_tier == "standard"
-        assert job.selected_quality_tier == "premium"
+        assert job.selected_quality_tier == "standard"
         assert job.degraded is False
-        assert job.routing_strategy == "free-first"
-        assert job.routing_reason == "free_standard_managed_override"
+        assert job.routing_strategy == "wallet-managed"
+        assert job.routing_reason == "wallet_fallback_route"
         assert job.prompt_profile == "stylized_illustration"
-        assert job.provider_candidates[:3] == ["openai", "huggingface", "pollinations"]
+        assert job.provider_candidates[:3] == ["huggingface", "pollinations", "openai"]
     finally:
         settings.environment = original_environment
         await service.shutdown()
@@ -2838,7 +2997,7 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
         create_fast = next(item for item in control_plane["surface_matrix"] if item["id"] == "create:flux-schnell")
         assert create_fast["request_model"] == get_settings().openai_image_draft_model
         chat_standard = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:standard-assist")
-        assert chat_standard["provider_chain"][0]["provider"] == get_settings().chat_primary_provider
+        assert chat_standard["provider_chain"][0]["provider"] in {"gemini", "openrouter", "openai"}
         prompt_improve = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:prompt-improve")
         assert prompt_improve["operator_role"] == "prompt_improve"
         provider_totals = {item["provider"]: item["total_spend_usd"] for item in telemetry["providers"]}

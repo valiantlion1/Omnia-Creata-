@@ -13,7 +13,7 @@ Studio has two intentional product surfaces:
 - Active frame: `Controlled Public Paid Launch`
 - `Protected Beta Hardening` is the closed baseline that got Studio here; it is no longer the main planning target
 - Public launch doctrine: broad public access, self-serve account flow, controlled capacity, and honest paid-product truth
-- Commercial packaging is `Starter`, `Pro`, and `Credit Top-up`
+- Commercial packaging is `Free Account`, `Creator`, `Pro`, and `Credit Packs`
 - Exact package numbers and checkout availability come from the server-authoritative catalog, not hardcoded UI copy
 - `Create` and `Chat` launch together and share one account, billing, and entitlement contract
 - `OCOS` is future internal operating-system work; it is not a Studio deliverable in this wave

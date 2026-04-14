@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.14.101",
+  "build": "2026.04.14.105",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-14",
-  "notes": "Phase 1 security hardening now freezes owner authority to stored backend identity truth and adds explicit rate limits around high-risk Studio self-service mutations such as project writes, profile export/delete, asset import, and style mutations."
+  "notes": "Studio now fails closed when a paid subscription is canceled or past due: effective plan, entitlements, billing summaries, settings bootstrap, and model validation all downgrade to the free contract while preserving purchased wallet credits. This wave also fixes a small frontend type drift so the current billing/bootstrap contract passes web type-check and build again."
 }

@@ -12,6 +12,7 @@ from .common import utc_now
 class IdentityPlan(str, Enum):
     GUEST = "guest"
     FREE = "free"
+    CREATOR = "creator"
     PRO = "pro"
 
 

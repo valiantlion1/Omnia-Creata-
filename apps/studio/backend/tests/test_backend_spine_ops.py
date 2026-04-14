@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
+import studio_platform.providers as provider_module
 from config.env import get_settings
+from studio_platform.billing_ops import BillingStateSnapshot
 from studio_platform.bootstrap_contract_ops import build_settings_bootstrap_payload
 from studio_platform import owner_health_ops
 from studio_platform.contract_catalog import BOOTSTRAP_FIELDS, build_contract_freeze_summary
@@ -12,13 +14,34 @@ from studio_platform.llm import StudioLLMGateway
 from studio_platform.model_catalog_ops import (
     get_model_catalog_entry_or_raise,
     serialize_model_catalog_for_identity,
+    validate_model_for_identity,
 )
 from studio_platform.models import IdentityPlan, OmniaIdentity
 from studio_platform.operator_control_plane_ops import build_owner_ai_control_plane
 from studio_platform.owner_health_ops import build_owner_health_payload
-from studio_platform.providers import ProviderRegistry
+from studio_platform.providers import ProviderCapabilities, ProviderRegistry, StudioImageProvider
 from studio_platform.service import StudioService
 from studio_platform.store import StudioStateStore
+
+
+class _FakeProvider(StudioImageProvider):
+    def __init__(self, *, name: str, rollout_tier: str, billable: bool) -> None:
+        self.name = name
+        self.rollout_tier = rollout_tier
+        self.billable = billable
+        self.capabilities = ProviderCapabilities(workflows=("text_to_image",))
+
+    async def is_available(self) -> bool:
+        return True
+
+    def is_configured(self) -> bool:
+        return True
+
+    async def health(self, probe: bool = True) -> dict[str, object]:
+        return {"name": self.name, "status": "healthy", "detail": "fake"}
+
+    async def generate(self, **kwargs):
+        raise NotImplementedError
 
 
 def test_serialize_model_catalog_for_identity_preserves_contract_fields() -> None:
@@ -45,6 +68,63 @@ def test_serialize_model_catalog_for_identity_preserves_contract_fields() -> Non
     assert serialized["display_description"] == serialized["creative_profile"]["description"]
     assert serialized["route_preview"]["render_experience"]["state"] == serialized["render_experience"]["state"]
     assert serialized["route_preview"]["pricing_lane"] in {"draft", "fallback"}
+
+
+def test_serialize_model_catalog_for_identity_uses_wallet_backed_route_preview() -> None:
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        extra_credits=60,
+    )
+    model = get_model_catalog_entry_or_raise("flux-schnell")
+    providers = ProviderRegistry()
+    runware = _FakeProvider(name="runware", rollout_tier="primary", billable=True)
+    pollinations = _FakeProvider(name="pollinations", rollout_tier="fallback", billable=False)
+    providers.providers = [runware, pollinations]
+    providers._providers_by_name = {provider.name: provider for provider in providers.providers}
+    providers._provider_circuits = {
+        provider.name: provider_module.ProviderCircuitState() for provider in providers.providers
+    }
+
+    serialized = serialize_model_catalog_for_identity(
+        identity=identity,
+        model=model,
+        providers=providers,
+    )
+
+    assert serialized["route_preview"]["planned_provider"] == "runware"
+    assert serialized["render_experience"]["state"] == "ready"
+
+
+def test_validate_model_for_identity_honors_effective_free_plan_when_subscription_is_inactive() -> None:
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        extra_credits=60,
+    )
+    model = get_model_catalog_entry_or_raise("juggernaut-xl")
+    billing_state = BillingStateSnapshot(
+        gross_remaining=60,
+        reserved_total=0,
+        available_to_spend=60,
+        monthly_remaining=0,
+        monthly_allowance=0,
+        extra_credits=60,
+        unlimited=False,
+        effective_plan=IdentityPlan.FREE,
+        subscription_active=False,
+    )
+
+    with pytest.raises(PermissionError, match="requires Pro"):
+        validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
 
 
 def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:

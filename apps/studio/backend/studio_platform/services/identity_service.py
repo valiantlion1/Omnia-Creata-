@@ -33,20 +33,12 @@ if TYPE_CHECKING:
 def _lazy_service_constants():
     """Lazy import to break circular dependency with service.py"""
     from ..service import (
-        CHECKOUT_CATALOG,
-        PLAN_CATALOG,
-        PUBLIC_PLAN_CATALOG,
-        PUBLIC_TOP_UP_GROUP,
         _FOUNDER_EMAILS,
         _MODERATION_RESET_WINDOW,
         _TEMP_BLOCK_AFTER_FIVE_STRIKES,
         _TEMP_BLOCK_AFTER_THREE_STRIKES,
     )
     return (
-        PLAN_CATALOG,
-        CHECKOUT_CATALOG,
-        PUBLIC_PLAN_CATALOG,
-        PUBLIC_TOP_UP_GROUP,
         _FOUNDER_EMAILS,
         _MODERATION_RESET_WINDOW,
         _TEMP_BLOCK_AFTER_FIVE_STRIKES,
@@ -57,11 +49,11 @@ class IdentityService:
     def __init__(self, service: 'StudioService'):
         self.service = service
         # Lazy-loaded to avoid circular import with service.py
-        _pc, _cc, _ppc, _ptg, _fe, _mrw, _tb5, _tb3 = _lazy_service_constants()
-        self._PLAN_CATALOG = _pc
-        self._CHECKOUT_CATALOG = _cc
-        self._PUBLIC_PLAN_CATALOG = _ppc
-        self._PUBLIC_TOP_UP_GROUP = _ptg
+        _fe, _mrw, _tb5, _tb3 = _lazy_service_constants()
+        self._PLAN_CATALOG = self.service.plan_catalog
+        self._CHECKOUT_CATALOG = self.service.checkout_catalog
+        self._PUBLIC_PLAN_CATALOG = self.service.public_plan_catalog
+        self._PUBLIC_TOP_UP_GROUP = self.service.public_credit_pack_group
         self._FOUNDER_EMAILS = _fe
         self._MODERATION_RESET_WINDOW = _mrw
         self._TEMP_BLOCK_AFTER_THREE_STRIKES = _tb3
@@ -128,12 +120,29 @@ class IdentityService:
 
     async def get_public_identity(self, auth_user: Any | None) -> Dict[str, Any]:
         if auth_user is None:
+            guest_plan = self._PLAN_CATALOG[IdentityPlan.GUEST]
+            guest_entitlements = resolve_guest_entitlements(plan_catalog=self._PLAN_CATALOG)
             return {
                 "guest": True,
                 "identity": self._serialize_guest_identity_payload(),
                 "credits": {"remaining": 0, "monthly_remaining": 0, "extra_credits": 0},
-                "plan": self._PLAN_CATALOG[IdentityPlan.GUEST].model_dump(mode="json"),
-                "entitlements": resolve_guest_entitlements(plan_catalog=self._PLAN_CATALOG),
+                "plan": guest_plan.model_dump(mode="json"),
+                "entitlements": guest_entitlements,
+                "account_tier": self._account_tier_for_plan(IdentityPlan.GUEST),
+                "subscription_tier": None,
+                "wallet_balance": 0,
+                "wallet": {
+                    "balance": 0,
+                    "wallet_balance": 0,
+                    "included_monthly_allowance": 0,
+                    "included_monthly_remaining": 0,
+                    "reserved_total": 0,
+                    "available_to_spend": 0,
+                    "spend_order": "monthly_then_extra",
+                    "unlimited": False,
+                },
+                "feature_entitlements": guest_entitlements,
+                "usage_caps": self._serialize_usage_caps(guest_plan),
             }
 
         identity = await self.ensure_identity(
@@ -218,7 +227,11 @@ class IdentityService:
                     bio=bio.strip(),
                     avatar_url=avatar_url,
                     default_visibility=default_visibility or Visibility.PRIVATE,
-                    subscription_status=SubscriptionStatus.ACTIVE if plan == IdentityPlan.PRO else SubscriptionStatus.NONE,
+                    subscription_status=(
+                        SubscriptionStatus.ACTIVE
+                        if plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}
+                        else SubscriptionStatus.NONE
+                    ),
                     monthly_credits_remaining=plan_config.monthly_credits,
                     monthly_credit_allowance=plan_config.monthly_credits,
                     extra_credits=0,
@@ -234,19 +247,37 @@ class IdentityService:
                     identity_id=identity.id,
                     name=f"{identity.display_name}'s Studio",
                 )
-                state.credit_ledger[f"grant_{identity.id}_{int(now.timestamp())}"] = CreditLedgerEntry(
-                    identity_id=identity.id,
-                    amount=plan_config.monthly_credits,
-                    entry_type=CreditEntryType.MONTHLY_GRANT,
-                    description=f"{plan_config.label} welcome credits",
-                )
+                if plan_config.monthly_credits > 0:
+                    state.credit_ledger[f"grant_{identity.id}_{int(now.timestamp())}"] = CreditLedgerEntry(
+                        identity_id=identity.id,
+                        amount=plan_config.monthly_credits,
+                        entry_type=CreditEntryType.MONTHLY_GRANT,
+                        description=f"{plan_config.label} welcome credits",
+                    )
             else:
                 if desired_plan and desired_plan != identity.plan:
                     identity.plan = desired_plan
-                    identity.subscription_status = SubscriptionStatus.ACTIVE if desired_plan == IdentityPlan.PRO else SubscriptionStatus.NONE
+                    identity.subscription_status = (
+                        SubscriptionStatus.ACTIVE
+                        if desired_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}
+                        else SubscriptionStatus.NONE
+                    )
                     upgraded_plan = self._PLAN_CATALOG[desired_plan]
                     identity.monthly_credit_allowance = upgraded_plan.monthly_credits
                     identity.monthly_credits_remaining = max(identity.monthly_credits_remaining, upgraded_plan.monthly_credits)
+                else:
+                    current_plan = self._PLAN_CATALOG[identity.plan]
+                    if not (identity.owner_mode or identity.root_admin or identity.local_access):
+                        identity.monthly_credit_allowance = current_plan.monthly_credits
+                        identity.monthly_credits_remaining = min(
+                            max(identity.monthly_credits_remaining, 0),
+                            current_plan.monthly_credits + max(identity.extra_credits, 0),
+                        )
+                        if (
+                            identity.plan not in {IdentityPlan.CREATOR, IdentityPlan.PRO}
+                            and identity.subscription_status not in {SubscriptionStatus.CANCELED, SubscriptionStatus.PAST_DUE}
+                        ):
+                            identity.subscription_status = SubscriptionStatus.NONE
                 identity.email = email or identity.email
                 identity.display_name = display_name or identity.display_name
                 if username:
@@ -340,6 +371,50 @@ class IdentityService:
             "workspace_id": None,
             "temp_block_until": None,
             "manual_review_state": ManualReviewState.NONE.value,
+        }
+
+
+    def _account_tier_for_plan(self, plan: IdentityPlan) -> str:
+        return plan.value
+
+
+    def _subscription_tier_for_identity(
+        self,
+        identity: OmniaIdentity,
+        *,
+        billing_state: BillingStateSnapshot | None = None,
+    ) -> str | None:
+        effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
+        if effective_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO} and identity.subscription_status == SubscriptionStatus.ACTIVE:
+            return effective_plan.value
+        return None
+
+
+    def _serialize_wallet_payload(self, billing_state: BillingStateSnapshot) -> Dict[str, Any]:
+        return {
+            "balance": billing_state.extra_credits,
+            "wallet_balance": billing_state.extra_credits,
+            "included_monthly_allowance": billing_state.monthly_allowance,
+            "included_monthly_remaining": billing_state.monthly_remaining,
+            "reserved_total": billing_state.reserved_total,
+            "available_to_spend": billing_state.available_to_spend,
+            "spend_order": billing_state.spend_order,
+            "unlimited": billing_state.unlimited,
+        }
+
+
+    def _serialize_usage_caps(self, plan: PlanCatalogEntry) -> Dict[str, Any]:
+        return {
+            "queue_priority": plan.queue_priority,
+            "max_incomplete_generations": plan.max_incomplete_generations,
+            "generation_submit_window_seconds": plan.generation_submit_window_seconds,
+            "generation_submit_limit": plan.generation_submit_limit,
+            "chat_message_limit": plan.chat_message_limit,
+            "max_chat_attachments": plan.max_chat_attachments,
+            "max_resolution": plan.max_resolution,
+            "requires_verified_account_for_generation": True,
+            "free_image_generation_included": False,
+            "wallet_credit_purchase_allowed": True,
         }
 
 
@@ -485,16 +560,24 @@ class IdentityService:
             generation_jobs=(),
             plan_catalog=self._PLAN_CATALOG,
         )
+        resolved_plan = self._PLAN_CATALOG[resolved_billing_state.effective_plan]
+        entitlements = self.serialize_entitlements(identity, billing_state=resolved_billing_state)
         return {
             "guest": False,
             "identity": self._serialize_identity_payload(identity),
             "credits": {
-                "remaining": resolved_billing_state.total_credits_remaining if hasattr(resolved_billing_state, "total_credits_remaining") else (identity.monthly_credits_remaining + identity.extra_credits),
-                "monthly_remaining": identity.monthly_credits_remaining,
-                "extra_credits": identity.extra_credits,
+                "remaining": resolved_billing_state.gross_remaining,
+                "monthly_remaining": resolved_billing_state.monthly_remaining,
+                "extra_credits": resolved_billing_state.extra_credits,
             },
-            "plan": self._PLAN_CATALOG[resolved_billing_state.effective_plan].model_dump(mode="json"),
-            "entitlements": self.serialize_entitlements(identity, billing_state=resolved_billing_state),
+            "plan": resolved_plan.model_dump(mode="json"),
+            "entitlements": entitlements,
+            "account_tier": self._account_tier_for_plan(resolved_billing_state.effective_plan),
+            "subscription_tier": self._subscription_tier_for_identity(identity, billing_state=resolved_billing_state),
+            "wallet_balance": resolved_billing_state.extra_credits,
+            "wallet": self._serialize_wallet_payload(resolved_billing_state),
+            "feature_entitlements": entitlements,
+            "usage_caps": self._serialize_usage_caps(resolved_plan),
         }
 
 
@@ -522,10 +605,10 @@ class IdentityService:
             generation_jobs=(),
             plan_catalog=self._PLAN_CATALOG,
         )
-        allowance = max(resolved_billing_state.monthly_allowance, 1)
+        allowance = max(resolved_billing_state.monthly_allowance, 0)
         remaining = resolved_billing_state.gross_remaining
-        consumed = max(allowance - resolved_billing_state.monthly_remaining, 0)
-        progress = max(0, min(100, round((consumed / allowance) * 100)))
+        consumed = max(resolved_billing_state.monthly_allowance - resolved_billing_state.monthly_remaining, 0)
+        progress = 0 if allowance <= 0 else max(0, min(100, round((consumed / allowance) * 100)))
         next_reset = (
             identity.last_credit_refresh_at.astimezone(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             + timedelta(days=32)
@@ -561,37 +644,67 @@ class IdentityService:
 
 
     def get_public_plan_payload(self) -> Dict[str, Any]:
-        plan_entries = []
-        for plan_id in (IdentityPlan.FREE, IdentityPlan.PRO):
+        def serialize_plan_entry(plan_id: IdentityPlan) -> Dict[str, Any]:
             plan = self._PLAN_CATALOG[plan_id]
             public_meta = self._PUBLIC_PLAN_CATALOG[plan_id]
-            plan_entries.append(
-                {
-                    **plan.model_dump(mode="json"),
-                    "id": public_meta["public_id"],
-                    "entitlement_plan": plan_id.value,
-                    "summary": public_meta["summary"],
-                    "feature_summary": list(public_meta["feature_summary"]),
-                    "price_usd": public_meta["price_usd"],
-                    "billing_period": public_meta["billing_period"],
-                    "checkout_kind": public_meta["checkout_kind"],
-                    "recommended": public_meta["recommended"],
-                    "availability": public_meta["availability"],
-                }
-            )
+            return {
+                **plan.model_dump(mode="json"),
+                "id": public_meta["public_id"],
+                "entitlement_plan": plan_id.value,
+                "summary": public_meta["summary"],
+                "feature_summary": list(public_meta["feature_summary"]),
+                "price_usd": public_meta["price_usd"],
+                "billing_period": public_meta["billing_period"],
+                "checkout_kind": public_meta["checkout_kind"],
+                "recommended": public_meta["recommended"],
+                "availability": public_meta["availability"],
+            }
+
+        subscriptions = [
+            serialize_plan_entry(IdentityPlan.CREATOR),
+            serialize_plan_entry(IdentityPlan.PRO),
+        ]
+        credit_packs = [
+            {"kind": kind.value, **meta}
+            for kind, meta in self._CHECKOUT_CATALOG.items()
+            if meta["plan"] is None
+        ]
+        free_account = serialize_plan_entry(IdentityPlan.FREE)
+        featured_subscription = self._PUBLIC_PLAN_CATALOG[IdentityPlan.PRO]["public_id"]
 
         return {
             "operating_mode": "controlled_public_paid_launch",
-            "plans": plan_entries,
+            "free_account": free_account,
+            "subscriptions": subscriptions,
+            "credit_packs": credit_packs,
+            "wallet": {
+                "contract": "subscription_plus_wallet",
+                "free_account_can_buy_credit_packs": True,
+                "image_generation_requires_credits_or_included_allowance": True,
+                "spend_order": "monthly_then_extra",
+                "free_image_generation_included": False,
+            },
+            "entitlements": {
+                IdentityPlan.FREE.value: self._serialize_usage_caps(self._PLAN_CATALOG[IdentityPlan.FREE]),
+                IdentityPlan.CREATOR.value: self._serialize_usage_caps(self._PLAN_CATALOG[IdentityPlan.CREATOR]),
+                IdentityPlan.PRO.value: self._serialize_usage_caps(self._PLAN_CATALOG[IdentityPlan.PRO]),
+            },
+            "usage_caps": {
+                "verified_account_required_for_generation": True,
+                "captcha_required_for_sensitive_flows": True,
+                "free_ai_chat_limited": True,
+                "free_image_generation_included": False,
+                "wallet_credit_purchase_allowed": True,
+                "credit_reserve_required_before_generation": True,
+            },
+            "featured_subscription": featured_subscription,
+            # Legacy aliases kept temporarily so older clients do not explode mid-migration.
+            "plans": [free_account, *subscriptions],
             "top_up": {
                 **self._PUBLIC_TOP_UP_GROUP,
-                "options": [
-                    {"kind": kind.value, **meta}
-                    for kind, meta in self._CHECKOUT_CATALOG.items()
-                    if meta["plan"] is None
-                ],
+                "options": credit_packs,
             },
-            "featured_plan": self._PUBLIC_PLAN_CATALOG[IdentityPlan.PRO]["public_id"],
+            "featured_plan": featured_subscription,
         }
 
 

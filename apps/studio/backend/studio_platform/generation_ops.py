@@ -330,6 +330,9 @@ def build_generated_asset_metadata(
 
 
 def consume_credits_locked(identity: OmniaIdentity, amount: int) -> None:
+    available = max(int(identity.monthly_credits_remaining or 0), 0) + max(int(identity.extra_credits or 0), 0)
+    if amount > available:
+        raise ValueError("Insufficient credits for settlement.")
     if identity.monthly_credits_remaining >= amount:
         identity.monthly_credits_remaining -= amount
         return

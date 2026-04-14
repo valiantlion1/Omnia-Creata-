@@ -846,29 +846,17 @@ def test_launch_readiness_reports_openai_image_lane_truth_for_current_build_smok
         )
         report = persist_provider_smoke_report(
             settings,
-            selected_provider="openai",
+            selected_provider="runware",
             selected_surface="image",
             include_failure_probe=False,
             results=[
                 {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text-to-image",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
             ],
         )
@@ -879,15 +867,15 @@ def test_launch_readiness_reports_openai_image_lane_truth_for_current_build_smok
 
         readiness = build_launch_readiness_report(
             settings=settings,
-            provider_status=[{"name": "openai", "status": "healthy", "detail": "configured"}],
+            provider_status=[{"name": "runware", "status": "healthy", "detail": "configured"}],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "heuristic",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
                     "openai": {"configured": False, "status": "not_configured"},
                 },
@@ -901,11 +889,11 @@ def test_launch_readiness_reports_openai_image_lane_truth_for_current_build_smok
 
         lane_truth = readiness["provider_truth"]["image"]["lane_truth"]
         assert lane_truth["status"] == "pass"
-        assert lane_truth["draft_lane"]["configured"] is True
-        assert lane_truth["draft_lane"]["smoke_verified_for_current_build"] is True
-        assert lane_truth["draft_lane"]["model"] == settings.openai_image_draft_model
-        assert lane_truth["final_lane"]["smoke_verified_for_current_build"] is True
-        assert lane_truth["final_lane"]["model"] == settings.openai_image_model
+        assert lane_truth["selected_lane"]["provider"] == "runware"
+        assert lane_truth["selected_lane"]["configured"] is True
+        assert lane_truth["selected_lane"]["smoke_verified_for_current_build"] is True
+        assert lane_truth["draft_lane"]["configured"] is False
+        assert lane_truth["final_lane"]["configured"] is False
         assert lane_truth["healthy_secondary_launch_grade_providers"] == []
         assert "no secondary launch-grade image lane configured" in lane_truth["detail"]
     finally:
@@ -1348,6 +1336,15 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
             include_failure_probe=False,
             results=[
                 {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
                     "label": "openrouter-chat",
                     "provider_name": "openrouter",
                     "workflow": "chat",
@@ -1357,33 +1354,12 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
                     "model": "google/gemini-2.5-flash",
                 },
                 {
-                    "label": "openai-chat",
-                    "provider_name": "openai",
-                    "workflow": "chat",
-                    "surface": "chat",
-                    "status": "ok",
-                    "latency_ms": 190,
-                    "model": "gpt-5.4-mini",
-                },
-                {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
                 {
                     "label": "fal-text",
@@ -1403,19 +1379,19 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
         readiness = build_launch_readiness_report(
             settings=settings,
             provider_status=[
-                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "runware", "status": "healthy", "detail": "configured"},
                 {"name": "fal", "status": "healthy", "detail": "configured"},
             ],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "openai",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
-                    "openai": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
                 },
             },
             provider_smoke_report=report,
@@ -1490,6 +1466,15 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
             include_failure_probe=False,
             results=[
                 {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
                     "label": "openrouter-chat",
                     "provider_name": "openrouter",
                     "workflow": "chat",
@@ -1499,33 +1484,12 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
                     "model": "google/gemini-2.5-flash",
                 },
                 {
-                    "label": "openai-chat",
-                    "provider_name": "openai",
-                    "workflow": "chat",
-                    "surface": "chat",
-                    "status": "ok",
-                    "latency_ms": 190,
-                    "model": "gpt-5.4-mini",
-                },
-                {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
                 {
                     "label": "fal-text",
@@ -1545,19 +1509,19 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
         readiness = build_launch_readiness_report(
             settings=settings,
             provider_status=[
-                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "runware", "status": "healthy", "detail": "configured"},
                 {"name": "fal", "status": "healthy", "detail": "configured"},
             ],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "openai",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
-                    "openai": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
                 },
             },
             provider_smoke_report=report,
@@ -1638,6 +1602,15 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
             include_failure_probe=False,
             results=[
                 {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
                     "label": "openrouter-chat",
                     "provider_name": "openrouter",
                     "workflow": "chat",
@@ -1647,33 +1620,12 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
                     "model": "google/gemini-2.5-flash",
                 },
                 {
-                    "label": "openai-chat",
-                    "provider_name": "openai",
-                    "workflow": "chat",
-                    "surface": "chat",
-                    "status": "ok",
-                    "latency_ms": 190,
-                    "model": "gpt-5.4-mini",
-                },
-                {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
                 {
                     "label": "fal-text",
@@ -1689,19 +1641,19 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
         readiness = build_launch_readiness_report(
             settings=settings,
             provider_status=[
-                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "runware", "status": "healthy", "detail": "configured"},
                 {"name": "fal", "status": "healthy", "detail": "configured"},
             ],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "openai",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
-                    "openai": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
                 },
             },
             provider_smoke_report=report,
@@ -1783,6 +1735,15 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
             include_failure_probe=False,
             results=[
                 {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
                     "label": "openrouter-chat",
                     "provider_name": "openrouter",
                     "workflow": "chat",
@@ -1792,33 +1753,12 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
                     "model": "google/gemini-2.5-flash",
                 },
                 {
-                    "label": "openai-chat",
-                    "provider_name": "openai",
-                    "workflow": "chat",
-                    "surface": "chat",
-                    "status": "ok",
-                    "latency_ms": 190,
-                    "model": "gpt-5.4-mini",
-                },
-                {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
                 {
                     "label": "fal-text",
@@ -1838,19 +1778,19 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
         readiness = build_launch_readiness_report(
             settings=settings,
             provider_status=[
-                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "runware", "status": "healthy", "detail": "configured"},
                 {"name": "fal", "status": "healthy", "detail": "configured"},
             ],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "openai",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
-                    "openai": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
                 },
             },
             provider_smoke_report=report,
@@ -1932,6 +1872,15 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
             include_failure_probe=False,
             results=[
                 {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
                     "label": "openrouter-chat",
                     "provider_name": "openrouter",
                     "workflow": "chat",
@@ -1941,33 +1890,12 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
                     "model": "google/gemini-2.5-flash",
                 },
                 {
-                    "label": "openai-chat",
-                    "provider_name": "openai",
-                    "workflow": "chat",
-                    "surface": "chat",
-                    "status": "ok",
-                    "latency_ms": 190,
-                    "model": "gpt-5.4-mini",
-                },
-                {
-                    "label": "openai-draft-text-to-image",
-                    "provider_name": "openai",
+                    "label": "runware-text",
+                    "provider_name": "runware",
                     "workflow": "text_to_image",
                     "surface": "image",
-                    "lane": "draft",
-                    "model": settings.openai_image_draft_model,
                     "status": "ok",
-                    "latency_ms": 380,
-                },
-                {
-                    "label": "openai-final-text-to-image",
-                    "provider_name": "openai",
-                    "workflow": "text_to_image",
-                    "surface": "image",
-                    "lane": "final",
-                    "model": settings.openai_image_model,
-                    "status": "ok",
-                    "latency_ms": 640,
+                    "latency_ms": 420,
                 },
                 {
                     "label": "fal-text",
@@ -1996,19 +1924,19 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
         readiness = build_launch_readiness_report(
             settings=settings,
             provider_status=[
-                {"name": "openai", "status": "healthy", "detail": "configured"},
+                {"name": "runware", "status": "healthy", "detail": "configured"},
                 {"name": "fal", "status": "healthy", "detail": "configured"},
             ],
             data_authority={"backend": "postgres", "durable": True},
             generation_runtime_mode="web",
             generation_broker={"enabled": True, "configured": True},
             chat_routing={
-                "primary_provider": "openrouter",
-                "fallback_provider": "openai",
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
                 "providers": {
-                    "gemini": {"configured": False, "status": "not_configured"},
+                    "gemini": {"configured": True, "status": "healthy"},
                     "openrouter": {"configured": True, "status": "healthy"},
-                    "openai": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
                 },
             },
             provider_smoke_report=report,

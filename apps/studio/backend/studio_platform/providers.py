@@ -281,7 +281,7 @@ class StudioImageProvider(ABC):
 
 class FalProvider(StudioImageProvider):
     name = "fal"
-    rollout_tier = "primary"
+    rollout_tier = "secondary"
     billable = True
     capabilities = ProviderCapabilities(
         workflows=("text_to_image", "image_to_image", "edit"),
@@ -617,7 +617,7 @@ class FalProvider(StudioImageProvider):
 
 class RunwareProvider(StudioImageProvider):
     name = "runware"
-    rollout_tier = "secondary"
+    rollout_tier = "primary"
     billable = True
     capabilities = ProviderCapabilities(
         workflows=("text_to_image", "image_to_image", "edit"),
@@ -1600,10 +1600,10 @@ class ProviderRegistry:
     def _provider_order(self, strategy: str) -> tuple[str, ...]:
         normalized = (strategy or "managed-first").strip().lower()
         if normalized == "free-first":
-            return ("pollinations", "huggingface", "openai", "fal", "runware", "demo")
+            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
         if normalized == "balanced":
-            return ("pollinations", "openai", "fal", "huggingface", "runware", "demo")
-        return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
+        return ("runware", "openai", "fal", "huggingface", "pollinations", "demo")
 
     def get_provider(self, provider_name: str | None) -> StudioImageProvider | None:
         normalized = (provider_name or "").strip().lower()
@@ -1648,8 +1648,9 @@ class ProviderRegistry:
         return {
             "default_strategy": self._configured_strategy,
             "plan_defaults": {
-                "free": "free-first",
-                "pro": "balanced",
+                "free": "wallet_managed",
+                "creator": "runware_first",
+                "pro": "runware_first_premium_caps",
             },
             "demo_policy": (
                 "degraded_only_last_resort"
@@ -1666,6 +1667,7 @@ class ProviderRegistry:
         model_id: str | None = None,
         workflow: str = "text_to_image",
         has_reference_image: bool = False,
+        wallet_backed: bool = False,
     ) -> GenerationRoutingDecision:
         normalized_workflow = normalize_generation_workflow(
             workflow,
@@ -1678,12 +1680,18 @@ class ProviderRegistry:
             has_reference_image=has_reference_image,
         )
         normalized_plan = self._normalize_plan(plan)
-        routing_strategy = "balanced" if normalized_plan == IdentityPlan.PRO.value else "free-first"
+        if normalized_plan == IdentityPlan.PRO.value:
+            routing_strategy = "premium-managed"
+        elif normalized_plan == IdentityPlan.CREATOR.value:
+            routing_strategy = "creator-managed"
+        else:
+            routing_strategy = "wallet-managed"
         requested_quality_tier = "premium" if analysis.premium_intent else "standard"
         ordered_provider_names = self._routing_lane_order(
             plan=normalized_plan,
             workflow=normalized_workflow,
             analysis=analysis,
+            wallet_backed=wallet_backed,
         )
         provider_candidates = tuple(
             provider_name
@@ -1763,7 +1771,7 @@ class ProviderRegistry:
         if isinstance(plan, IdentityPlan):
             return plan.value
         normalized = str(plan or IdentityPlan.FREE.value).strip().lower()
-        if normalized in {IdentityPlan.GUEST.value, IdentityPlan.FREE.value, IdentityPlan.PRO.value}:
+        if normalized in {IdentityPlan.GUEST.value, IdentityPlan.FREE.value, IdentityPlan.CREATOR.value, IdentityPlan.PRO.value}:
             return normalized
         return IdentityPlan.FREE.value
 
@@ -1773,19 +1781,24 @@ class ProviderRegistry:
         plan: str,
         workflow: str,
         analysis: PromptProfileAnalysis,
+        wallet_backed: bool = False,
     ) -> tuple[str, ...]:
         if workflow in {"image_to_image", "edit"}:
-            return ("openai", "fal", "runware", "huggingface")
+            return ("openai", "runware", "fal", "huggingface", "pollinations", "demo")
         if plan == IdentityPlan.PRO.value:
-            if analysis.premium_intent:
-                return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
-            return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
+                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
+        if plan == IdentityPlan.CREATOR.value or (
+            plan == IdentityPlan.FREE.value and wallet_backed
+        ):
+            if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
+                return ("runware", "fal", "huggingface", "pollinations", "openai", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "openai", "demo")
         if self._should_prefer_managed_free_lanes(workflow=workflow):
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("openai", "fal", "runware", "huggingface", "pollinations", "demo")
-            return ("openai", "fal", "runware", "pollinations", "huggingface", "demo")
+                return ("runware", "fal", "huggingface", "pollinations", "openai", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "openai", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")
@@ -1824,16 +1837,15 @@ class ProviderRegistry:
             return "workflow_requires_capable_provider"
         if normalized_provider == "demo":
             return "all_standard_lanes_unavailable_degraded"
-        if requested_quality_tier == "premium":
-            if normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
-                return "premium_intent_managed_preferred"
-            if routing_strategy == "balanced":
-                return "managed_unavailable_fallback_standard"
-        if routing_strategy == "free-first" and normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
-            return "free_standard_managed_override"
-        if routing_strategy == "balanced":
-            return "pro_balanced_standard_default"
-        return "free_standard_default"
+        if requested_quality_tier == "premium" and normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
+            return "premium_intent_managed_preferred"
+        if routing_strategy == "premium-managed":
+            return "pro_runware_first_default"
+        if routing_strategy == "creator-managed":
+            return "creator_runware_first_default"
+        if normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
+            return "wallet_managed_launch_lane"
+        return "wallet_fallback_route"
 
     def _is_degraded_route(
         self,
@@ -1888,6 +1900,7 @@ class ProviderRegistry:
         plan: IdentityPlan | str | None = None,
         prompt: str | None = None,
         model_id: str | None = None,
+        wallet_backed: bool = False,
     ) -> str:
         if plan is not None and prompt is not None:
             decision = self.plan_generation_route(
@@ -1896,6 +1909,7 @@ class ProviderRegistry:
                 model_id=model_id,
                 workflow=workflow,
                 has_reference_image=has_reference_image,
+                wallet_backed=wallet_backed,
             )
             return decision.selected_provider or "cloud"
         normalized_workflow = normalize_generation_workflow(

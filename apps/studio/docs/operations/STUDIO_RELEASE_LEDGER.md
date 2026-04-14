@@ -18,6 +18,50 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.14.105`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.104` aligned wallet-backed free routing, but paid entitlement drift still had one risky hole: canceled or past-due paid accounts could continue to look like Creator/Pro accounts in key backend surfaces because stored plan state and effective commercial truth were not fully separated. That left a fail-open path where premium chat/model access and billing shell copy could overstate what an inactive subscription should still receive.
+- What:
+  Studio now resolves an explicit effective commercial plan for inactive subscriptions. If a paid account is `canceled` or `past_due`, billing summaries, settings bootstrap payloads, entitlements, and account-tier reporting all fail closed to the free contract while preserving extra wallet credits that were actually purchased.
+  Generation enforcement now follows that same truth. Paid-only model validation reads the resolved billing state instead of trusting the stored plan field by itself, so inactive subscriptions can no longer start Pro-only image lanes just because the old plan name still exists on the identity record.
+  This wave also cleaned up one frontend contract drift exposed during verification: `MediaAsset` now carries optional `visibility` typing again, which restores `npm run type-check` alongside the already-passing production build.
+
+### `0.6.0-alpha` / build `2026.04.14.104`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.103` closed a lot of billing and security gaps, but one commerce/provider mismatch was still visible in the product contract: free accounts that had legitimately purchased wallet credits were still described and, in some paths, routed too much like fallback-only free users. That drift made route previews, generation admission, and billing forecasts tell slightly different stories about the same paid wallet state.
+- What:
+  Wallet-backed free accounts now carry explicit provider truth into the image routing stack. Studio generation admission passes wallet state into route planning, so purchased-credit free users can promote onto the same managed Runware-first execution lane family that Creator accounts use when those providers are actually available instead of being treated as fallback-only by default.
+  The same contract now reaches non-runtime surfaces too. Generation credit forecasts, render route previews, and model catalog previews all read the same wallet-backed truth, so the backend no longer tells the UI "fallback" while the real generation path is allowed to take a managed lane.
+  Regression coverage was extended around that behavior: wallet-backed free generations now prove they prefer Runware when it exists, forecast and experience-contract tests lock the same route-promotion rule, and the old misleading service-regression test name was corrected so the remaining fallback-only scenario is described honestly.
+
+### `0.6.0-alpha` / build `2026.04.14.103`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The `.102` commerce and provider wave changed core billing truth quickly, so it needed a focused hardening pass before any launch optimism crept in. An external second-eye review surfaced several real fail-closed gaps around Paddle verification, webhook idempotency, credit settlement, and a few unbounded or weakly validated router paths.
+- What:
+  Paddle webhook handling is now safer. Signature verification unwraps the real configured secret instead of passing a masked `SecretStr`, webhook receipts include `event_id` in their idempotency fingerprint, missing `identity_id` custom data fails closed, unknown identities raise instead of being silently acknowledged, and the retired LemonSqueezy service alias no longer pretends to process Paddle-shaped payloads.
+  Subscription and credit behavior were tightened too. `subscription.updated` no longer resets monthly allowance like a free renewal trigger, credit-pack checkout kinds are no longer accepted as subscription plan upgrades, and final generation settlement now rejects true credit underflow instead of silently clamping balances to zero.
+  Service and router hardening also landed: Studio service delegation now forwards security-log fields and chat rebuild arguments correctly, asset-token signing now requires a real JWT secret outside local development, demo login is development-only, and both `POST /personas` and `GET /public/export` now have stricter validation or explicit rate limits.
+
+### `0.6.0-alpha` / build `2026.04.14.102`
+- Date: `2026-04-14`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `Controlled Public Paid Launch` could not keep leaning on the temporary `Starter / Pro / top_up` story. Studio needed a real SaaS contract that separates free access, paid subscriptions, wallet balance, provider doctrine, and deployment truth without letting frontend copy or stale OpenAI-first assumptions keep inventing policy on their own.
+- What:
+  Studio commerce truth is now shaped around `Free Account`, `Creator`, `Pro`, and `Credit Packs`. The backend catalog, identity payloads, billing summaries, and checkout options now expose additive wallet-first fields such as `subscriptions`, `credit_packs`, `wallet`, `account_tier`, `subscription_tier`, `feature_entitlements`, and `usage_caps` instead of forcing the product back through the old starter/pro bundle assumptions.
+  Billing doctrine also moved to `Paddle`. Checkout kinds, webhook parsing, idempotent receipts, and subscription state transitions now follow Paddle-style transaction and subscription events while preserving truthful paid-state behavior such as `past_due`, `canceled`, and `expired` instead of silently refreshing monthly allowance forever.
+  Provider and runtime truth moved with that commerce change. Chat defaults now point at Gemini with OpenRouter as backup, image routing is Runware-first with selective OpenAI premium/edit lanes, and generation admission can fall back to a safe managed provider when the selected billable lane is blocked by spend guardrails instead of pretending the route is still usable.
+
 ### `0.6.0-alpha` / build `2026.04.14.101`
 - Date: `2026-04-14`
 - Codename: `Foundation`

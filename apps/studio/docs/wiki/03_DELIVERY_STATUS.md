@@ -48,9 +48,10 @@ Studio is now described as:
 - a controlled public paid launch, not a waitlist-first beta shell
 
 Commercial defaults:
-- `Starter`
+- `Free Account`
+- `Creator`
 - `Pro`
-- `Credit Top-up`
+- `Credit Packs`
 
 Exact plan pricing and package values must come from the backend catalog.
 The frontend should present that truth, not invent its own packaging story.
@@ -72,24 +73,26 @@ As of `2026-04-14`, official market pricing clusters roughly like this:
 - premium/pro plans: about `$60+/month`
 
 Current Studio package assumptions in the economics dossier:
-- `Starter`: `60` credits, currently modeled as `$0`
-- `Pro`: `1200` credits for `$18/month`
-- `Top-up`: `200` credits for `$8`
-- `Top-up`: `800` credits for `$24`
+- `Free Account`: `0` bundled image credits, limited AI chat, wallet credit packs allowed
+- `Creator`: `400` monthly credits for `$12/month`
+- `Pro`: `1200` monthly credits for `$24/month`
+- `Credit Pack`: `200` credits for `$8`
+- `Credit Pack`: `800` credits for `$24`
 
 Interpretation:
-- `Pro` is currently priced below much of the serious prosumer band
-- `Starter` only stays economically sane if it remains visibly limited and cost-safe
-- top-ups are currently the healthiest margin instrument in the package mix
+- `Creator` is the new paid entry point instead of a vague starter-to-pro jump
+- `Pro` is still priced below much of the serious prosumer band
+- free access only stays economically sane if image generation remains wallet-backed
+- credit packs are currently the healthiest margin instrument in the package mix
 
 Current tension:
 - the product doctrine says Studio is a controlled paid launch, not a broad free playground
-- the current dossier still models `Starter` as free
+- the current dossier now models a free account funnel plus two paid subscriptions
 - that tension should be resolved deliberately before broad public-paid exit, not ignored in copy
 
 Current cost caveat:
-- OpenAI-first image costs are manageable on draft lanes
-- higher-cost final lanes can compress margin quickly if they become default for low-revenue or free traffic
+- Runware-first image economics should carry most normal generation traffic
+- selective OpenAI edit/reference lanes can still compress margin quickly if they become default for low-revenue traffic
 - founder signoff is still required before `provider_economics` can close
 
 ## State Language

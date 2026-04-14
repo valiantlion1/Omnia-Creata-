@@ -67,7 +67,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-5 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all animate-[slideInRight_0.3s_ease-out] ${styles[toast.type]}`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-2xl border px-5 py-4 backdrop-blur-xl transition-all animate-[slideInRight_0.3s_ease-out] ${styles[toast.type]}`}
+              style={{ boxShadow: `var(--border-glow), ${toast.type === 'success' ? '0 8px 32px rgba(16,185,129,0.15)' : toast.type === 'error' ? '0 8px 32px rgba(244,63,94,0.15)' : toast.type === 'warning' ? '0 8px 32px rgba(245,158,11,0.12)' : '0 8px 32px rgba(59,130,246,0.12)'}` }}
             >
               <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${iconColors[toast.type]}`} />
               <p className="flex-1 text-sm font-medium leading-relaxed">{toast.message}</p>

@@ -1,13 +1,15 @@
 from __future__ import annotations
 import hmac
 import hashlib
+import json
+import time
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from config.env import Environment, get_settings
+from config.env import Environment, get_settings, reveal_secret
 from security.auth import User, UserRole, create_user_tokens, get_current_user, get_supabase_auth_client
 from security.auth import User as AuthUser
 from security.rate_limit import RateLimiter
@@ -169,6 +171,14 @@ class ProfileUpdateRequest(BaseModel):
     default_visibility: Optional[Visibility] = None
 
 
+class PersonaCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="New Persona", min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
+    system_prompt: str = Field(min_length=1, max_length=12000)
+    avatar_url: Optional[str] = Field(default=None, max_length=1000)
+
+
 def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRouter:
     router = APIRouter(prefix="/v1", tags=["studio"])
     settings = get_settings()
@@ -299,10 +309,10 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def demo_login(payload: DemoLoginRequest, request: Request):
         if not settings.enable_demo_auth:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Demo auth is disabled")
-        if settings.environment != Environment.DEVELOPMENT and payload.plan != IdentityPlan.FREE:
+        if settings.environment != Environment.DEVELOPMENT:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Demo Pro login is only available in local development.",
+                detail="Demo login is only available in local development.",
             )
         await _consume_rate_limit(request, "auth:demo-login", limit=8)
         demo_user = User(
@@ -511,21 +521,23 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.post("/personas", status_code=status.HTTP_201_CREATED)
     async def create_persona(
-        payload: Dict[str, Any],
+        payload: PersonaCreateRequest,
+        request: Request,
         current_user: Optional[AuthUser] = Depends(get_current_user)
     ):
         import uuid
         from datetime import datetime, timezone
         from .models.persona import StudioPersona
-        
+
         auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "personas:create", limit=12, identifier=auth_user.id)
         new_persona = StudioPersona(
             id=f"persona_{uuid.uuid4().hex[:8]}",
             identity_id=auth_user.id,
-            name=payload.get("name", "New Persona").strip()[:100],
-            description=payload.get("description", "").strip()[:500],
-            system_prompt=payload.get("system_prompt", "").strip(),
-            avatar_url=payload.get("avatar_url"),
+            name=payload.name.strip(),
+            description=payload.description.strip(),
+            system_prompt=payload.system_prompt.strip(),
+            avatar_url=payload.avatar_url,
             is_default=False,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -629,7 +641,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         return {"posts": posts}
 
     @router.get("/public/export")
-    async def get_public_export():
+    async def get_public_export(request: Request):
+        await _consume_rate_limit(request, "public:export", limit=20, window_seconds=60)
         # Ecosystem Federation: Send public data for omniacreata.com main website
         posts = await service.list_public_posts(sort="trending", viewer_identity_id=None)
         export_data = []
@@ -1405,37 +1418,59 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = await _ensure_identity_for_auth_user(current_user)
         return await service.get_settings_payload(auth_user.id)
 
-    @router.post("/webhooks/lemonsqueezy")
-    async def post_lemonsqueezy_webhook(request: Request):
+    def _parse_paddle_signature(signature_header: str) -> tuple[str | None, list[str]]:
+        timestamp: str | None = None
+        signatures: list[str] = []
+        for raw_part in signature_header.split(";"):
+            key, _, value = raw_part.strip().partition("=")
+            normalized_key = key.strip().lower()
+            normalized_value = value.strip()
+            if normalized_key == "ts" and normalized_value:
+                timestamp = normalized_value
+            elif normalized_key == "h1" and normalized_value:
+                signatures.append(normalized_value)
+        return timestamp, signatures
+
+    def _verify_paddle_signature(*, payload_bytes: bytes, signature_header: str, secret: str) -> bool:
+        timestamp, signatures = _parse_paddle_signature(signature_header)
+        if not timestamp or not signatures:
+            return False
+        try:
+            event_ts = int(timestamp)
+        except ValueError:
+            return False
+        if abs(int(time.time()) - event_ts) > 300:
+            return False
+        signed_payload = timestamp.encode("utf-8") + b":" + payload_bytes
+        expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        return any(hmac.compare_digest(expected, candidate) for candidate in signatures)
+
+    @router.post("/webhooks/paddle")
+    async def post_paddle_webhook(request: Request):
         settings = get_settings()
-        secret = settings.lemonsqueezy_webhook_secret
+        secret = reveal_secret(settings.paddle_webhook_secret).strip()
         if not secret:
             return Response("Webhook secret not configured", status_code=500)
-            
+
         payload_bytes = await request.body()
-        signature = request.headers.get("X-Signature") or request.headers.get("x-signature")
-        
+        signature = request.headers.get("Paddle-Signature") or request.headers.get("paddle-signature")
+
         if not signature:
-            # If no signature, reject
             return Response("Missing signature", status_code=401)
-            
-        # Verify HMAC signature
-        expected = hmac.new(
-            secret.encode("utf-8"), 
-            payload_bytes, 
-            hashlib.sha256
-        ).hexdigest()
-        
-        if not hmac.compare_digest(expected, signature):
+
+        if not _verify_paddle_signature(payload_bytes=payload_bytes, signature_header=signature, secret=secret):
             return Response("Invalid signature", status_code=401)
-            
-        import json
+
         try:
             payload = json.loads(payload_bytes)
         except json.JSONDecodeError:
             return Response("Invalid JSON", status_code=400)
-            
-        await service.process_lemonsqueezy_webhook(payload)
+
+        await service.process_paddle_webhook(payload)
         return {"status": "ok"}
+
+    @router.post("/webhooks/lemonsqueezy")
+    async def post_legacy_lemonsqueezy_webhook():
+        return Response("LemonSqueezy webhook has been retired. Use /v1/webhooks/paddle.", status_code=410)
 
     return router

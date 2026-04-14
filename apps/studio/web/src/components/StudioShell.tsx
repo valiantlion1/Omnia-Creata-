@@ -120,7 +120,7 @@ function Section({
             active ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:bg-white/[0.03] hover:text-white font-medium'
           }`
           const activeBar = active ? (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.5),0_0_4px_rgba(124,58,237,0.6)]" />
           ) : null
           return (
             <div key={item.to}>
@@ -430,7 +430,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {!isGuestShell && !collapsed && usageSummary && !hasInternalAccess ? (
           <div className="mb-3 space-y-1.5 px-1">
             <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: usagePercent > 5 ? '2px 0 8px rgba(124,58,237,0.5)' : 'none' }} />
             </div>
             <div className="flex items-center justify-between text-[10px] text-zinc-600">
               <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>
@@ -503,16 +503,9 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         <div className="noise-overlay" />
       </div>
       <aside
-        className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible transition-[width] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] lg:flex lg:flex-col ${
+        className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible transition-[width] duration-[400ms] ease-[cubic-bezier(0.25,0.1,0.25,1)] lg:flex lg:flex-col glass-sidebar ${
           desktopCollapsed ? 'w-[72px]' : 'w-[252px]'
         }`}
-        style={{
-          background: 'linear-gradient(180deg, rgba(14,14,22,0.92) 0%, rgba(10,10,16,0.96) 100%)',
-          backdropFilter: 'blur(24px) saturate(1.5)',
-          WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03), 4px 0 24px rgba(0,0,0,0.3)',
-        }}
       >
         {rail(desktopCollapsed)}
         {/* Edge toggle button — floats on sidebar border, visible on hover */}
@@ -550,7 +543,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </main>
         </div>
 
-        <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-white/[0.04] bg-[#0d0e11]/95 backdrop-blur-xl lg:hidden">
+        <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-white/[0.06] bg-[#0d0e11]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 20px rgba(0,0,0,0.3)' }}>
           {[primaryNav[0], primaryNav[1], primaryNav[2], libraryNav[0], { to: '/account', label: 'Profile', icon: UserCircle2 }].map((item) => {
             const Icon = item.icon
             const active = isActive(location.pathname, item)

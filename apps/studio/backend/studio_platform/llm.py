@@ -13,7 +13,7 @@ import httpx
 from config.env import Environment, configured_secret_value, get_settings, has_configured_secret
 
 from .ai_provider_catalog import chat_model_cost_rates
-from .models import ChatAttachment, ChatMessage, ChatRole
+from .models import ChatAttachment, ChatMessage, ChatRole, IdentityPlan
 from .prompt_engineering import analyze_generation_prompt_profile, improve_prompt_candidate
 from .services.launch_readiness import load_provider_smoke_report
 from .versioning import load_version_info
@@ -76,13 +76,15 @@ class StudioLLMGateway:
         settings = get_settings()
         return {
             "plan_defaults": {
-                "free": "standard",
+                "free": "limited",
+                "creator": "standard",
                 "pro": "premium",
             },
             "primary_provider": settings.chat_primary_provider,
             "fallback_provider": settings.chat_fallback_provider,
             "multimodal_policy": "configured_provider_order",
             "models": {
+                "gemini_limited": settings.gemini_free_model,
                 "gemini_standard": settings.gemini_model,
                 "gemini_premium": settings.gemini_premium_model,
                 "openrouter_standard": settings.openrouter_model,
@@ -116,6 +118,7 @@ class StudioLLMGateway:
         history: Sequence[ChatMessage],
         content: str,
         attachments: Sequence[ChatAttachment],
+        identity_plan: IdentityPlan = IdentityPlan.FREE,
         premium_chat: bool = False,
         intent_kind: str = "creative_guidance",
         prompt_profile: str = "generic",
@@ -128,6 +131,7 @@ class StudioLLMGateway:
             requested_model=requested_model,
             mode=mode,
             attachments=attachments,
+            identity_plan=identity_plan,
             premium_chat=premium_chat,
             prompt_profile=prompt_profile,
             detail_score=detail_score,
@@ -410,6 +414,7 @@ class StudioLLMGateway:
         requested_model: str | None,
         mode: str,
         attachments: Sequence[ChatAttachment],
+        identity_plan: IdentityPlan = IdentityPlan.FREE,
         premium_chat: bool,
         prompt_profile: str,
         detail_score: int,
@@ -483,13 +488,25 @@ class StudioLLMGateway:
                 ],
             )
 
-        requested_quality_tier = "premium" if premium_chat else "standard"
+        normalized_plan = identity_plan.value if isinstance(identity_plan, IdentityPlan) else str(identity_plan or "").strip().lower()
+        if premium_chat:
+            requested_quality_tier = "premium"
+        elif normalized_plan == IdentityPlan.FREE.value:
+            requested_quality_tier = "limited"
+        else:
+            requested_quality_tier = "standard"
         multimodal_request = bool(attachments) or mode in {"vision", "edit"} or recommended_workflow in {
             "image_to_image",
             "edit",
         }
-        routing_strategy = "premium-studio" if premium_chat else "standard-studio"
+        if premium_chat:
+            routing_strategy = "premium-studio"
+        elif normalized_plan == IdentityPlan.FREE.value:
+            routing_strategy = "free-limited-studio"
+        else:
+            routing_strategy = "standard-studio"
         routing_reason = self._determine_routing_reason(
+            identity_plan=identity_plan,
             premium_chat=premium_chat,
             multimodal_request=multimodal_request,
             prompt_profile=prompt_profile,
@@ -507,6 +524,21 @@ class StudioLLMGateway:
                     seen=seen,
                     provider=provider,
                     quality_tier="premium",
+                )
+            for provider in ordered_providers:
+                self._append_provider_candidate(
+                    candidates=raw_candidates,
+                    seen=seen,
+                    provider=provider,
+                    quality_tier="standard",
+                )
+        elif requested_quality_tier == "limited":
+            for provider in ordered_providers:
+                self._append_provider_candidate(
+                    candidates=raw_candidates,
+                    seen=seen,
+                    provider=provider,
+                    quality_tier="limited",
                 )
             for provider in ordered_providers:
                 self._append_provider_candidate(
@@ -555,18 +587,25 @@ class StudioLLMGateway:
     ) -> tuple[str, str]:
         settings = get_settings()
         if provider == "gemini":
-            model = settings.gemini_premium_model if quality_tier == "premium" else settings.gemini_model
+            if quality_tier == "premium":
+                model = settings.gemini_premium_model
+            elif quality_tier == "limited":
+                model = settings.gemini_free_model
+            else:
+                model = settings.gemini_model
             return model, quality_tier
         if provider == "openrouter":
             model = settings.openrouter_premium_model if quality_tier == "premium" else settings.openrouter_model
-            return model, quality_tier
+            effective_quality_tier = quality_tier if quality_tier != "limited" else self._infer_quality_tier_from_model(model)
+            return model, effective_quality_tier
         if provider == "openai":
             if quality_tier == "premium" and settings.environment == Environment.DEVELOPMENT:
                 # Keep local/dev fallback inexpensive unless premium is requested explicitly.
                 model = settings.openai_model
                 return model, self._infer_quality_tier_from_model(model)
             model = settings.openai_premium_model if quality_tier == "premium" else settings.openai_model
-            return model, quality_tier
+            effective_quality_tier = quality_tier if quality_tier != "limited" else self._infer_quality_tier_from_model(model)
+            return model, effective_quality_tier
         return "heuristic", "degraded"
 
     def _ordered_chat_providers(self, *, multimodal_request: bool) -> list[str]:
@@ -865,6 +904,7 @@ class StudioLLMGateway:
     def _determine_routing_reason(
         self,
         *,
+        identity_plan: IdentityPlan,
         premium_chat: bool,
         multimodal_request: bool,
         prompt_profile: str,
@@ -879,6 +919,10 @@ class StudioLLMGateway:
             return "premium_high_detail_chat"
         if premium_chat:
             return "premium_chat_default"
+        if identity_plan == IdentityPlan.FREE:
+            if multimodal_request:
+                return "free_limited_multimodal_chat"
+            return "free_limited_chat"
         if multimodal_request:
             return "standard_multimodal_chat"
         if prompt_profile in {"stylized_illustration", "fantasy_concept"}:
@@ -1566,12 +1610,14 @@ class StudioLLMGateway:
         normalized = model.strip().lower()
         if any(marker in normalized for marker in ("pro", "opus", "sonnet", "gpt-5", "grok-4", "o3")):
             return "premium"
-        if any(marker in normalized for marker in ("flash", "lite", "mini", "haiku")):
+        if "lite" in normalized:
+            return "limited"
+        if any(marker in normalized for marker in ("flash", "mini", "haiku")):
             return "standard"
         return "standard"
 
     def _is_quality_degraded(self, requested_quality_tier: str, selected_quality_tier: str) -> bool:
-        order = {"degraded": 0, "standard": 1, "premium": 2}
+        order = {"degraded": 0, "limited": 1, "standard": 2, "premium": 3}
         return order.get(selected_quality_tier, 0) < order.get(requested_quality_tier, 0)
 
     def _as_int(self, value: Any) -> int | None:

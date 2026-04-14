@@ -30,8 +30,8 @@ Purpose:
 
 ### 1. Catalog Truth
 
-- keep public plans and top-up packaging server-authoritative
-- use stable package ids: `starter`, `pro`, `top_up`
+- keep subscriptions, wallet, and credit packs server-authoritative
+- use stable launch ids: `free_account`, `creator`, `pro`, `credit_packs`
 - keep exact price and credit amounts in backend/catalog truth, not hardcoded UI copy
 - make Billing the canonical user-facing place to read current commercial truth
 
@@ -44,7 +44,8 @@ Purpose:
 
 ### 3. Provider Truth
 
-- treat `OpenAI` as the current launch-grade primary lane
+- treat `Gemini` as the default chat primary lane and `OpenRouter` as backup
+- treat `Runware` as the default image primary lane and `OpenAI` as selective premium edit/reference support
 - only promote backup or secondary providers when they are truly proven
 - do not let optional provider config masquerade as resilience
 - keep `provider_mix`, `image_public_paid_usage`, and `provider_economics` visible until they are actually closed
@@ -64,25 +65,25 @@ Official pricing snapshot checked on `2026-04-14`:
 - [Runway Pricing](https://runwayml.com/pricing): `Standard $15`, `Pro $35`, `Unlimited $95` before annual discounts
 - [Leonardo Pricing](https://leonardo.ai/pricing): entry paid starts around `Apprentice $12`, then `Artisan $30`, then `Maestro $60`
 - [Krea Pricing](https://www.krea.ai/pricing): `Basic $10`, `Pro $35`, `Max $105` before annual discounts
-- [OpenAI API Pricing](https://openai.com/api/pricing/): current official source for Studio's OpenAI-first chat and image economics
+- [OpenAI API Pricing](https://openai.com/api/pricing/): selective premium image/edit lane economics
 
 Implications for Studio:
 - do not compete on `unlimited generations`
 - do not compete on `cheapest prompt box`
 - compete on premium execution continuity and product trust
-- keep top-ups as the main shock absorber for spiky premium image usage
-- treat `Pro $18` as an aggressive launch price, not a forever assumption
+- keep credit packs as the main shock absorber for spiky premium image usage
+- treat `Creator $12` and `Pro $24` as launch assumptions, not forever assumptions
 
 Current economics reading:
-- current `Pro` positioning is below many serious creator tiers in the market
-- current top-up pricing is materially stronger than the monthly plan on a per-credit basis
-- current `Starter` package only makes sense if it stays draft-limited, tightly bounded, or is converted into a paid entry offer later
-- if higher-cost final OpenAI lanes become the default for broader traffic, package math should be re-signed before scale
+- current `Creator` and `Pro` positioning sits below much of the serious creator band in the market
+- current credit-pack pricing is materially stronger than the monthly plans on a per-credit basis
+- the free account only makes sense if image generation stays wallet-backed and tightly bounded
+- if selective OpenAI lanes become the default for broader traffic, package math should be re-signed before scale
 
 Recommended next commercial decisions:
-1. decide whether `Starter` is a truly free draft-only funnel or a low-cost paid entry plan
-2. keep `Pro` as the main `Chat + Create` paid contract for launch
-3. use top-ups, not fake unlimited promises, to absorb premium render demand
+1. keep `Free Account` as a chat-first funnel and wallet entry point, not a free image sink
+2. keep `Creator` and `Pro` as the two paid subscription contracts for launch
+3. use credit packs, not fake unlimited promises, to absorb premium render demand
 4. do not close `provider_economics` until the current-build dossier and founder signoff match the real launch defaults
 
 Recommended next product/engineering order:

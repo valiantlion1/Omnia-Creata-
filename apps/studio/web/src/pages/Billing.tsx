@@ -14,16 +14,18 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
 
 function formatBillingStatusLabel(summary: BillingSummary) {
-  if (summary.plan.id === 'free') return 'Starter access'
+  if (summary.account_tier === 'free') return 'Free account'
   if (!summary.subscription_status || summary.subscription_status === 'none') return 'No active subscription'
   return summary.subscription_status.replace(/_/g, ' ')
 }
 
 function formatBillingActivityDescription(description: string) {
   const trimmed = description.trim()
-  if (/^starter welcome credits$/i.test(trimmed)) return 'Starter welcome credits'
-  if (/^starter monthly refresh$/i.test(trimmed)) return 'Starter monthly refresh'
-  if (/^pro upgrade$/i.test(trimmed)) return 'Pro activation'
+  if (/^free account welcome credits$/i.test(trimmed)) return 'Free account welcome credits'
+  if (/^free account monthly refresh$/i.test(trimmed)) return 'Free account monthly refresh'
+  if (/^creator activation$/i.test(trimmed)) return 'Creator activation'
+  if (/^creator renewal$/i.test(trimmed)) return 'Creator renewal'
+  if (/^pro activation$/i.test(trimmed)) return 'Pro activation'
   if (/^pro renewal$/i.test(trimmed)) return 'Pro renewal'
   return trimmed
 }
@@ -34,7 +36,7 @@ function formatPlanPrice(priceUsd: number | null, billingPeriod: 'month' | null)
   return { price: `$${priceUsd}`, period: billingPeriod ? `/${billingPeriod}` : null }
 }
 
-function formatTopUpLeadPrice(options: PublicPlansPayload['top_up']['options']) {
+function formatCreditPackLeadPrice(options: PublicPlansPayload['credit_packs']) {
   if (!options.length) return 'Catalog'
   return `$${Math.min(...options.map((entry) => entry.price_usd))}`
 }
@@ -68,8 +70,11 @@ export default function BillingPage() {
   const isUnlimitedAccess = Boolean(billing?.credits.unlimited || isRoot)
   const availableCheckoutKinds = new Set<CheckoutKind>((billing?.checkout_options ?? []).map((option) => option.kind))
   const currentCommercialPlan = useMemo(
-    () => publicPlans?.plans.find((plan) => plan.entitlement_plan === billing?.plan.id) ?? null,
-    [billing?.plan.id, publicPlans?.plans],
+    () =>
+      publicPlans && billing
+        ? [publicPlans.free_account, ...publicPlans.subscriptions].find((plan) => plan.entitlement_plan === billing.plan.id) ?? null
+        : null,
+    [billing, publicPlans],
   )
   const generationLaneHighlights = billing?.generation_credit_guide?.lane_highlights ?? []
   const entitlementFacts = useMemo(() => {
@@ -174,7 +179,7 @@ export default function BillingPage() {
 
       {publicPlans ? (
         <section className="grid gap-8 md:grid-cols-2 pt-4">
-          {publicPlans.plans.map((plan) => {
+          {[publicPlans.free_account, ...publicPlans.subscriptions].map((plan) => {
             const isCurrentPlan = billing?.plan.id === plan.entitlement_plan
             const checkoutEnabled = Boolean(plan.checkout_kind && availableCheckoutKinds.has(plan.checkout_kind))
             const isCheckoutPending = Boolean(plan.checkout_kind) && checkoutLoading === plan.checkout_kind
@@ -267,17 +272,23 @@ export default function BillingPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Flexible usage</div>
-              <h2 className="mt-2 text-2xl font-bold text-white">{publicPlans.top_up.label}</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">{publicPlans.top_up.summary}</p>
+              <h2 className="mt-2 text-2xl font-bold text-white">Credit packs</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                Free accounts and subscribers can both buy wallet credits. Studio spends included monthly allowance first, then wallet balance.
+              </p>
             </div>
             <div className="text-right">
               <div className="text-sm text-zinc-500">Starts at</div>
-              <div className="text-4xl font-extrabold tracking-tight text-white">{formatTopUpLeadPrice(publicPlans.top_up.options)}</div>
+              <div className="text-4xl font-extrabold tracking-tight text-white">{formatCreditPackLeadPrice(publicPlans.credit_packs)}</div>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            {publicPlans.top_up.feature_summary.map((feature) => (
+            {[
+              'Free accounts can buy wallet credits',
+              'Image generation requires included allowance or wallet balance',
+              'Monthly allowance spends before wallet credits',
+            ].map((feature) => (
               <span key={feature} className="rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-300">
                 {feature}
               </span>
@@ -285,7 +296,7 @@ export default function BillingPage() {
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {publicPlans.top_up.options.map((option) => {
+            {publicPlans.credit_packs.map((option) => {
               const checkoutEnabled = availableCheckoutKinds.has(option.kind)
               const isCheckoutPending = checkoutLoading === option.kind
               return (

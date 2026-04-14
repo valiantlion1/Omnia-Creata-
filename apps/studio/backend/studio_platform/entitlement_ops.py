@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .billing_ops import BillingStateSnapshot
+from .billing_ops import BillingStateSnapshot, resolve_effective_plan
 from .models import ChatAttachment, IdentityPlan, OmniaIdentity, PlanCatalogEntry
 
 
@@ -54,12 +54,28 @@ def resolve_entitlements(
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
     billing_state: BillingStateSnapshot | None = None,
 ) -> ResolvedEntitlements:
-    effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
+    effective_plan = (
+        billing_state.effective_plan
+        if billing_state is not None
+        else resolve_effective_plan(identity=identity, plan_catalog=plan_catalog)
+    )
     plan = plan_catalog[effective_plan]
-    monthly_credits = billing_state.monthly_allowance if billing_state is not None else identity.monthly_credit_allowance
-    monthly_remaining = billing_state.monthly_remaining if billing_state is not None else identity.monthly_credits_remaining
+    monthly_credits = (
+        billing_state.monthly_allowance
+        if billing_state is not None
+        else int(plan.monthly_credits if effective_plan != identity.plan else identity.monthly_credit_allowance)
+    )
+    monthly_remaining = (
+        billing_state.monthly_remaining
+        if billing_state is not None
+        else min(max(int(identity.monthly_credits_remaining or 0), 0), monthly_credits)
+    )
     extra_credits = billing_state.extra_credits if billing_state is not None else identity.extra_credits
-    credits_remaining = billing_state.gross_remaining if billing_state is not None else identity.monthly_credits_remaining + identity.extra_credits
+    credits_remaining = (
+        billing_state.gross_remaining
+        if billing_state is not None
+        else monthly_remaining + max(int(identity.extra_credits or 0), 0)
+    )
     return ResolvedEntitlements(
         plan=effective_plan,
         queue_priority=plan.queue_priority,

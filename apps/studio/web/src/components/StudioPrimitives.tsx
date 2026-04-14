@@ -32,7 +32,7 @@ export function PageHeader({
     <div className={clsx('grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-end', className)}>
       <div className="min-w-0">
         <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-600">{eyebrow}</div>
-        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</h1>
+        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] font-display md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</h1>
         {description ? <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p> : null}
         {actions ? <div className="mt-5 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
       </div>
@@ -169,7 +169,7 @@ export function EmptyState({
 }) {
   return (
     <section className="border-y border-dashed border-white/[0.06] py-10 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.04] text-base text-white ring-1 ring-white/8">+</div>
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.04] text-base text-white ring-1 ring-white/8 shadow-[0_0_20px_-4px_rgba(124,58,237,0.2)]">+</div>
       <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</h3>
       <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
@@ -309,7 +309,7 @@ export function EditTextDialog({
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl">
+      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{title}</div>

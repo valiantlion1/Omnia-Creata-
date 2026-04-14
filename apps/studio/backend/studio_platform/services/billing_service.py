@@ -1,3 +1,4 @@
+from datetime import timezone
 from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from fastapi import Request
 import asyncio
@@ -59,7 +60,7 @@ class BillingService:
             model
             for model in await self.service.list_models_for_identity(identity)
             if not (
-                identity.plan == IdentityPlan.FREE and model.min_plan == IdentityPlan.PRO
+                identity.plan == IdentityPlan.FREE and model.min_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}
             )
         ]
         return build_billing_summary(
@@ -84,13 +85,13 @@ class BillingService:
         config = self.service.checkout_catalog[kind]
         settings = get_settings()
 
-        if settings.lemonsqueezy_store_id:
+        if settings.paddle_checkout_base_url:
             return {
                 "status": "redirect",
-                "provider": "lemonsqueezy",
+                "provider": "paddle",
                 "kind": kind.value,
-                "checkout_url": build_lemonsqueezy_checkout_url(
-                    store_id=settings.lemonsqueezy_store_id,
+                "checkout_url": build_paddle_checkout_url(
+                    base_url=settings.paddle_checkout_base_url,
                     identity_id=identity_id,
                     email=identity.email,
                     kind=kind,
@@ -251,6 +252,8 @@ class BillingService:
             identity.monthly_credits_remaining = 0
             identity.last_credit_refresh_at = utc_now()
             return
+        if identity.plan in {IdentityPlan.CREATOR, IdentityPlan.PRO} and identity.subscription_status != SubscriptionStatus.ACTIVE:
+            return
 
         last = identity.last_credit_refresh_at.astimezone(timezone.utc)
         now = utc_now()
@@ -265,10 +268,29 @@ class BillingService:
             )
 
 
-    async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
-        """Handle LemonSqueezy webhook events to update user subscription and credits."""
-        event_name = payload.get("meta", {}).get("event_name", "")
-        custom_data = payload.get("meta", {}).get("custom_data", {})
+    async def process_paddle_webhook(self, payload: Dict[str, Any]) -> None:
+        """Handle Paddle webhook events to update user subscription state and wallet credits."""
+        event_name = str(payload.get("event_type") or "").strip().lower()
+        data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
+        subscription_status = str(
+            data.get("status")
+            or (data.get("attributes", {}) if isinstance(data.get("attributes"), dict) else {}).get("status")
+            or ""
+        ).strip().lower()
+        if event_name == "subscription.updated":
+            if subscription_status == "expired":
+                event_name = "subscription.expired"
+            elif subscription_status in {"canceled", "cancelled"}:
+                event_name = "subscription.canceled"
+            elif subscription_status == "paused":
+                event_name = "subscription.paused"
+            elif subscription_status == "past_due":
+                event_name = "subscription.past_due"
+        custom_data = data.get("custom_data", {})
+        if not isinstance(custom_data, dict):
+            custom_data = payload.get("meta", {}).get("custom_data", {})
+        if not isinstance(custom_data, dict):
+            custom_data = {}
         identity_id = custom_data.get("identity_id")
         checkout_kind_raw = custom_data.get("checkout_kind")
         checkout_kind = None
@@ -277,66 +299,48 @@ class BillingService:
                 checkout_kind = CheckoutKind(checkout_kind_raw)
             except ValueError:
                 checkout_kind = None
-        
+
         if not identity_id:
-            # Maybe the user didn't have an account or it was a test hook
+            raise ValueError("Paddle webhook is missing identity_id custom_data.")
+
+        if not is_supported_paddle_event(event_name):
             return
 
-        if not is_supported_lemonsqueezy_event(event_name):
-            return
-            
         now = utc_now()
-        receipt = build_lemonsqueezy_webhook_receipt(
+        receipt = build_paddle_webhook_receipt(
             payload=payload,
             identity_id=identity_id,
             checkout_kind=checkout_kind,
             now=now,
         )
-        if event_name in ("order_created", "subscription_created", "subscription_payment_success"):
-            upgraded_email = None
-            already_processed = False
+        upgraded_email = None
+        upgraded_label = None
+        already_processed = False
 
-            def mutation(state: StudioState) -> None:
-                nonlocal already_processed, upgraded_email
-                if receipt.id in state.billing_webhook_receipts:
-                    already_processed = True
-                    return
-                result = apply_lemonsqueezy_webhook_event(
-                    state=state,
-                    identity_id=identity_id,
-                    event_name=event_name,
-                    now=now,
-                    plan_catalog=self.service.plan_catalog,
-                    checkout_catalog=self.service.checkout_catalog,
-                    checkout_kind=checkout_kind,
-                    receipt_id=receipt.id,
-                )
-                state.billing_webhook_receipts[receipt.id] = receipt
-                upgraded_email = result.upgraded_email
+        def mutation(state: StudioState) -> None:
+            nonlocal already_processed, upgraded_email, upgraded_label
+            if receipt.id in state.billing_webhook_receipts:
+                already_processed = True
+                return
+            result = apply_paddle_webhook_event(
+                state=state,
+                identity_id=identity_id,
+                event_name=event_name,
+                now=now,
+                plan_catalog=self.service.plan_catalog,
+                checkout_catalog=self.service.checkout_catalog,
+                checkout_kind=checkout_kind,
+                receipt_id=receipt.id,
+            )
+            state.billing_webhook_receipts[receipt.id] = receipt
+            upgraded_email = result.upgraded_email
+            if upgraded_email and checkout_kind in {CheckoutKind.CREATOR_MONTHLY, CheckoutKind.PRO_MONTHLY}:
+                upgraded_label = self.service.plan_catalog[checkout_catalog_kind_to_plan(checkout_kind)].label
 
-            await self.service.store.mutate(mutation)
-            if upgraded_email and not already_processed:
-                await mailer.send_subscription_update(upgraded_email, "Pro")
+        await self.service.store.mutate(mutation)
+        if upgraded_email and upgraded_label and not already_processed:
+            await mailer.send_subscription_update(upgraded_email, upgraded_label)
 
-        elif event_name in ("subscription_cancelled", "subscription_expired"):
-            already_processed = False
-
-            def mutation(state: StudioState) -> None:
-                nonlocal already_processed
-                if receipt.id in state.billing_webhook_receipts:
-                    already_processed = True
-                    return
-                apply_lemonsqueezy_webhook_event(
-                    state=state,
-                    identity_id=identity_id,
-                    event_name=event_name,
-                    now=now,
-                    plan_catalog=self.service.plan_catalog,
-                    checkout_catalog=self.service.checkout_catalog,
-                    checkout_kind=checkout_kind,
-                    receipt_id=receipt.id,
-                )
-                state.billing_webhook_receipts[receipt.id] = receipt
-
-            await self.service.store.mutate(mutation)
+    async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
+        raise RuntimeError("LemonSqueezy webhooks have been retired. Use Paddle webhook processing instead.")
 

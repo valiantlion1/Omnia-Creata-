@@ -29,17 +29,17 @@ IMAGE_DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
 
 
 def _protected_beta_chat_provider(settings: Settings) -> str:
-    value = str(getattr(settings, "protected_beta_chat_provider", "openai") or "").strip().lower()
+    value = str(getattr(settings, "protected_beta_chat_provider", "gemini") or "").strip().lower()
     if value in CHAT_LAUNCH_GRADE_PROVIDERS:
         return value
-    return "openai"
+    return "gemini"
 
 
 def _protected_beta_image_provider(settings: Settings) -> str:
-    value = str(getattr(settings, "protected_beta_image_provider", "openai") or "").strip().lower()
+    value = str(getattr(settings, "protected_beta_image_provider", "runware") or "").strip().lower()
     if value in IMAGE_LAUNCH_GRADE_PROVIDERS:
         return value
-    return "openai"
+    return "runware"
 
 
 def protected_beta_requires_final_image_lane(settings: Settings) -> bool:

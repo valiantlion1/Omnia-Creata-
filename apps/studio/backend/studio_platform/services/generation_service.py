@@ -560,17 +560,21 @@ class GenerationService:
         model_id: str,
         workflow: str,
         has_reference_image: bool,
+        keep_primary: bool = True,
     ) -> tuple[str, ...]:
         normalized_candidates = tuple(
             str(provider_name or "").strip().lower()
             for provider_name in provider_candidates
             if str(provider_name or "").strip()
         )
-        if len(normalized_candidates) <= 1:
+        if len(normalized_candidates) <= 1 and keep_primary:
             return normalized_candidates
 
-        allowed_candidates = [normalized_candidates[0]]
-        for provider_name in normalized_candidates[1:]:
+        allowed_candidates: list[str] = []
+        for index, provider_name in enumerate(normalized_candidates):
+            if index == 0 and keep_primary:
+                allowed_candidates.append(provider_name)
+                continue
             provider_billable = self.service.providers.provider_billable(provider_name)
             projected_cost_usd = self.service.providers.estimate_generation_cost(
                 provider_name=provider_name,
@@ -632,8 +636,9 @@ class GenerationService:
         plan_config = self.service.plan_catalog[identity.plan]
         if not plan_config.can_generate:
             raise PermissionError("Guests cannot generate images")
+        billing_state = await self.service.billing._resolve_billing_state_for_identity(identity)
 
-        self.service._validate_model_for_identity(identity, model)
+        self.service._validate_model_for_identity(identity, model, billing_state=billing_state)
         self.service._validate_dimensions_for_model(width, height, model)
         prompt_memory = await self.service.store.get_prompt_memory_for_identity(identity.id)
         prompt_memory_context = build_prompt_memory_context(prompt_memory)
@@ -670,6 +675,7 @@ class GenerationService:
             model_id=model.id,
             workflow=admission_prompt_snapshot.workflow,
             has_reference_image=reference_asset is not None,
+            wallet_backed=identity.plan == IdentityPlan.FREE and billing_state.extra_credits > 0,
         )
         compiled_request = compile_generation_request(
             prompt=cleaned_prompt,
@@ -708,26 +714,6 @@ class GenerationService:
                 "No real image provider is available for this workflow right now. "
                 "Studio will not replace it with a fake demo render."
             )
-        provider_estimated_cost = self.service.providers.estimate_generation_cost(
-            provider_name=routing_decision.selected_provider,
-            width=width,
-            height=height,
-            model_id=model.id,
-            workflow=routing_decision.workflow,
-            has_reference_image=reference_asset is not None,
-        )
-        provider_billable = self.service.providers.provider_billable(routing_decision.selected_provider)
-        spend_guardrail = await self.service._provider_spend_guardrail_for_provider(
-            provider_name=routing_decision.selected_provider,
-            provider_billable=provider_billable,
-            projected_cost_usd=provider_estimated_cost or 0.0,
-        )
-        if spend_guardrail is not None:
-            if spend_guardrail.status == "blocked":
-                logger.warning("generation_provider_spend_guardrail_block %s", spend_guardrail.serialize())
-                raise RuntimeError(self._provider_spend_guardrail_message())
-            if spend_guardrail.status == "warning":
-                logger.warning("generation_provider_spend_guardrail_warning %s", spend_guardrail.serialize())
         filtered_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
             provider_candidates=routing_decision.provider_candidates,
             width=width,
@@ -735,12 +721,32 @@ class GenerationService:
             model_id=model.id,
             workflow=routing_decision.workflow,
             has_reference_image=reference_asset is not None,
+            keep_primary=False,
         )
+        if not filtered_provider_candidates:
+            raise RuntimeError(self._provider_spend_guardrail_message())
+        effective_provider = filtered_provider_candidates[0]
+        effective_routing_decision = self.service.providers.finalize_generation_route(
+            routing_decision,
+            provider_name=effective_provider,
+        )
+        provider_estimated_cost = self.service.providers.estimate_generation_cost(
+            provider_name=effective_provider,
+            width=width,
+            height=height,
+            model_id=model.id,
+            workflow=effective_routing_decision.workflow,
+            has_reference_image=reference_asset is not None,
+        )
+        provider_billable = self.service.providers.provider_billable(effective_provider)
         pricing_quote = build_generation_pricing_quote(
-            selected_provider=routing_decision.selected_provider,
-            routing_decision=routing_decision,
+            selected_provider=effective_routing_decision.selected_provider,
+            routing_decision=replace(
+                effective_routing_decision,
+                provider_candidates=filtered_provider_candidates,
+            ),
             requested_model_id=model.id,
-            workflow=routing_decision.workflow,
+            workflow=effective_routing_decision.workflow,
             width=width,
             height=height,
             output_count=output_count,
@@ -761,15 +767,15 @@ class GenerationService:
             credit_cost=pricing_quote.credit_cost,
             output_count=output_count,
             queue_priority=plan_config.queue_priority,
-            provider=routing_decision.selected_provider or "pending",
-            provider_rollout_tier=self.service.providers.provider_rollout_tier(routing_decision.selected_provider),
+            provider=effective_provider,
+            provider_rollout_tier=self.service.providers.provider_rollout_tier(effective_provider),
             provider_billable=provider_billable,
-            requested_quality_tier=routing_decision.requested_quality_tier,
-            selected_quality_tier=routing_decision.selected_quality_tier,
-            degraded=routing_decision.degraded,
-            routing_strategy=routing_decision.routing_strategy,
-            routing_reason=routing_decision.routing_reason,
-            prompt_profile=routing_decision.prompt_profile,
+            requested_quality_tier=effective_routing_decision.requested_quality_tier,
+            selected_quality_tier=effective_routing_decision.selected_quality_tier,
+            degraded=effective_routing_decision.degraded,
+            routing_strategy=effective_routing_decision.routing_strategy,
+            routing_reason=effective_routing_decision.routing_reason,
+            prompt_profile=effective_routing_decision.prompt_profile,
             provider_candidates=list(filtered_provider_candidates),
             reserved_credit_cost=pricing_quote.reserved_credit_cost,
             credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",
@@ -1000,13 +1006,24 @@ class GenerationService:
 
         release_broker_claim = True
         try:
-            preflight_guardrail = await self.service._provider_spend_guardrail_for_provider(
-                provider_name=provider_label,
-                provider_billable=self.service.providers.provider_billable(provider_label),
-                projected_cost_usd=job.estimated_cost or 0.0,
+            execution_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
+                provider_candidates=tuple(job.provider_candidates or [provider_label]),
+                width=job.prompt_snapshot.width,
+                height=job.prompt_snapshot.height,
+                model_id=job.model,
+                workflow=job.prompt_snapshot.workflow,
+                has_reference_image=job.prompt_snapshot.reference_asset_id is not None,
+                keep_primary=False,
             )
-            if preflight_guardrail is not None:
-                if preflight_guardrail.status == "blocked":
+            if execution_provider_candidates:
+                provider_label = execution_provider_candidates[0]
+            else:
+                preflight_guardrail = await self.service._provider_spend_guardrail_for_provider(
+                    provider_name=provider_label,
+                    provider_billable=self.service.providers.provider_billable(provider_label),
+                    projected_cost_usd=job.estimated_cost or 0.0,
+                )
+                if preflight_guardrail is not None and preflight_guardrail.status == "blocked":
                     updated_job = await self._update_job_status(
                         job_id,
                         JobStatus.FAILED,
@@ -1027,20 +1044,12 @@ class GenerationService:
                         level=logging.WARNING,
                     )
                     return
-                if preflight_guardrail.status == "warning":
+                if preflight_guardrail is not None and preflight_guardrail.status == "warning":
                     logger.warning("generation_provider_spend_guardrail_warning %s", preflight_guardrail.serialize())
-            execution_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
-                provider_candidates=tuple(job.provider_candidates or [provider_label]),
-                width=job.prompt_snapshot.width,
-                height=job.prompt_snapshot.height,
-                model_id=job.model,
-                workflow=job.prompt_snapshot.workflow,
-                has_reference_image=job.prompt_snapshot.reference_asset_id is not None,
-            )
             execution_job = job
             if execution_provider_candidates and tuple(job.provider_candidates) != execution_provider_candidates:
                 execution_job = job.model_copy(
-                    update={"provider_candidates": list(execution_provider_candidates)}
+                    update={"provider_candidates": list(execution_provider_candidates), "provider": provider_label}
                 )
             execution = await self.service.generation_runtime.execute_job(execution_job)
             finished_at = utc_now()

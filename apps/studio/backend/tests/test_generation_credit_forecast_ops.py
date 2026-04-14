@@ -46,16 +46,23 @@ def _registry_with(*providers: StudioImageProvider) -> ProviderRegistry:
     return registry
 
 
-def _billing_state(*, available_to_spend: int, reserved_total: int = 0, unlimited: bool = False) -> BillingStateSnapshot:
+def _billing_state(
+    *,
+    available_to_spend: int,
+    reserved_total: int = 0,
+    unlimited: bool = False,
+    extra_credits: int = 0,
+    effective_plan: IdentityPlan = IdentityPlan.PRO,
+) -> BillingStateSnapshot:
     return BillingStateSnapshot(
         gross_remaining=available_to_spend + reserved_total,
         reserved_total=reserved_total,
         available_to_spend=available_to_spend,
         monthly_remaining=available_to_spend + reserved_total,
         monthly_allowance=1200,
-        extra_credits=0,
+        extra_credits=extra_credits,
         unlimited=unlimited,
-        effective_plan=IdentityPlan.PRO,
+        effective_plan=effective_plan,
         subscription_active=True,
     )
 
@@ -129,3 +136,29 @@ def test_credit_forecasts_show_discounted_fallback_hold() -> None:
     assert flux["settlement_credit_cost"] == 3
     assert flux["settlement_policy"] == "standard_discount"
     assert flux["max_startable_jobs_now"] == 19
+
+
+def test_credit_forecasts_promote_wallet_backed_free_accounts_to_runware_first() -> None:
+    registry = _registry_with(
+        _FakeProvider(name="runware", rollout_tier="primary", billable=True),
+        _FakeProvider(name="pollinations", rollout_tier="fallback", billable=False),
+        _FakeProvider(name="huggingface", rollout_tier="fallback", billable=False),
+    )
+    summary = build_generation_credit_forecasts(
+        identity_plan=IdentityPlan.FREE,
+        billing_state=_billing_state(
+            available_to_spend=60,
+            extra_credits=60,
+            effective_plan=IdentityPlan.FREE,
+        ),
+        models=[_model("flux-schnell", credit_cost=6, estimated_cost=0.003)],
+        providers=registry,
+    )
+
+    flux = summary["models"][0]
+    assert flux["planned_provider"] == "runware"
+    assert flux["pricing_lane"] == "draft"
+    assert flux["reserved_credit_cost"] == 6
+    assert flux["settlement_credit_cost"] == 6
+    assert flux["settlement_policy"] == "managed_full"
+    assert flux["render_experience"]["state"] == "ready"

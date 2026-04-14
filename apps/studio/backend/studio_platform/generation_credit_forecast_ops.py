@@ -72,6 +72,7 @@ def build_generation_credit_forecasts(
             model_id=model.id,
             workflow="text_to_image",
             has_reference_image=False,
+            wallet_backed=identity_plan == IdentityPlan.FREE and billing_state.extra_credits > 0,
         )
         provider_estimated_cost = providers.estimate_generation_cost(
             provider_name=routing_decision.selected_provider,

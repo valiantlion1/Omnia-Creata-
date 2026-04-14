@@ -205,10 +205,10 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
               // Standard Bubble
               <div className="relative group/content">
                 <div
-                  className={`px-5 py-3.5 text-[15px] leading-[1.65] shadow-sm transition-all duration-300 ${
+                  className={`px-5 py-3.5 text-[15px] leading-[1.7] shadow-sm transition-all duration-300 ${
                     isUser
-                      ? 'rounded-[22px] rounded-br-md bg-gradient-to-br from-[rgb(var(--primary-light)/0.15)] to-[rgb(var(--accent)/0.05)] text-white ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_4px_24px_rgba(0,0,0,0.2)]'
-                      : 'rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md text-zinc-200 ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]'
+                      ? 'rounded-[22px] rounded-br-md bg-gradient-to-br from-[rgb(var(--primary-light)/0.18)] to-[rgb(var(--accent)/0.06)] text-white ring-1 ring-[rgb(var(--primary-light)/0.22)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]'
+                      : 'rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 backdrop-blur-md text-zinc-200 ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3),inset_2px_0_0_rgba(124,58,237,0.12)]'
                   }`}
                 >
                   <ProgressiveText text={message.content} enabled={shouldAnimate} />
@@ -225,7 +225,7 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
 
                   {/* Assistant Actions */}
                   {!isUser && (
-                    <div className="flex items-center gap-1 bg-[#111216] rounded-full px-1.5 py-1 ring-1 ring-white/10 shadow-lg backdrop-blur-md">
+                    <div className="flex items-center gap-1 bg-[#111216]/90 rounded-full px-1.5 py-1 ring-1 ring-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur-xl" style={{ boxShadow: 'var(--border-glow), 0 8px 24px rgba(0,0,0,0.4)' }}>
                       <button onClick={handleCopy} className="flex h-6 w-6 items-center justify-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white transition" title="Copy text">
                         {hasCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                       </button>
@@ -282,7 +282,7 @@ export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenera
                   <button
                     key={action.id}
                     onClick={() => onSuggestionClick?.(action, message)}
-                    className="rounded-full border border-white/[0.08] bg-[#111216] px-4 py-2 text-[12px] font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-[rgb(var(--primary-light)/0.3)] shadow-sm"
+                    className="rounded-full border border-white/[0.08] bg-[#111216] px-4 py-2 text-[12px] font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-[rgb(var(--primary-light)/0.3)] hover:shadow-[0_0_16px_rgba(124,58,237,0.2)] shadow-sm"
                   >
                     {friendlyLabel}
                   </button>

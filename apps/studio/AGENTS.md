@@ -23,7 +23,7 @@ Keep the product feeling:
 1. `Create` and `Chat` remain distinct surfaces unless explicitly redirected by the user.
 2. Backend stability beats feature sprawl.
 3. Security, ownership, billing, and runtime behavior are server-authoritative.
-4. Starter or lower-tier users may be constrained, but must not receive humiliatingly bad product quality.
+4. Free Account or lower-tier users may be constrained, but must not receive humiliatingly bad product quality.
 5. Degraded/fallback behavior must be explicit in backend metadata, never silent magic.
 6. Do not redesign the UI unless the user explicitly asks for UI work.
 
@@ -43,7 +43,9 @@ Current active frame:
 - `Protected Beta Hardening` is now the closed baseline, not the active planning target.
 - `Controlled Public Paid Launch` is the active working frame.
 - Do not drift into random feature work; the main path is catalog truth, launch-critical surface completion, provider honesty, and current-build proof sync.
-- `Starter`, `Pro`, and `Credit Top-up` are the launch packaging ids; exact numbers belong to the server-authoritative catalog, not hardcoded shell copy.
+- `Free Account`, `Creator`, `Pro`, and `Credit Packs` are the launch catalog shapes; exact numbers belong to the server-authoritative catalog, not hardcoded shell copy.
+- Free accounts may buy wallet credits, but free image generation is not included at launch.
+- Chat doctrine is now `Gemini primary + OpenRouter backup`, image doctrine is `Runware first + selective OpenAI`, and billing backbone is `Paddle`.
 - `OCOS` is future internal operating-system work and should not silently enter Studio scope during this frame.
 - `main` is the only official Studio continuation branch. If Studio work appears on OOFM/Organizer branches again, recover `apps/studio/**` path-by-path instead of merging those branches wholesale.
 - Sprint 6 is complete, but its chat-quality guardrails remain active and should not be eroded by later changes.
