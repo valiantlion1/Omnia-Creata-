@@ -21,6 +21,7 @@ from studio_platform.models import (
     GenerationOutput,
     IdentityPlan,
     JobStatus,
+    ManualReviewState,
     MediaAsset,
     OmniaIdentity,
     PromptSnapshot,
@@ -29,6 +30,7 @@ from studio_platform.models import (
     ShareLink,
     StudioWorkspace,
     SubscriptionStatus,
+    Visibility,
     utc_now,
 )
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, ProviderResult
@@ -51,6 +53,7 @@ async def test_export_identity_data_uses_store_snapshot(tmp_path: Path):
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
@@ -376,6 +379,7 @@ async def test_delete_project_removes_project_bound_shares(tmp_path: Path):
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
@@ -385,17 +389,18 @@ async def test_delete_project_removes_project_bound_shares(tmp_path: Path):
         identity_id=identity.id,
         title="Project One",
     )
+    share = ShareLink(id="share-1", token="projectshare123456", identity_id=identity.id, project_id=project.id)
 
     await store.mutate(
         lambda state: (
             state.identities.__setitem__(identity.id, identity),
             state.workspaces.__setitem__(workspace.id, workspace),
             state.projects.__setitem__(project.id, project),
+            state.shares.__setitem__(share.id, share),
         )
     )
 
     try:
-        share, _ = await service.create_share(identity.id, project.id, None)
         deleted = await service.delete_project(identity.id, project.id)
         snapshot = await store.snapshot()
 
@@ -560,6 +565,7 @@ async def test_create_generation_recovers_stale_project_reference_with_latest_co
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
 
@@ -609,6 +615,7 @@ async def test_create_generation_recovers_stale_project_reference_by_creating_co
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
 
@@ -784,6 +791,7 @@ async def test_get_public_share_returns_project_payload(tmp_path: Path):
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -836,6 +844,7 @@ async def test_list_assets_hides_demo_placeholder_outputs(tmp_path: Path):
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -891,6 +900,7 @@ async def test_service_initialize_backfills_posts_for_existing_generations(tmp_p
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -969,6 +979,7 @@ async def test_get_public_share_hides_demo_placeholder_assets(tmp_path: Path):
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -1068,6 +1079,288 @@ async def test_get_public_share_rejects_trashed_asset_share(tmp_path: Path):
 
     with pytest.raises(KeyError):
         await service.get_public_share(share.token)
+
+
+@pytest.mark.asyncio
+async def test_create_share_rejects_project_without_ready_truthful_assets(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    render_path = tmp_path / "generating-share-asset.png"
+    render_path.write_bytes(b"generating-share")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Generating render",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"library_state": "generating"},
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+        )
+    )
+
+    with pytest.raises(PermissionError):
+        await service.create_share(identity.id, project.id, None)
+
+
+@pytest.mark.asyncio
+async def test_get_public_share_rejects_when_owner_loses_share_entitlement(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    render_path = tmp_path / "downgraded-share-asset.png"
+    render_path.write_bytes(b"downgraded-share")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.CANCELED,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Ready render",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={},
+    )
+    share = ShareLink(id="share-1", token="downgradedshare123456", identity_id=identity.id, asset_id=asset.id)
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.shares.__setitem__(share.id, share),
+        )
+    )
+
+    with pytest.raises(KeyError):
+        await service.get_public_share(share.token)
+
+
+@pytest.mark.asyncio
+async def test_get_public_share_rejects_manual_review_owner(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    render_path = tmp_path / "manual-review-share-asset.png"
+    render_path.write_bytes(b"manual-review-share")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        manual_review_state=ManualReviewState.REQUIRED,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Ready render",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={},
+    )
+    share = ShareLink(id="share-1", token="manualreviewshare123", identity_id=identity.id, asset_id=asset.id)
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.shares.__setitem__(share.id, share),
+        )
+    )
+
+    with pytest.raises(KeyError):
+        await service.get_public_share(share.token)
+
+
+@pytest.mark.asyncio
+async def test_list_public_posts_hides_blocked_assets_even_when_post_is_public(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    render_path = tmp_path / "blocked-public-post.png"
+    render_path.write_bytes(b"blocked-public-post")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Blocked render",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"protection_state": "blocked", "library_state": "blocked"},
+    )
+    post = PublicPost(
+        id="post-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        owner_username="userone",
+        owner_display_name="User One",
+        title="Editorial portrait",
+        prompt="cinematic studio portrait with rich lighting",
+        cover_asset_id=asset.id,
+        asset_ids=[asset.id],
+        visibility=Visibility.PUBLIC,
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.posts.__setitem__(post.id, post),
+        )
+    )
+
+    assert await service.list_public_posts() == []
+
+
+@pytest.mark.asyncio
+async def test_update_post_rejects_public_visibility_for_nonshareable_results(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    render_path = tmp_path / "blocked-private-post.png"
+    render_path.write_bytes(b"blocked-private-post")
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Blocked render",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"library_state": "generating"},
+    )
+    post = PublicPost(
+        id="post-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        owner_username="userone",
+        owner_display_name="User One",
+        title="Editorial portrait",
+        prompt="cinematic studio portrait with rich lighting",
+        cover_asset_id=asset.id,
+        asset_ids=[asset.id],
+        visibility=Visibility.PRIVATE,
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.posts.__setitem__(post.id, post),
+        )
+    )
+
+    with pytest.raises(PermissionError):
+        await service.update_post(identity.id, post.id, visibility=Visibility.PUBLIC)
 
 
 @pytest.mark.asyncio
@@ -1723,7 +2016,7 @@ async def test_send_chat_message_titles_new_conversation_from_attachment_seed(tm
 
 
 @pytest.mark.asyncio
-async def test_free_plan_chat_rejects_premium_modes_and_attachments(tmp_path: Path):
+async def test_free_plan_chat_is_fully_locked(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
@@ -1750,20 +2043,13 @@ async def test_free_plan_chat_rejects_premium_modes_and_attachments(tmp_path: Pa
 
     conversation = await service.create_conversation(identity.id, title="Premium attempt", model="vision")
 
-    with pytest.raises(PermissionError, match="require Pro"):
+    with pytest.raises(PermissionError, match="Studio chat is not available on this plan"):
         await service.send_chat_message(
             identity.id,
             conversation.id,
-            "buna bakip duzeltme oner",
-            model="vision",
-            attachments=[
-                {
-                    "kind": "image",
-                    "url": "data:image/png;base64,aGVsbG8=",
-                    "asset_id": None,
-                    "label": "reference.png",
-                }
-            ],
+            "Bir poster prompt'u yaz",
+            model="think",
+            attachments=[],
         )
 
 
@@ -1796,21 +2082,21 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     settings_payload = await service.get_settings_payload(identity.id)
     billing_summary = await service.billing_summary(identity.id)
 
-    assert settings_payload["entitlements"]["allowed_chat_modes"] == ["think"]
+    assert settings_payload["entitlements"]["allowed_chat_modes"] == []
     assert settings_payload["entitlements"]["premium_chat"] is False
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
     flux_model = next(model for model in settings_payload["models"] if model["id"] == "flux-schnell")
-    assert flux_model["creative_profile"]["id"] == "fast-draft"
-    assert flux_model["creative_profile"]["label"] == "Fast Draft"
-    assert flux_model["label"] == "Fast Draft"
-    assert flux_model["display_label"] == "Fast Draft"
+    assert flux_model["creative_profile"]["id"] == "fast"
+    assert flux_model["creative_profile"]["label"] == "Fast"
+    assert flux_model["label"] == "Fast"
+    assert flux_model["display_label"] == "Fast"
     assert flux_model["render_experience"]["state"] in {"ready", "fallback"}
     assert (
         flux_model["route_preview"]["render_experience"]["state"]
         == flux_model["render_experience"]["state"]
     )
     assert flux_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
-    assert billing_summary["entitlements"]["can_access_chat"] is True
+    assert billing_summary["entitlements"]["can_access_chat"] is False
     assert billing_summary["credits"]["credits_remaining"] == 60
     assert billing_summary["wallet_balance"] == 60
     flux_lane = next(
@@ -1818,8 +2104,8 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
         if entry["model_id"] == "flux-schnell"
     )
-    assert flux_lane["label"] == "Fast Draft"
-    assert flux_lane["creative_profile"]["id"] == "fast-draft"
+    assert flux_lane["label"] == "Fast"
+    assert flux_lane["creative_profile"]["id"] == "fast"
     assert flux_lane["pricing_lane"] == flux_model["route_preview"]["pricing_lane"]
     assert flux_lane["render_experience"]["state"] == flux_model["render_experience"]["state"]
 
@@ -2585,7 +2871,7 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
 
 
 @pytest.mark.asyncio
-async def test_create_generation_keeps_fallback_route_for_wallet_backed_free_accounts_when_runware_is_unavailable(tmp_path: Path):
+async def test_create_generation_promotes_openai_for_wallet_backed_free_accounts_when_runware_is_unavailable(tmp_path: Path):
     class _RoutingProvider:
         def __init__(self, *, name: str, rollout_tier: str, billable: bool = False) -> None:
             self.name = name
@@ -2682,14 +2968,14 @@ async def test_create_generation_keeps_fallback_route_for_wallet_backed_free_acc
             output_count=1,
         )
 
-        assert job.provider == "huggingface"
+        assert job.provider == "openai"
         assert job.requested_quality_tier == "standard"
-        assert job.selected_quality_tier == "standard"
+        assert job.selected_quality_tier == "premium"
         assert job.degraded is False
         assert job.routing_strategy == "wallet-managed"
-        assert job.routing_reason == "wallet_fallback_route"
+        assert job.routing_reason == "wallet_managed_launch_lane"
         assert job.prompt_profile == "stylized_illustration"
-        assert job.provider_candidates[:3] == ["huggingface", "pollinations", "openai"]
+        assert job.provider_candidates[:3] == ["openai", "huggingface", "pollinations"]
     finally:
         settings.environment = original_environment
         await service.shutdown()
@@ -2697,6 +2983,7 @@ async def test_create_generation_keeps_fallback_route_for_wallet_backed_free_acc
 
 @pytest.mark.asyncio
 async def test_health_detail_exposes_data_authority_for_sqlite_store(tmp_path: Path):
+    settings = get_settings()
     store = SqliteStudioStateStore(tmp_path / "runtime" / "studio-state.sqlite3")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
 
@@ -2710,6 +2997,9 @@ async def test_health_detail_exposes_data_authority_for_sqlite_store(tmp_path: P
         assert health["data_authority"]["durable"] is True
         assert health["data_authority"]["schema_version"] == "2"
         assert health["data_authority"]["path"].endswith("studio-state.sqlite3")
+        assert health["deployment_stack"]["canonical_stack"]["frontend"] == "vercel"
+        assert health["deployment_stack"]["configured_stack"]["frontend"] == settings.frontend_deploy_platform
+        assert health["deployment_stack"]["configured_stack"]["billing"] == settings.billing_backbone_provider
     finally:
         await service.shutdown()
 

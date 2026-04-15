@@ -16,6 +16,7 @@ from studio_platform.models import (
     PublicPost,
     ShareLink,
     StudioWorkspace,
+    SubscriptionStatus,
     Visibility,
     utc_now,
 )
@@ -36,12 +37,21 @@ async def _seed_identity_project_asset(
     *,
     identity_id: str = "user-1",
     plan: IdentityPlan = IdentityPlan.PRO,
+    subscription_status: SubscriptionStatus | None = None,
+    monthly_credits_remaining: int | None = None,
+    monthly_credit_allowance: int | None = None,
+    extra_credits: int = 0,
     temp_block_until=None,
     manual_review_state: ManualReviewState = ManualReviewState.NONE,
     owner_mode: bool = False,
     root_admin: bool = False,
     local_access: bool = False,
 ) -> tuple[OmniaIdentity, StudioWorkspace, Project, MediaAsset]:
+    resolved_subscription_status = subscription_status
+    if resolved_subscription_status is None:
+        resolved_subscription_status = (
+            SubscriptionStatus.NONE if plan == IdentityPlan.FREE else SubscriptionStatus.ACTIVE
+        )
     identity = OmniaIdentity(
         id=identity_id,
         email=f"{identity_id}@example.com",
@@ -49,6 +59,10 @@ async def _seed_identity_project_asset(
         username=identity_id,
         workspace_id=f"ws-{identity_id}",
         plan=plan,
+        subscription_status=resolved_subscription_status,
+        monthly_credits_remaining=60 if monthly_credits_remaining is None else monthly_credits_remaining,
+        monthly_credit_allowance=60 if monthly_credit_allowance is None else monthly_credit_allowance,
+        extra_credits=extra_credits,
         temp_block_until=temp_block_until,
         manual_review_state=manual_review_state,
         owner_mode=owner_mode,
@@ -132,6 +146,68 @@ async def test_create_generation_rejects_temp_blocked_identity(tmp_path: Path) -
                 cfg_scale=6.5,
                 seed=1,
                 aspect_ratio="1:1",
+                output_count=1,
+            )
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_generation_uses_server_authoritative_dimensions(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, project, _ = await _seed_identity_project_asset(
+        store,
+        plan=IdentityPlan.FREE,
+        subscription_status=SubscriptionStatus.NONE,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=12,
+    )
+
+    try:
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1536,
+            height=1536,
+            steps=28,
+            cfg_scale=6.5,
+            seed=1,
+            aspect_ratio="9:16",
+            output_count=1,
+        )
+
+        assert job.prompt_snapshot.aspect_ratio == "9:16"
+        assert job.prompt_snapshot.width == 576
+        assert job.prompt_snapshot.height == 1024
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_generation_rejects_unsupported_aspect_ratio(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, project, _ = await _seed_identity_project_asset(store)
+
+    try:
+        with pytest.raises(ValueError, match="Unsupported aspect ratio"):
+            await service.create_generation(
+                identity_id=identity.id,
+                project_id=project.id,
+                prompt="editorial portrait",
+                negative_prompt="",
+                reference_asset_id=None,
+                model_id="flux-schnell",
+                width=1024,
+                height=1024,
+                steps=28,
+                cfg_scale=6.5,
+                seed=1,
+                aspect_ratio="21:9",
                 output_count=1,
             )
     finally:
@@ -242,6 +318,14 @@ async def test_legacy_raw_token_share_still_resolves(tmp_path: Path) -> None:
 async def test_revoked_share_public_lookup_returns_not_found(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "revoked-share-asset.png"
+    render_path.write_bytes(b"revoked-share-asset")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
 
     try:
         share, raw_token = await service.create_share(identity.id, None, asset.id)
@@ -257,6 +341,14 @@ async def test_revoked_share_public_lookup_returns_not_found(tmp_path: Path) -> 
 async def test_revoked_share_asset_token_fails_with_permission_error(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "revoked-share-delivery.png"
+    render_path.write_bytes(b"revoked-share-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
 
     try:
         share, _ = await service.create_share(identity.id, None, asset.id)

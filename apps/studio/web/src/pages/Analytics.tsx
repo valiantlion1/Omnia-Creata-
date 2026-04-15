@@ -6,6 +6,8 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { getStudioAccessToken } from '@/lib/studioSession'
 
+const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || '')).replace(/\/$/, '')
+
 export default function AnalyticsPage() {
   const navigate = useNavigate()
   const { auth: session } = useStudioAuth()
@@ -24,14 +26,18 @@ export default function AnalyticsPage() {
     async function fetchTelemetry() {
       try {
         const token = getStudioAccessToken() || ''
-        const resp = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000') + '/v1/admin/telemetry', { headers: { Authorization: 'Bearer ' + token } })
+        const resp = await fetch(`${API_BASE_URL}/v1/admin/telemetry`, { headers: { Authorization: 'Bearer ' + token } })
+        if (resp.status === 401 || resp.status === 403) {
+          navigate('/explore', { replace: true })
+          setError(true)
+          return
+        }
+        if (!resp.ok) {
+          throw new Error(`Telemetry request failed with status ${resp.status}`)
+        }
         const res = await resp.json()
         setData(res)
-      } catch (err: any) {
-        // 2. Server-side authoritative block
-        if (err.response?.status === 403 || err.response?.status === 401) {
-           navigate('/explore', { replace: true })
-        }
+      } catch {
         setError(true)
       } finally {
         setLoading(false)

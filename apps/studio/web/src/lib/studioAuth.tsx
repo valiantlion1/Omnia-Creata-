@@ -5,9 +5,11 @@ import { logAuthTrace } from '@/lib/authTrace'
 import { studioApi, type AuthMeResponse, type IdentityPlan } from '@/lib/studioApi'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import {
+  DEFAULT_STUDIO_REDIRECT_PATH,
   clearStudioAccessToken,
   consumeStudioPostAuthRedirect,
   getStudioAccessToken,
+  sanitizeStudioRedirectPath,
   setStudioAccessToken,
   setStudioPostAuthRedirect,
 } from '@/lib/studioSession'
@@ -328,16 +330,17 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
     [persistAuthenticatedState],
   )
 
-  const signInWithProvider = React.useCallback(async (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath = '/studio') => {
+  const signInWithProvider = React.useCallback(async (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath = DEFAULT_STUDIO_REDIRECT_PATH) => {
+    const safeNextPath = sanitizeStudioRedirectPath(nextPath)
     try {
       await supabaseBrowser.auth.signOut()
     } catch {
       // Best-effort cleanup only; stale local auth should not block provider sign-in.
     }
     clearPersistedAuthState()
-    setStudioPostAuthRedirect(nextPath)
+    setStudioPostAuthRedirect(safeNextPath)
     const redirectTo = getOAuthRedirectUrl()
-    logAuthTrace('oauth_sign_in_started', { provider, redirectTo, nextPath })
+    logAuthTrace('oauth_sign_in_started', { provider, redirectTo, nextPath: safeNextPath })
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider,
       options: { redirectTo },

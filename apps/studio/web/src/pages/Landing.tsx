@@ -8,7 +8,7 @@ export default function LandingPage() {
   const navigate = useNavigate()
   usePageMeta(
     'Create Worlds Without Limits',
-    'Omnia Creata Studio - protected-beta creative platform for image generation, direction, and visual workflows.',
+    'Omnia Creata Studio - controlled-launch creative platform for image generation, direction, and visual workflows.',
   )
 
   return (
@@ -50,7 +50,7 @@ export default function LandingPage() {
       <main className="relative z-10 mx-auto flex max-w-[1000px] flex-col items-center justify-center px-6 pb-24 pt-24 text-center md:px-8 md:pt-32">
         <div className="mb-8 flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light)/0.3)] bg-[rgb(var(--primary-light)/0.08)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--primary-light))] backdrop-blur-md animate-pulse" style={{ animationDuration: '3s' }}>
           <Sparkles className="h-3.5 w-3.5" />
-          <span>Protected Beta</span>
+          <span>Controlled Launch</span>
         </div>
 
         <h1
@@ -77,7 +77,7 @@ export default function LandingPage() {
             onClick={() => navigate('/signup')}
             className="group flex items-center gap-2.5 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-8 py-4 text-base font-bold shadow-[0_0_30px_rgba(var(--primary),0.3)] transition-all hover:scale-105 hover:shadow-[0_0_50px_rgba(124,58,237,0.4),0_0_80px_-16px_rgba(99,102,241,0.3)] active:scale-[0.98]"
           >
-            Start Creating Free
+            Create Your Free Account
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
           <button
@@ -132,8 +132,8 @@ export default function LandingPage() {
               <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(var(--accent))]/15 text-[rgb(var(--accent-light))]">
                 <ShieldCheck className="h-7 w-7" />
               </div>
-              <h3 className="mb-3 text-lg font-bold">Protected Beta Controls</h3>
-              <p className="text-sm leading-relaxed text-zinc-400">Signed-in routes, sharing, and owner diagnostics are hardened to behave honestly before broader rollout.</p>
+              <h3 className="mb-3 text-lg font-bold">Launch Controls</h3>
+              <p className="text-sm leading-relaxed text-zinc-400">Signed-in routes, billing access, and sharing stay honest during the controlled public launch instead of pretending every surface is fully open.</p>
             </div>
 
             <div className="rounded-[28px] border border-white/[0.05] bg-white/[0.02] p-8 transition hover:border-white/[0.08]" style={{ boxShadow: 'var(--border-glow)' }}>
@@ -161,7 +161,7 @@ export default function LandingPage() {
           >
             Ready to create?
           </h2>
-          <p className="mt-4 text-zinc-400">Join Studio free. Upgrade when you need more.</p>
+          <p className="mt-4 text-zinc-400">Start with a free account. Add wallet credits or upgrade when you need more.</p>
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <button
               onClick={() => navigate('/signup')}

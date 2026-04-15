@@ -27,6 +27,7 @@ export type PlanInfo = {
   max_resolution: string
   share_links: boolean
   can_generate: boolean
+  can_access_chat: boolean
 }
 
 export type CreditSummary = {
@@ -280,7 +281,7 @@ export function isTerminalJobStatus(status: JobStatus) {
   return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
 }
 
-type CreativeProfileKey = 'fast-draft' | 'balanced-render' | 'polished-realism' | 'cinematic-detail' | 'studio-default'
+type CreativeProfileKey = 'fast' | 'standard' | 'premium' | 'signature' | 'studio-default'
 
 function cleanCreativeProfileLabel(value: string) {
   return value
@@ -297,27 +298,27 @@ function cleanCreativeProfileLabel(value: string) {
 
 export function getCreativeProfileKey(modelId: string | null | undefined): CreativeProfileKey {
   const normalized = modelId?.trim().toLowerCase() ?? ''
-  if (normalized.includes('flux-schnell') || normalized.includes('flux.1-schnell')) return 'fast-draft'
-  if (normalized.includes('sdxl') || normalized.includes('stable-diffusion-xl')) return 'balanced-render'
-  if (normalized.includes('realvis')) return 'polished-realism'
-  if (normalized.includes('juggernaut')) return 'cinematic-detail'
+  if (normalized.includes('flux-schnell') || normalized.includes('flux.1-schnell')) return 'fast'
+  if (normalized.includes('sdxl') || normalized.includes('stable-diffusion-xl')) return 'standard'
+  if (normalized.includes('realvis')) return 'premium'
+  if (normalized.includes('juggernaut')) return 'signature'
   return 'studio-default'
 }
 
 export function getCreativeProfileLabel(modelId: string | null | undefined, fallbackLabel?: string | null) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast-draft':
-      return 'Fast Draft'
-    case 'balanced-render':
-      return 'Balanced Render'
-    case 'polished-realism':
-      return 'Polished Realism'
-    case 'cinematic-detail':
-      return 'Cinematic Detail'
+    case 'fast':
+      return 'Fast'
+    case 'standard':
+      return 'Standard'
+    case 'premium':
+      return 'Premium'
+    case 'signature':
+      return 'Signature'
     default:
       if (fallbackLabel?.trim()) return cleanCreativeProfileLabel(fallbackLabel)
       if (modelId?.trim()) return cleanCreativeProfileLabel(modelId)
-      return 'Studio Profile'
+      return 'Studio'
   }
 }
 
@@ -326,29 +327,29 @@ export function getCreativeProfileDescription(
   fallbackDescription?: string | null,
 ) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast-draft':
-      return 'Best for quick ideas, loose compositions, and rapid prompt exploration.'
-    case 'balanced-render':
-      return 'A versatile everyday profile for polished concepts and steady detail.'
-    case 'polished-realism':
-      return 'Tuned for glossy product shots, portraits, and believable lighting.'
-    case 'cinematic-detail':
-      return 'Built for dramatic scenes, bold atmosphere, and premium finishing passes.'
+    case 'fast':
+      return 'Quick starts for ideas, composition tests, and fast variations.'
+    case 'standard':
+      return 'Balanced quality for everyday work when you want clean, dependable detail.'
+    case 'premium':
+      return 'A richer finish with cleaner lighting, better texture, and more polish.'
+    case 'signature':
+      return 'An internal advanced finish reserved for special high-detail runs.'
     default:
-      return fallbackDescription?.trim() || 'A Studio image profile matched to your current plan.'
+      return fallbackDescription?.trim() || 'A Studio image quality lane matched to your current plan.'
   }
 }
 
 export function getCreativeProfileBadge(modelId: string | null | undefined) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast-draft':
-      return 'Quick ideas'
-    case 'balanced-render':
-      return 'Everyday'
-    case 'polished-realism':
-      return 'Realism'
-    case 'cinematic-detail':
-      return 'Signature'
+    case 'fast':
+      return 'Quick starts'
+    case 'standard':
+      return 'Everyday detail'
+    case 'premium':
+      return 'Presentation ready'
+    case 'signature':
+      return 'Internal advanced'
     default:
       return 'Studio'
   }
@@ -357,17 +358,17 @@ export function getCreativeProfileBadge(modelId: string | null | undefined) {
 export function formatGenerationPricingLane(lane: GenerationPricingLane | string | null | undefined) {
   switch (lane) {
     case 'draft':
-      return 'Fast draft'
+      return 'Fast'
     case 'standard':
-      return 'Balanced render'
+      return 'Standard'
     case 'final':
-      return 'Premium finish'
+      return 'Premium'
     case 'fallback':
-      return 'Preview mode'
+      return 'Preview'
     case 'degraded':
-      return 'Safe mode'
+      return 'Limited'
     default:
-      return 'Balanced render'
+      return 'Standard'
   }
 }
 
@@ -399,12 +400,12 @@ export function formatGenerationEstimateSummary(
 }
 
 export function formatGenerationStartCapacity(maxStartableJobsNow: number | null, startStatus: string) {
-  if (startStatus === 'unlimited') return 'Starts available without a cap'
-  if (startStatus === 'no_hold') return 'No credits held on start'
-  if (maxStartableJobsNow === 0) return 'No starts available on current balance'
-  if (maxStartableJobsNow === 1) return '1 start available now'
-  if (maxStartableJobsNow == null) return 'Start capacity updating'
-  return `${maxStartableJobsNow} starts available now`
+  if (startStatus === 'unlimited') return 'Unlimited capacity'
+  if (startStatus === 'no_hold') return 'No credits held remotely'
+  if (maxStartableJobsNow === 0) return 'Insufficent credits'
+  if (maxStartableJobsNow === 1) return '1 start remaining'
+  if (maxStartableJobsNow == null) return 'Capacity syncing'
+  return `${maxStartableJobsNow} starts remaining`
 }
 
 export function formatGenerationGuideSummary(entry: Pick<
@@ -418,7 +419,10 @@ export function formatGenerationGuideSummary(entry: Pick<
   | 'estimated_cost'
   | 'estimated_cost_source'
 >) {
-  return `${formatGenerationPricingLane(entry.pricing_lane)} - ${entry.reserved_credit_cost} credits held on start - ${entry.settlement_credit_cost} credits typically used - ${formatGenerationStartCapacity(entry.max_startable_jobs_now, entry.start_status)} - ${formatGenerationEstimateSummary(entry.estimated_cost, entry.estimated_cost_source)}`
+  if (entry.reserved_credit_cost === entry.settlement_credit_cost) {
+    return `${entry.settlement_credit_cost} credits per generation`
+  }
+  return `Up to ${entry.reserved_credit_cost} credits held (usually ${entry.settlement_credit_cost} per generation)`
 }
 
 export function describeGenerationLaneTrust(
@@ -427,15 +431,15 @@ export function describeGenerationLaneTrust(
 ) {
   switch (lane) {
     case 'draft':
-      return 'Studio is set to the fast-draft route for quick idea finding.'
+      return 'Studio uses minimal compute for rapid exploration and layout planning.'
     case 'final':
-      return 'Studio is set to the premium finishing route for higher-quality output.'
+      return 'Studio devotes extended compute time for premium rendering and fine details.'
     case 'fallback':
-      return 'Preview rendering is active here. Premium image connections are not available in this environment yet.'
+      return 'Premium connections are offline so reference models are active.'
     case 'degraded':
-      return 'Safe mode is active here, so premium rendering is temporarily unavailable.'
+      return 'Studio capacity is limited so premium features are temporarily unavailable.'
     default:
-      return 'Studio is set to the balanced render route right now.'
+      return 'Studio balances speed and quality for professional everyday rendering.'
   }
 }
 
@@ -929,8 +933,8 @@ export const studioApi = {
     negative_prompt: string
     reference_asset_id?: string | null
     model: string
-    width: number
-    height: number
+    width?: number
+    height?: number
     steps: number
     cfg_scale: number
     seed: number

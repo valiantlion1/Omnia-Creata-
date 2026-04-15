@@ -1536,7 +1536,7 @@ class StudioLLMGateway:
             return None
         if value.startswith("data:"):
             return self._parse_data_url_image(value)
-        if value.startswith(("https://", "http://")):
+        if value.startswith("https://"):
             return {"source": "remote", "url": value, "mime_type": "image/*", "data": ""}
         return None
 

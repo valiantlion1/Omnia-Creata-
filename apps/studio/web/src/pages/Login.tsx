@@ -4,13 +4,17 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { sanitizeStudioRedirectPath } from '@/lib/studioSession'
 
 export default function LoginPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { isAuthenticated, signIn, signInWithProvider, completeOAuthSignIn, consumeRedirectAfterAuth } = useStudioAuth()
 
-  const nextPath = useMemo(() => new URLSearchParams(location.search).get('next') || '/studio', [location.search])
+  const nextPath = useMemo(
+    () => sanitizeStudioRedirectPath(new URLSearchParams(location.search).get('next')),
+    [location.search],
+  )
   const isOAuthCallback = useMemo(() => {
     const searchParams = new URLSearchParams(location.search)
     const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''))

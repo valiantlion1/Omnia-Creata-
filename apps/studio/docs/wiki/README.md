@@ -25,6 +25,8 @@ Use it to answer five questions fast:
   Release and verification orientation
 - [Roadmap And Planning](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/06_ROADMAP_AND_PLANNING.md)
   What comes next and in what order
+- [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
+  Internal package, lane, stop-loss, and burn-cap truth
 
 ## Canonical Use
 
@@ -49,7 +51,8 @@ Current build and operator truth still live in:
 - Studio is a premium creative product with two distinct surfaces: `Create` and `Chat`
 - `Protected Beta Hardening` is closed as the baseline that got Studio here
 - The active frame is `Controlled Public Paid Launch`
-- Current launch packaging ids are `Starter`, `Pro`, and `Credit Top-up`
+- Current launch packaging shape is `Free Account`, `Creator`, `Pro`, and `Credit Packs`
+- Current public image quality shape is `Fast`, `Standard`, and `Premium`
 - Exact package numbers belong to the backend catalog, not static docs copy
 - Current public-paid blockers remain:
   - `provider_mix`

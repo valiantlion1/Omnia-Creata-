@@ -96,8 +96,8 @@ class GenerationCreateRequest(BaseModel):
     negative_prompt: str = Field(default="", max_length=500)
     reference_asset_id: Optional[str] = None
     model: str = "flux-schnell"
-    width: int = Field(default=1024, ge=512, le=1536)
-    height: int = Field(default=1024, ge=512, le=1536)
+    width: Optional[int] = Field(default=None, ge=512, le=4096)
+    height: Optional[int] = Field(default=None, ge=512, le=4096)
     steps: int = Field(default=28, ge=1, le=50)
     cfg_scale: float = Field(default=6.5, ge=1, le=20)
     seed: int = Field(default=20260316, ge=0, le=2**32 - 1)
@@ -303,6 +303,14 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             request,
             "generation:create:ip",
             limit=20,
+        )
+
+    def _require_verified_generation_account(auth_user: AuthUser) -> None:
+        if auth_user.is_verified:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email address before creating generations.",
         )
 
     @router.post("/auth/demo-login")
@@ -906,6 +914,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_generation_rate_limits(request, auth_user)
+        _require_verified_generation_account(auth_user)
 
         mod_result, flagged_term = await check_prompt_safety(payload.prompt)
         if mod_result != ModerationResult.SAFE:

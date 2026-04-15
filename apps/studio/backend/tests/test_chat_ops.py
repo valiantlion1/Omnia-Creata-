@@ -1,3 +1,5 @@
+import pytest
+
 from studio_platform.chat_ops import (
     build_attachment_only_request,
     build_chat_continuity_summary,
@@ -35,6 +37,16 @@ def test_detect_chat_intent_prefers_image_analysis_when_reference_is_uploaded():
     assert intent.kind == "analyze_image"
     assert intent.has_image_attachment is True
     assert intent.asks_for_analysis is True
+
+
+def test_chat_attachment_rejects_insecure_http_url():
+    with pytest.raises(ValueError, match="Unsupported attachment URL"):
+        ChatAttachment(
+            kind="image",
+            url="http://example.com/reference.png",
+            asset_id=None,
+            label="reference.png",
+        )
 
 
 def test_detect_chat_intent_marks_edit_requests_with_reference_image():

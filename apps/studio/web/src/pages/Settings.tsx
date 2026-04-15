@@ -287,7 +287,7 @@ export default function SettingsPage() {
                         Edit Profile
                       </Link>
                       {!auth?.guest && (
-                        <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] px-6 py-3.5 text-[14px] font-bold text-zinc-400 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.1] hover:shadow-lg">
+                        <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3.5 text-[14px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.12] hover:text-white hover:border-white/[0.2] hover:shadow-lg">
                           <LogOut className="h-[16px] w-[16px]" /> Sign Out
                         </button>
                       )}
@@ -304,7 +304,7 @@ export default function SettingsPage() {
                     title="Plan & Billing"
                     description="Review your current plan, credits, and checkout availability."
                     action={
-                      <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                      <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                         View Plans <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
                       </Link>
                     }
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                             body: 'Dismissed walkthrough hints were reset for this browser.',
                           })
                         }}
-                        className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.06] bg-transparent px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.04] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                        className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                       >
                         Reset Guides
                       </button>
@@ -407,7 +407,7 @@ export default function SettingsPage() {
                             discoverabilityMutation.mutate('public')
                           }}
                           disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'public'}
-                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                         >
                           {discoverabilityMutation.isPending && pendingVisibility === 'public' ? 'Saving...' : 'Public'}
                         </button>
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                             discoverabilityMutation.mutate('private')
                           }}
                           disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'private'}
-                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                         >
                           {discoverabilityMutation.isPending && pendingVisibility === 'private' ? 'Saving...' : 'Private'}
                         </button>
@@ -429,7 +429,7 @@ export default function SettingsPage() {
                     title="Download Archive"
                     description="Export a full backup of your images, projects, and account history."
                     action={
-                      <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                      <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                         Export Archive
                       </button>
                     }
@@ -495,7 +495,7 @@ export default function SettingsPage() {
                     title="System Health"
                     description="Check that all generation services are running normally."
                     action={
-                      <button onClick={handleHealthRefresh} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                      <button onClick={handleHealthRefresh} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                         <RefreshCw className={`h-4 w-4 transition-transform duration-500 ${healthQuery.isFetching ? 'animate-spin' : 'group-hover:rotate-180'}`} /> Run Check
                       </button>
                     }

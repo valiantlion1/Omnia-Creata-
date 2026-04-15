@@ -15,7 +15,7 @@ import studio_platform.router as router_module
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
-from studio_platform.models import IdentityPlan, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioWorkspace, Visibility, utc_now
+from studio_platform.models import IdentityPlan, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioWorkspace, SubscriptionStatus, Visibility, utc_now
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
@@ -136,6 +136,7 @@ async def test_public_share_route_returns_not_found_for_trashed_asset_share(tmp_
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
@@ -189,6 +190,7 @@ async def test_public_share_route_returns_not_found_for_deleted_project_share(tm
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
@@ -275,11 +277,66 @@ async def test_public_share_route_returns_not_found_when_project_assets_are_inel
             state.assets.__setitem__(blocked_asset.id, blocked_asset),
         )
     )
-    _, public_token = await service.create_share(identity.id, project.id, None)
+    share = ShareLink(id="share-blocked-project", token="shareblockedproject123", identity_id=identity.id, project_id=project.id)
+    await service.store.mutate(lambda state: state.shares.__setitem__(share.id, share))
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/v1/shares/public/{public_token}")
+        response = await client.get(f"/v1/shares/public/{share.token}")
+
+    try:
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Share not found"}
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_share_route_returns_not_found_when_owner_loses_share_entitlement(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    render_path = tmp_path / "downgraded-project-share.png"
+    render_path.write_bytes(b"downgraded-project-share")
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user-1@example.com",
+        display_name="User One",
+        username="userone",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.CANCELED,
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Editorial",
+    )
+    asset = MediaAsset(
+        id="asset-project",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Project asset",
+        prompt="cinematic portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={},
+    )
+    share = ShareLink(id="share-downgraded", token="sharedowngraded123456", identity_id=identity.id, asset_id=asset.id)
+    await service.store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.shares.__setitem__(share.id, share),
+        )
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/v1/shares/public/{share.token}")
 
     try:
         assert response.status_code == 404
@@ -299,6 +356,7 @@ async def test_asset_content_route_rejects_revoked_public_share_token(tmp_path: 
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")

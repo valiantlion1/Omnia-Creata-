@@ -79,12 +79,14 @@ Current economics reading:
 - current credit-pack pricing is materially stronger than the monthly plans on a per-credit basis
 - the free account only makes sense if image generation stays wallet-backed and tightly bounded
 - if selective OpenAI lanes become the default for broader traffic, package math should be re-signed before scale
+- the current internal stop-loss, burn caps, and lane revenue floor are now written down in [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
 
 Recommended next commercial decisions:
-1. keep `Free Account` as a chat-first funnel and wallet entry point, not a free image sink
+1. keep `Free Account` as a Create-first wallet entry point, not a free image or free chat sink
 2. keep `Creator` and `Pro` as the two paid subscription contracts for launch
 3. use credit packs, not fake unlimited promises, to absorb premium render demand
 4. do not close `provider_economics` until the current-build dossier and founder signoff match the real launch defaults
+5. do not let public `Premium` silently collapse into default OpenAI high-quality spend under the current `12-credit` lane contract
 
 Recommended next product/engineering order:
 1. make lane-quality and cost truth more visible before submit

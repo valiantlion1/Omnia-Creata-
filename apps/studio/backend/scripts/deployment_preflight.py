@@ -17,7 +17,7 @@ from studio_platform.services.deployment_preflight import (
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate Studio staging env before docker compose boot.")
+    parser = argparse.ArgumentParser(description="Validate Studio deploy env before staging bring-up or external proof runs.")
     parser.add_argument(
         "--env-file",
         default=str(Path(__file__).resolve().parents[2] / "deploy" / ".env.staging"),

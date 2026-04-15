@@ -447,7 +447,7 @@ def test_plan_generation_route_prefers_openai_for_free_prompts_in_development_wh
 
         assert decision.provider_candidates[:4] == ("openai", "huggingface", "pollinations", "demo")
         assert decision.selected_provider == "openai"
-        assert decision.routing_reason == "free_standard_managed_override"
+        assert decision.routing_reason == "wallet_managed_launch_lane"
     finally:
         settings.environment = original_environment
 

@@ -156,7 +156,7 @@ class Settings(BaseSettings):
     pro_monthly_price_usd: float = 24.0
     credit_pack_small_price_usd: float = 8.0
     credit_pack_large_price_usd: float = 24.0
-    free_account_chat_message_limit: int = 12
+    free_account_chat_message_limit: int = 0
     creator_chat_message_limit: int = 120
     pro_chat_message_limit: int = 200
 
@@ -184,6 +184,17 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     enable_live_provider_smoke: bool = False
 
+    # Deployment Topology
+    public_web_base_url: Optional[str] = None
+    public_api_base_url: Optional[str] = None
+    frontend_deploy_platform: str = "vercel"
+    api_deploy_platform: str = "render"
+    worker_deploy_platform: str = "render"
+    redis_deploy_platform: str = "render"
+    data_deploy_platform: str = "supabase"
+    storage_deploy_platform: str = "supabase"
+    billing_backbone_provider: str = "paddle"
+
     # Server Configuration
     port: int = 8000
     host: str = "0.0.0.0"
@@ -200,6 +211,7 @@ class Settings(BaseSettings):
     jwt_secret: Optional[SecretStr] = None  # Optional in dev
     jwt_algorithm: str = "HS256"
     jwt_expiration: str = "24h"
+    captcha_verification_enabled: bool = False
     enable_api_docs: Optional[bool] = None
     enable_demo_auth: Optional[bool] = None
 
@@ -378,7 +390,6 @@ class Settings(BaseSettings):
         "pro_monthly_credits",
         "credit_pack_small_credits",
         "credit_pack_large_credits",
-        "free_account_chat_message_limit",
         "creator_chat_message_limit",
         "pro_chat_message_limit",
     )
@@ -387,6 +398,13 @@ class Settings(BaseSettings):
         if v <= 0:
             raise ValueError("Generation runtime limits must be positive")
         return v
+
+    @field_validator("free_account_chat_message_limit")
+    @classmethod
+    def validate_free_account_chat_message_limit(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("Free account chat message limit cannot be negative")
+        return value
 
     @field_validator(
         "creator_monthly_price_usd",
@@ -470,6 +488,46 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"sandbox", "production"}:
             raise ValueError("PADDLE_ENVIRONMENT must be either sandbox or production")
+        return normalized
+
+    @field_validator("frontend_deploy_platform")
+    @classmethod
+    def validate_frontend_deploy_platform(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"vercel", "docker", "local"}:
+            raise ValueError("FRONTEND_DEPLOY_PLATFORM must be vercel, docker, or local")
+        return normalized
+
+    @field_validator("api_deploy_platform", "worker_deploy_platform")
+    @classmethod
+    def validate_service_deploy_platform(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"render", "docker", "local"}:
+            raise ValueError("API/WORKER deploy platforms must be render, docker, or local")
+        return normalized
+
+    @field_validator("redis_deploy_platform")
+    @classmethod
+    def validate_redis_deploy_platform(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"render", "docker", "local"}:
+            raise ValueError("REDIS_DEPLOY_PLATFORM must be render, docker, or local")
+        return normalized
+
+    @field_validator("data_deploy_platform", "storage_deploy_platform")
+    @classmethod
+    def validate_data_storage_deploy_platform(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"supabase", "docker", "local"}:
+            raise ValueError("DATA/STORAGE deploy platforms must be supabase, docker, or local")
+        return normalized
+
+    @field_validator("billing_backbone_provider")
+    @classmethod
+    def validate_billing_backbone_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"paddle", "lemonsqueezy", "none"}:
+            raise ValueError("BILLING_BACKBONE_PROVIDER must be paddle, lemonsqueezy, or none")
         return normalized
 
     @model_validator(mode="after")

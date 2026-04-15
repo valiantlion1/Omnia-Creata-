@@ -5,6 +5,7 @@ from typing import Any, Callable, Mapping
 
 from config.env import Environment, Settings
 
+from .deployment_stack_ops import build_deployment_stack_summary
 from .contract_catalog import build_contract_freeze_summary
 from .models import ManualReviewState, StudioState, utc_now
 from .operator_control_plane_ops import build_owner_ai_control_plane
@@ -331,6 +332,7 @@ async def build_owner_health_detail_extensions(
         "startup_verification_report": startup_verification_report,
         "deployment_verification_report": deployment_verification_report,
         "runtime_logs": runtime_logs,
+        "deployment_stack": build_deployment_stack_summary(settings),
         "provider_spend_guardrails": provider_spend_guardrails,
         "cost_telemetry": cost_telemetry,
         "provider_economics_dossier": economics_dossier,
@@ -385,6 +387,7 @@ def build_owner_health_payload(
     startup_verification_report: Mapping[str, Any] | None = None,
     deployment_verification_report: Mapping[str, Any] | None = None,
     runtime_logs: Mapping[str, Any] | None = None,
+    deployment_stack: Mapping[str, Any] | None = None,
     provider_spend_guardrails: Mapping[str, Any] | None = None,
     cost_telemetry: Mapping[str, Any] | None = None,
     provider_economics_dossier: Mapping[str, Any] | None = None,
@@ -416,6 +419,8 @@ def build_owner_health_payload(
         payload["deployment_verification"] = dict(deployment_verification_report)
     if runtime_logs is not None:
         payload["runtime_logs"] = dict(runtime_logs)
+    if deployment_stack is not None:
+        payload["deployment_stack"] = dict(deployment_stack)
     if provider_spend_guardrails is not None:
         payload["provider_spend_guardrails"] = dict(provider_spend_guardrails)
     if cost_telemetry is not None:

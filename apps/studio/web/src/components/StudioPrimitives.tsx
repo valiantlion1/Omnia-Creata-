@@ -106,7 +106,7 @@ export function ButtonChip({
   return (
     <span
       className={clsx(
-        'inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs transition',
+        'inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs transition-all duration-300 ease-out active:scale-[0.97]',
         active ? 'bg-white text-black' : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/8',
         className,
       )}

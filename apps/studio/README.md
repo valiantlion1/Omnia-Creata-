@@ -17,6 +17,7 @@ Studio has two intentional product surfaces:
 - Exact package numbers and checkout availability come from the server-authoritative catalog, not hardcoded UI copy
 - `Create` and `Chat` launch together and share one account, billing, and entitlement contract
 - `OCOS` is future internal operating-system work; it is not a Studio deliverable in this wave
+- Canonical deployment stack is `Vercel + Render + Supabase + Redis + Paddle`; local Docker/protected staging remains a proof loop, not the final public hosting contract
 
 ## Current Launch Gaps
 

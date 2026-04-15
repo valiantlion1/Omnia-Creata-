@@ -610,8 +610,8 @@ class GenerationService:
         negative_prompt: str,
         reference_asset_id: Optional[str],
         model_id: str,
-        width: int,
-        height: int,
+        width: int | None,
+        height: int | None,
         steps: int,
         cfg_scale: float,
         seed: int,
@@ -639,7 +639,11 @@ class GenerationService:
         billing_state = await self.service.billing._resolve_billing_state_for_identity(identity)
 
         self.service._validate_model_for_identity(identity, model, billing_state=billing_state)
-        self.service._validate_dimensions_for_model(width, height, model)
+        resolved_aspect_ratio = self.service._normalize_generation_aspect_ratio(aspect_ratio)
+        resolved_width, resolved_height = self.service._resolve_generation_dimensions_for_model(
+            model=model,
+            aspect_ratio=resolved_aspect_ratio,
+        )
         prompt_memory = await self.service.store.get_prompt_memory_for_identity(identity.id)
         prompt_memory_context = build_prompt_memory_context(prompt_memory)
 
@@ -662,12 +666,12 @@ class GenerationService:
             source_negative_prompt=cleaned_negative_prompt,
             model_id=model.id,
             reference_asset_id=reference_asset.id if reference_asset else None,
-            width=width,
-            height=height,
+            width=resolved_width,
+            height=resolved_height,
             steps=steps,
             cfg_scale=cfg_scale,
             seed=seed,
-            aspect_ratio=aspect_ratio,
+            aspect_ratio=resolved_aspect_ratio,
         )
         routing_decision = self.service.providers.plan_generation_route(
             plan=identity.plan,
@@ -702,12 +706,12 @@ class GenerationService:
             source_negative_prompt=cleaned_negative_prompt,
             model_id=model.id,
             reference_asset_id=reference_asset.id if reference_asset else None,
-            width=width,
-            height=height,
+            width=resolved_width,
+            height=resolved_height,
             steps=steps,
             cfg_scale=cfg_scale,
             seed=seed,
-            aspect_ratio=aspect_ratio,
+            aspect_ratio=resolved_aspect_ratio,
         )
         if not routing_decision.provider_candidates:
             raise ValueError(
@@ -716,8 +720,8 @@ class GenerationService:
             )
         filtered_provider_candidates = await self._filter_blocked_fallback_provider_candidates(
             provider_candidates=routing_decision.provider_candidates,
-            width=width,
-            height=height,
+            width=resolved_width,
+            height=resolved_height,
             model_id=model.id,
             workflow=routing_decision.workflow,
             has_reference_image=reference_asset is not None,
@@ -732,8 +736,8 @@ class GenerationService:
         )
         provider_estimated_cost = self.service.providers.estimate_generation_cost(
             provider_name=effective_provider,
-            width=width,
-            height=height,
+            width=resolved_width,
+            height=resolved_height,
             model_id=model.id,
             workflow=effective_routing_decision.workflow,
             has_reference_image=reference_asset is not None,
@@ -747,8 +751,8 @@ class GenerationService:
             ),
             requested_model_id=model.id,
             workflow=effective_routing_decision.workflow,
-            width=width,
-            height=height,
+            width=resolved_width,
+            height=resolved_height,
             output_count=output_count,
             provider_estimated_cost=provider_estimated_cost,
             legacy_model=model,

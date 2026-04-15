@@ -23,6 +23,17 @@ from studio_platform.store import SqliteStudioStateStore
 from studio_platform.versioning import load_version_info
 
 
+@pytest.fixture(autouse=True)
+def _enable_captcha_for_existing_launch_readiness_expectations():
+    settings = get_settings()
+    original = settings.captcha_verification_enabled
+    settings.captcha_verification_enabled = True
+    try:
+        yield
+    finally:
+        settings.captcha_verification_enabled = original
+
+
 def _seed_operator_runtime_artifacts(settings, runtime_root: Path) -> tuple[dict[str, object], dict[str, object]]:
     logs_root = runtime_root / "logs"
     logs_root.mkdir(parents=True, exist_ok=True)
@@ -1416,6 +1427,146 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
         assert public_paid_phase["warning_keys"] == ["provider_economics"]
     finally:
         settings.studio_runtime_root = original_runtime_root
+
+
+def test_launch_readiness_blocks_public_paid_when_captcha_verification_is_disabled(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+    original_openrouter_api_key = settings.openrouter_api_key
+    original_openai_api_key = settings.openai_api_key
+    original_fal_api_key = settings.fal_api_key
+    original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
+    original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
+    original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
+    original_captcha_verification_enabled = settings.captcha_verification_enabled
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.STAGING
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_anon_key = "anon-key"
+    settings.supabase_service_role_key = "service-role-key"
+    settings.openrouter_api_key = "openrouter-key"
+    settings.openai_api_key = "openai-key"
+    settings.fal_api_key = "fal-key"
+    settings.public_paid_provider_economics_ready = True
+    settings.public_paid_provider_economics_ready_build = load_version_info().build
+    settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
+    settings.captcha_verification_enabled = False
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        deployment_report = persist_deployment_verification_report(
+            settings,
+            label="protected-staging",
+            base_url="https://staging-studio.omniacreata.com",
+            report={
+                "status": "pass",
+                "summary": "Deployment verification passed.",
+                "checks": [],
+                "actual_build": load_version_info().build,
+            },
+        )
+        report = persist_provider_smoke_report(
+            settings,
+            selected_provider="all",
+            selected_surface="all",
+            include_failure_probe=False,
+            results=[
+                {
+                    "label": "gemini-chat",
+                    "provider_name": "gemini",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 170,
+                    "model": "gemini-2.5-flash",
+                },
+                {
+                    "label": "openrouter-chat",
+                    "provider_name": "openrouter",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "status": "ok",
+                    "latency_ms": 180,
+                    "model": "google/gemini-2.5-flash",
+                },
+                {
+                    "label": "runware-text",
+                    "provider_name": "runware",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "status": "ok",
+                    "latency_ms": 420,
+                },
+                {
+                    "label": "fal-text",
+                    "provider_name": "fal",
+                    "workflow": "text_to_image",
+                    "surface": "image",
+                    "status": "ok",
+                    "latency_ms": 910,
+                },
+            ],
+        )
+        economics_dossier = persist_provider_economics_dossier(
+            settings,
+            public_plan_payload=_public_plan_payload(tmp_path),
+        )
+
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[
+                {"name": "runware", "status": "healthy", "detail": "configured"},
+                {"name": "fal", "status": "healthy", "detail": "configured"},
+            ],
+            data_authority={"backend": "postgres", "durable": True},
+            generation_runtime_mode="web",
+            generation_broker={"enabled": True, "configured": True},
+            chat_routing={
+                "primary_provider": "gemini",
+                "fallback_provider": "openrouter",
+                "providers": {
+                    "gemini": {"configured": True, "status": "healthy"},
+                    "openrouter": {"configured": True, "status": "healthy"},
+                    "openai": {"configured": False, "status": "not_configured"},
+                },
+            },
+            provider_smoke_report=report,
+            startup_verification_report=startup_report,
+            deployment_verification_report=deployment_report,
+            runtime_logs=runtime_logs,
+            economics_dossier=economics_dossier,
+        )
+
+        assert readiness["launch_gate"]["ready_for_protected_launch"] is True
+        assert "abuse_hardening" in readiness["launch_gate"]["warning_keys"]
+        public_paid_phase = next(
+            phase
+            for phase in readiness["platform_readiness"]["phases"]
+            if phase["id"] == "public_paid_platform"
+        )
+        assert public_paid_phase["status"] == "blocked"
+        assert "abuse_hardening" in public_paid_phase["blocking_keys"]
+        assert any("CAPTCHA" in blocker or "captcha" in blocker for blocker in public_paid_phase["blockers"])
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+        settings.openrouter_api_key = original_openrouter_api_key
+        settings.openai_api_key = original_openai_api_key
+        settings.fal_api_key = original_fal_api_key
+        settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
+        settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
+        settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
+        settings.captcha_verification_enabled = original_captcha_verification_enabled
 
 
 def test_launch_readiness_requires_current_build_economics_signoff_for_public_paid_ready(tmp_path: Path) -> None:

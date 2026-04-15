@@ -32,6 +32,7 @@ Already strong:
 - launch-readiness, provider smoke, and staging verification exist as operator truth surfaces
 
 Still open:
+- `abuse_hardening`
 - `provider_mix`
 - `image_public_paid_usage`
 - `provider_economics`
@@ -61,6 +62,7 @@ The frontend should present that truth, not invent its own packaging story.
 Studio is not considered ready for public paid exit until all of the following are true:
 - `Create -> result -> library/project -> share` feels stable and honest
 - `Chat -> in-chat generation -> create handoff -> result persistence` stays stable
+- signup and other abuse-sensitive flows have real CAPTCHA enforcement instead of docs-only contract truth
 - degraded or blocked provider states are visible instead of hidden behind premium-sounding copy
 - current-build artefacts stay aligned on the same build number
 - public plan and entitlement truth is server-authoritative
@@ -73,11 +75,17 @@ As of `2026-04-14`, official market pricing clusters roughly like this:
 - premium/pro plans: about `$60+/month`
 
 Current Studio package assumptions in the economics dossier:
-- `Free Account`: `0` bundled image credits, limited AI chat, wallet credit packs allowed
+- `Free Account`: `0` bundled image credits, chat locked, wallet credit packs allowed for Create
 - `Creator`: `400` monthly credits for `$12/month`
 - `Pro`: `1200` monthly credits for `$24/month`
 - `Credit Pack`: `200` credits for `$8`
 - `Credit Pack`: `800` credits for `$24`
+
+Current internal economics lock:
+- [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
+- conservative launch revenue floor is still the `Pro` plan at `$0.02 / credit`
+- public visible image lanes stay `Fast`, `Standard`, and `Premium`
+- `provider_economics` still stays open until exact current-build Runware normal-lane pricing and founder signoff are both current-build true
 
 Interpretation:
 - `Creator` is the new paid entry point instead of a vague starter-to-pro jump

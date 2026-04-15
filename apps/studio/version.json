@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.14.105",
+  "build": "2026.04.15.115",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-14",
-  "notes": "Studio now fails closed when a paid subscription is canceled or past due: effective plan, entitlements, billing summaries, settings bootstrap, and model validation all downgrade to the free contract while preserving purchased wallet credits. This wave also fixes a small frontend type drift so the current billing/bootstrap contract passes web type-check and build again."
+  "releaseDate": "2026-04-15",
+  "notes": "Create now exposes three clean public quality choices instead of old render-profile naming, aspect ratio pickers show only common ratios while the backend resolves real dimensions server-side, insecure HTTP chat attachment URLs are blocked, and the admin analytics surface no longer falls back to an insecure localhost API target in production."
 }

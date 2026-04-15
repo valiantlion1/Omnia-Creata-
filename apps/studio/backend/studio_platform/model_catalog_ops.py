@@ -7,11 +7,21 @@ from .creative_profile_ops import attach_creative_profile, resolve_creative_prof
 from .experience_contract_ops import build_model_route_preview
 from .models import IdentityPlan, ModelCatalogEntry, OmniaIdentity
 
+SUPPORTED_ASPECT_RATIOS: dict[str, tuple[int, int]] = {
+    "1:1": (1, 1),
+    "16:9": (16, 9),
+    "9:16": (9, 16),
+    "4:5": (4, 5),
+    "3:4": (3, 4),
+    "2:3": (2, 3),
+}
+_DIMENSION_MULTIPLE = 64
+
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     "flux-schnell": ModelCatalogEntry(
         id="flux-schnell",
         label="Fast",
-        description="High-speed model for rapid ideation and layout testing.",
+        description="Quick starts for ideas, layout checks, and fast variations.",
         min_plan=IdentityPlan.FREE,
         credit_cost=6,
         estimated_cost=0.003,
@@ -24,7 +34,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     "sdxl-base": ModelCatalogEntry(
         id="sdxl-base",
         label="Standard",
-        description="Balanced generation engine for standard high-quality compositions.",
+        description="Balanced quality for everyday creative work and dependable detail.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
         estimated_cost=0.008,
@@ -36,7 +46,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     "realvis-xl": ModelCatalogEntry(
         id="realvis-xl",
         label="Premium",
-        description="Advanced engine tuned for photorealism and cinematic renders.",
+        description="Richer detail and cleaner finish when the result needs to look polished.",
         min_plan=IdentityPlan.CREATOR,
         credit_cost=12,
         estimated_cost=0.015,
@@ -48,8 +58,8 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     ),
     "juggernaut-xl": ModelCatalogEntry(
         id="juggernaut-xl",
-        label="Pro",
-        description="Powerful engine delivering extreme detail for stylized hero shots.",
+        label="Signature",
+        description="Internal advanced finish for special high-detail runs.",
         min_plan=IdentityPlan.PRO,
         credit_cost=14,
         estimated_cost=0.02,
@@ -141,3 +151,38 @@ def validate_dimensions_for_model(
         raise ValueError(
             f"{creative_profile.label} supports up to {model.max_width}x{model.max_height}"
         )
+
+
+def normalize_generation_aspect_ratio(aspect_ratio: str | None) -> str:
+    normalized = str(aspect_ratio or "1:1").strip()
+    if normalized not in SUPPORTED_ASPECT_RATIOS:
+        supported = ", ".join(SUPPORTED_ASPECT_RATIOS.keys())
+        raise ValueError(f"Unsupported aspect ratio. Choose one of: {supported}")
+    return normalized
+
+
+def _snap_dimension(value: float, *, maximum: int) -> int:
+    bounded = max(1.0, min(float(maximum), float(value)))
+    snapped = int(round(bounded / _DIMENSION_MULTIPLE) * _DIMENSION_MULTIPLE)
+    if snapped > maximum:
+        snapped -= _DIMENSION_MULTIPLE
+    if snapped <= 0:
+        return min(maximum, _DIMENSION_MULTIPLE)
+    return min(maximum, snapped)
+
+
+def resolve_generation_dimensions_for_model(
+    *,
+    model: ModelCatalogEntry,
+    aspect_ratio: str,
+) -> tuple[int, int]:
+    normalized_ratio = normalize_generation_aspect_ratio(aspect_ratio)
+    ratio_width, ratio_height = SUPPORTED_ASPECT_RATIOS[normalized_ratio]
+    scale = min(model.max_width / ratio_width, model.max_height / ratio_height)
+    if scale <= 0:
+        raise ValueError("Model dimensions are not configured for generation.")
+
+    width = _snap_dimension(ratio_width * scale, maximum=model.max_width)
+    height = _snap_dimension(ratio_height * scale, maximum=model.max_height)
+    validate_dimensions_for_model(width=width, height=height, model=model)
+    return width, height

@@ -23,7 +23,7 @@ from ..asset_ops import (
 )
 from ..asset_storage import ResolvedAssetDelivery
 from ..entitlement_ops import ensure_clean_export_allowed, resolve_entitlements
-from ..models import GenerationJob, JobStatus, MediaAsset, Project, PromptMemoryProfile, ShareLink, StudioStyle, Visibility, utc_now
+from ..models import GenerationJob, JobStatus, MediaAsset, OmniaIdentity, Project, PromptMemoryProfile, ShareLink, StudioStyle, Visibility, utc_now
 from ..prompt_memory_ops import (
     build_prompt_memory_context,
     derive_display_title,
@@ -329,7 +329,7 @@ class LibraryService:
             asset.deleted_at is None
             and self.is_truthful_surface_asset(asset)
             and self.asset_protection_state(asset) != "blocked"
-            and self.asset_library_state(asset) != "blocked"
+            and self.asset_library_state(asset) == "ready"
         )
 
     def is_project_share_eligible_asset(self, asset: MediaAsset) -> bool:
@@ -538,10 +538,26 @@ class LibraryService:
             if not self.is_project_share_eligible_asset(asset):
                 raise PermissionError("Share access denied")
 
+    async def assert_share_owner_public_access(self, share: ShareLink) -> None:
+        identity = await self.service.store.get_model("identities", share.identity_id, OmniaIdentity)
+        if identity is None:
+            raise PermissionError("Share access denied")
+        if not self.service.public.is_publicly_visible_identity(identity):
+            raise PermissionError("Share access denied")
+        billing_state = await self.service._resolve_billing_state_for_identity(identity)
+        entitlements = resolve_entitlements(
+            identity=identity,
+            plan_catalog=self.service.plan_catalog,
+            billing_state=billing_state,
+        )
+        if not entitlements.can_share_links:
+            raise PermissionError("Share access denied")
+
     async def assert_share_access_by_id(self, asset: MediaAsset, share_id: str) -> None:
         share = await self.service.store.get_share(share_id)
         if share is None:
             raise PermissionError("Share access denied")
+        await self.assert_share_owner_public_access(share)
         if share.project_id and not share.asset_id:
             project = await self.service.store.get_project(share.project_id)
             if project is None or project.identity_id != share.identity_id:
@@ -555,6 +571,7 @@ class LibraryService:
         )
         if share is None:
             raise PermissionError("Share access denied")
+        await self.assert_share_owner_public_access(share)
         if share.project_id and not share.asset_id:
             project = await self.service.store.get_project(share.project_id)
             if project is None or project.identity_id != share.identity_id:
@@ -562,6 +579,9 @@ class LibraryService:
         self.assert_share_record_matches_asset(asset, share)
 
     async def assert_public_asset_preview_access(self, asset_id: str) -> None:
+        asset = await self.service.store.get_model("assets", asset_id, MediaAsset)
+        if asset is None or not self.is_public_share_eligible_asset(asset):
+            raise PermissionError("Public preview access denied")
         posts = await self.service.store.list_posts()
         identities = await self.service.store.list_identities()
         generations = await self.service.store.list_generations()

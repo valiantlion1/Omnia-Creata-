@@ -33,3 +33,4 @@ class StudioState(BaseModel):
     personas: Dict[str, StudioPersona] = Field(default_factory=dict)
     styles: Dict[str, StudioStyle] = Field(default_factory=dict)
     prompt_memories: Dict[str, PromptMemoryProfile] = Field(default_factory=dict)
+    migrations_applied: Dict[str, str] = Field(default_factory=dict)

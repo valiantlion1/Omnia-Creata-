@@ -73,7 +73,7 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
     {
       id: 'create',
       label: 'Create for direct runs',
-      body: 'Use Create when you already know what you want and need a fast, controlled image run.',
+      body: 'Use Create when you already know what you want and need a direct image run with wallet credits or a paid plan behind it.',
       icon: Zap,
     },
     {
@@ -106,6 +106,9 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">
             Your account is ready. Start with the surface that matches your intent, then keep anything worth revisiting inside your library.
           </p>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-500">
+            Free accounts can move straight into Create with wallet credits. Chat unlocks on Creator and Pro.
+          </p>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -126,18 +129,18 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
-            to="/create"
+            to="/create?welcome=1"
             onClick={onClose}
             className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90"
           >
             Open Create
           </Link>
           <Link
-            to="/chat"
+            to="/subscription"
             onClick={onClose}
             className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
           >
-            Open Chat
+            View Plans
           </Link>
           <button
             onClick={onClose}
@@ -246,7 +249,7 @@ const showcaseReferences: ShowcaseReference[] = [
     id: 'showcase-anime-art',
     src: '/atmosphere/showcase-08-anime-warrior.png',
     label: 'Anime Art',
-    tag: 'Characters',
+    tag: 'Anime',
     prompt: 'Anime illustration with bold linework, strong silhouettes, and expressive color.',
     likes: 205,
     createdAt: '2026-04-12T15:40:00Z',
@@ -759,10 +762,10 @@ export default function DashboardPage() {
               </p>
               {!searchQuery && (
                 <Link
-                  to="/create"
+                  to={canUseAccount ? '/create' : '/signup'}
                   className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
                 >
-                  Start Creating
+                  {canUseAccount ? 'Start Creating' : 'Create account'}
                 </Link>
               )}
             </div>

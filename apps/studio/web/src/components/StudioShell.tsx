@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   MessageSquare,
   Menu,
+
   PanelLeft,
   PenSquare,
   LogOut,
@@ -60,7 +61,9 @@ const libraryNav: NavItem[] = [
   { to: '/library/trash', label: 'Trash', icon: Trash2 },
 ]
 
-const elementsNav: NavItem[] = [{ to: '/elements/styles', label: 'Styles', icon: SwatchBook, aliases: ['/elements'] }]
+const elementsNav: NavItem[] = [
+  { to: '/elements/styles', label: 'Styles', icon: SwatchBook, aliases: ['/elements'] },
+]
 
 const utilityNav: NavItem[] = [
   { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/usage-policy', '/learn'] },
@@ -116,11 +119,11 @@ function Section({
           const isExpanded = Boolean(expandedItems?.[item.to])
           const actionChildren = childItems.filter((child) => child.kind !== 'history')
           const historyChildren = childItems.filter((child) => child.kind === 'history')
-          const rowClasses = `relative flex min-w-0 items-center rounded-xl px-3 py-2.5 text-[13px] transition ${
+          const rowClasses = `relative flex min-w-0 items-center rounded-xl px-3 py-2.5 text-[13px] transition-all duration-300 ease-out active:scale-[0.98] ${
             active ? 'bg-white/[0.06] text-white font-semibold' : 'text-zinc-400 hover:bg-white/[0.03] hover:text-white font-medium'
           }`
           const activeBar = active ? (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.5),0_0_4px_rgba(124,58,237,0.6)]" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.7),0_0_6px_rgba(124,58,237,0.8)]" />
           ) : null
           return (
             <div key={item.to}>
@@ -395,8 +398,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const rail = (collapsed: boolean) => (
     <>
       <div className={`flex h-[78px] items-center border-b border-white/[0.015] ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
-        <Link to="/landing" className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`} title="Open Omnia Creata landing page">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl">
+        <Link to="/landing" className={`group flex items-center transition-all ${collapsed ? 'justify-center' : 'gap-3'}`} title="Open Omnia Creata landing page">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[2deg]">
             <img src="/omnia-crest.png" alt="Omnia Creata" className="h-9 w-9 object-contain" />
           </div>
           {!collapsed ? (
@@ -429,8 +432,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* Usage bar — always visible for logged-in users */}
         {!isGuestShell && !collapsed && usageSummary && !hasInternalAccess ? (
           <div className="mb-3 space-y-1.5 px-1">
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: usagePercent > 5 ? '2px 0 8px rgba(124,58,237,0.5)' : 'none' }} />
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08] shadow-inner">
+              <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: usagePercent > 5 ? '0 0 12px rgba(124,58,237,0.6)' : 'none' }} />
             </div>
             <div className="flex items-center justify-between text-[10px] text-zinc-600">
               <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>
@@ -548,10 +551,10 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             const Icon = item.icon
             const active = isActive(location.pathname, item)
             return (
-              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] transition-colors ${active ? 'text-white' : 'text-zinc-500'}`}>
+              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] transition-all duration-300 active:scale-95 ${active ? 'text-white' : 'text-zinc-500'}`}>
                 <Icon className="h-4.5 w-4.5" />
                 {item.label}
-                {active ? <div className="h-[3px] w-[3px] rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]" /> : <div className="h-[3px]" />}
+                {active ? <div className="h-[3px] w-[3px] rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8),0_0_3px_rgb(var(--primary))]" /> : <div className="h-[3px]" />}
               </Link>
             )
           })}

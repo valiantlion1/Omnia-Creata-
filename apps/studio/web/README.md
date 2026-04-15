@@ -29,8 +29,11 @@ It is the React/Vite surface for:
 - Main local values:
   - `VITE_API_BASE_URL=http://127.0.0.1:8000`
   - `VITE_AUTH_REDIRECT_BASE_URL=http://127.0.0.1:5173`
-- For staging-style deployment, the deployment pack builds the frontend with:
+- For protected local staging with the Docker deployment pack, the frontend can use:
   - `VITE_API_BASE_URL=/api`
+- For the canonical public stack (`Vercel + Render + Supabase + Redis + Paddle`), set:
+  - `VITE_API_BASE_URL=https://your-render-api-host`
+  - `VITE_AUTH_REDIRECT_BASE_URL=https://your-vercel-frontend-host`
 
 ## Notes
 - The frontend should treat backend metadata as source of truth for auth, billing, ownership, runtime, and chat execution context.

@@ -6,6 +6,8 @@ from ..bootstrap_contract_ops import build_settings_bootstrap_payload
 from ..model_catalog_ops import (
     get_model_catalog_entry_or_raise,
     list_model_catalog_entries,
+    normalize_generation_aspect_ratio,
+    resolve_generation_dimensions_for_model,
     serialize_model_catalog_for_identity,
     validate_dimensions_for_model,
     validate_model_for_identity,
@@ -69,3 +71,14 @@ class ShellService:
 
     def validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
         validate_dimensions_for_model(width=width, height=height, model=model)
+
+    def normalize_generation_aspect_ratio(self, aspect_ratio: str | None) -> str:
+        return normalize_generation_aspect_ratio(aspect_ratio)
+
+    def resolve_generation_dimensions_for_model(
+        self,
+        *,
+        model: ModelCatalogEntry,
+        aspect_ratio: str,
+    ) -> tuple[int, int]:
+        return resolve_generation_dimensions_for_model(model=model, aspect_ratio=aspect_ratio)

@@ -6,6 +6,7 @@ import { AlertTriangle, Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal,
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import {
   getCreativeProfileDescription,
+  getCreativeProfileKey,
   getCreativeProfileLabel,
   describeGenerationLaneTrust,
   formatGenerationGuideSummary,
@@ -103,12 +104,12 @@ const PLACEHOLDER_PROMPTS = [
 /* ─── Aspect presets ───────────────────────────────── */
 
 const aspectPresets = {
-  '1:1':  { width: 1024, height: 1024, label: 'Square', aspect: 'aspect-square' },
-  '16:9': { width: 1280, height: 720, label: 'Landscape', aspect: 'aspect-video' },
-  '9:16': { width: 720, height: 1280, label: 'Story', aspect: 'aspect-[9/16]' },
-  '4:5':  { width: 1024, height: 1280, label: 'Portrait', aspect: 'aspect-[4/5]' },
-  '3:4':  { width: 960, height: 1280, label: 'Editorial portrait', aspect: 'aspect-[3/4]' },
-  '2:3':  { width: 1024, height: 1536, label: 'Poster', aspect: 'aspect-[2/3]' },
+  '1:1':  { aspect: 'aspect-square' },
+  '16:9': { aspect: 'aspect-video' },
+  '9:16': { aspect: 'aspect-[9/16]' },
+  '4:5':  { aspect: 'aspect-[4/5]' },
+  '3:4':  { aspect: 'aspect-[3/4]' },
+  '2:3':  { aspect: 'aspect-[2/3]' },
 } as const
 
 const aspectOrder: Array<keyof typeof aspectPresets> = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
@@ -263,7 +264,14 @@ export default function CreatePage() {
     () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
     [canUseLocalModels, modelsQuery.data],
   )
-  const selectedModel = useMemo(() => models.find((entry) => entry.id === selectedModelId) ?? models[0], [models, selectedModelId])
+  const visibleModels = useMemo(
+    () => models.filter((entry) => getCreativeProfileKey(entry.id) !== 'signature'),
+    [models],
+  )
+  const selectedModel = useMemo(
+    () => visibleModels.find((entry) => entry.id === selectedModelId) ?? visibleModels[0],
+    [selectedModelId, visibleModels],
+  )
   const selectedModelCreditGuide = useMemo(
     () => billingQuery.data?.generation_credit_guide?.models?.find((entry) => entry.model_id === selectedModel?.id) ?? null,
     [billingQuery.data, selectedModel],
@@ -287,6 +295,8 @@ export default function CreatePage() {
   )
   const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
   const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
+  const showFirstRunGuide = searchParams.get('welcome') === '1'
+  const isOutOfCredits = !hasUnlimitedCredits && runtimeCredits <= 0
   const activeAspect = aspectPresets[aspectRatio]
   const orderedAspectOptions = useMemo(
     () =>
@@ -305,11 +315,11 @@ export default function CreatePage() {
   /* ─── Effects ─────────────────────────────────── */
 
   useEffect(() => {
-    if (!models.length) return
-    if (!models.some((entry) => entry.id === selectedModelId)) {
-      setSelectedModelId(models[0].id)
+    if (!visibleModels.length) return
+    if (!visibleModels.some((entry) => entry.id === selectedModelId)) {
+      setSelectedModelId(visibleModels[0].id)
     }
-  }, [models, selectedModelId])
+  }, [selectedModelId, visibleModels])
 
   useEffect(() => {
     if (!requestedProjectId) return
@@ -459,11 +469,11 @@ export default function CreatePage() {
     const trigger = modelPickerButtonRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
-    const estimatedHeight = Math.min(Math.max(models.slice(0, 6).length * 82 + 16, 180), 360)
+    const estimatedHeight = Math.min(Math.max(visibleModels.slice(0, 6).length * 82 + 16, 180), 360)
     const spaceBelow = window.innerHeight - rect.bottom
     const spaceAbove = rect.top
     setModelPickerDirection(spaceBelow < estimatedHeight && spaceAbove > spaceBelow ? 'up' : 'down')
-  }, [modelPickerOpen, models])
+  }, [modelPickerOpen, visibleModels])
 
   /* ─── Handlers ────────────────────────────────── */
 
@@ -584,11 +594,9 @@ export default function CreatePage() {
         negative_prompt: negativePrompt,
         reference_asset_id: referenceAssetId,
         model: selectedModel.id,
-        width: activeAspect.width,
-        height: activeAspect.height,
         steps,
         cfg_scale: cfgScale,
-        seed: Math.floor(Math.random() * 1_000_000_000),
+        seed: seed ?? Math.floor(Math.random() * 1_000_000_000),
         aspect_ratio: aspectRatio,
         output_count: outputCount,
       })
@@ -601,7 +609,7 @@ export default function CreatePage() {
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
-  }, [activeAspect.height, activeAspect.width, aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, queryClient, referenceAssetId, selectedModel, selectedModelCreditGuide, steps])
+  }, [aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, pushPromptHistory, queryClient, referenceAssetId, seed, selectedModel, selectedModelCreditGuide, steps])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -637,7 +645,7 @@ export default function CreatePage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Create</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Write a prompt, pick a creative profile, choose a ratio, and generate. Create is the direct image workspace inside Studio.
+            Write a prompt, choose a quality, pick a format, and generate. Create is the direct image workspace inside Studio.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
@@ -662,7 +670,11 @@ export default function CreatePage() {
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
           <div>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Create</h1>
-            <p className="mt-1 text-sm text-zinc-500">Describe what you'd like to create.</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {isOutOfCredits
+                ? 'Describe what you want to make, then add wallet credits or upgrade when you are ready to run it.'
+                : 'Describe what you would like to create.'}
+            </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
             ) : null}
@@ -671,6 +683,30 @@ export default function CreatePage() {
             {runningJobs ? <StatusPill tone="neutral">{runningJobs} creating</StatusPill> : null}
           </div>
         </div>
+
+        {(showFirstRunGuide || isOutOfCredits) ? (
+          <div className="mb-6 overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03]">
+            <div className="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-6">
+              <div className="max-w-2xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Create Access</p>
+                <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">
+                  Free accounts can use Create. Chat stays on paid plans.
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  Studio does not bundle free image generation at launch. Use wallet credits to run Create on a free account, or move onto Creator or Pro if you want the paid chat surface and bigger monthly capacity.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-3">
+                <Link to="/subscription" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90">
+                  View Plans
+                </Link>
+                <Link to="/explore" className="rounded-full bg-white/[0.05] px-5 py-2.5 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
+                  Back to Gallery
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* ── Prompt Area ────────────────────────── */}
         <div className="glass-card overflow-visible p-[2px]">
@@ -917,7 +953,7 @@ export default function CreatePage() {
           </div>
 
           {/* Credit Warning */}
-          {!hasUnlimitedCredits && runtimeCredits < 10 && (
+          {!isOutOfCredits && !hasUnlimitedCredits && runtimeCredits < 10 && (
             <div className="mx-6 mb-2 flex items-center gap-2 rounded-xl bg-amber-400/10 px-4 py-2.5 text-[12px] font-semibold text-amber-400 ring-1 ring-amber-400/20">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               Only {runtimeCredits} credits remaining.
@@ -938,14 +974,7 @@ export default function CreatePage() {
                   <div className="flex h-[22px] w-[22px] items-center justify-center opacity-90">
                     <div className={`border-2 ${activeAspect.aspect} w-full rounded-sm border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.18)]`} />
                   </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold text-white">
-                      {aspectRatio} · {activeAspect.label}
-                    </div>
-                    <div className="truncate text-[11px] text-zinc-500">
-                      {activeAspect.width} × {activeAspect.height}
-                    </div>
-                  </div>
+                  <div className="min-w-0 text-[13px] font-semibold text-white">{aspectRatio}</div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${ratioPickerOpen ? 'rotate-180 text-white' : ''}`} />
                 </button>
 
@@ -968,14 +997,7 @@ export default function CreatePage() {
                             <div className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-white/[0.04]">
                               <div className={`border-2 ${option.aspect} w-5 rounded-sm ${active ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.2)]' : 'border-zinc-400'}`} />
                             </div>
-                            <div className="min-w-0">
-                              <div className="text-[13px] font-semibold tracking-wide">
-                                {option.ratio} · {option.label}
-                              </div>
-                              <div className="mt-1 text-[11px] leading-5 text-zinc-500">
-                                {option.width} × {option.height}
-                              </div>
-                            </div>
+                            <div className="min-w-0 text-[13px] font-semibold tracking-wide">{option.ratio}</div>
                           </div>
                           {active ? <Check className="h-4 w-4 text-white" /> : null}
                         </button>
@@ -995,7 +1017,7 @@ export default function CreatePage() {
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select creative profile'}
+                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select quality'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -1003,7 +1025,7 @@ export default function CreatePage() {
 
                 {modelPickerOpen ? (
                   <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
-                    {models.slice(0, 6).map((entry) => {
+                    {visibleModels.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
                       return (
                         <button

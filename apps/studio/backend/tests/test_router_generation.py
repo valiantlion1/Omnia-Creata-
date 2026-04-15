@@ -71,13 +71,14 @@ async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMem
     async def _current_user(request: Request) -> User:
         user_id = request.headers.get("X-Test-User", "user-1")
         email = request.headers.get("X-Test-Email", f"{user_id}@example.com")
+        is_verified = request.headers.get("X-Test-Verified", "true").strip().lower() in {"1", "true", "yes"}
         return User(
             id=user_id,
             email=email,
             username=user_id,
             role=UserRole.USER,
             is_active=True,
-            is_verified=True,
+            is_verified=is_verified,
         )
 
     app.dependency_overrides[router_module.get_current_user] = _current_user
@@ -176,9 +177,53 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["credit_status"] == "reserved"
         assert payload["pricing_lane"] == "fallback"
         assert payload["estimated_cost_source"] == "catalog_fallback"
-        assert payload["creative_profile"]["id"] == "fast-draft"
-        assert payload["creative_profile"]["label"] == "Fast Draft"
+        assert payload["creative_profile"]["id"] == "fast"
+        assert payload["creative_profile"]["label"] == "Fast"
         assert payload["render_experience"]["state"] == "fallback"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_requires_verified_account_before_job_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+    create_generation_called = False
+
+    async def fake_create_generation(**_: object) -> GenerationJob:
+        nonlocal create_generation_called
+        create_generation_called = True
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1", "X-Test-Verified": "false"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial portrait",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Verify your email address before creating generations."}
+        assert create_generation_called is False
     finally:
         await service.shutdown()
 

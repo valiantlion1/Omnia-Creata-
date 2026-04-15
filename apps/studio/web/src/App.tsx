@@ -30,7 +30,6 @@ const SettingsPage = lazy(() => import('@/pages/Settings'))
 const SharedPage = lazy(() => import('@/pages/Shared'))
 const SignupPage = lazy(() => import('@/pages/Signup'))
 const CommunityPage = lazy(() => import('@/pages/Community'))
-const CharactersPage = lazy(() => import('@/pages/Characters'))
 const AnalyticsPage = lazy(() => import('@/pages/Analytics'))
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
 const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
@@ -139,7 +138,6 @@ function ProtectedRoutes() {
       <Route path="/media" element={<Navigate to="/library/images" replace />} />
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
-      <Route path="/elements/characters" element={<CharactersPage />} />
       <Route path="/help" element={<DocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
@@ -151,6 +149,7 @@ function ProtectedRoutes() {
       <Route path="/billing" element={<Navigate to="/subscription" replace />} />
       <Route path="/plan" element={<Navigate to="/subscription" replace />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="/u/:username" element={<AccountPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/studio" element={<Navigate to="/explore" replace />} />
       <Route path="/gallery" element={<Navigate to="/library/images" replace />} />
@@ -180,8 +179,7 @@ function AppFrame() {
     location.pathname === '/landing' ||
     location.pathname === '/login' ||
     location.pathname === '/signup' ||
-    location.pathname.startsWith('/shared/') ||
-    location.pathname.startsWith('/u/')
+    location.pathname.startsWith('/shared/')
   const isPublicCapable =
     location.pathname === '/help' ||
     location.pathname === '/docs' ||
@@ -189,7 +187,8 @@ function AppFrame() {
     location.pathname === '/terms' ||
     location.pathname === '/privacy' ||
     location.pathname === '/usage-policy' ||
-    location.pathname === '/learn'
+    location.pathname === '/learn' ||
+    location.pathname.startsWith('/u/')
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const shouldRenderWithShell = isPublicShellRoute || canRenderWithShell
 

@@ -18,6 +18,115 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.15.115`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.114` cleaned up visible shell breakage, but Create still carried old product-language drift in exactly the place users feel quality most directly. Model choices were still narrated like creative-profile experiments instead of simple quality lanes, aspect ratios still leaked unnecessary preset semantics, and generation dimensions were still too dependent on client-supplied shape instead of one server-authoritative truth. A smaller frontend security/config drift also remained: the admin analytics page still had a production fallback to `http://127.0.0.1:8000` and did not treat auth failures as a real fail-closed redirect path.
+- What:
+  Create now speaks in three clear public quality choices: `Fast`, `Standard`, and `Premium`. The internal advanced image lane remains in the backend, but it no longer clutters the public Create picker, so the surface reads like one intentional product instead of a model registry.
+  Aspect ratio selection is now cleaner too. The picker shows only icon-plus-ratio choices such as `1:1`, `16:9`, and `9:16`, while the backend resolves the actual width and height server-side from the selected model and ratio. That closes both a UI rough edge and an economics/safety issue where client-supplied dimensions could drift from Studio's real provider and credit truth.
+  This wave also tightened two real security/config edges. Chat attachments now reject insecure `http://` remote image URLs, and the admin analytics surface no longer falls back to an insecure localhost API target in production; it now uses the same-origin/API env truth and treats 401/403 responses as explicit fail-closed redirects.
+
+### `0.6.0-alpha` / build `2026.04.15.114`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.113` corrected the Free Account doctrine, but the live shell still had a few rough edges that made Studio feel broken in exactly the wrong places. The `Characters` page was still hanging around even though it had already been deferred, signed-in visits to `/u/:username` were dropping out of the shell into the public router, and local image routing was still too eager to hide billable OpenAI lanes behind weaker fallback-only providers when Runware/Fal were unavailable.
+- What:
+  The web shell is now cleaner and more honest. `Characters` is no longer mounted in routes or sidebar navigation, and signed-in visits to other creators' profile pages now stay inside the Studio shell so sidebar navigation and account context do not disappear mid-session.
+  Image routing truth also improved for the current local/provider reality. Wallet-managed and development override lanes now promote configured OpenAI image generation ahead of degraded fallback-only providers when Runware/Fal are unavailable, which gives Standard and higher-quality requests a much healthier path on current machines.
+  This wave also adds a small but real auth hardening fix on the frontend: post-auth redirect targets are now sanitized to internal Studio paths only, so hostile `next=` values cannot bounce login or OAuth flows out to arbitrary external URLs.
+
+### `0.6.0-alpha` / build `2026.04.15.113`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.112` made the public shell feel less broken, but one important doctrine detail was still inverted in places: free accounts were still being treated like limited-chat users instead of wallet-backed Create users. That drift made onboarding, plan truth, and the chat shell feel inconsistent with the actual launch contract.
+- What:
+  Free-account truth now matches the intended Studio launch model. The backend catalog and public plan payload now say clearly that free accounts can enter Create with wallet credits while Studio chat remains locked to Creator and Pro.
+  The web surface moved with that change: signup now lands into the Explore welcome path, Create explains the wallet-backed first-run flow more honestly, and Chat no longer pretends to be a partially available surface for free accounts.
+  Studio docs and economics notes were also corrected so the current build no longer describes Free Account as a limited-chat funnel.
+
+### `0.6.0-alpha` / build `2026.04.15.112`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.111` kept the launch gate honest, but the public shell still felt rough in a way that looked like broken product instead of controlled rollout. Landing copy was still speaking in a `Protected Beta` voice, signed-out billing CTAs looked dead instead of routing people into account creation, and the comparison table on the pricing page contradicted the newer wallet-backed free-account doctrine.
+- What:
+  Landing now speaks in the current controlled-launch frame rather than the older protected-beta framing, and its primary CTA is explicit about the real free-account entry point instead of implying free bundled image usage.
+  The public billing surface is also more honest for signed-out visitors: paid-plan and credit-pack actions now route to account creation instead of rendering as disabled dead ends, and the feature-comparison table now mirrors the current backend contract more closely by emphasizing bundled monthly credits, wallet packs, concurrency, resolution, sharing, clean exports, and premium chat instead of promising free bundled image generation.
+  Explore's empty-state CTA now also routes guests into account creation rather than sending them straight into a login-gated create path, which reduces the "this app isn't working" feeling on an otherwise healthy local build.
+
+### `0.6.0-alpha` / build `2026.04.15.111`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.110` fixed a real closed-beta fail-open at the generation gate, but the controlled public paid launch pass still had one honesty gap: launch-readiness truth was not explicitly treating public abuse hardening as a blocker. Provider truth, economics truth, and staging proof were visible, yet the lack of real CAPTCHA enforcement on sensitive flows could still hide behind those greener surfaces.
+- What:
+  Public paid readiness now models `abuse_hardening` as its own operator-visible gate. Protected beta may still remain ready with advisory warnings, but the `public_paid_platform` phase now blocks explicitly if sensitive-flow CAPTCHA verification is not actually enabled.
+  This keeps the readiness model aligned with the product doctrine: verified-account generation is now enforced at runtime, but broader self-serve public exposure still is not ready until signup and similar abuse-sensitive flows stop relying on docs-only CAPTCHA claims.
+  Docs were updated to match that truth, so the AI context pack and delivery-status pages now name `abuse_hardening` alongside the existing provider and economics blockers instead of letting operators infer it from conversation history.
+
+### `0.6.0-alpha` / build `2026.04.15.110`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.109` aligned deploy/proof truth, but the closed paid beta hardening pass still had one real fail-open left on the runtime path: Studio told clients that verified accounts were required for generation, yet the `/v1/generations` route still allowed unverified authenticated users to submit work. That is exactly the kind of mismatch that turns a "protected beta" claim into theater.
+- What:
+  Studio generation submit now enforces verified-account status before moderation or job creation, so unverified accounts fail closed with an explicit `403` instead of slipping into the paid image flow. This keeps the backend contract aligned with the usage-cap payload Studio already advertised and narrows one obvious abuse path during closed beta.
+  This wave also refreshed a stale security regression helper so share/public export tests reflect the current paid-share entitlement contract and the stricter ready/truthful-share rules rather than older pre-entitlement assumptions.
+  The wave is intentionally honest about what it did not solve: CAPTCHA is still only represented as contract truth in payloads/docs, not as real backend verification. That remains a launch blocker for a broader public abuse posture even though the verified-generation gap is now closed.
+
+### `0.6.0-alpha` / build `2026.04.15.109`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.108` improved backend maintainability, but Studio's deploy/proof story still drifted from the real launch stack. The repo had a decent Docker-based protected staging loop, yet the canonical public contract had not been made concrete enough in config, env examples, owner health truth, or preflight checks for `Vercel + Render + Supabase + Redis + Paddle`.
+- What:
+  Studio now carries an explicit platform deploy pack alongside the protected local staging proof loop. A new [deployment_stack_ops.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/deployment_stack_ops.py) summarizes the locked stack, owner health detail now exposes that deployment-stack truth, and deployment preflight can validate canonical platform envs instead of only Docker-style staging inputs.
+  The repo also now ships a platform env example, a Render blueprint, and a Vercel config: [deploy/.env.platform.example](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/.env.platform.example), [render.yaml](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/render.yaml), and [web/vercel.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/web/vercel.json). Docs now distinguish the bounded Docker proof loop from the canonical public stack, and Studio web is back to passing both `type-check` and `build` after a small dead-variable cleanup in Billing.
+  This wave does not pretend launch proof is finished. What it closes is repo truth: the stack contract, env scaffolding, verification entry points, and operator payloads now describe the same deployment story. What remains blocked is external provisioning and closure-grade proof on actual Vercel/Render/Supabase/Paddle infrastructure.
+
+### `0.6.0-alpha` / build `2026.04.15.108`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.107` locked the economics story, but the backend spine still carried a quieter maintenance risk: `apps/studio/backend/studio_platform/service.py` had swollen past the size guard that is meant to keep Studio's orchestration layer readable and safe to evolve. The product behavior was fine, yet the shell/billing/chat/generation boundaries were being buried under a giant mixed file again.
+- What:
+  This wave is a stability refactor, not a product behavior change. The plan/catalog/preset/public-plan builders that define Studio's commercial and shell bootstrap contract were extracted into a dedicated [service_catalog.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/service_catalog.py), and [service.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/service.py) now imports that contract instead of owning every static builder inline.
+  That brings the backend spine back under its size target while preserving the exact shell delegation lines and runtime constructor behavior that current tests expect. The point of the change is simpler future maintenance: chat, generation, and public/share extractions now have a calmer orchestration file to grow from instead of a single blob drifting upward again.
+
+### `0.6.0-alpha` / build `2026.04.15.107`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.106` hardened public/share truth, but Studio still lacked one thing that matters just as much as security and provider doctrine: a canonical internal economics lock. Package shape existed, lane credits existed, and provider doctrine existed, but the actual stop-loss math, revenue floor, and burn-cap rules were still spread across code, wiki notes, and conversation memory.
+- What:
+  Studio now has a dedicated launch economics lock document that pins the current internal commercial table against backend truth. It records the current `Free Account / Creator / Pro / Credit Packs` package values, the `Fast / Standard / Premium` public lane contract, the managed-versus-fallback hold rules, and the conservative `Pro` revenue floor that should be used for launch-risk decisions.
+  The lock also makes risk thresholds explicit instead of implied. Soft and hard variable-spend caps are now written down, OpenAI image sub-cap and spend-share thresholds are explicit, and the docs now state clearly that `OpenAI high` must not silently become the default public `Premium` lane under the current `12-credit` contract.
+  This wave is documentation and operator-truth alignment, not runtime behavior change. It also cleans up lingering docs drift where a few Studio wiki entry points still described the old `Starter / Pro / Credit Top-up` story instead of the live `Free Account / Creator / Pro / Credit Packs` doctrine.
+
+### `0.6.0-alpha` / build `2026.04.15.106`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.105` separated active commercial truth from stale paid-plan labels, but the `Create -> result -> project/library -> share` chain still had a few public-surface holes. Studio could still carry dead project shares that were only destined to 404 later, and old public/share access could survive longer than it should when owner state or asset readiness drifted away from launch truth.
+- What:
+  Share creation now fails closed earlier. Project shares require at least one ready, truthful asset up front, and asset shares now trust the same `public-share eligible` rule that public retrieval uses instead of only checking a smaller blocked/deleted subset.
+  Public retrieval got stricter too. Share links now die when the owner identity is missing, manually reviewed, temporarily blocked, internal-only, or no longer entitled to share because the current billing state has fallen back out of the paid contract.
+  Public post surfaces also got more honest. Public feed serialization, public-preview asset access, and public post transitions now only expose showcase-ready assets; blocked, generating, failed, deleted, or demo-placeholder results no longer qualify just because they were still renderable.
+
 ### `0.6.0-alpha` / build `2026.04.14.105`
 - Date: `2026-04-14`
 - Codename: `Foundation`

@@ -22,7 +22,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    navigate('/subscription?welcome=1', { replace: true })
+    navigate('/explore?welcome=1', { replace: true })
   }, [isAuthenticated, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -52,7 +52,7 @@ export default function SignupPage() {
         acceptedUsagePolicy: acceptedLegal,
         marketingOptIn,
       })
-      navigate('/subscription?welcome=1', { replace: true })
+      navigate('/explore?welcome=1', { replace: true })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to create your account right now.')
     } finally {
@@ -65,7 +65,7 @@ export default function SignupPage() {
     setError(null)
 
     try {
-      await signInWithProvider(provider, '/subscription?welcome=1')
+      await signInWithProvider(provider, '/explore?welcome=1')
     } catch (googleError) {
       setError(googleError instanceof Error ? googleError.message : `${provider} sign up could not start.`)
       setGoogleBusy(false)

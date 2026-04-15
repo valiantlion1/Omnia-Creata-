@@ -31,6 +31,7 @@ _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "image_provider_lane",
     "provider_economics",
     "deployment_verification",
+    "abuse_hardening",
 }
 
 _LOCAL_ALPHA_REQUIRED_KEYS = frozenset(
@@ -400,6 +401,21 @@ def build_launch_readiness_report(
             "pass",
             "Supabase auth configuration is present.",
             "URL, anon key, and service-role key are configured.",
+        )
+
+    if is_launch_environment and settings.captcha_verification_enabled is not True:
+        add_check(
+            "abuse_hardening",
+            "warning",
+            "Sensitive-flow CAPTCHA verification is still not enforced.",
+            "Verified accounts are now required for generation, but signup and other abuse-sensitive flows still lack live CAPTCHA verification for a broader public paid rollout.",
+        )
+    else:
+        add_check(
+            "abuse_hardening",
+            "pass",
+            "Sensitive-flow abuse gates are aligned with the current launch posture.",
+            "Verified-account generation enforcement is active and CAPTCHA verification is enabled where public rollout requires it.",
         )
 
     durable = bool(data_authority.get("durable"))
@@ -1115,6 +1131,19 @@ def _build_public_paid_platform_phase(
             warnings.append(
                 smoke_summary
                 or "Current-build provider smoke still needs operator attention."
+            )
+
+    abuse_hardening_check = check_lookup.get("abuse_hardening")
+    if isinstance(abuse_hardening_check, dict):
+        abuse_status = str(abuse_hardening_check.get("status") or "").strip().lower()
+        abuse_summary = str(abuse_hardening_check.get("summary") or "").strip()
+        abuse_detail = str(abuse_hardening_check.get("detail") or "").strip()
+        if abuse_status != "pass":
+            blocking_keys.append("abuse_hardening")
+            blockers.append(
+                abuse_summary
+                or abuse_detail
+                or "Public signup and other abuse-sensitive flows still need stronger hardening before controlled public paid launch."
             )
 
     chat_truth = provider_truth.get("chat") if isinstance(provider_truth.get("chat"), dict) else {}

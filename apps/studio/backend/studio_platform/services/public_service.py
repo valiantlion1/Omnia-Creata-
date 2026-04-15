@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ..entitlement_ops import resolve_entitlements
 from ..generation_ops import infer_style_tags
-from ..models import GenerationJob, JobStatus, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioState, Visibility, utc_now
+from ..models import GenerationJob, JobStatus, ManualReviewState, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioState, Visibility, utc_now
 from ..share_ops import build_public_share_payload, build_share_token_preview, create_share_record
 
 if TYPE_CHECKING:
@@ -68,6 +68,7 @@ class PublicService:
     def normalize_public_posts_locked(self, state: StudioState) -> None:
         now = utc_now()
         generations_by_id = state.generations
+        assets_by_id = state.assets
         for post in state.posts.values():
             identity = state.identities.get(post.identity_id)
             changed = False
@@ -79,34 +80,63 @@ class PublicService:
             if post.owner_display_name != next_display_name:
                 post.owner_display_name = next_display_name
                 changed = True
-            if (
-                post.visibility == Visibility.PUBLIC
-                and self.should_hide_post_from_public(
+            if post.visibility == Visibility.PUBLIC:
+                if self.should_hide_post_from_public(
                     post,
                     identity=identity,
                     generations_by_id=generations_by_id,
-                )
-            ):
-                post.visibility = Visibility.PRIVATE
-                changed = True
+                ) or not self.is_publicly_showcase_ready_post(post):
+                    post.visibility = Visibility.PRIVATE
+                    changed = True
+                elif not self.visible_post_assets(
+                    assets_by_id,
+                    post,
+                    public_preview=True,
+                ):
+                    post.visibility = Visibility.PRIVATE
+                    changed = True
             if changed:
                 post.updated_at = now
+
+    def visible_post_assets(
+        self,
+        assets_by_id: Dict[str, MediaAsset],
+        post: PublicPost,
+        *,
+        public_preview: bool = False,
+    ) -> list[MediaAsset]:
+        ordered_asset_ids: list[str] = []
+        if post.cover_asset_id:
+            ordered_asset_ids.append(post.cover_asset_id)
+        ordered_asset_ids.extend(post.asset_ids)
+        visible_assets: list[MediaAsset] = []
+        seen_asset_ids: set[str] = set()
+        for asset_id in ordered_asset_ids:
+            if asset_id in seen_asset_ids or asset_id not in assets_by_id:
+                continue
+            seen_asset_ids.add(asset_id)
+            asset = assets_by_id[asset_id]
+            if public_preview:
+                if self.service.library.is_public_share_eligible_asset(asset):
+                    visible_assets.append(asset)
+                continue
+            if asset.deleted_at is None and self.service.library.is_truthful_surface_asset(asset):
+                visible_assets.append(asset)
+        return visible_assets
 
     def post_preview_assets(
         self,
         assets_by_id: Dict[str, MediaAsset],
-        asset_ids: list[str],
+        post: PublicPost,
         *,
         identity_id: str | None = None,
         public_preview: bool = False,
     ) -> list[Dict[str, Any]]:
-        visible_assets = [
-            assets_by_id[asset_id]
-            for asset_id in asset_ids
-            if asset_id in assets_by_id
-            and assets_by_id[asset_id].deleted_at is None
-            and self.service.library.is_truthful_surface_asset(assets_by_id[asset_id])
-        ]
+        visible_assets = self.visible_post_assets(
+            assets_by_id,
+            post,
+            public_preview=public_preview,
+        )
         return self.service.library.serialize_assets(
             visible_assets[:4],
             identity_id=identity_id,
@@ -122,7 +152,17 @@ class PublicService:
         viewer_identity_id: str | None = None,
         public_preview: bool = False,
     ) -> Dict[str, Any]:
+        visible_assets = self.visible_post_assets(
+            assets_by_id,
+            post,
+            public_preview=public_preview,
+        )
         cover_asset = assets_by_id.get(post.cover_asset_id or "")
+        if public_preview:
+            if cover_asset is None or not self.service.library.is_public_share_eligible_asset(cover_asset):
+                cover_asset = visible_assets[0] if visible_assets else None
+        elif cover_asset is None or cover_asset.deleted_at is not None or not self.service.library.is_truthful_surface_asset(cover_asset):
+            cover_asset = visible_assets[0] if visible_assets else None
         identity = identities_by_id.get(post.identity_id) if identities_by_id else None
         return {
             "id": post.id,
@@ -139,7 +179,7 @@ class PublicService:
             else None,
             "preview_assets": self.post_preview_assets(
                 assets_by_id,
-                post.asset_ids,
+                post,
                 identity_id=viewer_identity_id,
                 public_preview=public_preview,
             ),
@@ -189,13 +229,11 @@ class PublicService:
                 continue
             if not self.is_publicly_showcase_ready_post(post):
                 continue
-            preview_assets = [
-                assets_by_id[asset_id]
-                for asset_id in post.asset_ids
-                if asset_id in assets_by_id
-                and assets_by_id[asset_id].deleted_at is None
-                and self.service.library.is_truthful_surface_asset(assets_by_id[asset_id])
-            ]
+            preview_assets = self.visible_post_assets(
+                assets_by_id,
+                post,
+                public_preview=True,
+            )
             if not preview_assets:
                 continue
             public_posts.append(post)
@@ -284,11 +322,23 @@ class PublicService:
             )
         ):
             raise PermissionError("Post is private")
+        if viewer_identity_id != post.identity_id and not self.is_publicly_showcase_ready_post(post):
+            raise PermissionError("Post is private")
+        if (
+            viewer_identity_id != post.identity_id
+            and not self.visible_post_assets(
+                assets_by_id,
+                post,
+                public_preview=True,
+            )
+        ):
+            raise PermissionError("Post is private")
         return self.serialize_post(
             post,
             assets_by_id=assets_by_id,
             identities_by_id=identities_by_id,
             viewer_identity_id=viewer_identity_id,
+            public_preview=viewer_identity_id != post.identity_id,
         )
 
     async def update_post(
@@ -307,6 +357,22 @@ class PublicService:
                 action_code="public_post",
                 action_label="making posts public",
             )
+            assets = await self.service.store.list_assets()
+            generations = await self.service.store.list_generations()
+            assets_by_id = {asset.id: asset for asset in assets}
+            generations_by_id = {generation.id: generation for generation in generations}
+            if self.should_hide_post_from_public(
+                post,
+                identity=identity,
+                generations_by_id=generations_by_id,
+            ) or not self.is_publicly_showcase_ready_post(post):
+                raise PermissionError("Only showcase-ready posts can be made public")
+            if not self.visible_post_assets(
+                assets_by_id,
+                post,
+                public_preview=True,
+            ):
+                raise PermissionError("Only ready, truthful results can be made public")
 
         def mutation(state: StudioState) -> None:
             current = state.posts[post.id]
@@ -383,6 +449,12 @@ class PublicService:
             ):
                 raise PermissionError("Only public showcase-ready posts can be interacted with")
             if not self.is_publicly_showcase_ready_post(post):
+                raise PermissionError("Only public showcase-ready posts can be interacted with")
+            if not self.visible_post_assets(
+                state.assets,
+                post,
+                public_preview=True,
+            ):
                 raise PermissionError("Only public showcase-ready posts can be interacted with")
             return post
 
@@ -491,15 +563,18 @@ class PublicService:
         if bool(project_id) == bool(asset_id):
             raise ValueError("Provide exactly one of project_id or asset_id")
         if project_id:
-            await self.service.require_owned_model("projects", project_id, Project, identity_id)
+            project = await self.service.require_owned_model("projects", project_id, Project, identity_id)
+            assets = await self.service.list_assets(identity_id, project_id=project.id)
+            eligible_assets = [
+                asset
+                for asset in assets
+                if self.service.library.is_project_share_eligible_asset(asset)
+            ]
+            if not eligible_assets:
+                raise PermissionError("Only projects with ready, truthful assets can be shared publicly")
         if asset_id:
             asset = await self.service.require_owned_model("assets", asset_id, MediaAsset, identity_id)
-            if (
-                asset.deleted_at is not None
-                or self.service._is_demo_placeholder_asset(asset)
-                or self.service.library.asset_protection_state(asset) == "blocked"
-                or self.service.library.asset_library_state(asset) == "blocked"
-            ):
+            if not self.service.library.is_public_share_eligible_asset(asset):
                 raise PermissionError("Only ready, truthful assets can be shared publicly")
 
         public_token = self.service._generate_share_public_token()
@@ -563,6 +638,10 @@ class PublicService:
             raise KeyError("Share not found")
         if share.expires_at and share.expires_at < utc_now():
             raise KeyError("Share not found")
+        try:
+            await self.service.library.assert_share_owner_public_access(share)
+        except PermissionError as exc:
+            raise KeyError("Share not found") from exc
 
         if share.project_id:
             project = await self.service.store.get_project(share.project_id)
@@ -614,6 +693,17 @@ class PublicService:
             return fallback
         return (identity.display_name or fallback).strip() or fallback
 
+    def is_publicly_visible_identity(self, identity: OmniaIdentity | None) -> bool:
+        if identity is None:
+            return False
+        if self.is_internal_identity(identity):
+            return False
+        if identity.manual_review_state == ManualReviewState.REQUIRED:
+            return False
+        if identity.temp_block_until and identity.temp_block_until > utc_now():
+            return False
+        return True
+
     def is_internal_identity(self, identity: OmniaIdentity | None) -> bool:
         if identity is None:
             return True
@@ -643,7 +733,7 @@ class PublicService:
         identity: OmniaIdentity | None,
         generations_by_id: Dict[str, GenerationJob],
     ) -> bool:
-        if self.is_internal_identity(identity):
+        if not self.is_publicly_visible_identity(identity):
             return True
         return self.generation_provider_for_post(post, generations_by_id) == "demo"
 

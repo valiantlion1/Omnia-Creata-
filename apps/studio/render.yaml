@@ -1,0 +1,152 @@
+services:
+  - type: keyvalue
+    name: omnia-studio-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: omnia-studio-api
+    runtime: python
+    rootDir: apps/studio/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/healthz
+    disk:
+      name: studio-runtime
+      mountPath: /var/data/studio
+      sizeGB: 5
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: HOST
+        value: 0.0.0.0
+      - key: ENVIRONMENT
+        value: staging
+      - key: PUBLIC_WEB_BASE_URL
+        sync: false
+      - key: PUBLIC_API_BASE_URL
+        sync: false
+      - key: STATE_STORE_BACKEND
+        value: postgres
+      - key: ASSET_STORAGE_BACKEND
+        value: supabase
+      - key: GENERATION_RUNTIME_MODE
+        value: web
+      - key: STUDIO_RUNTIME_ROOT
+        value: /var/data/studio
+      - key: FRONTEND_DEPLOY_PLATFORM
+        value: vercel
+      - key: API_DEPLOY_PLATFORM
+        value: render
+      - key: WORKER_DEPLOY_PLATFORM
+        value: render
+      - key: REDIS_DEPLOY_PLATFORM
+        value: render
+      - key: DATA_DEPLOY_PLATFORM
+        value: supabase
+      - key: STORAGE_DEPLOY_PLATFORM
+        value: supabase
+      - key: BILLING_BACKBONE_PROVIDER
+        value: paddle
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: omnia-studio-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_CHECKOUT_BASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RUNWARE_API_KEY
+        sync: false
+      - key: FAL_API_KEY
+        sync: false
+      - key: HUGGINGFACE_TOKEN
+        sync: false
+
+  - type: worker
+    name: omnia-studio-worker
+    runtime: python
+    rootDir: apps/studio/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/generation_worker.py
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: ENVIRONMENT
+        value: staging
+      - key: PUBLIC_WEB_BASE_URL
+        sync: false
+      - key: PUBLIC_API_BASE_URL
+        sync: false
+      - key: STATE_STORE_BACKEND
+        value: postgres
+      - key: ASSET_STORAGE_BACKEND
+        value: supabase
+      - key: GENERATION_RUNTIME_MODE
+        value: worker
+      - key: FRONTEND_DEPLOY_PLATFORM
+        value: vercel
+      - key: API_DEPLOY_PLATFORM
+        value: render
+      - key: WORKER_DEPLOY_PLATFORM
+        value: render
+      - key: REDIS_DEPLOY_PLATFORM
+        value: render
+      - key: DATA_DEPLOY_PLATFORM
+        value: supabase
+      - key: STORAGE_DEPLOY_PLATFORM
+        value: supabase
+      - key: BILLING_BACKBONE_PROVIDER
+        value: paddle
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: omnia-studio-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_CHECKOUT_BASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RUNWARE_API_KEY
+        sync: false
+      - key: FAL_API_KEY
+        sync: false
+      - key: HUGGINGFACE_TOKEN
+        sync: false

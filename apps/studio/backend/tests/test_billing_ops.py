@@ -340,14 +340,14 @@ async def test_billing_summary_reports_reserved_and_available_credits(
         assert serialized["credit_status"] == "reserved"
         assert serialized["pricing_lane"] == "fallback"
         assert serialized["estimated_cost_source"] == "catalog_fallback"
-        assert serialized["creative_profile"]["id"] == "fast-draft"
-        assert serialized["creative_profile"]["label"] == "Fast Draft"
+        assert serialized["creative_profile"]["id"] == "fast"
+        assert serialized["creative_profile"]["label"] == "Fast"
         assert serialized["render_experience"]["state"] == "fallback"
         assert draft_guide["quoted_credit_cost"] == 6
         assert draft_guide["reserved_credit_cost"] == 3
         assert draft_guide["settlement_credit_cost"] == 3
-        assert draft_guide["creative_profile"]["id"] == "fast-draft"
-        assert draft_guide["creative_profile"]["badge"] == "Quick ideas"
+        assert draft_guide["creative_profile"]["id"] == "fast"
+        assert draft_guide["creative_profile"]["badge"] == "Quick starts"
         assert draft_guide["render_experience"]["state"] == "fallback"
     finally:
         await service.shutdown()
@@ -371,6 +371,8 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         assert free_account["price_usd"] == 0
         assert free_account["checkout_kind"] is None
         assert free_account["availability"] == "included"
+        assert free_account["can_access_chat"] is False
+        assert free_account["can_generate"] is True
 
         assert creator["entitlement_plan"] == "creator"
         assert creator["label"] == "Creator"
@@ -386,6 +388,7 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
 
         assert payload["wallet"]["free_account_can_buy_credit_packs"] is True
         assert payload["wallet"]["free_image_generation_included"] is False
+        assert payload["usage_caps"]["free_ai_chat_limited"] is False
         assert len(payload["credit_packs"]) == 2
         assert {option["kind"] for option in payload["credit_packs"]} == {
             CheckoutKind.CREDIT_PACK_SMALL.value,

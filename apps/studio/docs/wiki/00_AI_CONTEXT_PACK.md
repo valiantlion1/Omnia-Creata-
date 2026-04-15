@@ -42,6 +42,7 @@ This means:
 2. [Product North Star](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/01_PRODUCT_NORTH_STAR.md)
 3. [Delivery Status](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/03_DELIVERY_STATUS.md)
 4. [Roadmap And Planning](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/06_ROADMAP_AND_PLANNING.md)
+5. [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
 
 ### Backend, billing, provider, or ops work
 
@@ -64,13 +65,15 @@ Treat these as stable unless the task explicitly changes them:
 - `Create` and `Chat` stay distinct product surfaces
 - auth, billing, entitlement, moderation, and runtime truth are server-authoritative
 - Studio is a global product, not a narrow creator-only beta toy
-- the live packaging ids are `Starter`, `Pro`, and `Credit Top-up`
+- the live packaging shape is `Free Account`, `Creator`, `Pro`, and `Credit Packs`
+- the public image quality shape is `Fast`, `Standard`, and `Premium`
 - exact package numbers come from the backend public-plan catalog
 - `OCOS` is future internal operating-system work, not current Studio scope
 
 ## Current Open Launch Gaps
 
 The main public-paid blockers still visible in operator truth are:
+- `abuse_hardening`
 - `provider_mix`
 - `image_public_paid_usage`
 - `provider_economics`

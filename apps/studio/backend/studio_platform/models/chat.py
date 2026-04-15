@@ -37,7 +37,7 @@ class ChatAttachment(BaseModel):
     @classmethod
     def validate_url(cls, value: str) -> str:
         url = value.strip()
-        allowed_prefixes = ("data:", "https://", "http://", "/v1/assets/")
+        allowed_prefixes = ("data:", "https://", "/v1/assets/")
         if not url.startswith(allowed_prefixes):
             raise ValueError("Unsupported attachment URL")
         if len(url) > 5_000_000:

@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 
+from ..deployment_stack_ops import build_deployment_stack_summary_from_env
+
 _PLACEHOLDER_PREFIXES = (
     "your-",
     "replace-",
@@ -43,6 +45,18 @@ def _looks_like_placeholder(value: str) -> bool:
 def _has_real_value(env_values: dict[str, str], key: str) -> bool:
     value = env_values.get(key, "").strip()
     return bool(value) and not _looks_like_placeholder(value)
+
+
+def _is_https_public_url(value: str) -> bool:
+    parsed = urlparse(value) if value else None
+    if not parsed:
+        return False
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.netloc)
+        and "localhost" not in parsed.netloc
+        and "127.0.0.1" not in parsed.netloc
+    )
 
 
 def _protected_beta_chat_provider(env_values: dict[str, str]) -> str:
@@ -110,6 +124,46 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
             public_web_base_url or "missing",
         )
 
+    stack = build_deployment_stack_summary_from_env(env_values)
+    platform_mode = stack["explicit_platform_mode"] is True
+    configured_stack = stack["configured_stack"]
+    if platform_mode:
+        if stack["matches_canonical"]:
+            add_check(
+                "deployment_stack",
+                "pass",
+                "Deployment stack matches the locked Vercel/Render/Supabase/Redis/Paddle contract.",
+                (
+                    f"frontend={configured_stack['frontend']}, api={configured_stack['api']}, "
+                    f"worker={configured_stack['worker']}, redis={configured_stack['redis']}, "
+                    f"data={configured_stack['data']}, storage={configured_stack['storage']}, "
+                    f"billing={configured_stack['billing']}."
+                ),
+            )
+        else:
+            add_check(
+                "deployment_stack",
+                "blocked",
+                "Deployment stack drifts from the locked launch contract.",
+                "Mismatched surfaces: " + ", ".join(stack["mismatches"]),
+            )
+
+        public_api_base_url = str(stack["public_api_base_url"] or "")
+        if _is_https_public_url(public_api_base_url):
+            add_check(
+                "public_api_base_url",
+                "pass",
+                "Public API base URL looks launch-safe.",
+                public_api_base_url,
+            )
+        else:
+            add_check(
+                "public_api_base_url",
+                "blocked",
+                "PUBLIC_API_BASE_URL is missing, local, or not HTTPS.",
+                public_api_base_url or "missing",
+            )
+
     state_store_backend = env_values.get("STATE_STORE_BACKEND", "").strip().lower()
     if state_store_backend == "postgres":
         add_check(
@@ -131,6 +185,9 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
     postgres_password = env_values.get("POSTGRES_PASSWORD", "").strip()
     postgres_db = env_values.get("POSTGRES_DB", "").strip()
     if state_store_backend == "postgres":
+        parsed_database_url = urlparse(postgres_database_url) if postgres_database_url else None
+        database_host = str(parsed_database_url.hostname or "").strip().lower() if parsed_database_url else ""
+        container_postgres = database_host in {"postgres", "postgresql", "db"}
         if postgres_database_url and postgres_user and postgres_password and postgres_db:
             parsed_database_url = urlparse(postgres_database_url)
             database_user = parsed_database_url.username or ""
@@ -157,12 +214,36 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
                         f"POSTGRES user/db={postgres_user or 'missing'}/{postgres_db or 'missing'}."
                     ),
                 )
+        elif postgres_database_url and not container_postgres:
+            add_check(
+                "postgres_credentials_alignment",
+                "pass",
+                "DATABASE_URL points at an external managed Postgres authority.",
+                f"host={database_host or 'unknown'}",
+            )
         else:
             add_check(
                 "postgres_credentials_alignment",
                 "warning",
                 "Postgres service credentials are not explicitly pinned in the staging env.",
                 "Set POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD alongside DATABASE_URL to avoid drift.",
+            )
+
+    asset_storage_backend = str(env_values.get("ASSET_STORAGE_BACKEND", "") or "").strip().lower()
+    if platform_mode:
+        if asset_storage_backend == "supabase":
+            add_check(
+                "asset_storage_backend",
+                "pass",
+                "Launch-shaped platform env is configured to use Supabase storage.",
+                "ASSET_STORAGE_BACKEND=supabase.",
+            )
+        else:
+            add_check(
+                "asset_storage_backend",
+                "blocked",
+                "Canonical platform stack should use Supabase-backed asset storage.",
+                f"ASSET_STORAGE_BACKEND={asset_storage_backend or 'missing'}.",
             )
 
     web_mode = env_values.get("GENERATION_RUNTIME_MODE_WEB", "").strip().lower()
@@ -204,6 +285,25 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
             "pass",
             "Critical staging secrets are present.",
             "Supabase, JWT, database, and Redis secrets are populated.",
+        )
+
+    paddle_ready = all(
+        _has_real_value(env_values, key)
+        for key in ("PADDLE_API_KEY", "PADDLE_WEBHOOK_SECRET", "PADDLE_CHECKOUT_BASE_URL")
+    )
+    if paddle_ready:
+        add_check(
+            "billing_backbone",
+            "pass",
+            "Paddle billing backbone is configured.",
+            "Checkout API key, webhook secret, and checkout base URL are present.",
+        )
+    else:
+        add_check(
+            "billing_backbone",
+            "warning",
+            "Paddle billing backbone is not fully configured.",
+            "Missing one or more of PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET, or PADDLE_CHECKOUT_BASE_URL.",
         )
 
     protected_beta_chat_provider = _protected_beta_chat_provider(env_values)

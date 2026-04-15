@@ -142,15 +142,36 @@ Studio now includes a first bounded deployment pack for protected staging:
 
 - [deploy/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/README.md)
 - [deploy/docker-compose.staging.yml](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/docker-compose.staging.yml)
+- [deploy/.env.platform.example](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/deploy/.env.platform.example)
+- [../render.yaml](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/render.yaml)
+- [../web/vercel.json](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/web/vercel.json)
 - [backend/Dockerfile](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/Dockerfile)
 - [web/Dockerfile](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/web/Dockerfile)
 
-This pack is meant to move Studio away from single-PC dependence and toward:
+The current canonical public stack is now:
+
+- frontend on `Vercel`
+- backend API on `Render`
+- worker on `Render`
+- auth / Postgres / storage on `Supabase`
+- queue broker on `Render` Redis / Key Value
+- billing on `Paddle`
+
+The Docker compose pack is still useful, but it now serves as a bounded protected-staging rehearsal rather than the final public hosting contract.
+
+Studio's deploy artefacts now move the product away from single-PC dependence and toward:
 
 - postgres metadata authority
 - redis-backed split runtime
 - backend + worker topology
 - same-origin web-to-api staging behavior
+
+For real public-stack proof, preflight the non-local env and then verify the live Vercel/Render deployment:
+
+```powershell
+python scripts/deployment_preflight.py --env-file ..\deploy\.env.platform
+powershell -ExecutionPolicy Bypass -File ..\deploy\verify-studio-platform.ps1
+```
 
 ### API Documentation
 

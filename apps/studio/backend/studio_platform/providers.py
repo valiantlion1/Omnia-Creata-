@@ -716,10 +716,11 @@ class RunwareProvider(StudioImageProvider):
         if not isinstance(data, list) or not data:
             raise ProviderTemporaryError("Runware returned no result data")
         result = data[0]
-        image_bytes, mime_type = self._extract_runware_image(result)
 
         if result.get("NSFWContent") is True:
             raise ProviderFatalError("Runware flagged the output as potentially sensitive")
+
+        image_bytes, mime_type = self._extract_runware_image(result)
 
         return ProviderResult(
             provider=self.name,
@@ -1562,7 +1563,7 @@ class ProviderRegistry:
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._configured_strategy = (settings.generation_provider_strategy or "free-first").strip().lower()
+        self._configured_strategy = (settings.generation_provider_strategy or "managed-first").strip().lower()
         self._enable_demo_generation_fallback = bool(settings.enable_demo_generation_fallback)
         providers_by_name: dict[str, StudioImageProvider | None] = {
             "openai": OpenAIImageProvider(
@@ -1793,12 +1794,12 @@ class ProviderRegistry:
             plan == IdentityPlan.FREE.value and wallet_backed
         ):
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("runware", "fal", "huggingface", "pollinations", "openai", "demo")
-            return ("runware", "fal", "pollinations", "huggingface", "openai", "demo")
+                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
         if self._should_prefer_managed_free_lanes(workflow=workflow):
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("runware", "fal", "huggingface", "pollinations", "openai", "demo")
-            return ("runware", "fal", "pollinations", "huggingface", "openai", "demo")
+                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")

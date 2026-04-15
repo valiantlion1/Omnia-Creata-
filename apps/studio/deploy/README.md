@@ -5,6 +5,16 @@ This is the first bounded deployment pack for Studio after the initial sprint fa
 It is meant to solve one concrete problem:
 - stop treating a single local PC as the only runtime shape
 
+Canonical launch stack:
+- frontend: `Vercel`
+- backend API: `Render`
+- worker: `Render`
+- auth / Postgres / storage: `Supabase`
+- queue broker: `Render Key Value / Redis`
+- billing backbone: `Paddle`
+
+The Docker compose pack below still matters, but now as a bounded protected-staging proof loop and local topology rehearsal, not as the canonical public deployment target.
+
 ## What this pack gives us
 
 - a containerized frontend
@@ -18,7 +28,11 @@ It is meant to solve one concrete problem:
 
 - `docker-compose.staging.yml`
 - `.env.staging.example`
+- `.env.platform.example`
 - `nginx.conf`
+- `verify-studio-platform.ps1`
+- `../render.yaml`
+- `../web/vercel.json`
 - `backend/Dockerfile`
 - `web/Dockerfile`
 
@@ -29,7 +43,11 @@ Use this pack for:
 - local VM/VPS trials
 - a first always-on environment that behaves closer to launch topology
 
-Do not treat it as the final production platform contract yet.
+Do not treat the Docker compose pack as the final public deployment contract.
+For the public stack, use:
+- `apps/studio/web/vercel.json` for the frontend host
+- `apps/studio/render.yaml` for Render API/worker/redis
+- `.env.platform.example` as the canonical non-local env checklist
 
 ## Quick start
 
@@ -66,6 +84,33 @@ powershell -ExecutionPolicy Bypass -File .\start-studio-staging.ps1
 - frontend: `http://localhost:8080`
 - backend health: `http://localhost:8080/api/v1/healthz`
 
+## Canonical platform preflight
+
+For the real launch stack, copy `.env.platform.example` to `.env.platform`, fill the real public URLs and secrets, then run:
+
+```powershell
+python ..\backend\scripts\deployment_preflight.py --env-file .env.platform
+```
+
+That preflight now validates:
+- canonical `Vercel + Render + Supabase + Redis + Paddle` stack alignment
+- `PUBLIC_WEB_BASE_URL` and `PUBLIC_API_BASE_URL`
+- Supabase-backed asset storage
+- split API/worker runtime
+- Paddle billing backbone presence
+
+After a live Vercel/Render staging deploy exists, verify it through:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1
+```
+
+And with owner truth:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1 -PromptForOwnerToken -RequireClosureReady
+```
+
 ## Important expectations
 
 - Use `STATE_STORE_BACKEND=postgres`
@@ -88,19 +133,19 @@ The next operational step is:
 After deploy, you can also verify the public staging stack explicitly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1
+powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1
 ```
 
 If you want the verify step to inspect owner-only launch readiness, pass an owner bearer token:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -OwnerBearerToken "<owner-token>"
+powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1 -OwnerBearerToken "<owner-token>"
 ```
 
 If you do not want that token living in shell history or command arguments, use the prompt flow instead:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\verify-studio-staging.ps1 -PromptForOwnerToken
+powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1 -PromptForOwnerToken
 ```
 
 By default the verify script now targets the local forwarded staging URL (`http://127.0.0.1:<WEB_PORT>`) for Docker proofs.

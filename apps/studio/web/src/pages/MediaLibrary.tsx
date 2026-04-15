@@ -432,7 +432,7 @@ function AssetLightbox({
           ) : null}
         </div>
 
-        <div className="space-y-5 rounded-[28px] bg-black/30 p-5 ring-1 ring-white/8 backdrop-blur-md" style={{ boxShadow: 'var(--border-glow), 0 16px 60px rgba(0,0,0,0.5)' }}>
+        <div className="space-y-6 rounded-[32px] bg-[#0c0d12]/60 p-6 ring-1 ring-white/10 backdrop-blur-2xl shadow-[0_40px_100px_rgba(0,0,0,0.8)]" style={{ boxShadow: 'var(--border-glow), 0 40px 100px rgba(0,0,0,0.8)' }}>
           <div>
             <div className="text-xl font-semibold tracking-[-0.03em] text-white">{state.group.title}</div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-zinc-400">
@@ -448,21 +448,21 @@ function AssetLightbox({
           <div className="max-h-[10rem] overflow-auto pr-1 text-[13px] leading-6 text-zinc-400">{state.group.prompt}</div>
 
           {/* Primary actions */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {!isChatOrigin ? (
               <button
                 onClick={onReusePrompt}
-                className="w-full rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
+                className="w-full rounded-xl bg-white px-4 py-3 text-[14px] font-bold text-black transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-[1.02] active:scale-[0.98]"
                 disabled={busy}
               >
                 Reuse prompt
               </button>
             ) : null}
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               {!isChatOrigin ? (
                 <button
                   onClick={onReuseStyle}
-                  className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
                   disabled={busy}
                 >
                   Reuse style
@@ -470,7 +470,7 @@ function AssetLightbox({
               ) : null}
               <button
                 onClick={onMove}
-                className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-50"
+                className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
                 disabled={busy}
               >
                 Move
@@ -478,7 +478,7 @@ function AssetLightbox({
               {!isChatOrigin ? (
                 <button
                   onClick={onOpenProject}
-                  className="flex-1 rounded-full bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-white/[0.1]"
+                  className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95"
                 >
                   Project
                 </button>
@@ -487,10 +487,10 @@ function AssetLightbox({
           </div>
 
           {/* Visibility & danger */}
-          <div className="flex items-center gap-2 border-t border-white/[0.06] pt-3">
+          <div className="flex items-center gap-2 border-t border-white/10 pt-4">
             <button
               onClick={() => onSetVisibility(asset.visibility === 'public' ? 'private' : 'public')}
-              className="rounded-full bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-white disabled:opacity-50"
+              className="rounded-full bg-white/5 px-4 py-2 text-[11px] font-bold text-zinc-400 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-50"
               disabled={busy}
             >
               {asset.visibility === 'public' ? 'Make private' : 'Make public'}
@@ -498,7 +498,7 @@ function AssetLightbox({
             <div className="flex-1" />
             <button
               onClick={onTrash}
-              className="rounded-full px-3 py-1.5 text-[11px] font-medium text-rose-400/80 transition hover:bg-rose-500/[0.08] hover:text-rose-300 disabled:opacity-50"
+              className="rounded-full px-4 py-2 text-[11px] font-bold text-rose-400/80 transition-all duration-300 hover:bg-rose-500/10 hover:text-rose-300 active:scale-95 disabled:opacity-50"
               disabled={busy}
             >
               Delete
@@ -506,17 +506,17 @@ function AssetLightbox({
           </div>
 
           {canStep ? (
-            <div className="grid grid-cols-5 gap-2 border-t border-white/[0.06] pt-3">
+            <div className="grid grid-cols-5 gap-2 border-t border-white/10 pt-5">
               {state.group.items.map((item, index) => (
                 <button
                   key={item.id}
                   onClick={() => onSelect(index)}
-                  className={`overflow-hidden rounded-[14px] ring-1 transition ${state.index === index ? 'ring-white/40 shadow-glow-sm' : 'ring-white/6 hover:ring-white/20'}`}
+                  className={`overflow-hidden rounded-[14px] ring-2 transition-all duration-500 scale-100 active:scale-90 ${state.index === index ? 'ring-[rgb(var(--primary-light))] shadow-[0_0_15px_rgba(var(--primary-light),0.4)]' : 'ring-white/5 hover:ring-white/20'}`}
                 >
                   <ProtectedAssetImage
                     sources={assetPreviewSources(item)}
                     alt={assetDisplayTitle(item)}
-                    className="aspect-square h-full w-full object-cover"
+                    className={`aspect-square h-full w-full object-cover transition-opacity duration-300 ${state.index === index ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}
                   />
                 </button>
               ))}
@@ -622,20 +622,20 @@ function MenuAction({
 
 function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (view: ViewMode) => void }) {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-white/[0.03] p-1 ring-1 ring-white/8">
+    <div className="flex items-center gap-1 rounded-full bg-white/[0.03] p-1 ring-1 ring-white/10 shadow-inner">
       <button
         onClick={() => onChange('grid')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${value === 'grid' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
         title="Grid view"
       >
-        <Grid2X2 className="h-3.5 w-3.5" />
+        <Grid2X2 className="h-4 w-4" />
       </button>
       <button
         onClick={() => onChange('list')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition ${value === 'list' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${value === 'list' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
         title="List view"
       >
-        <List className="h-3.5 w-3.5" />
+        <List className="h-4 w-4" />
       </button>
     </div>
   )
@@ -651,12 +651,12 @@ function FilterBar<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       {options.map((option) => (
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`rounded-full px-2.5 py-1.5 text-[11px] transition ${value === option.id ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+          className={`rounded-full px-4 py-1.5 text-[11px] font-bold tracking-wide transition-all duration-300 active:scale-95 ${value === option.id ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
         >
           {option.label}
         </button>
@@ -685,7 +685,6 @@ function Toolbar({
   actions?: ReactNode
 }) {
   const searchRef = useState<HTMLInputElement | null>(null)
-  const inputRef = { current: searchRef[0] }
   const setInputRef = searchRef[1]
 
   useEffect(() => {
@@ -694,32 +693,35 @@ function Toolbar({
       const tag = (event.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       event.preventDefault()
-      inputRef.current?.focus()
+      searchRef[0]?.focus()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [inputRef])
+  }, [searchRef])
 
   return (
-    <section className="border-b border-white/[0.06] pb-2">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+    <section className="border-b border-white/[0.06] pb-5 pt-2">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white font-display md:text-[2.1rem]">{title}</h1>
-          <p className="mt-1 text-sm text-zinc-500">{description}</p>
-          {filters ? <div className="mt-2">{filters}</div> : null}
+          <h1 className="text-[2rem] font-black tracking-[-0.05em] text-white font-display md:text-[2.4rem] drop-shadow-sm">{title}</h1>
+          <p className="mt-1 text-[13px] font-medium text-zinc-500">{description}</p>
+          {filters ? <div className="mt-4">{filters}</div> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <label className="flex min-w-[170px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-400 ring-1 ring-white/8">
-            <Search className="h-3.5 w-3.5" />
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <label className="group/search relative flex min-w-[220px] items-center gap-2.5 rounded-full bg-white/[0.03] px-4 py-2 text-[13px] text-zinc-400 ring-1 ring-white/10 transition-all duration-300 focus-within:ring-[rgb(var(--primary-light))/0.5] focus-within:bg-black/40 focus-within:shadow-[0_0_20px_rgba(var(--primary-light),0.15)]">
+            <Search className="h-4 w-4 transition-colors group-focus-within/search:text-[rgb(var(--primary-light))]" />
             <input
               id="studio-library-search"
               name="search"
               ref={(el) => setInputRef(el)}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search  /"
-              className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-500"
+              placeholder="Search assets..."
+              className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-600"
             />
+            <div className="flex h-5 w-5 items-center justify-center rounded-md border border-white/10 bg-white/5 text-[10px] font-bold text-zinc-500 group-focus-within/search:opacity-0 transition-opacity">
+              /
+            </div>
           </label>
           <ViewToggle value={view} onChange={onViewChange} />
           {actions}
@@ -779,41 +781,47 @@ function PendingPreview({
   if (view === 'grid') {
     return (
       <div className="space-y-3">
-        <div className="relative overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+        <div className="relative group/pending overflow-hidden rounded-[22px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-500 hover:ring-white/20">
           {isBlocked || isFailed ? (
             <>
-              <div className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.12),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.15),transparent_70%)]'} opacity-50`} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/40 backdrop-blur-xl">
-                 <div className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
-                   {isBlocked ? <Lock className="h-5 w-5 text-amber-300/90" /> : <ImageOff className="h-5 w-5 text-rose-400/80" />}
+              <div className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.15),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.18),transparent_70%)]'} opacity-50 animate-digitize`} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/60 backdrop-blur-xl">
+                 <div className={`flex h-12 w-12 items-center justify-center rounded-full shadow-2xl transition-transform duration-500 group-hover/pending:scale-110 ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}>
+                   {isBlocked ? <Lock className="h-5 w-5 text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.4)]" /> : <ImageOff className="h-5 w-5 text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.4)]" />}
                  </div>
-                 <span className={`text-[11px] font-bold tracking-wider uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}>{badge}</span>
+                 <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}>{badge}</span>
                  {isFailed && (
                    <button
                      onClick={handleRetry}
-                     className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+                     className="relative mt-1 overflow-hidden rounded-full bg-white/10 px-4 py-2 text-[11px] font-bold text-white ring-1 ring-white/20 transition-all duration-300 hover:bg-white/20 hover:ring-white/40 active:scale-95"
                    >
-                     Retry in Create →
+                     <span className="relative z-10">Retry in Create →</span>
                    </button>
                  )}
               </div>
             </>
           ) : (
             <>
-              <div className="aspect-square w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]" />
-              <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.06)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
-              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm">
-                <div className="relative flex h-8 w-8 items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" />
-                  <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+              <div className="aspect-square w-full animate-pulse bg-gradient-to-b from-white/[0.05] to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.12)] via-transparent to-transparent animate-[oc-gen-glow_4s_ease-in-out_infinite]" />
+              
+              {/* Premium Scanning Laser */}
+              <div className="absolute inset-x-0 top-0 z-10 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_15px_rgb(var(--primary-light))] animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
+              <div className="absolute inset-x-0 h-20 bg-gradient-to-b from-[rgb(var(--primary-light)/0.15)] to-transparent opacity-40 animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
+              
+              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+                <div className="relative flex h-10 w-10 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.2)] animate-ping" />
+                  <div className="relative h-2.5 w-2.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 15px rgb(var(--primary-light)/0.8)' }} />
                 </div>
               </div>
             </>
           )}
         </div>
         <div className="min-w-0 px-1">
-          <div className="truncate text-[13px] font-semibold text-white">{title}</div>
-          <div className={`mt-0.5 text-[11px] font-medium ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+          <div className="truncate text-[13px] font-bold text-white tracking-tight">{title}</div>
+          <div className={`mt-0.5 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+            {!isBlocked && !isFailed && <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />}
             {subtitle}
           </div>
         </div>
@@ -822,36 +830,35 @@ function PendingPreview({
   }
 
   return (
-    <div className="group flex items-center gap-4 py-3 transition-all duration-300 hover:bg-white/[0.02] rounded-xl px-2 -mx-2">
-      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+    <div className="group flex items-center gap-4 py-3.5 transition-all duration-300 hover:bg-white/[0.03] rounded-2xl px-3 -mx-3">
+      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
         {isBlocked || isFailed ? (
           <>
-            <div className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.18),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.2),transparent_70%)]'}`} />
-            <div className="absolute inset-0 flex items-center justify-center bg-[#0c0d12]/40 backdrop-blur-xl">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/20' : 'bg-rose-500/10 ring-1 ring-rose-500/20'}`}>
-                {isBlocked ? <Lock className="h-3.5 w-3.5 text-amber-300/90" /> : <ImageOff className="h-3.5 w-3.5 text-rose-400/80" />}
+            <div className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.2),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.22),transparent_70%)]'} animate-digitize`} />
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0c0d12]/50 backdrop-blur-md">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}>
+                {isBlocked ? <Lock className="h-3.5 w-3.5 text-amber-300" /> : <ImageOff className="h-3.5 w-3.5 text-rose-400" />}
               </div>
             </div>
           </>
         ) : (
           <>
-            <div className="h-full w-full bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.08)] via-transparent to-transparent animate-[oc-pulse_3s_ease-in-out_infinite]" />
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-full animate-[shimmer_2.5s_ease-in-out_infinite] bg-gradient-to-b from-white/[0.1] to-transparent" style={{ transform: 'translateY(-100%)' }} />
-            </div>
+            <div className="h-full w-full bg-gradient-to-b from-white/[0.08] to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.15)] via-transparent to-transparent animate-[oc-gen-glow_4s_ease-in-out_infinite]" />
+            <div className="absolute inset-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-60 shadow-[0_0_10px_rgb(var(--primary-light))] animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="relative flex h-6 w-6 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.15)] animate-ping" style={{ animationDuration: '2s' }} />
-                <div className="relative h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 10px rgb(var(--primary-light)/0.6)' }} />
+                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.2)] animate-ping" style={{ animationDuration: '2.5s' }} />
+                <div className="relative h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.7)' }} />
               </div>
             </div>
           </>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-white">{title}</div>
-        <div className={`mt-1 text-xs font-medium ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+        <div className="truncate text-[14px] font-bold text-white tracking-tight">{title}</div>
+        <div className={`mt-1 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
+          {!isBlocked && !isFailed && <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />}
           {subtitle}
         </div>
       </div>
@@ -1520,36 +1527,77 @@ export default function MediaLibraryPage() {
                     </div>
 
                     {activeView === 'grid' ? (
-                      <div className="mt-3 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                        {group.items.map((asset) => (
-                          <button
-                            key={asset.id}
-                            onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
-                            className="group/card relative overflow-hidden rounded-[18px] bg-white/[0.03] text-left ring-1 ring-white/[0.05] transition-all duration-300 hover:ring-white/[0.12] hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] hover:-translate-y-0.5"
-                          >
-                            <ProtectedAssetImage
-                              sources={assetPreviewSources(asset)}
-                              alt={assetDisplayTitle(asset)}
-                              className="aspect-square w-full object-cover transition duration-500 group-hover/card:scale-[1.04]"
-                              fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                            />
-                            {group.items.length > 1 && (
-                              <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white/80 backdrop-blur-sm">
-                                V{variantOrder(asset) + 1}
+                      <div className="mt-4 grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                        {group.items.map((asset, assetIndex) => {
+                          const isLiked = metadataNumber(asset.metadata, 'like_count') ?? 0 > 0
+                          return (
+                            <div key={asset.id} className="group/card relative">
+                              <button
+                                onClick={() => openPreview(group, assetIndex)}
+                                className="relative block w-full aspect-square overflow-hidden rounded-[24px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all duration-500 hover:ring-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)] hover:-translate-y-1 active:scale-[0.97]"
+                                style={{ transform: 'translate3d(0,0,0)' }}
+                              >
+                                <ProtectedAssetImage
+                                  sources={assetPreviewSources(asset)}
+                                  alt={assetDisplayTitle(asset)}
+                                  className="h-full w-full object-cover transition-transform duration-700 group-hover/card:scale-[1.08] group-hover/card:brightness-[0.85]"
+                                  fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+                                
+                                {group.items.length > 1 && (
+                                  <div className="absolute top-3 left-3 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-black text-white/90 backdrop-blur-md ring-1 ring-white/10">
+                                    V{variantOrder(asset) + 1}
+                                  </div>
+                                )}
+                              </button>
+
+                              {/* Premium Hover Action Bar */}
+                              <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/10 p-1.5 opacity-0 backdrop-blur-xl ring-1 ring-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-300 group-hover/card:opacity-100 group-hover/card:-translate-y-1 animate-glass-reveal">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); /* Heart logic if exists */ }}
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 hover:scale-110 active:scale-90 ${isLiked ? 'text-rose-500 bg-rose-500/10' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                                  title="Like"
+                                >
+                                  <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
+                                </button>
+                                {!group.isChatOrigin && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
+                                    }}
+                                    className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white hover:scale-110 active:scale-90"
+                                    title="Reuse Prompt"
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                  </button>
+                                )}
+                                <div className="h-4 w-px bg-white/10 mx-0.5" />
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleTrashGroup(group.id, group.title)
+                                  }}
+                                  className="flex h-8 w-8 items-center justify-center rounded-full text-white/40 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-300 hover:scale-110 active:scale-90"
+                                  title="Trash"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
-                            )}
-                          </button>
-                        ))}
+                            </div>
+                          )
+                        })}
                       </div>
                     ) : (
-                      <div className="mt-3 space-y-1">
-                        {group.items.map((asset) => (
+                      <div className="mt-4 space-y-2">
+                        {group.items.map((asset, assetIndex) => (
                           <button
                             key={asset.id}
-                            onClick={() => openPreview(group, group.items.findIndex((item) => item.id === asset.id))}
-                            className="flex w-full items-center gap-4 rounded-xl px-2 py-2.5 text-left transition-all duration-200 hover:bg-white/[0.03]"
+                            onClick={() => openPreview(group, assetIndex)}
+                            className="group/list-item flex w-full items-center gap-5 rounded-2xl px-3 py-3 text-left transition-all duration-300 hover:bg-white/5 active:scale-[0.99]"
                           >
-                            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.06]">
+                            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] ring-1 ring-white/10 shadow-lg transition-transform duration-500 group-hover/list-item:scale-105">
                               <ProtectedAssetImage
                                 sources={assetPreviewSources(asset)}
                                 alt={assetDisplayTitle(asset)}
@@ -1558,11 +1606,14 @@ export default function MediaLibraryPage() {
                               />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="truncate text-[13px] font-medium text-white">{assetDisplayTitle(asset)}</div>
-                              {group.items.length > 1 && (
-                                <div className="mt-0.5 text-[11px] text-zinc-500">Variation {variantOrder(asset) + 1}</div>
-                              )}
+                              <div className="truncate text-[14px] font-bold text-white tracking-tight">{assetDisplayTitle(asset)}</div>
+                              <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-zinc-500">
+                                <span>Variation {variantOrder(asset) + 1}</span>
+                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                <span>{formatDate(asset.created_at)}</span>
+                              </div>
                             </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700 transition-all duration-300 group-hover/list-item:translate-x-1 group-hover/list-item:text-zinc-400" />
                           </button>
                         ))}
                       </div>
@@ -1574,31 +1625,43 @@ export default function MediaLibraryPage() {
               <EmptyInline icon={<ImageIcon className="h-4 w-4" />} title="No images yet." description="Generate something in Create and it will land here automatically." />
             )}
 
-            {/* Bulk action bar */}
+            {/* Bulk action bar - Summoning Animation */}
             {selectedGroups.size > 0 && (
-              <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
-                <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-[#16181f]/95 px-6 py-3.5 shadow-[0_8px_48px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.1] backdrop-blur-xl" style={{ boxShadow: 'var(--border-glow), 0 8px 48px rgba(0,0,0,0.7)' }}>
-                  <span className="text-sm font-semibold text-white">{selectedGroups.size} selected</span>
-                  <div className="h-4 w-px bg-white/[0.12]" />
-                  <button
-                    onClick={() => setSelectedGroups(new Set(filteredImageGroups.map((g) => g.id)))}
-                    className="text-sm text-zinc-400 transition hover:text-white"
-                  >
-                    Select all
-                  </button>
-                  <button
-                    onClick={handleBulkTrash}
-                    disabled={trashPostMutation.isPending}
-                    className="rounded-full bg-rose-500/[0.12] px-4 py-1.5 text-sm font-semibold text-rose-300 ring-1 ring-rose-500/20 transition hover:bg-rose-500/[0.2] disabled:opacity-50"
-                  >
-                    Move to trash
-                  </button>
+              <div className="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center px-4">
+                <div className="pointer-events-auto flex items-center gap-4 rounded-full bg-[#16181f]/80 px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/20 backdrop-blur-2xl animate-tray-summon" style={{ boxShadow: 'var(--border-glow), 0 20px 50px rgba(0,0,0,0.6)' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgb(var(--primary-light))] text-[12px] font-black text-white shadow-[0_0_12px_rgba(var(--primary-light),0.5)]">
+                      {selectedGroups.size}
+                    </div>
+                    <span className="text-sm font-bold text-white tracking-tight">Selected</span>
+                  </div>
+                  
+                  <div className="h-4 w-px bg-white/10" />
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedGroups(new Set(filteredImageGroups.map((g) => g.id)))}
+                      className="rounded-full px-3 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/5 hover:text-white active:scale-95"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      onClick={handleBulkTrash}
+                      disabled={trashPostMutation.isPending}
+                      className="rounded-full bg-rose-500/10 px-4 py-2 text-xs font-bold text-rose-300 ring-1 ring-rose-500/20 transition-all hover:bg-rose-500/20 active:scale-95 disabled:opacity-50"
+                    >
+                      Move to trash
+                    </button>
+                  </div>
+
+                  <div className="h-4 w-px bg-white/10" />
+
                   <button
                     onClick={() => setSelectedGroups(new Set())}
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-zinc-400 transition-all hover:bg-white/10 hover:text-white active:scale-90"
                     title="Clear selection"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               </div>

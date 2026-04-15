@@ -17,7 +17,7 @@ const sections: HelpSection[] = [
     intro: 'Studio brings Explore, Create, Chat, Library, and account controls into one creative workspace.',
     items: [
       { title: 'Explore', body: 'Browse public creations, creator profiles, and style references. Public browsing stays open even if you are not signed in.' },
-      { title: 'Create', body: 'Write a prompt, choose a creative profile, pick a ratio, and start an image run. Create is the deterministic image surface and stays separate from Chat.' },
+      { title: 'Create', body: 'Write a prompt, choose a quality, pick a format, and start an image run. Create is the deterministic image surface and stays separate from Chat.' },
       { title: 'Chat', body: 'Use Chat as the creative copilot for direction, refinement, and edit handoffs. It can carry selected images in for critique or follow-up editing, but it is not the same surface as Create.' },
       { title: 'Library', body: 'Completed, blocked, failed, and deleted outputs are surfaced separately so the shell does not pretend every run delivered a successful final image.' },
       { title: 'Projects and sharing', body: 'Projects keep related image sets together. Public or private state depends on the current truth of each post and asset, not on shell shortcuts alone.' },

@@ -5,16 +5,16 @@ from studio_platform.models import IdentityPlan, ModelCatalogEntry
 def test_resolve_creative_profile_prefers_model_specific_mapping() -> None:
     profile = resolve_creative_profile(model_id="realvis-xl", pricing_lane="fallback")
 
-    assert profile.id == "polished-realism"
-    assert profile.label == "Polished Realism"
+    assert profile.id == "premium"
+    assert profile.label == "Premium"
     assert profile.default_lane == "final"
 
 
 def test_resolve_creative_profile_falls_back_to_lane_when_model_is_unknown() -> None:
     profile = resolve_creative_profile(model_id="unknown-model", pricing_lane="fallback")
 
-    assert profile.id == "preview-render"
-    assert profile.label == "Preview Render"
+    assert profile.id == "preview"
+    assert profile.label == "Preview"
     assert profile.default_lane == "fallback"
 
 
@@ -33,5 +33,5 @@ def test_attach_creative_profile_enriches_model_catalog_entry() -> None:
     enriched = attach_creative_profile(model)
 
     assert enriched.creative_profile is not None
-    assert enriched.creative_profile.id == "fast-draft"
-    assert enriched.creative_profile.badge == "Quick ideas"
+    assert enriched.creative_profile.id == "fast"
+    assert enriched.creative_profile.badge == "Quick starts"

@@ -264,6 +264,43 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   to   { opacity: 1; filter: blur(0px);  transform: scale(1); }
 }
 
+/* Digitizing Noise — high speed flicker for processing/blocked */
+@keyframes oc-digitize-noise {
+  0%   { opacity: 0.15; transform: scale(1); }
+  10%  { opacity: 0.25; transform: scale(1.02) translateX(1px); }
+  20%  { opacity: 0.1;  transform: scale(1) translateX(-1px); }
+  30%  { opacity: 0.3;  transform: scale(1.01); }
+  45%  { opacity: 0.15; transform: scale(1); }
+  50%  { opacity: 0.4;  transform: scale(1.04) translateY(1px); }
+  65%  { opacity: 0.2;  transform: scale(1); }
+  80%  { opacity: 0.35; transform: scale(1.02); }
+  100% { opacity: 0.15; transform: scale(1); }
+}
+
+/* Bulk Action Tray Summon — elegant slide up with glow */
+@keyframes oc-tray-summon {
+  from { transform: translateY(120%) translateX(-50%); opacity: 0; filter: blur(8px); }
+  to   { transform: translateY(0) translateX(-50%); opacity: 1; filter: blur(0); }
+}
+
+/* Glass Action Bar Reveal */
+@keyframes oc-glass-reveal {
+  from { transform: translateY(8px) scale(0.95) translateX(-50%); opacity: 0; filter: blur(4px); }
+  to   { transform: translateY(0) scale(1) translateX(-50%); opacity: 1; filter: blur(0); }
+}
+
 .animate-gen-reveal {
   animation: oc-img-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-digitize {
+  animation: oc-digitize-noise 0.4s steps(2) infinite;
+}
+
+.animate-tray-summon {
+  animation: oc-tray-summon 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-glass-reveal {
+  animation: oc-glass-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

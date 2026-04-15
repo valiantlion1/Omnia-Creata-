@@ -636,11 +636,15 @@ class IdentityService:
 
 
     def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
+        migration_key = "visibility_defaults_v1"
+        if migration_key in state.migrations_applied:
+            return
         now = utc_now()
         for identity in state.identities.values():
             if identity.default_visibility == Visibility.PUBLIC:
                 identity.default_visibility = Visibility.PRIVATE
                 identity.updated_at = now
+        state.migrations_applied[migration_key] = now.isoformat()
 
 
     def get_public_plan_payload(self) -> Dict[str, Any]:
@@ -692,7 +696,7 @@ class IdentityService:
             "usage_caps": {
                 "verified_account_required_for_generation": True,
                 "captcha_required_for_sensitive_flows": True,
-                "free_ai_chat_limited": True,
+                "free_ai_chat_limited": False,
                 "free_image_generation_included": False,
                 "wallet_credit_purchase_allowed": True,
                 "credit_reserve_required_before_generation": True,
