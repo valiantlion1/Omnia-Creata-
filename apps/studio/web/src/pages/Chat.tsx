@@ -1259,15 +1259,15 @@ export default function ChatPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/[0.05] ring-1 ring-white/[0.08]">
             <MessageCircle className="h-7 w-7 text-zinc-300" />
           </div>
-          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat is not available yet</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat lives inside paid Studio plans</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Create an account to enter Studio. Free accounts can work in Create, and paid plans unlock the chat surface.
+            Create your account to enter Studio. Free accounts can start in Create, and Creator or Pro unlock the chat surface when you want live guidance.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+            <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               Create account
             </Link>
-            <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
+            <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               Open Create
             </Link>
           </div>
@@ -1285,14 +1285,14 @@ export default function ChatPage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat unlocks on paid plans</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Free accounts can work directly in Create, but the Studio chat surface stays locked until you move onto Creator or Pro.
+            Keep moving in Create today, or move onto Creator or Pro when you want multimodal guidance, editing help, and faster iteration inside Chat.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/create" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-              Open Create
-            </Link>
-            <Link to="/subscription" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
+            <Link to="/subscription" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               View Plans
+            </Link>
+            <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
+              Open Create
             </Link>
           </div>
         </section>
@@ -1361,7 +1361,7 @@ export default function ChatPage() {
           {conversationDetailQuery.isLoading ? (
             <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading chat...
+              Loading chat…
             </div>
           ) : timeline.length ? (
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pb-10 pt-6">

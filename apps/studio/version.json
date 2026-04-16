@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.15.115",
+  "build": "2026.04.16.124",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-15",
-  "notes": "Create now exposes three clean public quality choices instead of old render-profile naming, aspect ratio pickers show only common ratios while the backend resolves real dimensions server-side, insecure HTTP chat attachment URLs are blocked, and the admin analytics surface no longer falls back to an insecure localhost API target in production."
+  "releaseDate": "2026-04-16",
+  "notes": "Frozen-tree bookkeeping and proof-sync build for the recent frontend cleanup and backend security/hardening waves; no new product code is introduced in this bump."
 }

@@ -25,6 +25,7 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
       >
         <button
           onClick={onClose}
+          aria-label="Close dialog"
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
         >
           <X className="h-4 w-4" />
@@ -34,23 +35,23 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
           <Sparkles className="h-6 w-6 text-white" />
         </div>
 
-          <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
+        <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
             Create an account to continue
           </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Sign up to like images, create your own, save favorites, and join the community. It takes less than a minute.
+          Sign up to save favorites, start in Create, and keep your work inside Studio. Creator and Pro add the chat surface when you want it.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
           <Link
             to="/signup"
-            className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90"
+            className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
           >
             Create account
           </Link>
           <Link
             to="/login"
-            className="flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.06]"
+            className="flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-6 py-3.5 text-sm font-medium text-white transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
           >
             Already have an account? Log in
           </Link>
@@ -66,20 +67,20 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   const quickPointers = [
     {
       id: 'explore',
-      label: 'Explore for direction',
-      body: 'Browse community work and Studio references when you want ideas before you start.',
+      label: 'Explore for references',
+      body: 'Use the feed when you need direction, atmosphere, or examples before a run.',
       icon: Sparkles,
     },
     {
       id: 'create',
-      label: 'Create for direct runs',
-      body: 'Use Create when you already know what you want and need a direct image run with wallet credits or a paid plan behind it.',
+      label: 'Create to run',
+      body: 'Write the prompt, choose quality, pick a format, and run directly into your library.',
       icon: Zap,
     },
     {
       id: 'save',
-      label: 'Save what matters',
-      body: 'Keep strong outputs in your library so you can return, refine, and share without losing the thread.',
+      label: 'Save what works',
+      body: 'Keep strong outputs in your library so you can revisit, refine, and share without losing the thread.',
       icon: Heart,
     },
   ]
@@ -92,6 +93,7 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <button
           onClick={onClose}
+          aria-label="Close dialog"
           className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-zinc-400 transition hover:bg-white/[0.12] hover:text-white"
           title="Skip"
         >
@@ -104,11 +106,12 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
           <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">Welcome to Studio</h2>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">
-            Your account is ready. Start with the surface that matches your intent, then keep anything worth revisiting inside your library.
+            Your account is ready. Start in Create when you want a direct image run, then come back to Explore and Library whenever you need direction or context.
           </p>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-500">
-            Free accounts can move straight into Create with wallet credits. Chat unlocks on Creator and Pro.
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium text-zinc-400">
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-300">Free account → Create</span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-500">Creator / Pro → Chat</span>
+          </div>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -131,20 +134,13 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
           <Link
             to="/create?welcome=1"
             onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
           >
-            Open Create
-          </Link>
-          <Link
-            to="/subscription"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
-          >
-            View Plans
+            Start in Create
           </Link>
           <button
             onClick={onClose}
-            className="rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+            className="rounded-full border border-white/[0.12] px-6 py-3 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
           >
             Skip for now
           </button>
@@ -753,19 +749,19 @@ export default function DashboardPage() {
                 <Users className="h-7 w-7 text-zinc-500" />
               </div>
               <div className="text-xl font-semibold text-zinc-200">
-                {searchQuery ? `No results for "${searchQuery}"` : 'Community gallery is warming up'}
+                {searchQuery ? `No results for "${searchQuery}"` : 'Nothing is live here yet'}
               </div>
               <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
                 {searchQuery
                   ? 'Try different prompt words, creator names, or style tags.'
-                  : 'Be the first to create and share your work with the community.'}
+                  : 'Start in Create, then publish the work you want the community to see.'}
               </p>
               {!searchQuery && (
                 <Link
                   to={canUseAccount ? '/create' : '/signup'}
-                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
+                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
-                  {canUseAccount ? 'Start Creating' : 'Create account'}
+                  {canUseAccount ? 'Open Create' : 'Create account'}
                 </Link>
               )}
             </div>

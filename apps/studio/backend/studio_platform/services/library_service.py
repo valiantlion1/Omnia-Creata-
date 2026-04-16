@@ -31,6 +31,7 @@ from ..prompt_memory_ops import (
     update_prompt_memory_profile,
 )
 from ..style_library import STYLE_CATALOG, serialize_style_catalog_entry
+from ..share_ops import hash_share_token
 
 if TYPE_CHECKING:
     from ..service import StudioService
@@ -126,6 +127,10 @@ class LibraryService:
             and protection_state != "blocked"
             and self.asset_variant_exists(asset, "clean")
         )
+        if public_preview or share_id or share_token:
+            payload.pop("identity_id", None)
+            payload.pop("workspace_id", None)
+            payload.pop("project_id", None)
         return payload
 
     def serialize_assets(
@@ -189,13 +194,18 @@ class LibraryService:
         public_preview: bool = False,
     ) -> str:
         expires_at = utc_now() + timedelta(seconds=self.service._asset_token_ttl_seconds)
+        share_token_hash = (
+            hash_share_token(share_token, secret=self.service._asset_token_secret)
+            if share_token
+            else None
+        )
         payload = {
             "sub": "asset-delivery",
             "asset_id": asset_id,
             "variant": variant,
             "identity_id": identity_id,
             "share_id": share_id,
-            "share_token": share_token,
+            "share_token_hash": share_token_hash,
             "public_preview": public_preview,
             "exp": expires_at,
             "iat": utc_now(),
@@ -217,6 +227,7 @@ class LibraryService:
         if (
             not payload.get("identity_id")
             and not payload.get("share_id")
+            and not payload.get("share_token_hash")
             and not payload.get("share_token")
             and not payload.get("public_preview")
         ):
@@ -392,6 +403,8 @@ class LibraryService:
         try:
             if claims.get("share_id"):
                 await self.assert_share_access_by_id(asset, str(claims["share_id"]))
+            elif claims.get("share_token_hash"):
+                await self.assert_share_access_by_public_token_hash(asset, str(claims["share_token_hash"]))
             elif claims.get("share_token"):
                 await self.assert_share_access_by_public_token(asset, str(claims["share_token"]))
             elif claims.get("public_preview"):
@@ -402,6 +415,8 @@ class LibraryService:
             scope = "owner"
             if claims.get("share_id"):
                 scope = "share"
+            elif claims.get("share_token_hash"):
+                scope = "share_legacy_hashed"
             elif claims.get("share_token"):
                 scope = "share_legacy"
             elif claims.get("public_preview"):
@@ -567,6 +582,20 @@ class LibraryService:
     async def assert_share_access_by_public_token(self, asset: MediaAsset, share_token: str) -> None:
         share = await self.service.store.get_share_by_public_token(
             share_token,
+            secret=self.service._asset_token_secret,
+        )
+        if share is None:
+            raise PermissionError("Share access denied")
+        await self.assert_share_owner_public_access(share)
+        if share.project_id and not share.asset_id:
+            project = await self.service.store.get_project(share.project_id)
+            if project is None or project.identity_id != share.identity_id:
+                raise PermissionError("Share access denied")
+        self.assert_share_record_matches_asset(asset, share)
+
+    async def assert_share_access_by_public_token_hash(self, asset: MediaAsset, share_token_hash: str) -> None:
+        share = await self.service.store.get_share_by_public_token_hash(
+            share_token_hash,
             secret=self.service._asset_token_secret,
         )
         if share is None:

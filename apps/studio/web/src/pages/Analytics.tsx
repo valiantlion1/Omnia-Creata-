@@ -135,7 +135,11 @@ export default function AnalyticsPage() {
               <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-6">
                 <div className="flex flex-col items-center text-center text-zinc-500 gap-3">
                   <Zap className="h-8 w-8 text-emerald-500/80" />
-                  <p>Secure connection established.<br/>System is operating normally.</p>
+                  <p>
+                    Owner telemetry is connected.
+                    <br />
+                    Detailed provider trends will populate as live staging and production signals are wired.
+                  </p>
                 </div>
               </div>
             </div>
@@ -143,15 +147,20 @@ export default function AnalyticsPage() {
             <div className="flex min-h-[400px] flex-col rounded-[32px] border border-white/[0.08] bg-[#0e0f12] p-8 hidden lg:flex">
               <h3 className="text-lg font-semibold text-white mb-6">Security Audit Log</h3>
               <div className="flex-1 space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-start gap-4 border-b border-white/[0.05] pb-4">
-                    <div className="mt-1 h-2 w-2 rounded-full bg-rose-500" />
-                    <div>
-                      <p className="text-sm font-medium text-white">Injection Blocked</p>
-                      <p className="text-xs text-zinc-500">Payload blocked by AI wrapper.</p>
-                    </div>
+                <div className="flex items-start gap-4 border-b border-white/[0.05] pb-4">
+                  <div className="mt-1 h-2 w-2 rounded-full bg-amber-400" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Owner-only event stream</p>
+                    <p className="text-xs text-zinc-500">Detailed security events appear here once staging and production log drains are connected.</p>
                   </div>
-                ))}
+                </div>
+                <div className="flex items-start gap-4 border-b border-white/[0.05] pb-4">
+                  <div className="mt-1 h-2 w-2 rounded-full bg-[rgb(var(--primary))]" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Current build truth</p>
+                    <p className="text-xs text-zinc-500">Use launch readiness and owner health detail for the canonical blocker list on this build.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

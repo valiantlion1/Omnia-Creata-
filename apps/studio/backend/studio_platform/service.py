@@ -1272,6 +1272,13 @@ class StudioService:
     ) -> ProviderSpendGuardrailStatus | None:
         return await self.billing._provider_spend_guardrail_for_provider(provider_name=provider_name, provider_billable=provider_billable, projected_cost_usd=projected_cost_usd)
 
+    async def _evaluate_monthly_spend_guardrail(
+        self,
+        *,
+        projected_cost_usd: float = 0.0,
+    ):
+        return await self.billing._evaluate_monthly_spend_guardrail(projected_cost_usd=projected_cost_usd)
+
     async def _build_provider_spend_guardrails_summary(self) -> Dict[str, Any]:
         return await self.billing._build_provider_spend_guardrails_summary()
 

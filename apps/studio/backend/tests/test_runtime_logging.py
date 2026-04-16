@@ -4,6 +4,8 @@ import logging
 import os
 from pathlib import Path
 
+import pytest
+
 from config.env import Environment, Settings
 from runtime_logging import configure_runtime_logging
 
@@ -68,3 +70,79 @@ def test_settings_enable_demo_auth_defaults_to_development_only():
 
     assert development.enable_demo_auth is True
     assert staging.enable_demo_auth is False
+
+
+def test_settings_enable_api_docs_defaults_to_development_only():
+    development = Settings(_env_file=None, jwt_secret="x" * 32, environment=Environment.DEVELOPMENT)
+    staging = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        database_url="postgresql://user:pass@localhost:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://127.0.0.1:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    assert development.enable_api_docs is True
+    assert staging.enable_api_docs is False
+
+
+def test_validate_production_requirements_requires_launch_shaped_runtime_values():
+    staging = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    staging.validate_production_requirements()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_message"),
+    [
+        ({"supabase_anon_key": None}, "supabase_anon_key"),
+        ({"redis_url": None}, "redis_url"),
+        ({"asset_storage_backend": "local"}, "ASSET_STORAGE_BACKEND"),
+        ({"public_web_base_url": "http://localhost:5173"}, "PUBLIC_WEB_BASE_URL"),
+        ({"public_api_base_url": "http://127.0.0.1:8000"}, "PUBLIC_API_BASE_URL"),
+        ({"enable_demo_auth": True}, "ENABLE_DEMO_AUTH"),
+        ({"enable_demo_generation_fallback": True}, "ENABLE_DEMO_GENERATION_FALLBACK"),
+        ({"enable_api_docs": True}, "ENABLE_API_DOCS"),
+    ],
+)
+def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides, expected_message):
+    base_kwargs = {
+        "_env_file": None,
+        "jwt_secret": "x" * 32,
+        "environment": Environment.STAGING,
+        "database_url": "postgresql://user:pass@db.example.com:5432/studio",
+        "supabase_url": "https://example.supabase.co",
+        "supabase_anon_key": "anon-key",
+        "supabase_service_role_key": "x" * 32,
+        "redis_url": "redis://cache.example.com:6379/0",
+        "state_store_backend": "postgres",
+        "asset_storage_backend": "supabase",
+        "public_web_base_url": "https://studio.example.com",
+        "public_api_base_url": "https://api.example.com",
+    }
+    base_kwargs.update(overrides)
+
+    settings = Settings(**base_kwargs)
+
+    with pytest.raises(ValueError, match=expected_message):
+        settings.validate_production_requirements()

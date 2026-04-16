@@ -67,7 +67,7 @@ const elementsNav: NavItem[] = [
 
 const utilityNav: NavItem[] = [
   { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/usage-policy', '/learn'] },
-  { to: '/subscription', label: 'Subscription', icon: CreditCard, aliases: ['/billing', '/plan'] },
+  { to: '/subscription', label: 'Billing', icon: CreditCard, aliases: ['/billing', '/plan'] },
   { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'], expandOnMainClick: true },
 ]
 
@@ -310,6 +310,15 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   } : undefined)
   const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
   const usagePercent = usageSummary ? Math.max(0, 100 - usageSummary.progress_percent) : 0
+  const mobileBottomNav: NavItem[] = [
+    primaryNav[0],
+    primaryNav[1],
+    primaryNav[2],
+    libraryNav[0],
+    isGuestShell
+      ? { to: '/signup', label: 'Join', icon: UserCircle2 }
+      : { to: '/account', label: 'Profile', icon: UserCircle2 },
+  ]
 
   const getItemChildren = (item: NavItem) => {
     if (item.to === '/chat') return chatChildren
@@ -323,7 +332,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       return (
         <div className="rounded-[20px] border border-white/[0.06] bg-black/20 p-3 ring-1 ring-white/[0.04]">
           <div className="text-sm font-semibold text-white">Public access</div>
-          <div className="mt-1 text-xs leading-6 text-zinc-500">Explore and Help stay open. Compose, Chat, Library, and account actions unlock after sign in.</div>
+          <div className="mt-1 text-xs leading-6 text-zinc-500">Explore and Help stay open. Create, Library, and account controls unlock after sign in. Chat stays on paid plans.</div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Link
               to="/login?next=%2Fexplore"
@@ -547,7 +556,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-white/[0.06] bg-[#0d0e11]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 20px rgba(0,0,0,0.3)' }}>
-          {[primaryNav[0], primaryNav[1], primaryNav[2], libraryNav[0], { to: '/account', label: 'Profile', icon: UserCircle2 }].map((item) => {
+          {mobileBottomNav.map((item) => {
             const Icon = item.icon
             const active = isActive(location.pathname, item)
             return (

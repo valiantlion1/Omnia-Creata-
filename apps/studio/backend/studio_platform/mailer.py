@@ -1,3 +1,4 @@
+import html
 import logging
 from typing import Optional
 from config.env import get_settings
@@ -28,9 +29,10 @@ class EmailService:
         if not self.is_enabled:
             return
             
+        safe_name = html.escape(str(name or ""))
         html_content = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Welcome to OmniaCreata Studio, {name}!</h2>
+            <h2>Welcome to OmniaCreata Studio, {safe_name}!</h2>
             <p>We're thrilled to have you on board. You can now start creating stunning images and exploring unlimited inspiration.</p>
             <p>If you have any questions, just reply to this email.</p>
             <br/>
@@ -53,10 +55,11 @@ class EmailService:
         if not self.is_enabled:
             return
             
+        safe_plan = html.escape(str(plan_name or ""))
         html_content = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Your Subscription has been updated</h2>
-            <p>Your workspace is now on the <strong>{plan_name}</strong> plan.</p>
+            <p>Your workspace is now on the <strong>{safe_plan}</strong> plan.</p>
             <p>Your generation limits and monthly credits have been refreshed. Thank you for supporting us!</p>
             <br/>
             <p><strong>The OmniaCreata Team</strong></p>

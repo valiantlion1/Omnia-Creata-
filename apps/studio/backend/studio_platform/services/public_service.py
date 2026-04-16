@@ -19,6 +19,16 @@ class PublicService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
 
+    def serialize_public_project(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        project = Project.model_validate(payload)
+        return {
+            "title": project.title,
+            "description": project.description,
+            "surface": project.surface,
+            "created_at": project.created_at.isoformat(),
+            "updated_at": project.updated_at.isoformat(),
+        }
+
     def backfill_posts_locked(self, state: StudioState) -> None:
         for generation in state.generations.values():
             if generation.status != JobStatus.SUCCEEDED:
@@ -187,7 +197,7 @@ class PublicService:
             "like_count": len(post.liked_by),
             "viewer_has_liked": bool(viewer_identity_id and viewer_identity_id in post.liked_by),
             "created_at": post.created_at.isoformat(),
-            "project_id": post.project_id,
+            "project_id": None if public_preview else post.project_id,
             "style_tags": post.style_tags,
         }
 
@@ -527,7 +537,7 @@ class PublicService:
         share = ShareLink.model_validate(payload["share"])
         serialized: Dict[str, Any] = {"share": self.serialize_share_record(share)}
         if "project" in payload:
-            serialized["project"] = payload["project"]
+            serialized["project"] = self.serialize_public_project(payload["project"])
         if "assets" in payload:
             serialized["assets"] = self.service.library.serialize_assets(
                 [MediaAsset.model_validate(asset) for asset in payload["assets"]],

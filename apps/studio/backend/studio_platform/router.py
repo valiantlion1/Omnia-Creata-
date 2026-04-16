@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hmac
 import hashlib
+import ipaddress
 import json
 import time
 from typing import Any, Dict, Literal, Optional
@@ -12,6 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from config.env import Environment, get_settings, reveal_secret
 from security.auth import User, UserRole, create_user_tokens, get_current_user, get_supabase_auth_client
 from security.auth import User as AuthUser
+from security.captcha import (
+    CaptchaConfigurationError,
+    CaptchaServiceError,
+    CaptchaVerificationError,
+    verify_captcha_token,
+)
 from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError
 from security.moderation import check_prompt_safety, ModerationResult
@@ -31,15 +38,15 @@ class DemoLoginRequest(BaseModel):
 
 class ProjectCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    title: str
-    description: str = ""
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
     surface: Literal["compose", "chat"] = "compose"
 
 
 class ProjectUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    title: str
-    description: str = ""
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
 
 
 class StyleSaveRequest(BaseModel):
@@ -72,6 +79,7 @@ class SupabaseSignupRequest(BaseModel):
     password: str = Field(min_length=8, max_length=256)
     display_name: str = Field(default="Omnia User", max_length=120)
     username: str = Field(min_length=3, max_length=32)
+    captcha_token: Optional[str] = Field(default=None, max_length=4096)
     accepted_terms: bool
     accepted_privacy: bool
     accepted_usage_policy: bool
@@ -82,6 +90,7 @@ class SupabaseLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=256)
+    captcha_token: Optional[str] = Field(default=None, max_length=4096)
 
 
 class PromptImproveRequest(BaseModel):
@@ -107,8 +116,8 @@ class GenerationCreateRequest(BaseModel):
 
 class ShareCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    project_id: Optional[str] = None
-    asset_id: Optional[str] = None
+    project_id: Optional[str] = Field(default=None, max_length=128)
+    asset_id: Optional[str] = Field(default=None, max_length=128)
 
 
 class BillingCheckoutRequest(BaseModel):
@@ -118,8 +127,8 @@ class BillingCheckoutRequest(BaseModel):
 
 class ConversationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    title: str = ""
-    model: str = "studio-assist"
+    title: str = Field(default="", max_length=200)
+    model: str = Field(default="studio-assist", max_length=64)
 
 
 class ChatMessageRequest(BaseModel):
@@ -161,7 +170,7 @@ class PostUpdateRequest(BaseModel):
 
 class PostMoveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    project_id: str
+    project_id: str = Field(max_length=128)
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -263,6 +272,28 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         client_host = request.client.host if request.client else "unknown"
         return f"{scope}:{identifier or client_host}"
 
+    def _request_client_ip(request: Request) -> str | None:
+        client_host = request.client.host if request.client else None
+
+        trusted_proxy = False
+        if client_host:
+            try:
+                parsed = ipaddress.ip_address(client_host)
+            except ValueError:
+                trusted_proxy = client_host in {"localhost", "testclient"}
+            else:
+                trusted_proxy = parsed.is_private or parsed.is_loopback
+
+        if trusted_proxy:
+            for header_name in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
+                raw_value = str(request.headers.get(header_name) or "").strip()
+                if not raw_value:
+                    continue
+                candidate = raw_value.split(",")[0].strip()
+                if candidate:
+                    return candidate
+        return client_host
+
     async def _consume_rate_limit(
         request: Request,
         scope: str,
@@ -313,6 +344,37 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             detail="Verify your email address before creating generations.",
         )
 
+    async def _require_auth_captcha(
+        request: Request,
+        *,
+        token: str | None,
+        action: Literal["signup", "login"],
+    ) -> None:
+        if (
+            settings.environment in {Environment.STAGING, Environment.PRODUCTION}
+            and settings.captcha_ready_for_sensitive_flows is not True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="CAPTCHA verification is required for this environment but is not configured correctly.",
+            )
+        if settings.captcha_verification_enabled is not True:
+            return
+        try:
+            await verify_captcha_token(
+                token,
+                remote_ip=_request_client_ip(request),
+                action=action,
+                settings=settings,
+            )
+        except CaptchaVerificationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except (CaptchaConfigurationError, CaptchaServiceError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
     @router.post("/auth/demo-login")
     async def demo_login(payload: DemoLoginRequest, request: Request):
         if not settings.enable_demo_auth:
@@ -353,6 +415,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
     async def signup(payload: SupabaseSignupRequest, request: Request):
         await _consume_rate_limit(request, "auth:signup", limit=8)
+        await _require_auth_captcha(request, token=payload.captcha_token, action="signup")
         if not (payload.accepted_terms and payload.accepted_privacy and payload.accepted_usage_policy):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -405,6 +468,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/auth/login")
     async def login(payload: SupabaseLoginRequest, request: Request):
         await _consume_rate_limit(request, "auth:login", limit=12)
+        await _require_auth_captcha(request, token=payload.captcha_token, action="login")
         supabase_client = get_supabase_auth_client()
         if supabase_client is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
@@ -472,7 +536,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             "status": "OK",
             "telemetry": telemetry,
             "total_identities": counts.get("identities", 0),
-            "blocked_injections": 12,
+            "blocked_injections": None,
+            "blocked_injections_status": "unavailable",
+            "blocked_injections_detail": (
+                "Injection-specific blocking telemetry is not persisted yet; "
+                "this field is intentionally unset instead of returning a fake value."
+            ),
         }
 
     @router.get("/healthz")
@@ -510,6 +579,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "prompt:improve", limit=20, identifier=auth_user.id)
+        mod_result, flagged_term = await check_prompt_safety(payload.prompt)
+        if mod_result == ModerationResult.HARD_BLOCK:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your prompt was flagged by our content safety filter.",
+            )
         try:
             return await service.improve_generation_prompt(payload.prompt, identity_id=auth_user.id)
         except ValueError as exc:
@@ -655,10 +730,24 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         posts = await service.list_public_posts(sort="trending", viewer_identity_id=None)
         export_data = []
         for p in posts[:20]: # Limit to top 20 for federation
+            cover_asset = p.get("cover_asset") if isinstance(p.get("cover_asset"), dict) else None
+            preview_assets = p.get("preview_assets") if isinstance(p.get("preview_assets"), list) else []
+            image_url = None
+            for candidate in [cover_asset, *preview_assets]:
+                if not isinstance(candidate, dict):
+                    continue
+                image_url = (
+                    candidate.get("preview_url")
+                    or candidate.get("thumbnail_url")
+                    or candidate.get("url")
+                )
+                if image_url:
+                    break
+            prompt = str(p.get("prompt") or "")
             export_data.append({
                 "id": p.get("id"),
-                "image_url": p.get("thumbnail_url") or p.get("cover_url"),
-                "prompt_snippet": p.get("prompt", "")[:100] + "...",
+                "image_url": image_url,
+                "prompt_snippet": (prompt[:100] + "...") if len(prompt) > 100 else prompt,
                 "creator": p.get("owner_display_name", "Omnia Creator"),
                 "likes": p.get("like_count", 0),
                 "source": "studio.omniacreata.com",
@@ -779,6 +868,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
+        mod_result, flagged_term = await check_prompt_safety(payload.content)
+        if mod_result == ModerationResult.HARD_BLOCK:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your message was flagged by our content safety filter.",
+            )
         try:
             result = await service.send_chat_message(
                 auth_user.id,
@@ -809,6 +904,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:edit-message", limit=24, identifier=auth_user.id)
+        mod_result, flagged_term = await check_prompt_safety(payload.content)
+        if mod_result == ModerationResult.HARD_BLOCK:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your message was flagged by our content safety filter.",
+            )
         try:
             result = await service.edit_chat_message(
                 auth_user.id,
@@ -962,8 +1063,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested resource not found")
         return _serialize_generation(job, auth_user.id)
 
     @router.get("/generations/{generation_id}")
@@ -1183,8 +1284,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             delivery = await service.resolve_clean_asset_export(asset_id, auth_user.id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except FileNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset file not found")
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         except AssetStorageError:

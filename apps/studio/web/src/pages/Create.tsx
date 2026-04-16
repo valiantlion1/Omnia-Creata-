@@ -94,11 +94,11 @@ const PROMPT_TEMPLATES = [
 /* ─── Placeholder prompts ──────────────────────────── */
 
 const PLACEHOLDER_PROMPTS = [
-  'A neon-lit Tokyo alley at midnight, rain-soaked reflections, cinematic mood...',
-  'Minimalist perfume bottle on dark marble, studio lighting, product photography...',
-  'Ancient dragon perched on crystal ruins, aurora borealis, fantasy concept art...',
-  'Fashion editorial, model in flowing silk, golden hour, soft bokeh background...',
-  'Futuristic architecture overlooking the ocean, glass and concrete, sunset...',
+  'A neon-lit Tokyo alley at midnight, rain-soaked reflections, cinematic mood…',
+  'Minimalist perfume bottle on dark marble, studio lighting, product photography…',
+  'Ancient dragon perched on crystal ruins, aurora borealis, fantasy concept art…',
+  'Fashion editorial, model in flowing silk, golden hour, soft bokeh background…',
+  'Futuristic architecture overlooking the ocean, glass and concrete, sunset…',
 ]
 
 /* ─── Aspect presets ───────────────────────────────── */
@@ -113,6 +113,7 @@ const aspectPresets = {
 } as const
 
 const aspectOrder: Array<keyof typeof aspectPresets> = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
+const createFirstRunSteps = ['Prompt', 'Quality', 'Format', 'Library'] as const
 
 /* ─── Toast types ──────────────────────────────────── */
 
@@ -155,7 +156,7 @@ function getToastLabel(status: JobStatus) {
 function getToastDescription(job: GenerationToast) {
   const normalized = normalizeJobStatus(job.status)
   if (normalized === 'succeeded') return 'Your image is ready! Check your Library.'
-  if (normalized === 'running' || normalized === 'queued') return 'Creating your image...'
+  if (normalized === 'running' || normalized === 'queued') return 'Creating your image…'
   return job.error || 'This image could not be created. Try again?'
 }
 
@@ -645,7 +646,7 @@ export default function CreatePage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Create</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Write a prompt, choose a quality, pick a format, and generate. Create is the direct image workspace inside Studio.
+            Create is Studio&apos;s direct image workspace. Start here when you know what you want to make.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
@@ -672,8 +673,8 @@ export default function CreatePage() {
             <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Create</h1>
             <p className="mt-1 text-sm text-zinc-500">
               {isOutOfCredits
-                ? 'Describe what you want to make, then add wallet credits or upgrade when you are ready to run it.'
-                : 'Describe what you would like to create.'}
+                ? 'Shape the prompt now, then top up when you are ready to run it.'
+                : 'Describe the image, choose quality, then run it.'}
             </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
@@ -686,24 +687,37 @@ export default function CreatePage() {
 
         {(showFirstRunGuide || isOutOfCredits) ? (
           <div className="mb-6 overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03]">
-            <div className="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-6">
+            <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-end md:justify-between md:px-6">
               <div className="max-w-2xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Create Access</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  {isOutOfCredits ? 'Wallet needed' : 'First run'}
+                </p>
                 <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">
-                  Free accounts can use Create. Chat stays on paid plans.
+                  {isOutOfCredits ? 'Create is ready when you are.' : 'Start here, then save the keepers.'}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Studio does not bundle free image generation at launch. Use wallet credits to run Create on a free account, or move onto Creator or Pro if you want the paid chat surface and bigger monthly capacity.
+                  {isOutOfCredits
+                    ? 'Free accounts can compose here any time. Add wallet credits when you want to run, or move onto Creator or Pro if you also want the chat surface.'
+                    : 'Create is the direct image workspace inside Studio. Pick a quality, choose a format, and the run lands in your library.'}
                 </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {createFirstRunSteps.map((step) => (
+                    <span
+                      key={step}
+                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-zinc-300"
+                    >
+                      {step}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-3">
-                <Link to="/subscription" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90">
-                  View Plans
-                </Link>
-                <Link to="/explore" className="rounded-full bg-white/[0.05] px-5 py-2.5 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
-                  Back to Gallery
-                </Link>
-              </div>
+              {isOutOfCredits ? (
+                <div className="flex shrink-0 flex-wrap gap-3">
+                  <Link to="/subscription" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
+                    Plans & credits
+                  </Link>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -870,7 +884,7 @@ export default function CreatePage() {
                       value={negativePrompt}
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
-                      placeholder="Things to avoid: blurry, low quality, deformed hands..."
+                      placeholder="Things to avoid: blurry, low quality, deformed hands…"
                       className="w-full resize-none rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04]"
                       style={{ maxHeight: '80px' }}
                     />
@@ -969,12 +983,15 @@ export default function CreatePage() {
                 <button
                   ref={ratioPickerButtonRef}
                   onClick={() => setRatioPickerOpen((value) => !value)}
-                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
+                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="flex h-[22px] w-[22px] items-center justify-center opacity-90">
                     <div className={`border-2 ${activeAspect.aspect} w-full rounded-sm border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.18)]`} />
                   </div>
-                  <div className="min-w-0 text-[13px] font-semibold text-white">{aspectRatio}</div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Format</div>
+                    <div className="mt-0.5 text-[13px] font-semibold text-white">{aspectRatio}</div>
+                  </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${ratioPickerOpen ? 'rotate-180 text-white' : ''}`} />
                 </button>
 
@@ -1013,11 +1030,12 @@ export default function CreatePage() {
                 <button
                   ref={modelPickerButtonRef}
                   onClick={() => setModelPickerOpen((value) => !value)}
-                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
+                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Quality</div>
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Select quality'}
+                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Choose quality'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -1071,7 +1089,7 @@ export default function CreatePage() {
               >
                 <span className="relative z-10 flex items-center gap-2">
                   {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/80" /> : <Wand2 className="h-4.5 w-4.5 text-black" />}
-                  {submittingCount ? 'Creating...' : 'Generate Image'}
+                  {submittingCount ? 'Creating…' : 'Generate'}
                 </span>
               </button>
             </div>
@@ -1158,7 +1176,7 @@ export default function CreatePage() {
                       disabled={sharingToastId === job.id}
                       className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {sharingToastId === job.id ? 'Copying...' : 'Copy share link'}
+                      {sharingToastId === job.id ? 'Copying…' : 'Copy share link'}
                     </button>
                   ) : null}
                 </div>

@@ -67,10 +67,13 @@ export default function BillingPage() {
 
   const isUnlimitedAccess = Boolean(billing?.credits.unlimited || isRoot)
   const availableCheckoutKinds = new Set<CheckoutKind>((billing?.checkout_options ?? []).map((option) => option.kind))
+  const hasAnyCheckoutEnabled = availableCheckoutKinds.size > 0
   const currentCommercialPlan = useMemo(
     () =>
       publicPlans && billing
-        ? [publicPlans.free_account, ...publicPlans.subscriptions].find((plan) => plan.entitlement_plan === billing.plan.id) ?? null
+        ? [publicPlans.free_account, ...publicPlans.subscriptions].find(
+            (plan) => plan.entitlement_plan === billing.plan.id || plan.entitlement_plan === billing.account_tier,
+          ) ?? null
         : null,
     [billing, publicPlans],
   )
@@ -153,6 +156,18 @@ export default function BillingPage() {
         </div>
       )}
 
+      {isAuthenticated && billing && !isUnlimitedAccess && !hasAnyCheckoutEnabled ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] p-4 text-amber-100">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+          <div>
+            <div className="text-sm font-semibold">Self-serve billing is not live on this build.</div>
+            <p className="mt-1 text-sm text-amber-100/80">
+              You can review the Studio catalog here, but upgrades and credit-pack top-ups stay unavailable until billing is connected for this environment.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* ─── Stats row ─── */}
       {billing && !loading ? (
         <section className="grid gap-4 md:grid-cols-3">
@@ -225,20 +240,27 @@ export default function BillingPage() {
       {publicPlans ? (
         <section className="grid gap-4 lg:grid-cols-3">
           {[publicPlans.free_account, ...publicPlans.subscriptions].map((plan) => {
-            const isCurrentPlan = billing?.plan.id === plan.entitlement_plan
+            const isCurrentPlan = Boolean(
+              billing && (billing.plan.id === plan.entitlement_plan || billing.account_tier === plan.entitlement_plan),
+            )
+            const isFreeCurrentPlan = isCurrentPlan && plan.id === 'free_account'
             const checkoutEnabled = Boolean(plan.checkout_kind && availableCheckoutKinds.has(plan.checkout_kind))
             const isCheckoutPending = Boolean(plan.checkout_kind) && checkoutLoading === plan.checkout_kind
             const needsAccount = Boolean(plan.checkout_kind) && !isAuthenticated
             const price = formatPlanPrice(plan.price_usd, plan.billing_period)
             const ctaLabel = isCurrentPlan
-              ? 'Current plan'
+              ? isFreeCurrentPlan
+                ? 'Open Create'
+                : 'Current plan'
               : needsAccount
                 ? 'Create account'
                 : plan.checkout_kind && !checkoutEnabled
-                ? 'Checkout not enabled'
+                ? 'Checkout unavailable'
                 : plan.checkout_kind
                   ? 'Upgrade now'
-                  : 'Create account'
+                  : isAuthenticated
+                    ? 'Open Create'
+                    : 'Create account'
 
             return (
               <div
@@ -274,7 +296,14 @@ export default function BillingPage() {
 
                 {/* CTA */}
                 <div className="mt-6">
-                  {plan.checkout_kind && needsAccount ? (
+                  {isFreeCurrentPlan && isAuthenticated ? (
+                    <Link
+                      to="/create"
+                      className="w-full rounded-xl py-3 px-6 text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-white/[0.06] text-white hover:bg-white/[0.1]"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> {ctaLabel}
+                    </Link>
+                  ) : plan.checkout_kind && needsAccount ? (
                     <Link
                       to="/signup"
                       className={`w-full rounded-xl py-3 px-6 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
@@ -313,7 +342,7 @@ export default function BillingPage() {
                     </button>
                   ) : (
                     <Link
-                      to="/signup"
+                      to={isAuthenticated ? '/create' : '/signup'}
                       className="w-full rounded-xl py-3 px-6 text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-white/[0.06] text-white hover:bg-white/[0.1]"
                     >
                       <Sparkles className="h-3.5 w-3.5" /> {ctaLabel}
@@ -437,7 +466,7 @@ export default function BillingPage() {
                         ) : checkoutEnabled ? (
                           'Buy'
                         ) : (
-                          'N/A'
+                          'Unavailable'
                         )}
                       </button>
                     )}

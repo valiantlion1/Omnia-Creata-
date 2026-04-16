@@ -3,7 +3,10 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { LegalFooter } from '@/components/StudioPrimitives'
+import { TurnstileWidget } from '@/components/TurnstileWidget'
 import { useStudioAuth } from '@/lib/studioAuth'
+
+const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -18,6 +21,8 @@ export default function SignupPage() {
   const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -37,6 +42,10 @@ export default function SignupPage() {
       setError('Please accept the Terms, Privacy Policy, and Usage Policy to continue.')
       return
     }
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Complete the verification check to continue.')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
@@ -47,6 +56,7 @@ export default function SignupPage() {
         username: username.trim().toLowerCase(),
         email: email.trim().toLowerCase(),
         password,
+        captchaToken: captchaToken ?? undefined,
         acceptedTerms: acceptedLegal,
         acceptedPrivacy: acceptedLegal,
         acceptedUsagePolicy: acceptedLegal,
@@ -55,6 +65,10 @@ export default function SignupPage() {
       navigate('/explore?welcome=1', { replace: true })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to create your account right now.')
+      if (TURNSTILE_SITE_KEY) {
+        setCaptchaToken(null)
+        setCaptchaResetKey((value) => value + 1)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -98,11 +112,25 @@ export default function SignupPage() {
           <div className="max-w-2xl">
             <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Create account</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl md:leading-[1.02]">
-              Enter Studio, then choose your plan.
+              Create your account. Start in Create.
             </h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
-              Create your account first. After that, you can review plans, credits, and upgrades from inside Studio.
+              Create the account first. Once you&apos;re in, Create is the direct starting point and plans stay available inside Studio whenever you need more capacity.
             </p>
+            <div className="mt-8 max-w-xl space-y-3 text-sm text-zinc-400">
+              {[
+                ['1', 'Create the account'],
+                ['2', 'Open Create and run your first image'],
+                ['3', 'Add credits or move up when you want Chat'],
+              ].map(([step, label]) => (
+                <div key={step} className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-zinc-200">
+                    {step}
+                  </div>
+                  <div className="pt-0.5 leading-6">{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <form className="space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
@@ -149,6 +177,7 @@ export default function SignupPage() {
                   onChange={(event) => setUsername(event.target.value.replace(/\s+/g, ''))}
                   placeholder="username"
                   autoComplete="username"
+                  spellCheck={false}
                   className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
                 />
               </label>
@@ -164,6 +193,7 @@ export default function SignupPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@omniacreata.com"
                 autoComplete="email"
+                spellCheck={false}
                 className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
               />
             </label>
@@ -229,6 +259,15 @@ export default function SignupPage() {
 
             {error ? <div className="text-sm text-rose-200">{error}</div> : null}
 
+            {TURNSTILE_SITE_KEY ? (
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                action="signup"
+                resetKey={captchaResetKey}
+                onTokenChange={setCaptchaToken}
+              />
+            ) : null}
+
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
                 type="submit"
@@ -238,12 +277,13 @@ export default function SignupPage() {
                   !username.trim() ||
                   !email.trim() ||
                   password.length < 8 ||
-                  passwordConfirmation.length < 8
+                  passwordConfirmation.length < 8 ||
+                  (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)
                 }
                 className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
               >
-                {submitting ? 'Creating account...' : 'Create account'}
+                {submitting ? 'Creating account…' : 'Create account'}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <div className="text-sm text-zinc-400">

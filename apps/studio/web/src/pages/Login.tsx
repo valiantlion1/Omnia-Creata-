@@ -3,8 +3,11 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { LegalFooter } from '@/components/StudioPrimitives'
+import { TurnstileWidget } from '@/components/TurnstileWidget'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { sanitizeStudioRedirectPath } from '@/lib/studioSession'
+
+const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
 
 export default function LoginPage() {
   const location = useLocation()
@@ -32,6 +35,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [oauthCompleting, setOauthCompleting] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,14 +72,22 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Complete the verification check to continue.')
+      return
+    }
     setSubmitting(true)
     setError(null)
 
     try {
-      await signIn(email.trim().toLowerCase(), password)
+      await signIn(email.trim().toLowerCase(), password, captchaToken ?? undefined)
       navigate(nextPath, { replace: true })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to log in right now.')
+      if (TURNSTILE_SITE_KEY) {
+        setCaptchaToken(null)
+        setCaptchaResetKey((value) => value + 1)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -189,10 +202,19 @@ export default function LoginPage() {
             {error ? <div className="text-sm text-rose-200">{error}</div> : null}
             {oauthCompleting ? <div className="text-sm text-zinc-300">Completing Google sign-in...</div> : null}
 
+            {TURNSTILE_SITE_KEY ? (
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                action="login"
+                resetKey={captchaResetKey}
+                onTokenChange={setCaptchaToken}
+              />
+            ) : null}
+
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
                 type="submit"
-                disabled={isBusy || !email.trim() || !password}
+                disabled={isBusy || !email.trim() || !password || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
                 className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 hover:shadow-[0_0_32px_rgba(124,58,237,0.35)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 24px rgba(124,58,237,0.22)' }}
               >

@@ -17,6 +17,24 @@ SUPPORTED_ASPECT_RATIOS: dict[str, tuple[int, int]] = {
 }
 _DIMENSION_MULTIPLE = 64
 
+# ── Model catalog ──
+# estimated_cost reflects Runware-first pricing (primary provider).
+# Values are set slightly above observed Runware API costs to stay conservative
+# for stop-loss guardrail evaluation. Runware returns actual cost per call;
+# these estimates are fallbacks for forecasting and credit guides.
+#
+# Runware observed costs (2026-04):
+#   flux-schnell  ~$0.002-0.003/image
+#   sdxl-base     ~$0.003-0.005/image
+#   realvis-xl    ~$0.005-0.008/image
+#   juggernaut-xl ~$0.008-0.012/image
+#
+# Credit cost rationale (Pro floor $0.02/credit):
+#   Fast 6cr      -> $0.12 revenue, $0.003 cost -> 97% margin
+#   Standard 8cr  -> $0.16 revenue, $0.005 cost -> 97% margin
+#   Premium 12cr  -> $0.24 revenue, $0.010 cost -> 96% margin
+#   Signature 14cr-> $0.28 revenue, $0.012 cost -> 96% margin
+
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     "flux-schnell": ModelCatalogEntry(
         id="flux-schnell",
@@ -37,7 +55,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         description="Balanced quality for everyday creative work and dependable detail.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
-        estimated_cost=0.008,
+        estimated_cost=0.005,
         max_width=1024,
         max_height=1024,
         runtime="cloud",
@@ -49,7 +67,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         description="Richer detail and cleaner finish when the result needs to look polished.",
         min_plan=IdentityPlan.CREATOR,
         credit_cost=12,
-        estimated_cost=0.015,
+        estimated_cost=0.010,
         max_width=1536,
         max_height=1536,
         featured=True,
@@ -62,7 +80,7 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         description="Internal advanced finish for special high-detail runs.",
         min_plan=IdentityPlan.PRO,
         credit_cost=14,
-        estimated_cost=0.02,
+        estimated_cost=0.012,
         max_width=1536,
         max_height=1536,
         runtime="cloud",

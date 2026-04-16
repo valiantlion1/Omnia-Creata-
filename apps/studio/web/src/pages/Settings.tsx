@@ -264,7 +264,7 @@ export default function SettingsPage() {
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                     <div className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-3xl font-black text-white shadow-[0_0_40px_rgba(var(--primary),0.3)] ring-1 ring-white/20 isolate">
-                      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_58%)] opacity-30 mix-blend-overlay" />
                       <span className="relative z-10 drop-shadow-md">{(auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()}</span>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>
@@ -346,7 +346,7 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Sparkles}
                     title="Smart Interface Hints"
-                    description="Remember this browser's guidance preference while protected-beta onboarding finishes rolling out."
+                    description="Remember this browser's guidance preference while Studio's first-run onboarding keeps settling into the controlled launch shell."
                     action={
                       <div className="flex justify-start sm:justify-end w-full">
                         <Switch

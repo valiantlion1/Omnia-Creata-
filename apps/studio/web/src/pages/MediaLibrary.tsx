@@ -1907,7 +1907,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Favorites"
-              description="Pinned and saved visuals can live here later. For now this surface stays intentionally clean."
+              description="Saved visuals appear here when you favorite work from Create, Library, or public posts."
               search={search}
               onSearchChange={setSearch}
               view={activeView}

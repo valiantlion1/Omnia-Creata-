@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-15
+Last updated: 2026-04-16
 
 ## Current baseline
 
@@ -12,8 +12,38 @@ Last updated: 2026-04-15
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
+- Current frozen-tree proof build is `2026.04.16.124`, and it is intentionally a bookkeeping/proof sync only. The substantive frontend cleanup and backend security/hardening work remain the `.116` -> `.123` wave already present in the current tree.
+- Current-build proof is mixed and explicitly not launch-ready theater: local verify passes on `.124`, but provider smoke is blocked by the staging env contract (`PUBLIC_API_BASE_URL` is not valid for staging/prod smoke), and protected staging is blocked because Docker engine is not running, so closure stays false.
 
 ## Recent stabilization wins
+
+- `.124` is an honesty/passive-control build, not a new feature wave. It ties `version.json`, the release docs, and the proof artefacts to the same frozen tree without widening product scope.
+- The current `.124` proof chain is at least fail-closed now. Stable local startup verification passes on the new build, the stale `.99` smoke artefact has been replaced with a blocked `.124` smoke report after env validation failed, and the protected staging bring-up loop leaves a current-build blocker report instead of silently inheriting an older staging result.
+
+- `.123` closes several launch-facing backend honesty gaps without widening scope. Staging/production auth now fail closed when Turnstile is expected but not actually ready, and sensitive CAPTCHA verification now requires real action plus hostname proof instead of treating missing fields like an acceptable partial success.
+- Public/share safety is tighter on the same build. Shared project/post payloads no longer leak internal identity/workspace/project linkage, share responses now emit explicit `no-store` cache headers, and legacy share-scoped asset delivery tokens carry a hashed share marker instead of the raw public token.
+- `.123` also removes two smaller but high-signal truth drifts: admin telemetry stops returning an invented `blocked_injections` number, and public export cards now source their image preview from the nested public asset payload Studio really serves today rather than stale flat thumbnail assumptions.
+
+- `.122` finishes the cleanup wave on the backend truth layer. Owner-only health/detail payloads no longer echo raw exception strings when telemetry, economics, or readiness builders fail; they now keep the section summary, expose only the exception type, and point operators toward runtime logs for the exact failure context.
+- The same wave also normalizes operator/provider wording around the current launch frame. Provider truth and smoke coverage surfaces now describe selected launch lanes and launch-grade image coverage instead of leaning on older `protected-beta` phrasing, which makes owner health/readiness payloads line up better with the rest of Studio's `Controlled Public Paid Launch` doctrine.
+
+- `.121` removes a sneaky deployment fail-open from the frontend. Non-development Studio builds no longer fall back to `http://127.0.0.1:8000` when `VITE_API_BASE_URL` is missing, so bad deploy env now fails visibly instead of quietly acting like a localhost app.
+- The same wave also strips stale dead surfaces out of the repo. Orphaned `Home.tsx` and `Splash.tsx` are gone, which removes old `public beta / free credits / no credit card` copy drift from Studio's source tree, and a couple of internal surfaces now use more honest wording instead of placeholder-looking telemetry or "later" language.
+
+- `.120` closes a browser/proxy privacy gap on top of the `.119` config hardening. Sensitive auth, billing, owner, detailed health, and export endpoints now emit `Cache-Control: no-store, private` plus `Pragma: no-cache`, so private Studio JSON is less likely to be cached outside the live session boundary.
+- `.120` also locks that behavior with a focused FastAPI response-header regression test, so this is no longer only a convention inside middleware code.
+
+- `.119` hardens Studio's launch-shaped runtime contract. Staging and production can no longer boot with half-local env truth such as missing Supabase anon/Redis values, local/non-HTTPS public URLs, local asset storage, or enabled demo surfaces, and API docs now default to development-only instead of quietly opening in staging.
+- The backend API surface also got a small but concrete browser hardening pass in `.119`. JSON/API responses now carry `Cross-Origin-Opener-Policy`, staging/prod adds HSTS, and when docs are disabled the API emits a locked CSP instead of leaving content policy undefined.
+
+- `.118` turns abuse hardening from documentation truth into runtime wiring. Studio password signup/login can now enforce Cloudflare Turnstile when the feature is enabled, and the auth web surfaces are already prepared to send the verification token once `VITE_TURNSTILE_SITE_KEY` is configured.
+- Launch readiness is also more honest on this build. `abuse_hardening` no longer means only "the bool is off"; it now also catches the more dangerous half-configured state where Turnstile is nominally enabled but the site key or secret is still missing.
+
+- `.117` is a live-shell honesty cleanup wave on top of the first-run polish. Billing now treats a signed-in free account like the account it already is: the current free plan shows as current, its primary action is `Open Create`, and checkout-disabled plan/credit-pack states no longer collapse into a confusing `Create account` or `N/A` mix.
+- The same wave also reduces small but visible doctrine drift. When self-serve billing is not active for the current build, the page now says so directly, Settings no longer talks about protected-beta onboarding, and the Help FAQ now describes internal owner access without leaning on an older beta-stage phrase.
+
+- `.116` is a focused first-run polish wave on the web shell. Explore's welcome overlay and empty-state guidance now push people toward the real first move more clearly, Signup explains the account-to-Create path in one calmer sequence, and Chat's paid lock states now feel more like premium upgrade surfaces than dead ends.
+- Create also reads more like a direct workspace in `.116`. The onboarding banner is lighter and more action-led, and the quality/format controls now carry clearer structure so the prompt -> quality -> format -> generate chain scans faster without changing the underlying launch doctrine.
 
 - `.115` turns Create into a much cleaner public surface. The quality picker now stays on the three user-facing lanes Studio actually wants to sell and explain: `Fast`, `Standard`, and `Premium`. The internal advanced lane still exists in backend truth, but it no longer leaks into the main Create picker and confuse the product story.
 - The same wave also makes aspect-ratio and size truth more honest. Create now shows only the common ratio choices, while the backend resolves real generation dimensions from model plus aspect ratio instead of trusting arbitrary client width/height input. That gives the product one safer dimension contract across pricing, routing, and provider execution.

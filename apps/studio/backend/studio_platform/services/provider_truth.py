@@ -636,23 +636,23 @@ def _build_chat_provider_truth(
 
     if selected_state.get("healthy_for_launch") is True and selected_state.get("launch_grade") is True:
         status = "pass"
-        summary = "The selected protected-beta chat lane is healthy on the current build."
+        summary = "The selected launch chat lane is healthy on the current build."
     elif selected_state.get("launch_grade") is True and selected_state.get("runtime_available") is True:
         status = "blocked"
         summary = (
-            "The selected protected-beta chat lane exists, but the current build has not proven it through live smoke yet."
+            "The selected launch chat lane exists, but the current build has not proven it through live smoke yet."
         )
     elif selected_state.get("launch_grade") is True and selected_state.get("configured") is True:
         status = "blocked"
-        summary = "The selected protected-beta chat provider is configured, but it is not currently healthy."
+        summary = "The selected launch chat provider is configured, but it is not currently healthy."
     elif selected_state.get("configured") is True and selected_state.get("launch_grade") is not True:
         status = "blocked"
         summary = (
-            "The selected protected-beta chat provider is configured but still limited to a free-tier lane."
+            "The selected launch chat provider is configured but still limited to a free-tier lane."
         )
     else:
         status = "blocked"
-        summary = "Premium chat does not currently have the selected protected-beta launch-grade lane configured."
+        summary = "Premium chat does not currently have the selected launch-grade lane configured."
 
     if configured_limited and not configured_launch_grade:
         economics_status = "warning"
@@ -820,31 +820,31 @@ def _build_image_lane_truth(
             if final_verified:
                 summary = "OpenAI draft and owner-QA final image lanes are proven on the current build."
             else:
-                summary = "OpenAI draft image lane is proven for protected beta; owner-QA final proof remains optional."
+                summary = "OpenAI draft image lane is proven for the current launch baseline; owner-QA final proof remains optional."
         elif openai_configured and (draft_verified or final_verified):
             status = "warning"
             summary = "OpenAI image lanes are only partially proven on the current build."
         elif openai_configured and openai_runtime_available:
             status = "warning"
-            summary = "OpenAI image lanes are configured, but current-build smoke has not proven the protected-beta draft lane yet."
+            summary = "OpenAI image lanes are configured, but current-build smoke has not proven the selected draft lane yet."
         elif openai_configured:
             status = "warning"
-            summary = "OpenAI image lane is configured but not currently healthy enough to prove the protected-beta route."
+            summary = "OpenAI image lane is configured but not currently healthy enough to prove the selected launch route."
         else:
             status = "warning"
-            summary = "OpenAI protected-beta image lane is not configured yet."
+            summary = "OpenAI launch image lane is not configured yet."
     elif selected_configured and selected_runtime_available and selected_smoke_verified:
         status = "pass"
-        summary = f"{selected_provider} is proven as the selected protected-beta image lane on the current build."
+        summary = f"{selected_provider} is proven as the selected launch image lane on the current build."
     elif selected_configured and selected_runtime_available:
         status = "warning"
-        summary = f"{selected_provider} is configured, but current-build smoke has not proven it as the protected-beta image lane yet."
+        summary = f"{selected_provider} is configured, but current-build smoke has not proven it as the selected launch image lane yet."
     elif selected_configured:
         status = "warning"
-        summary = f"{selected_provider} is configured but not currently healthy enough to prove the protected-beta image route."
+        summary = f"{selected_provider} is configured but not currently healthy enough to prove the selected launch image route."
     else:
         status = "warning"
-        summary = f"{selected_provider} is not configured as the protected-beta image lane."
+        summary = f"{selected_provider} is not configured as the selected launch image lane."
 
     details: list[str] = []
     details.append(f"selected provider={selected_provider}")
@@ -860,7 +860,7 @@ def _build_image_lane_truth(
             + f" ({final_model})"
         )
         if not final_verified and not require_final_lane:
-            details.append("owner-QA final lane remains optional for protected beta")
+            details.append("owner-QA final lane remains optional for the current launch baseline")
     elif selected_provider == "openai":
         details.append("OpenAI draft/final lanes are not configured")
     else:
@@ -990,18 +990,18 @@ def _build_image_provider_truth(
     selected_provider = _protected_beta_image_provider(settings)
     if healthy_launch_grade:
         status = "pass"
-        summary = "Image generation has a healthy protected-beta billable lane."
+        summary = "Image generation has a healthy selected launch-grade billable lane."
     elif unverified_runtime_healthy:
         status = "blocked"
         summary = (
-            "The selected protected-beta image lane exists, but the current build has not proven it through live smoke yet."
+            "The selected launch image lane exists, but the current build has not proven it through live smoke yet."
         )
     elif selected_launch_grade:
         status = "blocked"
-        summary = "The selected protected-beta image provider is configured, but it is not currently healthy."
+        summary = "The selected launch image provider is configured, but it is not currently healthy."
     else:
         status = "blocked"
-        summary = "Image generation does not currently have a protected-beta billable lane."
+        summary = "Image generation does not currently have a selected launch-grade billable lane."
 
     if selected_launch_grade:
         economics_status = "pass"
@@ -1017,22 +1017,22 @@ def _build_image_provider_truth(
 
     if healthy_launch_grade and healthy_managed_backups:
         resilience_status = "pass"
-        resilience_summary = "Image generation has a proven protected-beta lane and at least one proven managed backup lane."
+        resilience_summary = "Image generation has a proven selected launch lane and at least one proven managed backup lane."
     elif healthy_launch_grade or selected_launch_grade:
         resilience_status = "warning"
         if configured_unproven_managed_backups:
             backup_names = ", ".join(item["provider"] for item in configured_unproven_managed_backups)
             resilience_summary = (
-                "Image generation currently relies on a single selected protected-beta lane; "
+                "Image generation currently relies on a single selected launch lane; "
                 f"managed backup lanes ({backup_names}) are configured but not proven on the current build yet."
             )
         else:
             resilience_summary = (
-                "Image generation currently relies on a single selected protected-beta lane and no managed backup lane is configured."
+                "Image generation currently relies on a single selected launch lane and no managed backup lane is configured."
             )
     else:
         resilience_status = "blocked"
-        resilience_summary = "Image generation does not yet have a protected-beta billable lane."
+        resilience_summary = "Image generation does not yet have a selected launch-grade billable lane."
 
     if healthy_launch_grade and healthy_managed_backups:
         public_paid_usage_status = "pass"
@@ -1054,12 +1054,12 @@ def _build_image_provider_truth(
     elif unverified_runtime_healthy:
         public_paid_usage_status = "blocked"
         public_paid_usage_summary = (
-            "The selected protected-beta image lane exists, but the current build has not proven it through live smoke yet."
+            "The selected launch image lane exists, but the current build has not proven it through live smoke yet."
         )
     elif selected_launch_grade:
         public_paid_usage_status = "blocked"
         public_paid_usage_summary = (
-            "The selected protected-beta image provider is configured, but it is not currently healthy enough for public-paid usage."
+            "The selected launch image provider is configured, but it is not currently healthy enough for public-paid usage."
         )
     elif configured_fallback or configured_degraded:
         public_paid_usage_status = "blocked"

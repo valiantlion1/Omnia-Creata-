@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+import unicodedata
 from enum import Enum
 from typing import Optional, Tuple
 import httpx
@@ -8,20 +10,54 @@ from config.env import configured_secret_value, get_settings
 
 logger = logging.getLogger("omnia.studio.moderation")
 
+# Common leet-speak / unicode substitutions
+_LEET_MAP = {
+    '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's',
+    '7': 't', '8': 'b', '9': 'g', '@': 'a', '$': 's',
+    '!': 'i', '+': 't', '|': 'l',
+}
+
+
+def _normalize_for_moderation(text: str) -> str:
+    """Aggressively normalize text to defeat common evasion techniques."""
+    # 1. NFKD unicode normalization (decomposes characters)
+    text = unicodedata.normalize("NFKD", text)
+    # 2. Strip all non-ASCII characters (removes zero-width, Cyrillic lookalikes, etc.)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    # 3. Lowercase
+    text = text.lower()
+    # 4. Apply leet-speak substitutions
+    text = "".join(_LEET_MAP.get(ch, ch) for ch in text)
+    # 5. Remove all non-alphanumeric except spaces
+    text = re.sub(r"[^a-z0-9\s]", "", text)
+    # 6. Collapse multiple spaces
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _term_matches(term: str, text: str) -> bool:
+    """Match term in text. Short terms use word boundaries to avoid false positives."""
+    if len(term) <= 3:
+        return bool(re.search(r'\b' + re.escape(term) + r'\b', text))
+    return term in text
+
+
 class ModerationResult(str, Enum):
     SAFE = "safe"
     SOFT_BLOCK = "soft_block"
     HARD_BLOCK = "hard_block"
 
 
+# Terms are stored in their normalized form (no hyphens/punctuation) so they
+# match correctly against the normalized input text.
 HARD_BLOCK_TERMS = {
-    "child porn", "cp", "rape", "pedophile", "murder", "gore", "terrorist", 
-    "suicide", "self-harm", "beheading", "dismemberment", "csam"
+    "child porn", "cp", "rape", "pedophile", "murder", "gore", "terrorist",
+    "suicide", "selfharm", "self harm", "beheading", "dismemberment", "csam",
 }
 
 SOFT_BLOCK_TERMS = {
     "naked", "nude", "blood", "sexy", "erotic", "nsfw",
-    "biden", "trump", "putin", "politician"
+    "biden", "trump", "putin", "politician",
 }
 
 async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[str]]:
@@ -33,14 +69,14 @@ async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[s
     """
     if not prompt:
         return (ModerationResult.SAFE, None)
-        
-    normalized = prompt.lower()
-    
+
+    normalized = _normalize_for_moderation(prompt)
+
     settings = get_settings()
-    
+
     # Check strict hard boundaries immediately (regex layer 1)
     for term in HARD_BLOCK_TERMS:
-        if term in normalized.split():
+        if _term_matches(term, normalized):
             return (ModerationResult.HARD_BLOCK, term)
             
     # Try OpenRouter LLM approach if available
@@ -87,7 +123,7 @@ async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[s
             
     # Regex Layer 2: Soft block fallback
     for term in SOFT_BLOCK_TERMS:
-        if term in normalized.split():
+        if _term_matches(term, normalized):
             return (ModerationResult.SOFT_BLOCK, term)
             
     return (ModerationResult.SAFE, None)

@@ -128,6 +128,70 @@ async def test_public_share_route_uses_ip_rate_limit(
 
 
 @pytest.mark.asyncio
+async def test_public_share_route_redacts_internal_project_and_asset_ids(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    render_path = tmp_path / "public-share-safe.png"
+    render_path.write_bytes(b"public-share-safe")
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user-1@example.com",
+        display_name="User One",
+        username="userone",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Editorial Share",
+        description="Launch-safe shared project",
+    )
+    asset = MediaAsset(
+        id="asset-share-safe",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Shared asset",
+        prompt="cinematic editorial portrait with dramatic rim light",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"thumbnail_path": str(render_path)},
+    )
+    await service.store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+        )
+    )
+    _, public_token = await service.create_share(identity.id, project.id, None)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/v1/shares/public/{public_token}")
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["project"]["title"] == "Editorial Share"
+        assert "identity_id" not in payload["project"]
+        assert "workspace_id" not in payload["project"]
+        assert "system_managed" not in payload["project"]
+        assert "last_generation_id" not in payload["project"]
+        assert payload["assets"]
+        asset_payload = payload["assets"][0]
+        assert "identity_id" not in asset_payload
+        assert "workspace_id" not in asset_payload
+        assert "project_id" not in asset_payload
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_public_share_route_returns_not_found_for_trashed_asset_share(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     identity = OmniaIdentity(
@@ -457,6 +521,77 @@ async def test_like_routes_reject_hidden_public_posts_without_mutating_likes(tmp
         persisted_post = await service.store.get_model("posts", "post-hidden", PublicPost)
         assert persisted_post is not None
         assert persisted_post.liked_by == ["seed-like"]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_posts_route_redacts_internal_project_and_asset_ids(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    render_path = tmp_path / "public-post-safe.png"
+    render_path.write_bytes(b"public-post-safe")
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user-1@example.com",
+        display_name="User One",
+        username="userone",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Editorial Project",
+    )
+    asset = MediaAsset(
+        id="asset-public-safe",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Editorial Portrait",
+        prompt="cinematic editorial portrait with warm key light",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"thumbnail_path": str(render_path)},
+    )
+    post = PublicPost(
+        id="post-public-safe",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        owner_username=identity.username or "userone",
+        owner_display_name=identity.display_name,
+        title="Editorial Portrait",
+        prompt="cinematic editorial portrait with warm key light",
+        cover_asset_id=asset.id,
+        asset_ids=[asset.id],
+        visibility=Visibility.PUBLIC,
+    )
+    await service.store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.posts.__setitem__(post.id, post),
+        )
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/public/posts")
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()["posts"][0]
+        assert payload["project_id"] is None
+        assert payload["cover_asset"] is not None
+        assert "identity_id" not in payload["cover_asset"]
+        assert "workspace_id" not in payload["cover_asset"]
+        assert "project_id" not in payload["cover_asset"]
     finally:
         await service.shutdown()
 
@@ -1141,6 +1276,8 @@ async def test_admin_telemetry_route_requires_root_admin_and_returns_summary(tmp
         assert "telemetry" in payload
         assert "event_count" in payload["telemetry"]
         assert payload["total_identities"] >= 1
+        assert payload["blocked_injections"] is None
+        assert payload["blocked_injections_status"] == "unavailable"
     finally:
         await service.shutdown()
 
@@ -1319,6 +1456,447 @@ async def test_demo_login_refuses_even_free_plan_outside_development(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_signup_requires_captcha_token_when_verification_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    signup_calls: list[str] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+
+        def __init__(self, email: str):
+            self.user = {
+                "id": "user-signup",
+                "email": email,
+                "user_metadata": {
+                    "display_name": "Signup User",
+                    "username": "signup-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            }
+
+    class FakeSupabaseAuthClient:
+        async def sign_up(self, **kwargs):
+            signup_calls.append(str(kwargs.get("email") or ""))
+            return FakeSession(str(kwargs.get("email") or "signup@example.com"))
+
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/signup",
+                json={
+                    "email": "signup@example.com",
+                    "password": "Password123!",
+                    "display_name": "Signup User",
+                    "username": "signup-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Complete CAPTCHA verification to continue."}
+        assert signup_calls == []
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_signup_fails_closed_when_launch_env_captcha_is_not_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    signup_calls: list[str] = []
+
+    class FakeSupabaseAuthClient:
+        async def sign_up(self, **kwargs):
+            signup_calls.append(str(kwargs.get("email") or ""))
+            raise AssertionError("sign_up should not be called when CAPTCHA is not launch-ready")
+
+    settings.environment = Environment.STAGING
+    settings.captcha_verification_enabled = False
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = None
+    settings.turnstile_secret_key = None
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/signup",
+                json={
+                    "email": "signup@example.com",
+                    "password": "Password123!",
+                    "display_name": "Signup User",
+                    "username": "signup-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            )
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": "CAPTCHA verification is required for this environment but is not configured correctly."
+        }
+        assert signup_calls == []
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_accepts_verified_captcha_token_when_verification_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    login_calls: list[str] = []
+    captcha_calls: list[dict[str, str | None]] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+
+        def __init__(self, email: str):
+            self.user = {
+                "id": "user-login",
+                "email": email,
+                "user_metadata": {
+                    "display_name": "Login User",
+                    "username": "login-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            }
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            login_calls.append(str(kwargs.get("email") or ""))
+            return FakeSession(str(kwargs.get("email") or "login@example.com"))
+
+    async def fake_verify_captcha_token(token, *, remote_ip=None, action=None, settings=None, transport=None):
+        captcha_calls.append(
+            {
+                "token": str(token or ""),
+                "remote_ip": remote_ip,
+                "action": action,
+            }
+        )
+        return {"success": True, "action": action, "hostname": "127.0.0.1"}
+
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+    monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/login",
+                json={
+                    "email": "login@example.com",
+                    "password": "Password123!",
+                    "captcha_token": "turnstile-token",
+                },
+            )
+
+        assert response.status_code == 200
+        assert login_calls == ["login@example.com"]
+        assert captcha_calls == [
+            {
+                "token": "turnstile-token",
+                "remote_ip": "127.0.0.1",
+                "action": "login",
+            }
+        ]
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_captcha_uses_forwarded_ip_only_for_trusted_proxy_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    remote_ips: list[str | None] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+        user = {
+            "id": "user-login",
+            "email": "login@example.com",
+            "user_metadata": {
+                "display_name": "Login User",
+                "username": "login-user",
+                "accepted_terms": True,
+                "accepted_privacy": True,
+                "accepted_usage_policy": True,
+                "marketing_opt_in": False,
+            },
+        }
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            return FakeSession()
+
+    async def fake_verify_captcha_token(token, *, remote_ip=None, action=None, settings=None, transport=None):
+        remote_ips.append(remote_ip)
+        return {"success": True, "action": action, "hostname": "127.0.0.1"}
+
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+    monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
+
+    transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 40123))
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/login",
+                headers={"x-forwarded-for": "198.51.100.44, 10.0.0.2"},
+                json={
+                    "email": "login@example.com",
+                    "password": "Password123!",
+                    "captcha_token": "turnstile-token",
+                },
+            )
+
+        assert response.status_code == 200
+        assert remote_ips == ["198.51.100.44"]
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_captcha_ignores_forwarded_ip_for_untrusted_direct_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    remote_ips: list[str | None] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+        user = {
+            "id": "user-login",
+            "email": "login@example.com",
+            "user_metadata": {
+                "display_name": "Login User",
+                "username": "login-user",
+                "accepted_terms": True,
+                "accepted_privacy": True,
+                "accepted_usage_policy": True,
+                "marketing_opt_in": False,
+            },
+        }
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            return FakeSession()
+
+    async def fake_verify_captcha_token(token, *, remote_ip=None, action=None, settings=None, transport=None):
+        remote_ips.append(remote_ip)
+        return {"success": True, "action": action, "hostname": "127.0.0.1"}
+
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+    monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
+
+    transport = httpx.ASGITransport(app=app, client=("8.8.8.8", 40123))
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/login",
+                headers={"x-forwarded-for": "203.0.113.9, 10.0.0.2"},
+                json={
+                    "email": "login@example.com",
+                    "password": "Password123!",
+                    "captcha_token": "turnstile-token",
+                },
+            )
+
+        assert response.status_code == 200
+        assert remote_ips == ["8.8.8.8"]
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_verify_captcha_token_rejects_missing_action_for_sensitive_flow() -> None:
+    from security.captcha import CaptchaVerificationError, verify_captcha_token
+
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    original_public_web_base_url = settings.public_web_base_url
+
+    settings.environment = Environment.STAGING
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.public_web_base_url = "https://studio.omniacreata.com"
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={"success": True, "hostname": "studio.omniacreata.com"},
+        )
+    )
+
+    try:
+        with pytest.raises(CaptchaVerificationError, match="did not match this action"):
+            await verify_captcha_token(
+                "turnstile-token",
+                action="login",
+                settings=settings,
+                transport=transport,
+            )
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        settings.public_web_base_url = original_public_web_base_url
+
+
+@pytest.mark.asyncio
+async def test_verify_captcha_token_rejects_missing_hostname_in_staging() -> None:
+    from security.captcha import CaptchaVerificationError, verify_captcha_token
+
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    original_public_web_base_url = settings.public_web_base_url
+
+    settings.environment = Environment.STAGING
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.public_web_base_url = "https://studio.omniacreata.com"
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={"success": True, "action": "login"},
+        )
+    )
+
+    try:
+        with pytest.raises(CaptchaVerificationError, match="did not return a hostname"):
+            await verify_captcha_token(
+                "turnstile-token",
+                action="login",
+                settings=settings,
+                transport=transport,
+            )
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        settings.public_web_base_url = original_public_web_base_url
+
+
+def test_share_routes_require_no_store_headers() -> None:
+    from main import _requires_no_store_headers
+
+    assert _requires_no_store_headers("/v1/shares") is True
+    assert _requires_no_store_headers("/v1/shares/public/sharetoken") is True
+
+
+@pytest.mark.asyncio
 async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1473,6 +2051,43 @@ async def test_public_export_route_uses_ip_rate_limit(
     try:
         assert response.status_code == 200
         assert any("public:export" in key and limit == 20 and window == 60 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_export_route_uses_nested_public_asset_urls_when_flat_fields_are_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def fake_list_public_posts(sort: str, viewer_identity_id: str | None):
+        return [
+            {
+                "id": "post-1",
+                "prompt": "sunset over the city skyline at golden hour",
+                "owner_display_name": "User",
+                "like_count": 4,
+                "cover_asset": {
+                    "preview_url": "/v1/assets/asset-1/preview?token=abc",
+                    "thumbnail_url": "/v1/assets/asset-1/thumbnail?token=abc",
+                },
+                "preview_assets": [],
+            }
+        ]
+
+    monkeypatch.setattr(service, "list_public_posts", fake_list_public_posts)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/public/export")
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()["trending_creations"][0]
+        assert payload["image_url"] == "/v1/assets/asset-1/preview?token=abc"
+        assert payload["prompt_snippet"] == "sunset over the city skyline at golden hour"
     finally:
         await service.shutdown()
 

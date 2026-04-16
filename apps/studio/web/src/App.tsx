@@ -34,6 +34,14 @@ const AnalyticsPage = lazy(() => import('@/pages/Analytics'))
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
 const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
 
+function ShellFriendlyDocumentationPage() {
+  return (
+    <div className="[&>header]:hidden [&>div>footer]:hidden">
+      <DocumentationPage />
+    </div>
+  )
+}
+
 function loadPostHog() {
   if (!posthogBootstrapPromise) {
     posthogBootstrapPromise = Promise.all([import('posthog-js'), import('posthog-js/react')]).then(([posthogModule, reactModule]) => {
@@ -138,7 +146,7 @@ function ProtectedRoutes() {
       <Route path="/media" element={<Navigate to="/library/images" replace />} />
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
-      <Route path="/help" element={<DocumentationPage />} />
+      <Route path="/help" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
       <Route path="/terms" element={<Navigate to="/help#terms" replace />} />
@@ -173,6 +181,13 @@ function AppFrame() {
     location.pathname === '/subscription' ||
     location.pathname === '/billing' ||
     location.pathname === '/plan' ||
+    location.pathname === '/help' ||
+    location.pathname === '/docs' ||
+    location.pathname === '/faq' ||
+    location.pathname === '/terms' ||
+    location.pathname === '/privacy' ||
+    location.pathname === '/usage-policy' ||
+    location.pathname === '/learn' ||
     location.pathname.startsWith('/elements/')
   const isAlwaysPublic =
     location.pathname === '/' ||

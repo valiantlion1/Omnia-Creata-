@@ -570,8 +570,35 @@ class GenerationService:
         if len(normalized_candidates) <= 1 and keep_primary:
             return normalized_candidates
 
+        # ── Monthly stop-loss guardrail (doctrine rules 1-5) ──
+        monthly_guardrail = await self.service._evaluate_monthly_spend_guardrail()
+        monthly_blocked_providers: set[str] = set()
+        if monthly_guardrail.status == "blocked":
+            logger.warning("generation_monthly_spend_hard_cap_blocked %s", monthly_guardrail.serialize())
+            return ()
+        if monthly_guardrail.status == "warning":
+            logger.warning("generation_monthly_spend_guardrail_warning %s", monthly_guardrail.serialize())
+        if monthly_guardrail.blocked_providers:
+            monthly_blocked_providers = set(monthly_guardrail.blocked_providers)
+            logger.warning(
+                "generation_monthly_guardrail_provider_block providers=%s reason=%s",
+                monthly_guardrail.blocked_providers, monthly_guardrail.reason,
+            )
+
         allowed_candidates: list[str] = []
         for index, provider_name in enumerate(normalized_candidates):
+            # Skip providers blocked by monthly guardrails (OpenAI share/cap)
+            if provider_name in monthly_blocked_providers:
+                logger.warning(
+                    "generation_monthly_guardrail_skip_provider provider=%s reason=%s",
+                    provider_name, monthly_guardrail.reason,
+                )
+                if index == 0 and keep_primary and len(normalized_candidates) > 1:
+                    continue
+                elif index == 0 and keep_primary:
+                    allowed_candidates.append(provider_name)
+                    continue
+                continue
             if index == 0 and keep_primary:
                 allowed_candidates.append(provider_name)
                 continue

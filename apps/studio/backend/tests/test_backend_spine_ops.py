@@ -249,6 +249,9 @@ async def test_health_detail_survives_cost_telemetry_failure(tmp_path: Path, mon
     try:
         payload = await service.health(detail=True)
         assert payload["cost_telemetry"]["status"] == "error"
+        assert "telemetry unavailable" not in payload["cost_telemetry"]["detail"]
+        assert "RuntimeError" in payload["cost_telemetry"]["detail"]
+        assert "runtime logs" in payload["cost_telemetry"]["detail"].lower()
         assert payload["launch_gate"]["status"] in {"ready", "blocked", "needs_attention"}
         assert "truth_sync" in payload
     finally:
@@ -275,5 +278,7 @@ async def test_health_detail_uses_launch_readiness_fallback_on_builder_failure(
         assert payload["launch_gate"]["ready_for_protected_launch"] is False
         assert payload["provider_truth"]["public_paid_usage_safe"] is False
         assert payload["launch_readiness"]["checks"][0]["key"] == "launch_readiness_runtime"
+        assert "readiness unavailable" not in payload["launch_readiness"]["checks"][0]["detail"]
+        assert "RuntimeError" in payload["launch_readiness"]["checks"][0]["detail"]
     finally:
         await service.shutdown()

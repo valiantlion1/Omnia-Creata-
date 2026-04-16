@@ -89,6 +89,27 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 app.include_router(create_router(service, rate_limiter))
 
 
+def _requires_no_store_headers(path: str) -> bool:
+    normalized = str(path or "").strip().lower()
+    if not normalized.startswith("/v1/"):
+        return False
+    if normalized.startswith("/v1/auth/"):
+        return True
+    if normalized.startswith("/v1/billing/"):
+        return True
+    if normalized.startswith("/v1/owner/"):
+        return True
+    if normalized.startswith("/v1/shares"):
+        return True
+    if normalized in {"/v1/settings/bootstrap", "/v1/healthz/detail", "/v1/profiles/me/export"}:
+        return True
+    if normalized.startswith("/v1/projects/") and normalized.endswith("/export"):
+        return True
+    if normalized.startswith("/v1/assets/") and normalized.endswith("/clean-export"):
+        return True
+    return False
+
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
@@ -96,7 +117,18 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if settings.environment in {Environment.STAGING, Environment.PRODUCTION}:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if not settings.enable_api_docs:
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        )
+    if _requires_no_store_headers(request.url.path):
+        response.headers.setdefault("Cache-Control", "no-store, private")
+        response.headers.setdefault("Pragma", "no-cache")
     return response
 
 

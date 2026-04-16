@@ -410,6 +410,13 @@ def build_launch_readiness_report(
             "Sensitive-flow CAPTCHA verification is still not enforced.",
             "Verified accounts are now required for generation, but signup and other abuse-sensitive flows still lack live CAPTCHA verification for a broader public paid rollout.",
         )
+    elif is_launch_environment and settings.captcha_ready_for_sensitive_flows is not True:
+        add_check(
+            "abuse_hardening",
+            "warning",
+            "Sensitive-flow Turnstile verification is enabled but the site key or secret is still missing.",
+            "Cloudflare Turnstile still needs both a site key and a secret before password signup/login can enforce CAPTCHA cleanly on launch surfaces.",
+        )
     else:
         add_check(
             "abuse_hardening",
@@ -693,7 +700,7 @@ def _build_smoke_check(
         return {
             "status": "warning",
             "summary": "No live provider smoke report has been recorded yet.",
-            "detail": "Run scripts/provider_smoke.py intentionally before broader protected-beta and public-launch decisions; keep this visible in operator truth.",
+            "detail": "Run scripts/provider_smoke.py intentionally before broader launch and public-paid decisions; keep this visible in operator truth.",
         }
 
     current_build = load_version_info().build
@@ -807,7 +814,7 @@ def _resolve_smoke_coverage_gaps(
     missing_image = sorted(configured_image - image_tested)
     if missing_image:
         gaps.append(
-            "configured protected-beta image lanes were not smoke-tested on this build: "
+            "configured launch-grade image lanes were not smoke-tested on this build: "
             + ", ".join(missing_image)
         )
 
@@ -1015,7 +1022,7 @@ def _build_platform_readiness(
             elif candidate == "protected_beta":
                 next_stage = "public_paid_platform"
                 next_stage_label = phase_by_id["public_paid_platform"]["label"]
-                summary = "Studio is backend-ready for protected beta operation, but public paid platform blockers still remain."
+                summary = "Studio is backend-ready for the controlled launch baseline, but public paid platform blockers still remain."
             else:
                 next_stage = "protected_beta"
                 next_stage_label = phase_by_id["protected_beta"]["label"]

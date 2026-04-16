@@ -58,6 +58,20 @@ def find_share_by_public_token(
     return None
 
 
+def find_share_by_public_token_hash(
+    shares: Iterable[ShareLink],
+    token_hash: str,
+    *,
+    secret: str,
+) -> ShareLink | None:
+    for share in shares:
+        if share.token_hash and share.token_hash == token_hash:
+            return share
+        if share.token and hash_share_token(share.token, secret=secret) == token_hash:
+            return share
+    return None
+
+
 def build_public_share_payload(
     *,
     share: ShareLink,

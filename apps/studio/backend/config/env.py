@@ -4,6 +4,7 @@ import os
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator, SecretStr
 from pydantic_settings import BaseSettings
@@ -73,11 +74,32 @@ def has_configured_secret(value: SecretStr | str | None) -> bool:
     return not is_placeholder_secret_value(normalized)
 
 
+def has_configured_string(value: str | None) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return False
+    return not is_placeholder_secret_value(normalized)
+
+
 def configured_secret_value(value: SecretStr | str | None) -> str:
     normalized = reveal_secret(value).strip()
     if not normalized or is_placeholder_secret_value(normalized):
         return ""
     return normalized
+
+
+def is_launch_safe_public_url(value: str | None) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized or is_placeholder_secret_value(normalized):
+        return False
+    parsed = urlparse(normalized)
+    host = str(parsed.netloc or "").lower()
+    return (
+        parsed.scheme == "https"
+        and bool(host)
+        and "localhost" not in host
+        and "127.0.0.1" not in host
+    )
 
 
 class Environment(str, Enum):
@@ -143,6 +165,12 @@ class Settings(BaseSettings):
     huggingface_daily_hard_cap_usd: Optional[float] = None
     openrouter_daily_soft_cap_usd: Optional[float] = None
     openrouter_daily_hard_cap_usd: Optional[float] = None
+    # ── Monthly spend guardrails (stop-loss doctrine) ──
+    monthly_ai_spend_soft_cap_usd: float = 25.0
+    monthly_ai_spend_hard_cap_usd: float = 60.0
+    openai_monthly_image_cap_usd: float = 15.0
+    openai_image_share_caution_pct: float = 25.0
+    openai_image_share_block_pct: float = 40.0
     owner_cost_telemetry_window_days: int = 30
     owner_cost_telemetry_recent_event_limit: int = 20
     public_paid_provider_economics_ready: bool = False
@@ -211,7 +239,10 @@ class Settings(BaseSettings):
     jwt_secret: Optional[SecretStr] = None  # Optional in dev
     jwt_algorithm: str = "HS256"
     jwt_expiration: str = "24h"
+    captcha_provider: str = "turnstile"
     captcha_verification_enabled: bool = False
+    turnstile_site_key: Optional[str] = None
+    turnstile_secret_key: Optional[SecretStr] = None
     enable_api_docs: Optional[bool] = None
     enable_demo_auth: Optional[bool] = None
 
@@ -250,9 +281,11 @@ class Settings(BaseSettings):
     enable_pollinations: bool = True
     enable_demo_generation_fallback: bool = False
 
-    # Cost Tracking
-    cost_per_generation_usd: float = 0.01
-    cost_per_upscale_usd: float = 0.005
+    # Cost Tracking (conservative defaults, Runware-first doctrine)
+    # Real Runware costs are $0.003-0.012 per image depending on model.
+    # These defaults are used as fallback when provider doesn't report actual cost.
+    cost_per_generation_usd: float = 0.006
+    cost_per_upscale_usd: float = 0.004
 
     @property
     def cors_origins_list(self) -> List[str]:
@@ -317,6 +350,20 @@ class Settings(BaseSettings):
             if value and value not in deduped:
                 deduped.append(value)
         return deduped
+
+    @property
+    def captcha_provider_normalized(self) -> str:
+        return str(self.captcha_provider or "").strip().lower()
+
+    @property
+    def captcha_ready_for_sensitive_flows(self) -> bool:
+        if self.captcha_verification_enabled is not True:
+            return False
+        if self.captcha_provider_normalized != "turnstile":
+            return False
+        return has_configured_string(self.turnstile_site_key) and has_configured_secret(
+            self.turnstile_secret_key
+        )
 
     @property
     def runtime_root_path(self) -> Path:
@@ -532,9 +579,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _ensure_jwt(self):
-        default_non_prod = self.environment != Environment.PRODUCTION
         if self.enable_api_docs is None:
-            self.enable_api_docs = default_non_prod
+            self.enable_api_docs = self.environment == Environment.DEVELOPMENT
         if self.enable_demo_auth is None:
             self.enable_demo_auth = self.environment == Environment.DEVELOPMENT
         if not self.jwt_secret:
@@ -572,16 +618,26 @@ class Settings(BaseSettings):
     def validate_production_requirements(self):
         """Validate that required settings are present in production."""
         if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
-            required_fields = [
+            required_secret_fields = [
                 ("database_url", self.database_url),
-                ("supabase_url", self.supabase_url),
+                ("supabase_anon_key", self.supabase_anon_key),
                 ("supabase_service_role_key", self.supabase_service_role_key),
+                ("redis_url", self.redis_url),
+            ]
+            required_string_fields = [
+                ("supabase_url", self.supabase_url),
             ]
 
             missing_fields = [
-                field_name for field_name, field_value in required_fields
-                if not field_value
+                field_name
+                for field_name, field_value in required_secret_fields
+                if not has_configured_secret(field_value)
             ]
+            missing_fields.extend(
+                field_name
+                for field_name, field_value in required_string_fields
+                if not has_configured_string(field_value)
+            )
 
             if missing_fields:
                 raise ValueError(
@@ -589,6 +645,24 @@ class Settings(BaseSettings):
                 )
             if self.state_store_backend != "postgres":
                 raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
+            if self.asset_storage_backend != "supabase":
+                raise ValueError("ASSET_STORAGE_BACKEND must be set to 'supabase' in staging and production environments")
+            if self.enable_demo_auth:
+                raise ValueError("ENABLE_DEMO_AUTH must be disabled in staging and production environments")
+            if self.enable_demo_generation_fallback:
+                raise ValueError(
+                    "ENABLE_DEMO_GENERATION_FALLBACK must be disabled in staging and production environments"
+                )
+            if self.enable_api_docs:
+                raise ValueError("ENABLE_API_DOCS must be disabled in staging and production environments")
+            if not is_launch_safe_public_url(self.public_web_base_url):
+                raise ValueError(
+                    "PUBLIC_WEB_BASE_URL must be a configured HTTPS non-local URL in staging and production environments"
+                )
+            if not is_launch_safe_public_url(self.public_api_base_url):
+                raise ValueError(
+                    "PUBLIC_API_BASE_URL must be a configured HTTPS non-local URL in staging and production environments"
+                )
 
     model_config = {
         "env_file": _ENV_FILE,

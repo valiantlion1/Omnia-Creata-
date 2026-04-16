@@ -1,6 +1,14 @@
 import { clearStudioAccessToken, getStudioAccessToken } from '@/lib/studioSession'
 
-const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000')).replace(/\/$/, '')
+const CONFIGURED_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
+const API_BASE_URL = import.meta.env.DEV ? '' : CONFIGURED_API_BASE_URL
+
+function buildApiUrl(path: string) {
+  if (!import.meta.env.DEV && !API_BASE_URL) {
+    throw new Error('Studio deployment is incomplete right now. API base URL is not configured.')
+  }
+  return `${API_BASE_URL}/v1${path}`
+}
 
 export type IdentityPlan = 'guest' | 'free' | 'creator' | 'pro'
 export type CommercialPlanId = 'free_account' | 'creator' | 'pro' | 'credit_packs'
@@ -89,6 +97,7 @@ export type DemoLoginResponse = {
 export type PasswordAuthPayload = {
   email: string
   password: string
+  captcha_token?: string
 }
 
 export type SignupPayload = PasswordAuthPayload & {
@@ -821,10 +830,11 @@ async function apiFetchWithToken<T>(path: string, token: string | null, init?: R
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
+  const url = buildApiUrl(path)
 
   let response: Response
   try {
-    response = await fetch(`${API_BASE_URL}/v1${path}`, {
+    response = await fetch(url, {
       ...init,
       headers,
     })
@@ -1036,10 +1046,11 @@ export const studioApi = {
 async function apiFetchBlob(path: string, init?: RequestInit): Promise<Blob> {
   const headers = new Headers(init?.headers)
   if (getStudioAccessToken()) headers.set('Authorization', `Bearer ${getStudioAccessToken()}`)
+  const url = buildApiUrl(path)
 
   let response: Response
   try {
-    response = await fetch(`${API_BASE_URL}/v1${path}`, {
+    response = await fetch(url, {
       ...init,
       headers,
     })

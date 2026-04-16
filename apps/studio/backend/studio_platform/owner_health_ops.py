@@ -21,11 +21,19 @@ from .services.provider_economics_dossier import persist_provider_economics_doss
 logger = logging.getLogger(__name__)
 
 
+def _redacted_owner_error_detail(exc: Exception) -> str:
+    error_type = exc.__class__.__name__ if exc.__class__.__name__ else "RuntimeError"
+    return (
+        "Exact failure details are redacted from the owner-health payload. "
+        f"Error type={error_type}. Check runtime logs for full context."
+    )
+
+
 def _build_owner_detail_error_payload(*, summary: str, exc: Exception) -> dict[str, str]:
     return {
         "status": "error",
         "summary": summary,
-        "detail": str(exc),
+        "detail": _redacted_owner_error_detail(exc),
     }
 
 

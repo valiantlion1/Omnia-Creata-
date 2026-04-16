@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import jwt
 import pytest
 
 from security.moderation import ModerationResult
@@ -358,6 +359,109 @@ async def test_revoked_share_asset_token_fails_with_permission_error(tmp_path: P
 
         with pytest.raises(PermissionError):
             await service.resolve_asset_delivery(asset.id, token, "content")
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_asset_delivery_token_hashes_legacy_public_share_scope(tmp_path: Path) -> None:
+    service, _ = await _build_service(tmp_path)
+
+    try:
+        raw_share_token = "legacy-share-token-123456"
+        token = service._create_asset_delivery_token(
+            asset_id="asset-1",
+            variant="content",
+            identity_id=None,
+            share_token=raw_share_token,
+        )
+        claims = jwt.decode(token, options={"verify_signature": False})
+
+        assert claims.get("share_token") is None
+        assert claims["share_token_hash"] == service._hash_share_public_token(raw_share_token)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_hashed_legacy_share_scope_still_resolves_asset_delivery(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "hashed-legacy-share-delivery.png"
+    render_path.write_bytes(b"hashed-legacy-share-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        raw_share_token = "legacy-share-token-123456"
+        share = ShareLink(
+            id="share-hashed-legacy",
+            token="",
+            token_hash=service._hash_share_public_token(raw_share_token),
+            token_preview="legacy...3456",
+            identity_id=identity.id,
+            asset_id=asset.id,
+        )
+        await store.mutate(lambda state: state.shares.__setitem__(share.id, share))
+        token = service._create_asset_delivery_token(
+            asset_id=asset.id,
+            variant="content",
+            identity_id=None,
+            share_token=raw_share_token,
+        )
+
+        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
+
+        assert delivery.local_path == render_path
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_raw_legacy_share_scope_in_existing_asset_token_still_resolves_asset_delivery(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "raw-legacy-share-delivery.png"
+    render_path.write_bytes(b"raw-legacy-share-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        raw_share_token = "legacy-share-token-abcdef"
+        share = ShareLink(
+            id="share-raw-legacy",
+            token=raw_share_token,
+            identity_id=identity.id,
+            asset_id=asset.id,
+        )
+        await store.mutate(lambda state: state.shares.__setitem__(share.id, share))
+        token = jwt.encode(
+            {
+                "sub": "asset-delivery",
+                "asset_id": asset.id,
+                "variant": "content",
+                "identity_id": None,
+                "share_id": None,
+                "share_token": raw_share_token,
+                "public_preview": False,
+                "exp": utc_now() + timedelta(minutes=5),
+                "iat": utc_now(),
+            },
+            service._asset_token_secret,
+            algorithm="HS256",
+        )
+
+        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
+
+        assert delivery.local_path == render_path
     finally:
         await service.shutdown()
 

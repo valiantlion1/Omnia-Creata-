@@ -18,6 +18,103 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.16.124`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The current Studio tree was already frozen with a frontend cleanup wave (`.116` -> `.121`) and a backend security/hardening wave (`.118` -> `.123`), but bookkeeping and proof were still pinned to `.123`. This thread intentionally avoided new product work and used one build bump to bind the frozen tree, the release docs, and the current proof chain to the same manifest.
+- What:
+  `.124` changes only bookkeeping/proof surfaces: `version.json`, this ledger, and the maintenance map. Stable local startup plus `verify-studio-local.ps1` now prove the frozen tree on build `.124` with matching backend `build`/`bootBuild`, healthy `/v1/healthz`, and a reachable Studio login shell in stable preview mode.
+  Live provider smoke does not pass on `.124`. The smoke CLI stops before suite initialization because `apps/studio/deploy/.env.staging` does not currently satisfy the staging contract for `PUBLIC_API_BASE_URL` (it must be a configured HTTPS non-local URL in staging/production). To keep launch/operator truth honest, the stale `.99` local smoke artefact was overwritten with a blocked `.124` report under the external runtime root instead of letting an older success soften current-build warnings.
+  Protected staging proof is also fail-closed on `.124`. The official `start-studio-staging.ps1` bring-up/verify loop stops immediately because Docker engine is not running on this machine, and the staging runtime report records `status=blocked` with `closure_ready=false`. This build does not claim launch-gate readiness; it only refreshes proof honesty for the frozen tree.
+
+### `0.6.0-alpha` / build `2026.04.16.123`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.122` tightened owner/operator truth, but the backend still had a few launch-critical honesty gaps that were too risky to leave in place. Sensitive auth flows could still proceed in staging/production when CAPTCHA wiring was incomplete, public/share payloads still leaked internal project or identity linkage, legacy asset-delivery tokens still carried raw share scope, and some operator/public surfaces still narrated placeholder telemetry or export media truth instead of the real current-build state.
+- What:
+  Password signup/login now fail closed in staging and production when Studio says sensitive-flow CAPTCHA is required but Turnstile is not actually ready, and CAPTCHA verification itself now rejects missing action/hostname proof for those launch environments instead of accepting partial responses.
+  Public/share serialization is also tighter on `.123`. Shared project and asset payloads now redact internal identity/workspace/project linkage fields, `/v1/shares...` responses are explicitly marked `Cache-Control: no-store, private`, and legacy share-scoped asset delivery tokens now carry only a hashed share identifier rather than the raw public share token.
+  Operator/public truth got a smaller but important honesty cleanup too. Admin telemetry no longer invents a fake `blocked_injections` count, and public export cards now derive preview images from the nested public asset payload Studio actually emits today instead of pretending flat thumbnail fields still exist. Focused backend regression tests lock the new fail-closed CAPTCHA gate, the payload redaction rules, the hashed share scope, the no-store share headers, and the corrected export/operator truth.
+
+### `0.6.0-alpha` / build `2026.04.16.122`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.121` cleaned up stale frontend truth and re-synced runtime proof, but the remaining owner/operator backend surfaces still leaked two kinds of drift: raw exception text could spill into owner health detail when internal builders failed, and several launch-facing provider summaries still narrated the older `protected-beta` frame instead of the current controlled-launch doctrine.
+- What:
+  Owner-only health payloads now redact raw exception messages instead of returning `str(exc)` directly. Operators still get the section-level summary plus the exception type, but the payload now explicitly points them to runtime logs for exact failure context rather than echoing internal failure strings straight into the response body.
+  The same cleanup wave also normalizes provider/operator wording around the active launch frame. Chat and image provider truth now talk about the selected launch lane or launch baseline instead of repeating `protected-beta` in summary text, and smoke-readiness wording now describes missing launch-grade image coverage without leaning on older stage names. Focused backend regression tests were updated to lock both the new redaction behavior and the new operator-facing launch wording.
+
+### `0.6.0-alpha` / build `2026.04.16.121`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.120` closed more security gaps, but the audit still found three product-truth problems that would age badly if left alone. The frontend API client could still fall back to `127.0.0.1` in a non-dev build, two stale orphaned pages still carried old `public beta / free credits / no credit card` language inside the repo, and a couple of internal surfaces still spoke like placeholder demos rather than honest operator tooling.
+- What:
+  The Studio web client now fails closed if a non-development build is missing `VITE_API_BASE_URL` instead of silently aiming at `http://127.0.0.1:8000`. That keeps broken deployment env from masquerading as a live API host and turns the problem into an explicit deployment error instead of a misleading localhost fallback.
+  The repo also drops two dead public-shell leftovers: `Home.tsx` and `Splash.tsx` are gone, which removes stale `public beta`, `Free to start`, and `150 monthly credits` product drift from Studio's codebase. Media Library favorites copy is now honest about what the surface does today, and the admin analytics page no longer pretends placeholder "secure connection / injection blocked" cards are real telemetry feeds.
+  This wave also cleans up one smaller auth-facing fallback: OAuth redirect URL generation no longer falls back to a localhost login URL when no browser origin exists. Local runtime proof was then re-synced so the running backend can be checked against the new current build instead of keeping an older `bootBuild` alive.
+
+### `0.6.0-alpha` / build `2026.04.16.120`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.119` tightened launch-shaped config and base API headers, but one privacy/security gap still remained on the browser edge: sensitive authenticated responses such as auth, billing, owner, and export payloads still lacked an explicit no-store policy, which made it easier for stale or private JSON to linger in browser or intermediary caches.
+- What:
+  Sensitive Studio API routes now emit `Cache-Control: no-store, private` plus `Pragma: no-cache`. This now covers the auth surface, billing summary flows, owner/operator payloads, detailed health truth, and explicit export endpoints, so session and operator-state JSON are less likely to be cached outside the live request boundary.
+  The `.120` verification pass also locks that route selection explicitly in tests, so Studio now has regression coverage for both the new no-store routing logic and the actual response headers returned by the FastAPI app.
+
+### `0.6.0-alpha` / build `2026.04.16.119`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.118` made auth abuse-hardening real, but staging/production runtime truth could still drift in a dangerous way: API docs defaulted on outside production, launch-shaped env validation was weaker than the deployment preflight doctrine, and the API surface still lacked a few basic hardened headers for non-development environments.
+- What:
+  Studio config now fails closed more aggressively in staging and production. API docs default to development-only, and non-development boot now requires a real launch-shaped runtime: Supabase anon plus service-role keys, Redis, HTTPS public web/API base URLs, Postgres state authority, Supabase asset storage, and disabled demo auth/fallback paths.
+  The backend API surface also got a small but meaningful header hardening pass. Non-development responses now emit HSTS, all API responses carry `Cross-Origin-Opener-Policy`, and when API docs are disabled the service returns a locked CSP for JSON/API routes instead of leaving the browser with no content policy at all.
+  Sensitive routes also now fail safer at the browser/proxy layer. Auth, billing, owner, detailed health, and export-style endpoints emit `Cache-Control: no-store` plus `Pragma: no-cache`, which reduces the chance of stale or private account payloads being cached outside Studio's intended live session boundary.
+  Regression coverage now locks both sides of that change: runtime settings tests prove the stricter staging/prod contract, and new API-header tests verify the current build actually emits the new CSP/HSTS behavior.
+
+### `0.6.0-alpha` / build `2026.04.16.118`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.117` cleaned up visible shell honesty, but one of the biggest remaining pre-Paddle blockers was still mostly aspirational: Studio said CAPTCHA was required for sensitive flows, yet password signup/login had no real verification path behind that claim. That left `abuse_hardening` as a docs-and-launch-readiness truth rather than a runtime-enforced contract, which is exactly the kind of gap that stays invisible until public auth traffic starts getting hammered.
+- What:
+  Studio auth is now Turnstile-ready end to end. The backend has a real CAPTCHA verifier, password signup/login requests carry an optional `captcha_token`, and when CAPTCHA enforcement is enabled the router now fails closed if the token is missing, invalid, or the Turnstile configuration itself is incomplete.
+  Launch-readiness truth also got sharper. `abuse_hardening` no longer depends on a single boolean; it now distinguishes "CAPTCHA disabled" from "Turnstile enabled but site key/secret missing," which makes the blocker much more actionable for the next operator pass.
+  The web auth surfaces were prepared for the same contract. Login and Signup can now render a Turnstile challenge when `VITE_TURNSTILE_SITE_KEY` is present, carry the returned token through Studio auth payloads, and reset the challenge after a failed password attempt so single-use verification does not silently poison retries.
+
+### `0.6.0-alpha` / build `2026.04.16.117`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.116` made first-run guidance calmer, but a quick live audit still found a few high-friction honesty gaps in the shell. The biggest one was billing: a signed-in free account could still land on the pricing surface and see `Create account` on its own current plan, while disabled credit-pack actions degraded into a vague `N/A` state instead of telling the truth about checkout readiness. A smaller copy drift also survived in Settings and Help where protected-beta language was still leaking into user-facing explanations even though Studio's active frame has already moved on.
+- What:
+  Billing now behaves more like a real product surface. Signed-in free accounts see their current plan correctly and get an `Open Create` path instead of a stray account-creation CTA, and when self-serve billing is not wired for the current build the page now says that directly rather than leaving people to infer it from dead buttons.
+  Credit-pack actions were also cleaned up so unavailable purchase states read intentionally instead of collapsing into `N/A`. At the same time, the remaining user-facing copy drift was tightened: Settings no longer references protected-beta onboarding, and the Help FAQ now describes internal owner access without narrating the older beta frame as if it were still the public product contract.
+
+### `0.6.0-alpha` / build `2026.04.15.116`
+- Date: `2026-04-15`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.115` fixed Create naming truth and a couple of real security edges, but the signed-in first-run still felt too much like policy explanation and not enough like product guidance. Explore's welcome overlay was still teaching too many things at once, Create's onboarding block still read like a rules notice, Chat's paid lock looked more like a wall than a premium path, and Signup still told users to "enter Studio" before it showed them what the actual first move was.
+- What:
+  Studio's first-run web surfaces now feel calmer and more directional without changing the underlying launch doctrine. Explore points people more clearly toward Create, the empty community state now tells the truth about what to do first, and the signup surface now explains the `account -> Create -> credits/chat later` path in one compact sequence instead of broad product narration.
+  Create itself also became more legible as a work surface. The first-run banner now reads like a guided handoff into the real workflow rather than a gated warning block, and the quality/format selectors now carry small structural labels so the prompt -> quality -> format -> generate chain is easier to scan.
+  Chat stayed paid-only, but its locked states now present that truth with a more premium posture: guests see chat as part of paid Studio, and free signed-in users get a clearer `View Plans` path without losing the alternate `Open Create` route.
+
 ### `0.6.0-alpha` / build `2026.04.15.115`
 - Date: `2026-04-15`
 - Codename: `Foundation`

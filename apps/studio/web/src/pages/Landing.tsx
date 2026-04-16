@@ -7,7 +7,7 @@ import { LegalFooter } from '@/components/StudioPrimitives'
 export default function LandingPage() {
   const navigate = useNavigate()
   usePageMeta(
-    'Create Worlds Without Limits',
+    'Create Worlds With Control',
     'Omnia Creata Studio - controlled-launch creative platform for image generation, direction, and visual workflows.',
   )
 
@@ -41,7 +41,7 @@ export default function LandingPage() {
             onClick={() => navigate('/signup')}
             className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all hover:scale-105 active:scale-[0.98] md:px-5 md:py-2.5"
           >
-            Get Started
+            Create account
           </button>
         </div>
       </nav>
@@ -64,7 +64,7 @@ export default function LandingPage() {
         >
           Create Worlds,
           <br />
-          Without Limits.
+          With Control.
         </h1>
 
         <p className="mb-12 max-w-2xl text-lg leading-relaxed text-zinc-400 md:text-xl">
@@ -161,7 +161,7 @@ export default function LandingPage() {
           >
             Ready to create?
           </h2>
-          <p className="mt-4 text-zinc-400">Start with a free account. Add wallet credits or upgrade when you need more.</p>
+          <p className="mt-4 text-zinc-400">Start with a free account. Create stays open there; add wallet credits or upgrade if you also want Chat.</p>
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <button
               onClick={() => navigate('/signup')}

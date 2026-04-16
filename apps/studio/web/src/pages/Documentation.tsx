@@ -32,7 +32,7 @@ const sections: HelpSection[] = [
     items: [
       { title: 'Do I need an account?', body: 'Not for public browsing. You do need an account for Create, Chat, Library, and other signed-in surfaces.' },
       { title: 'Is pricing final?', body: 'Plan and credit amounts come from the live catalog for your environment and can change over time.' },
-      { title: 'How do credits work?', body: 'Metered accounts spend credits according to the active generation lane. Internal owner accounts may show protected-beta access instead of normal customer metering.' },
+      { title: 'How do credits work?', body: 'Metered accounts spend credits according to the active generation lane. Internal owner accounts may show elevated access that does not mirror normal customer metering.' },
       { title: 'Can I use outputs commercially?', body: 'Review your current plan and policy language before using outputs for paid or client work.' },
       { title: 'Can I keep work private?', body: 'Yes, where the shell and account state allow it. Visibility controls follow the real post and profile truth, and blocked or deleted items are not treated like ordinary public assets.' },
       { title: 'How do I delete my account?', body: 'Account deletion currently remains a support-assisted path. Reach out before assuming instant self-serve deletion is available for your account.' },

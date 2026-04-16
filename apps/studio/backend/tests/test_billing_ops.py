@@ -1536,3 +1536,114 @@ async def test_owner_unlimited_accounts_skip_reservation_and_spend(
         assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in snapshot.credit_ledger.values())
     finally:
         await service.shutdown()
+
+
+# ────────────────────────────────────────────────────────────────────────
+# Monthly spend guardrail tests (stop-loss doctrine)
+# ────────────────────────────────────────────────────────────────────────
+
+from studio_platform.provider_spend_guardrails import (
+    MonthlySpendSummary,
+    evaluate_monthly_spend_guardrail,
+    summarize_monthly_spend,
+)
+
+
+def _make_monthly_summary(**overrides) -> MonthlySpendSummary:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    defaults = {
+        "window_start": now,
+        "window_end": now,
+        "total_spend_usd": 0.0,
+        "image_spend_usd": 0.0,
+        "chat_spend_usd": 0.0,
+        "prompt_improve_spend_usd": 0.0,
+        "openai_image_spend_usd": 0.0,
+        "openai_total_spend_usd": 0.0,
+        "provider_image_spend": {},
+    }
+    defaults.update(overrides)
+    return MonthlySpendSummary(**defaults)
+
+
+def test_monthly_guardrail_passes_when_within_caps() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(total_spend_usd=10.0)
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert result.status == "pass"
+    assert result.reason == "within_caps"
+    assert not result.blocked_providers
+
+
+def test_monthly_guardrail_warns_on_soft_cap() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(total_spend_usd=26.0)
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert result.status == "warning"
+    assert result.reason == "monthly_soft_cap_exceeded"
+
+
+def test_monthly_guardrail_blocks_on_hard_cap() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(total_spend_usd=61.0)
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert result.status == "blocked"
+    assert result.reason == "monthly_hard_cap_exceeded"
+
+
+def test_monthly_guardrail_blocks_openai_on_image_cap() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(
+        total_spend_usd=20.0,
+        image_spend_usd=18.0,
+        openai_image_spend_usd=16.0,
+    )
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert "openai" in result.blocked_providers
+
+
+def test_monthly_guardrail_blocks_openai_on_share_percentage() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(
+        total_spend_usd=10.0,
+        image_spend_usd=10.0,
+        openai_image_spend_usd=5.0,
+    )
+    assert summary.openai_image_share_pct == 50.0
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert "openai" in result.blocked_providers
+
+
+def test_monthly_guardrail_caution_on_openai_share_25pct() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(
+        total_spend_usd=10.0,
+        image_spend_usd=10.0,
+        openai_image_spend_usd=3.0,
+    )
+    assert summary.openai_image_share_pct == 30.0
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+    assert result.status == "warning"
+    assert "openai" not in result.blocked_providers
+
+
+def test_monthly_guardrail_disabled_always_passes() -> None:
+    settings = get_settings()
+    original = settings.provider_spend_guardrails_enabled
+    try:
+        settings.provider_spend_guardrails_enabled = False
+        summary = _make_monthly_summary(total_spend_usd=999.0, openai_image_spend_usd=999.0)
+        result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary)
+        assert result.status == "pass"
+        assert result.reason == "guardrails_disabled"
+    finally:
+        settings.provider_spend_guardrails_enabled = original
+
+
+def test_monthly_guardrail_projected_cost_pushes_over_hard_cap() -> None:
+    settings = get_settings()
+    summary = _make_monthly_summary(total_spend_usd=59.5)
+    result = evaluate_monthly_spend_guardrail(settings, monthly_summary=summary, projected_cost_usd=1.0)
+    assert result.status == "blocked"
+    assert result.reason == "monthly_hard_cap_exceeded"

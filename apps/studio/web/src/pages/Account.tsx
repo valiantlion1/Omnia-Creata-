@@ -37,10 +37,10 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
   if (!posts.length) {
     return (
       <EmptyState
-        title={ownProfile ? 'No profile posts yet' : 'No public posts yet'}
+        title={ownProfile ? 'Nothing on your profile yet' : 'No public posts yet'}
         description={
           ownProfile
-            ? 'Your creations will appear here once you start generating images.'
+            ? 'Start in Create, then keep the images you want on your profile here.'
             : 'This creator hasn\'t published any images yet.'
         }
       />
@@ -332,7 +332,7 @@ export default function AccountPage() {
             <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Your gallery' : 'Public gallery'}</div>
             <div className="mt-1 text-sm text-zinc-500">
               {payload.own_profile
-                ? 'All your images. Only you can see the private ones.'
+                ? 'Images on your profile appear here. Private items stay visible only to you.'
                 : 'Images shared publicly by this creator.'}
             </div>
           </div>

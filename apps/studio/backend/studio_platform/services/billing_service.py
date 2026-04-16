@@ -86,6 +86,10 @@ class BillingService:
         settings = get_settings()
 
         if settings.paddle_checkout_base_url:
+            logger.info(
+                "Checkout initiated: identity=%s kind=%s provider=%s",
+                identity_id, kind.value, "paddle",
+            )
             return {
                 "status": "redirect",
                 "provider": "paddle",
@@ -101,6 +105,10 @@ class BillingService:
         if not self._demo_checkout_fallback_allowed():
             raise RuntimeError("Billing checkout is not configured for this environment")
 
+        logger.info(
+            "Checkout initiated: identity=%s kind=%s provider=%s",
+            identity_id, kind.value, "demo",
+        )
         # Fallback to demo local mutation only for local development.
         updated_holder: Dict[str, OmniaIdentity] = {}
 
@@ -116,6 +124,10 @@ class BillingService:
             )
 
         await self.service.store.mutate(mutation)
+        logger.info(
+            "Demo checkout completed: identity=%s kind=%s",
+            identity_id, kind.value,
+        )
         updated = updated_holder["identity"]
         billing_state = await self._resolve_billing_state_for_identity(updated)
         return {
@@ -151,8 +163,34 @@ class BillingService:
                 projected_cost_usd=projected_cost_usd,
             )
 
-        return await self.service.store.read(query)
+        result = await self.service.store.read(query)
+        if result and result.status == "blocked":
+            logger.warning(
+                "Provider spend guardrail BLOCKED: provider=%s",
+                normalized_provider,
+            )
+        return result
 
+    async def _evaluate_monthly_spend_guardrail(
+        self,
+        *,
+        projected_cost_usd: float = 0.0,
+    ) -> MonthlyGuardrailResult:
+        def query(state: StudioState) -> MonthlyGuardrailResult:
+            monthly = summarize_monthly_spend(state, now=utc_now())
+            return evaluate_monthly_spend_guardrail(
+                self.service.settings,
+                monthly_summary=monthly,
+                projected_cost_usd=projected_cost_usd,
+            )
+
+        result = await self.service.store.read(query)
+        if result.status == "blocked":
+            logger.warning(
+                "Monthly spend guardrail BLOCKED: status=%s",
+                result.status,
+            )
+        return result
 
     async def _build_provider_spend_guardrails_summary(self) -> Dict[str, Any]:
         provider_names: List[str] = []
@@ -242,6 +280,10 @@ class BillingService:
             metadata=dict(metadata or {}),
         )
         await self.service.store.save_model("cost_telemetry_events", event)
+        logger.info(
+            "Cost telemetry recorded: provider=%s amount_usd=%.6f surface=%s",
+            normalized_provider, normalized_amount, surface,
+        )
         return event
 
 
@@ -265,6 +307,10 @@ class BillingService:
                 amount=plan_config.monthly_credits,
                 entry_type=CreditEntryType.MONTHLY_GRANT,
                 description=f"{plan_config.label} monthly refresh",
+            )
+            logger.info(
+                "Monthly credits refreshed: identity=%s plan=%s credits=%d",
+                identity.id, identity.plan.value, plan_config.monthly_credits,
             )
 
 
@@ -306,6 +352,10 @@ class BillingService:
         if not is_supported_paddle_event(event_name):
             return
 
+        logger.info(
+            "Paddle webhook received: event=%s identity=%s checkout_kind=%s",
+            event_name, identity_id, checkout_kind_raw,
+        )
         now = utc_now()
         receipt = build_paddle_webhook_receipt(
             payload=payload,
@@ -321,6 +371,10 @@ class BillingService:
             nonlocal already_processed, upgraded_email, upgraded_label
             if receipt.id in state.billing_webhook_receipts:
                 already_processed = True
+                logger.info(
+                    "Paddle webhook already processed: receipt=%s",
+                    receipt.id,
+                )
                 return
             result = apply_paddle_webhook_event(
                 state=state,
@@ -338,8 +392,17 @@ class BillingService:
                 upgraded_label = self.service.plan_catalog[checkout_catalog_kind_to_plan(checkout_kind)].label
 
         await self.service.store.mutate(mutation)
+        if not already_processed:
+            logger.info(
+                "Paddle webhook applied: event=%s identity=%s receipt=%s",
+                event_name, identity_id, receipt.id,
+            )
         if upgraded_email and upgraded_label and not already_processed:
             await mailer.send_subscription_update(upgraded_email, upgraded_label)
+            logger.info(
+                "Subscription upgrade email sent: email=%s plan=%s",
+                upgraded_email, upgraded_label,
+            )
 
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
         raise RuntimeError("LemonSqueezy webhooks have been retired. Use Paddle webhook processing instead.")

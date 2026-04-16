@@ -32,7 +32,7 @@ from .models import (
     StudioWorkspace,
 )
 from .project_ops import filter_projects
-from .share_ops import find_share_by_public_token, find_share_by_token
+from .share_ops import find_share_by_public_token, find_share_by_public_token_hash, find_share_by_token
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -271,6 +271,12 @@ class StudioRepository:
     async def get_share_by_public_token(self, raw_token: str, *, secret: str) -> ShareLink | None:
         def query(state: StudioState) -> ShareLink | None:
             return find_share_by_public_token(state.shares.values(), raw_token, secret=secret)
+
+        return await self.read(query)
+
+    async def get_share_by_public_token_hash(self, token_hash: str, *, secret: str) -> ShareLink | None:
+        def query(state: StudioState) -> ShareLink | None:
+            return find_share_by_public_token_hash(state.shares.values(), token_hash, secret=secret)
 
         return await self.read(query)
 

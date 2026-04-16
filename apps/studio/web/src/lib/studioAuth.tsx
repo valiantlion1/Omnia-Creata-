@@ -19,6 +19,7 @@ type SignupInput = {
   username: string
   email: string
   password: string
+  captchaToken?: string
   acceptedTerms: boolean
   acceptedPrivacy: boolean
   acceptedUsagePolicy: boolean
@@ -31,7 +32,7 @@ type StudioAuthContextValue = {
   isAuthSyncing: boolean
   isAuthenticated: boolean
   completeOAuthSignIn: () => Promise<void>
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<void>
   signUp: (input: SignupInput) => Promise<void>
   signInWithProvider: (provider: 'google' | 'facebook' | 'apple' | 'twitter', nextPath?: string) => Promise<void>
   signInDemo: (plan?: IdentityPlan, displayName?: string) => Promise<void>
@@ -145,7 +146,7 @@ function getOAuthRedirectUrl() {
   }
 
   if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:5173/login?oauth=1'
+    return '/login?oauth=1'
   }
 
   return `${window.location.origin}/login?oauth=1`
@@ -304,8 +305,8 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
   )
 
   const signIn = React.useCallback(
-    async (email: string, password: string) => {
-      const response = await studioApi.signIn({ email, password })
+    async (email: string, password: string, captchaToken?: string) => {
+      const response = await studioApi.signIn({ email, password, captcha_token: captchaToken })
       await syncBrowserSession(response.access_token, response.refresh_token)
       await persistAuthenticatedState(response.access_token, response.identity)
     },
@@ -319,6 +320,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
         username: input.username,
         email: input.email,
         password: input.password,
+        captcha_token: input.captchaToken,
         accepted_terms: input.acceptedTerms,
         accepted_privacy: input.acceptedPrivacy,
         accepted_usage_policy: input.acceptedUsagePolicy,
