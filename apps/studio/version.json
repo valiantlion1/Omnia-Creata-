@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.16.124",
+  "build": "2026.04.16.125",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-16",
-  "notes": "Frozen-tree bookkeeping and proof-sync build for the recent frontend cleanup and backend security/hardening waves; no new product code is introduced in this bump."
+  "notes": "Final frozen-tree bookkeeping and proof-sync build after the narrow provider smoke drift fix; no new frontend or backend feature wave is introduced in this bump."
 }

@@ -146,15 +146,31 @@ def _merge_provider_smoke_results(
     if not isinstance(existing_results, list):
         return list(new_results)
 
-    merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
-    for raw_result in [*existing_results, *new_results]:
-        if not isinstance(raw_result, dict):
-            continue
+    def _result_key(raw_result: dict[str, Any]) -> tuple[str, str, str, str]:
         provider_name = str(raw_result.get("provider_name") or "").strip().lower()
         workflow = str(raw_result.get("workflow") or "").strip().lower()
         surface = _infer_smoke_surface(raw_result)
         label = str(raw_result.get("label") or "").strip().lower()
-        key = (surface, provider_name, workflow, label)
+        return (surface, provider_name, workflow, label)
+
+    def _is_synthetic_environment_preflight(raw_result: dict[str, Any]) -> bool:
+        provider_name = str(raw_result.get("provider_name") or "").strip().lower()
+        workflow = str(raw_result.get("workflow") or "").strip().lower()
+        surface = _infer_smoke_surface(raw_result)
+        return provider_name == "environment" and workflow == "preflight" and surface == "image"
+
+    new_keys = {
+        _result_key(raw_result)
+        for raw_result in new_results
+        if isinstance(raw_result, dict)
+    }
+    merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for raw_result in [*existing_results, *new_results]:
+        if not isinstance(raw_result, dict):
+            continue
+        key = _result_key(raw_result)
+        if _is_synthetic_environment_preflight(raw_result) and key not in new_keys:
+            continue
         merged[key] = dict(raw_result)
     return list(merged.values())
 

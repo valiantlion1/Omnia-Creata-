@@ -155,6 +155,61 @@ def test_provider_smoke_report_merges_current_build_surfaces_for_same_env_source
         settings.studio_runtime_root = original_runtime_root
 
 
+def test_provider_smoke_report_drops_stale_environment_preflight_result_on_same_build_refresh(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    try:
+        persist_provider_smoke_report(
+            settings,
+            selected_provider="all",
+            selected_surface="all",
+            include_failure_probe=False,
+            source_env_file="C:/fake/staging.env",
+            results=[
+                {
+                    "label": "provider-smoke-env-validation",
+                    "provider_name": "environment",
+                    "workflow": "preflight",
+                    "surface": "all",
+                    "lane": "env",
+                    "status": "error",
+                    "latency_ms": 0,
+                    "error_type": "environment_validation",
+                    "error": "PUBLIC_API_BASE_URL must be a configured HTTPS non-local URL in staging and production environments",
+                }
+            ],
+        )
+        merged = persist_provider_smoke_report(
+            settings,
+            selected_provider="openai",
+            selected_surface="chat",
+            include_failure_probe=False,
+            source_env_file="C:/fake/staging.env",
+            results=[
+                {
+                    "label": "openai-chat-premium-smoke",
+                    "provider_name": "openai",
+                    "workflow": "chat",
+                    "surface": "chat",
+                    "lane": "primary",
+                    "status": "ok",
+                    "latency_ms": 180,
+                    "model": "gpt-4o-mini",
+                }
+            ],
+        )
+
+        assert merged["summary"]["error"] == 0
+        assert merged["summary"]["ok"] == 1
+        assert all(
+            str(result.get("provider_name") or "").strip().lower() != "environment"
+            for result in merged["results"]
+        )
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+
+
 def test_provider_smoke_report_tracks_openai_image_lanes_for_current_build(tmp_path: Path) -> None:
     settings = get_settings()
     original_runtime_root = settings.studio_runtime_root
