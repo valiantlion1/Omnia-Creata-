@@ -14,8 +14,10 @@ from config.env import Environment, get_settings
 import studio_platform.router as router_module
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
+from security.supabase_auth import SupabaseAuthUnavailableError
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
 from studio_platform.models import IdentityPlan, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioWorkspace, SubscriptionStatus, Visibility, utc_now
+from studio_platform.models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
@@ -621,6 +623,38 @@ async def test_asset_content_route_uses_ip_rate_limit(
     try:
         assert response.status_code == 200
         assert any("assets:content:ip" in key and limit == 120 for key, limit, _ in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_asset_content_route_uses_forwarded_ip_for_trusted_proxy_rate_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_resolve_asset_delivery(asset_id: str, token: str, variant: str) -> ResolvedAssetDelivery:
+        return ResolvedAssetDelivery(filename="asset.png", media_type="image/png", content=b"png")
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.resolve_asset_delivery = fake_resolve_asset_delivery  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 40123))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/assets/asset-1/content?token=abcdefghijklmnop",
+            headers={"x-forwarded-for": "198.51.100.44, 10.0.0.2"},
+        )
+
+    try:
+        assert response.status_code == 200
+        assert any(key == "assets:content:ip:198.51.100.44" and limit == 120 for key, limit, _ in calls)
     finally:
         await service.shutdown()
 
@@ -1462,6 +1496,7 @@ async def test_signup_requires_captcha_token_when_verification_is_enabled(
 ) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
+    original_environment = settings.environment
     original_enabled = settings.captcha_verification_enabled
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
@@ -1590,6 +1625,7 @@ async def test_login_accepts_verified_captcha_token_when_verification_is_enabled
 ) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
+    original_environment = settings.environment
     original_enabled = settings.captcha_verification_enabled
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
@@ -1664,6 +1700,167 @@ async def test_login_accepts_verified_captcha_token_when_verification_is_enabled
         settings.captcha_provider = original_provider
         settings.turnstile_site_key = original_site_key
         settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_returns_503_when_supabase_auth_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            raise SupabaseAuthUnavailableError("Supabase auth is temporarily unavailable right now.")
+
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        settings.environment = Environment.DEVELOPMENT
+        settings.captcha_verification_enabled = False
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/login",
+                json={
+                    "email": "login@example.com",
+                    "password": "Password123!",
+                },
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Supabase auth is temporarily unavailable right now."
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_signup_returns_503_when_supabase_auth_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+
+    class FakeSupabaseAuthClient:
+        async def sign_up(self, **kwargs):
+            raise SupabaseAuthUnavailableError("Supabase auth is temporarily unavailable right now.")
+
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        settings.environment = Environment.DEVELOPMENT
+        settings.captcha_verification_enabled = False
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/signup",
+                json={
+                    "email": "signup@example.com",
+                    "password": "Password123!",
+                    "display_name": "Signup User",
+                    "username": "signup-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Supabase auth is temporarily unavailable right now."
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_signup_records_consent_audit_metadata_in_identity_and_supabase_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enabled = settings.captcha_verification_enabled
+    recorded_sign_up_payloads: list[dict[str, object]] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+        user = {
+            "id": "user-signup-audit",
+            "email": "signup@example.com",
+            "user_metadata": {
+                "display_name": "Signup User",
+                "username": "signup-user",
+                "accepted_terms": True,
+                "accepted_privacy": True,
+                "accepted_usage_policy": True,
+                "marketing_opt_in": True,
+            },
+        }
+
+    class FakeSupabaseAuthClient:
+        async def sign_up(self, **kwargs):
+            recorded_sign_up_payloads.append(kwargs)
+            return FakeSession()
+
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        settings.environment = Environment.DEVELOPMENT
+        settings.captcha_verification_enabled = False
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/signup",
+                json={
+                    "email": "signup@example.com",
+                    "password": "Password123!",
+                    "display_name": "Signup User",
+                    "username": "signup-user",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": True,
+                },
+            )
+
+        assert response.status_code == 201
+        assert len(recorded_sign_up_payloads) == 1
+        sign_up_payload = recorded_sign_up_payloads[0]
+        assert sign_up_payload["terms_version"] == TERMS_VERSION
+        assert sign_up_payload["privacy_version"] == PRIVACY_VERSION
+        assert sign_up_payload["usage_policy_version"] == USAGE_POLICY_VERSION
+        assert sign_up_payload["marketing_consent_version"] == MARKETING_CONSENT_VERSION
+        assert isinstance(sign_up_payload["accepted_terms_at"], str)
+        assert isinstance(sign_up_payload["accepted_privacy_at"], str)
+        assert isinstance(sign_up_payload["accepted_usage_policy_at"], str)
+        assert isinstance(sign_up_payload["marketing_opt_in_at"], str)
+
+        identity = response.json()["identity"]["identity"]
+        assert identity["terms_version"] == TERMS_VERSION
+        assert identity["privacy_version"] == PRIVACY_VERSION
+        assert identity["usage_policy_version"] == USAGE_POLICY_VERSION
+        assert identity["marketing_consent_version"] == MARKETING_CONSENT_VERSION
+        assert identity["accepted_terms_at"] is not None
+        assert identity["accepted_privacy_at"] is not None
+        assert identity["accepted_usage_policy_at"] is not None
+        assert identity["marketing_opt_in_at"] is not None
+    finally:
+        settings.environment = original_environment
+        settings.captcha_verification_enabled = original_enabled
         await service.shutdown()
 
 
@@ -1795,6 +1992,74 @@ async def test_login_captcha_ignores_forwarded_ip_for_untrusted_direct_client(
 
         assert response.status_code == 200
         assert remote_ips == ["8.8.8.8"]
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        settings.captcha_provider = original_provider
+        settings.turnstile_site_key = original_site_key
+        settings.turnstile_secret_key = original_secret_key
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_captcha_ignores_invalid_forwarded_ip_from_trusted_proxy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    original_provider = settings.captcha_provider
+    original_site_key = settings.turnstile_site_key
+    original_secret_key = settings.turnstile_secret_key
+    remote_ips: list[str | None] = []
+
+    class FakeSession:
+        access_token = "access-token"
+        refresh_token = "refresh-token"
+        token_type = "bearer"
+        user = {
+            "id": "user-login",
+            "email": "login@example.com",
+            "user_metadata": {
+                "display_name": "Login User",
+                "username": "login-user",
+                "accepted_terms": True,
+                "accepted_privacy": True,
+                "accepted_usage_policy": True,
+                "marketing_opt_in": False,
+            },
+        }
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            return FakeSession()
+
+    async def fake_verify_captcha_token(token, *, remote_ip=None, action=None, settings=None, transport=None):
+        remote_ips.append(remote_ip)
+        return {"success": True, "action": action, "hostname": "127.0.0.1"}
+
+    settings.captcha_verification_enabled = True
+    settings.captcha_provider = "turnstile"
+    settings.turnstile_site_key = "turnstile-site-key"
+    settings.turnstile_secret_key = "turnstile-secret-key"
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+    monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
+
+    transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 40123))
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/login",
+                headers={"x-forwarded-for": "definitely-not-an-ip, 10.0.0.2"},
+                json={
+                    "email": "login@example.com",
+                    "password": "Password123!",
+                    "captcha_token": "turnstile-token",
+                },
+            )
+
+        assert response.status_code == 200
+        assert remote_ips == ["127.0.0.1"]
     finally:
         settings.captcha_verification_enabled = original_enabled
         settings.captcha_provider = original_provider

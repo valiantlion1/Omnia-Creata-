@@ -18,6 +18,38 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.17.127`
+- Date: `2026-04-17`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.126` closed prompt-history, consent, and audit-trail gaps, but Phase 1 still had a login-seam problem that could survive normal usage: a stale stored post-auth redirect from an earlier OAuth attempt could leak into a later sign-in and override the explicit `?next=` destination the user was actually trying to reach. The same auth wave also still needed a full backend suite rerun and a current-build browser proof pass before it could honestly be called stabilized.
+- What:
+  `.127` narrows that auth seam without opening a new feature surface. Studio now persists OAuth intent across the provider roundtrip, treats transient auth-service outages as retryable during OAuth callback sync, and clears stale stored redirect state when a direct email/password sign-in succeeds so an old OAuth target cannot hijack a later login. A new web regression test locks the explicit-`next` precedence rule, and the backend regression suite is clean again on this build.
+  Current-build proof is stronger on `.127` than on `.126`. Full backend pytest now passes with `521 passed`, focused web auth tests pass with `7 passed`, Studio web still passes `type-check` and `build`, `verify-studio-local.ps1` passes on `.127`, and current-build provider smoke remains green with `ok=5`, `skipped=2`, `error=0`. Browser verification on the current build confirms the login footer now shows `.127`, email/password login reaches `/explore`, Google OAuth starts with a callback URL that preserves `?next=...`, simulated signed-in callback completion lands on `/subscription` instead of falling back to idle `/login`, and both `/billing` and `/plan` still resolve to `/subscription`. Protected staging was not rerun for `.127`; the latest protected-staging artefact is still `.125 warning` with `closure_ready=true`, so this build does not claim fresh staging proof yet.
+
+### `0.6.0-alpha` / build `2026.04.17.126`
+- Date: `2026-04-17`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.125` preserved proof truth, but Phase 1 still had three product-hardening gaps that were too visible to leave for later: Create prompt history was still shared across accounts on the same browser profile, optional analytics could still start without explicit consent, and policy acceptance was still stored as booleans without a durable audit trail that said what was accepted and when.
+- What:
+  `.126` hardens those launch-facing seams without opening a new feature surface. Create prompt history is now account-scoped in the browser, so a signed-in user no longer inherits another account's local prompt history just because they share the same machine profile. Optional analytics are now consent-gated too: PostHog only boots after an explicit banner choice, and declining keeps Studio on essential storage only instead of silently enabling non-essential tracking.
+  The backend now records policy-acceptance audit fields server-side. Identity payloads carry accepted timestamps plus current version strings for terms, privacy, usage policy, and marketing consent, and legacy accepted records are backfilled on first refresh instead of staying as timestamp-less booleans forever. Focused auth/identity regressions, web type-check, and web build are green on this build.
+  Current-build proof was refreshed where this wave actually changed behavior. `verify-studio-local.ps1` now passes on `.126`, and live provider smoke also passes on `.126` with `ok=5`, `skipped=2`, `error=0`, proving OpenRouter/OpenAI chat plus Runware and OpenAI image lanes on the current build. Protected staging was not rerun for `.126`; the latest protected-staging artefact remains `.125 warning` with `closure_ready=true`, so this build does not claim fresh staging proof until that loop is rerun.
+
+### `0.6.0-alpha` / build `2026.04.16.125`
+- Date: `2026-04-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The current Studio tree remained frozen after the `.124` bookkeeping pass, but the proof chain moved again before the docs did. `.125` exists to keep the manifest and operations docs aligned with the real current-build evidence after the narrow provider-smoke drift was corrected, without opening another frontend or backend implementation wave.
+- What:
+  `.125` still changes only bookkeeping/proof surfaces: `version.json`, this ledger, and the maintenance map. Stable local startup plus `verify-studio-local.ps1` prove the frozen tree on build `.125` with matching backend `build`/`bootBuild`, healthy `/v1/healthz`, and a reachable Studio login shell in stable preview mode.
+  Live provider smoke now passes on `.125` and is recorded from `apps/studio/deploy/.env.staging` as a current-build report with `ok=3`, `skipped=4`, `error=0`. The current successful cases prove the active OpenAI launch lane for chat plus the OpenAI draft/final image lanes, while unconfigured Fal/Runware/Gemini/OpenRouter cases remain explicitly skipped instead of being flattened into fake success.
+  Protected staging is still fail-closed on `.125`. The official protected-staging report now says `status=blocked` because Docker compose bring-up failed before the stack reached a running topology, and the staging runtime artefact keeps `closure_ready=false`. This build does not claim launch-gate readiness; it only refreshes bookkeeping truth around the frozen tree and its current proof state.
+
 ### `0.6.0-alpha` / build `2026.04.16.124`
 - Date: `2026-04-16`
 - Codename: `Foundation`
@@ -28,7 +60,6 @@ Use this ledger for human-readable release history:
   `.124` changes only bookkeeping/proof surfaces: `version.json`, this ledger, and the maintenance map. Stable local startup plus `verify-studio-local.ps1` now prove the frozen tree on build `.124` with matching backend `build`/`bootBuild`, healthy `/v1/healthz`, and a reachable Studio login shell in stable preview mode.
   Live provider smoke does not pass on `.124`. The smoke CLI stops before suite initialization because `apps/studio/deploy/.env.staging` does not currently satisfy the staging contract for `PUBLIC_API_BASE_URL` (it must be a configured HTTPS non-local URL in staging/production). To keep launch/operator truth honest, the stale `.99` local smoke artefact was overwritten with a blocked `.124` report under the external runtime root instead of letting an older success soften current-build warnings.
   Protected staging proof is also fail-closed on `.124`. The official `start-studio-staging.ps1` bring-up/verify loop stops immediately because Docker engine is not running on this machine, and the staging runtime report records `status=blocked` with `closure_ready=false`. This build does not claim launch-gate readiness; it only refreshes proof honesty for the frozen tree.
-
 ### `0.6.0-alpha` / build `2026.04.16.123`
 - Date: `2026-04-16`
 - Codename: `Foundation`

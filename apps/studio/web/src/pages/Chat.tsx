@@ -7,6 +7,7 @@ import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
 import { AppPage } from '@/components/StudioPrimitives'
 import { ChatBubble } from '@/components/ChatBubble'
+import { InlineError } from '@/components/InlineError'
 import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatSuggestedAction, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
 import {
   parseChatSuggestedActionPayload,
@@ -1363,6 +1364,32 @@ export default function ChatPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading chat…
             </div>
+          ) : conversationDetailQuery.isError ? (
+            <div className="mx-auto flex h-full w-full max-w-lg items-center px-6">
+              <InlineError
+                title="Couldn't load this conversation"
+                message={conversationDetailQuery.error instanceof Error && conversationDetailQuery.error.message
+                  ? conversationDetailQuery.error.message
+                  : 'Studio could not reach your conversation just now. Please try again.'}
+                onRetry={() => { void conversationDetailQuery.refetch() }}
+                retryDisabled={conversationDetailQuery.isFetching}
+                retryLabel={conversationDetailQuery.isFetching ? 'Retrying…' : 'Try again'}
+                className="w-full"
+              />
+            </div>
+          ) : conversationsQuery.isError && !activeConversationId ? (
+            <div className="mx-auto flex h-full w-full max-w-lg items-center px-6">
+              <InlineError
+                title="Couldn't load your chats"
+                message={conversationsQuery.error instanceof Error && conversationsQuery.error.message
+                  ? conversationsQuery.error.message
+                  : 'Studio could not load your recent conversations. Please try again.'}
+                onRetry={() => { void conversationsQuery.refetch() }}
+                retryDisabled={conversationsQuery.isFetching}
+                retryLabel={conversationsQuery.isFetching ? 'Retrying…' : 'Try again'}
+                className="w-full"
+              />
+            </div>
           ) : timeline.length ? (
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pb-10 pt-6">
               {timeline.map((item) => {
@@ -1518,14 +1545,27 @@ export default function ChatPage() {
             </p>
           </div>
 
-          {/* Error toast */}
-          {(sendMessageMutation.error || createConversationMutation.error) ? (
-            <div className="mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-amber-400/15 bg-amber-400/5 px-4 py-3 text-sm text-amber-200/80">
-              {sendMessageMutation.error instanceof Error
-                ? 'Something went wrong sending your message. Please try again.'
-                : createConversationMutation.error instanceof Error
-                  ? 'Could not start a new conversation. Please try again.'
-                  : 'Something went wrong. Please try again.'}
+          {/* Send / conversation errors */}
+          {sendMessageMutation.error instanceof Error ? (
+            <div className="mx-auto mt-3 w-full max-w-3xl">
+              <InlineError
+                title="Message not sent"
+                message={sendMessageMutation.error.message || 'Something went wrong sending your message. Please try again.'}
+                onRetry={() => {
+                  sendMessageMutation.reset()
+                  void handleSend()
+                }}
+                retryDisabled={sendMessageMutation.isPending || (!draft.trim() && !pendingAttachments.length)}
+              />
+            </div>
+          ) : createConversationMutation.error instanceof Error ? (
+            <div className="mx-auto mt-3 w-full max-w-3xl">
+              <InlineError
+                title="Could not start a new conversation"
+                message={createConversationMutation.error.message || 'Please try again in a moment.'}
+                onRetry={() => createConversationMutation.reset()}
+                retryLabel="Dismiss"
+              />
             </div>
           ) : null}
         </div>

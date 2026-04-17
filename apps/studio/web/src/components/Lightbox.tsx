@@ -92,7 +92,7 @@ function LightboxModal({ image, onClose }: { image: LightboxPayload; onClose: ()
       {/* Sidebar */}
       {hasSidebar && (
         <aside
-          className="hidden md:flex w-[300px] shrink-0 flex-col gap-5 border-l border-white/[0.05] bg-[#08090b] p-6 overflow-y-auto"
+          className="hidden md:flex w-[320px] shrink-0 flex-col gap-5 border-l border-white/[0.05] bg-[#08090b] p-6 overflow-y-auto"
           style={{ animation: 'oc-fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both' }}
           onClick={(e) => e.stopPropagation()}
         >

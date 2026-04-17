@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-16
+Last updated: 2026-04-17
 
 ## Current baseline
 
@@ -12,13 +12,21 @@ Last updated: 2026-04-16
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current frozen-tree proof build is `2026.04.16.124`, and it is intentionally a bookkeeping/proof sync only. The substantive frontend cleanup and backend security/hardening work remain the `.116` -> `.123` wave already present in the current tree.
-- Current-build proof is mixed and explicitly not launch-ready theater: local verify passes on `.124`, but provider smoke is blocked by the staging env contract (`PUBLIC_API_BASE_URL` is not valid for staging/prod smoke), and protected staging is blocked because Docker engine is not running, so closure stays false.
+- Current implementation build is `2026.04.17.127`. This wave is still the same narrow Phase 1 hardening track, but it now also closes a real auth-seam bug: stale post-auth redirect intent can no longer leak from an earlier OAuth attempt into a later direct login and override the explicit route the user actually requested.
+- Current-build proof is stronger but still intentionally partial. Local verify passes on `.127`, provider smoke also passes on `.127`, full backend pytest is green again, and browser verification now proves `.127` on the login/subscription surfaces. The latest protected staging artefact is still `.125 warning` with `closure_ready=true`, so current staging closure has not yet been rerun on `.127`.
 
 ## Recent stabilization wins
 
-- `.124` is an honesty/passive-control build, not a new feature wave. It ties `version.json`, the release docs, and the proof artefacts to the same frozen tree without widening product scope.
-- The current `.124` proof chain is at least fail-closed now. Stable local startup verification passes on the new build, the stale `.99` smoke artefact has been replaced with a blocked `.124` smoke report after env validation failed, and the protected staging bring-up loop leaves a current-build blocker report instead of silently inheriting an older staging result.
+- `.127` finishes the current auth-stability slice instead of leaving it half-proven. OAuth callback sync now treats transient auth-service outages as retryable, the login shell preserves explicit `?next=` intent all the way through the provider roundtrip, and stale stored redirect state now gets consumed on direct password login instead of hijacking a later callback path.
+- The same wave re-established full proof discipline on the current build. Full backend pytest is green with `521 passed`, focused web auth regressions are green with `7 passed`, Studio web still passes `type-check` and `build`, `verify-studio-local.ps1` passes on `.127`, current-build provider smoke remains `ok=5`, `skipped=2`, `error=0`, and browser checks confirm `/login`, `/billing`, `/plan`, and the simulated signed-in OAuth callback path all behave honestly on build `.127`.
+
+- `.126` closes three Phase 1 launch-hardening seams that were still too loose for a paid product surface. Create prompt history is now account-scoped inside the browser, optional analytics no longer bootstrap before an explicit consent choice, and identity records now carry accepted-at plus policy-version fields instead of only raw consent booleans.
+- The same wave keeps proof honest on the new build. Targeted auth/identity regressions are green, Studio web still passes `type-check` and `build`, `verify-studio-local.ps1` now passes on `.126`, and current-build provider smoke is green with `ok=5`, `skipped=2`, `error=0`.
+
+- `.125` is the final bookkeeping/proof-sync correction for the previous frozen tree, not a new implementation wave. It kept `version.json`, the release docs, and the proof artefacts aligned after the narrow provider-smoke drift fix before the new `.126` hardening slice opened.
+- The final `.125` proof chain ended healthier than its first bookkeeping note suggested. Stable local startup verification passed, live provider smoke passed as a current-build report, and owner-token protected staging verification later reached `warning` with `closure_ready=true`; that build still was not public-paid ready, but protected-beta closure stopped being blocked there.
+
+- `.124` remains useful only as the prior fail-closed bookkeeping pass. It recorded the earlier local verify pass, the then-blocked smoke state, and the staging blocker honestly instead of letting stale proof read like current truth.
 
 - `.123` closes several launch-facing backend honesty gaps without widening scope. Staging/production auth now fail closed when Turnstile is expected but not actually ready, and sensitive CAPTCHA verification now requires real action plus hostname proof instead of treating missing fields like an acceptable partial success.
 - Public/share safety is tighter on the same build. Shared project/post payloads no longer leak internal identity/workspace/project linkage, share responses now emit explicit `no-store` cache headers, and legacy share-scoped asset delivery tokens carry a hashed share marker instead of the raw public token.

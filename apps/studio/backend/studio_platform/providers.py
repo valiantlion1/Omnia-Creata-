@@ -748,6 +748,7 @@ class RunwareProvider(StudioImageProvider):
         workflow: str,
     ) -> dict[str, object]:
         task_uuid = str(__import__("uuid").uuid4())
+        cleaned_negative_prompt = negative_prompt.strip()
         payload: dict[str, object] = {
             "taskType": "imageInference",
             "taskUUID": task_uuid,
@@ -756,7 +757,6 @@ class RunwareProvider(StudioImageProvider):
             "includeCost": True,
             "checkNSFW": True,
             "positivePrompt": prompt,
-            "negativePrompt": negative_prompt,
             "width": width,
             "height": height,
             "steps": min(max(steps, 1), 50),
@@ -765,6 +765,9 @@ class RunwareProvider(StudioImageProvider):
             "numberResults": 1,
             "model": self._resolve_model_id(model_id),
         }
+        # Runware rejects empty or too-short negative prompts; omit them unless they are valid.
+        if len(cleaned_negative_prompt) >= 2:
+            payload["negativePrompt"] = cleaned_negative_prompt
         if workflow in {"image_to_image", "edit"}:
             if reference_image is None:
                 raise ProviderTemporaryError("Runware image-to-image workflow requires a reference image")

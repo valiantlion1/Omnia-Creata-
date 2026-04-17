@@ -56,9 +56,17 @@ export type IdentityPayload = {
   root_admin?: boolean
   local_access?: boolean
   accepted_terms?: boolean
+  accepted_terms_at?: string | null
+  terms_version?: string | null
   accepted_privacy?: boolean
+  accepted_privacy_at?: string | null
+  privacy_version?: string | null
   accepted_usage_policy?: boolean
+  accepted_usage_policy_at?: string | null
+  usage_policy_version?: string | null
   marketing_opt_in?: boolean
+  marketing_opt_in_at?: string | null
+  marketing_consent_version?: string | null
   bio?: string
   avatar_url?: string | null
   default_visibility?: Visibility

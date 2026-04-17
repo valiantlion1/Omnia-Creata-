@@ -206,38 +206,71 @@ class GeneratedAssetProtectionPipeline:
         return buffer.getvalue()
 
     def _apply_visible_watermark(self, image: Image.Image, watermark_text: str) -> Image.Image:
-        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        width, height = image.size
+        try:
+            from pathlib import Path
+            logo_path = Path(__file__).resolve().parent.parent.parent.parent / "web" / "public" / "omnia-logo.png"
+            logo = Image.open(logo_path).convert("RGBA")
+            
+            width, height = image.size
+            # Calculate dynamic size for the logo, e.g. max 12% of width/height
+            logo_target_size = int(min(width, height) * 0.12)
+            logo_target_size = max(40, min(160, logo_target_size))
+            
+            # Keep logo aspect ratio
+            logo_ratio = logo.width / logo.height
+            logo_w = logo_target_size
+            logo_h = int(logo_w / logo_ratio)
+            
+            logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
+            
+            # Opacity
+            target_opacity = 0.9
+            alpha = logo.split()[3]
+            alpha = alpha.point(lambda p: int(p * target_opacity))
+            logo.putalpha(alpha)
+            
+            # Position: bottom right
+            margin = max(24, int(min(width, height) * 0.03))
+            box_left = width - logo_w - margin
+            box_top = height - logo_h - margin
+            
+            overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            overlay.paste(logo, (box_left, box_top), logo)
+            return Image.alpha_composite(image, overlay)
+        except Exception:
+            # Fallback to the original text pill
+            overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+            width, height = image.size
 
-        font_size = max(20, min(52, int(min(width, height) * 0.034)))
-        font = self._resolve_font(font_size)
-        margin = max(20, int(min(width, height) * 0.026))
-        text_padding_x = max(14, font_size // 2)
-        text_padding_y = max(10, font_size // 3)
-        text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
+            font_size = max(20, min(52, int(min(width, height) * 0.034)))
+            font = self._resolve_font(font_size)
+            margin = max(20, int(min(width, height) * 0.026))
+            text_padding_x = max(14, font_size // 2)
+            text_padding_y = max(10, font_size // 3)
+            text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
 
-        box_left = max(margin, width - text_width - (text_padding_x * 2) - margin)
-        box_top = max(margin, height - text_height - (text_padding_y * 2) - margin)
-        box_right = min(width - margin, box_left + text_width + (text_padding_x * 2))
-        box_bottom = min(height - margin, box_top + text_height + (text_padding_y * 2))
+            box_left = max(margin, width - text_width - (text_padding_x * 2) - margin)
+            box_top = max(margin, height - text_height - (text_padding_y * 2) - margin)
+            box_right = min(width - margin, box_left + text_width + (text_padding_x * 2))
+            box_bottom = min(height - margin, box_top + text_height + (text_padding_y * 2))
 
-        draw.rounded_rectangle(
-            (box_left, box_top, box_right, box_bottom),
-            radius=max(16, font_size // 2),
-            fill=(7, 10, 18, 112),
-            outline=(255, 255, 255, 36),
-            width=1,
-        )
-        draw.text(
-            (box_left + text_padding_x, box_top + text_padding_y - 1),
-            watermark_text,
-            font=font,
-            fill=(255, 255, 255, int(255 * self._visible_opacity)),
-        )
-        return Image.alpha_composite(image, overlay)
+            draw.rounded_rectangle(
+                (box_left, box_top, box_right, box_bottom),
+                radius=max(16, font_size // 2),
+                fill=(7, 10, 18, 112),
+                outline=(255, 255, 255, 36),
+                width=1,
+            )
+            draw.text(
+                (box_left + text_padding_x, box_top + text_padding_y - 1),
+                watermark_text,
+                font=font,
+                fill=(255, 255, 255, int(255 * self._visible_opacity)),
+            )
+            return Image.alpha_composite(image, overlay)
 
     def _resolve_font(self, font_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         for candidate in (

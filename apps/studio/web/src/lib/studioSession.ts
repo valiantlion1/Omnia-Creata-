@@ -1,6 +1,7 @@
 let memoryToken: string | null = null;
 let memoryPostAuthRedirect: string | null = null;
 export const DEFAULT_STUDIO_REDIRECT_PATH = '/explore';
+const POST_AUTH_REDIRECT_STORAGE_KEY = 'oc-studio-post-auth-redirect';
 
 export function sanitizeStudioRedirectPath(path: string | null | undefined, fallback = DEFAULT_STUDIO_REDIRECT_PATH) {
   if (typeof path !== 'string') {
@@ -43,16 +44,47 @@ export function clearStudioAccessToken() {
   }
 }
 
+function readStoredPostAuthRedirect() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage.getItem(POST_AUTH_REDIRECT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPostAuthRedirect(path: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (path) {
+      window.sessionStorage.setItem(POST_AUTH_REDIRECT_STORAGE_KEY, path);
+    } else {
+      window.sessionStorage.removeItem(POST_AUTH_REDIRECT_STORAGE_KEY);
+    }
+  } catch {
+    // Best effort only; auth redirect should still work in-memory if storage is unavailable.
+  }
+}
+
 export function setStudioPostAuthRedirect(path: string) {
-  memoryPostAuthRedirect = sanitizeStudioRedirectPath(path);
+  const safePath = sanitizeStudioRedirectPath(path);
+  memoryPostAuthRedirect = safePath;
+  writeStoredPostAuthRedirect(safePath);
 }
 
 export function getStudioPostAuthRedirect() {
-  return memoryPostAuthRedirect;
+  const stored = readStoredPostAuthRedirect();
+  if (stored) {
+    const safeStored = sanitizeStudioRedirectPath(stored);
+    memoryPostAuthRedirect = safeStored;
+    return safeStored;
+  }
+  return memoryPostAuthRedirect ? sanitizeStudioRedirectPath(memoryPostAuthRedirect) : null;
 }
 
 export function consumeStudioPostAuthRedirect() {
-  const value = memoryPostAuthRedirect;
+  const value = getStudioPostAuthRedirect();
   memoryPostAuthRedirect = null;
+  writeStoredPostAuthRedirect(null);
   return value ? sanitizeStudioRedirectPath(value) : null;
 }

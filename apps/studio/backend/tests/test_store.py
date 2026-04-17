@@ -9,6 +9,7 @@ from studio_platform.store import (
     PostgresStudioStateStore,
     SqliteStudioStateStore,
     StudioStateStore,
+    _load_state_from_rows,
     build_state_store,
 )
 
@@ -273,3 +274,31 @@ def test_postgres_store_replace_rows_uses_advisory_lock():
     assert "SELECT pg_advisory_xact_lock" in joined_sql
     assert "DELETE FROM studio_state_records" in joined_sql
     assert "INSERT INTO studio_state_records (collection, model_id, payload)" in joined_sql
+
+
+def test_load_state_from_rows_skips_malformed_payloads(caplog: pytest.LogCaptureFixture):
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+
+    with caplog.at_level("WARNING"):
+        state = _load_state_from_rows(
+            [
+                ("identities", "broken-user", '{"id":"broken-user"} not-json'),
+                ("identities", identity.id, identity.model_dump(mode="json")),
+                ("workspaces", workspace.id, workspace.model_dump(mode="json")),
+            ]
+        )
+
+    assert "broken-user" not in state.identities
+    assert state.identities[identity.id].email == identity.email
+    assert state.workspaces[workspace.id].identity_id == identity.id
+    assert any(
+        "Skipping malformed Studio state row while loading durable store" in record.message
+        for record in caplog.records
+    )

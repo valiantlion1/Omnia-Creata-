@@ -26,6 +26,21 @@ Purpose:
 - keep pricing, entitlement, and usage truth server-authored
 - preserve protected-beta closure while moving the product story forward
 
+## Phase 1 Hardening
+
+Current Phase 1 baseline is the narrow hardening slice that makes the paid surface less sloppy before bigger launch work:
+- isolate browser-local prompt history per account
+- gate optional analytics behind explicit consent
+- keep policy acceptance auditable with timestamp + version fields
+- keep auth redirect intent stable across password login and OAuth callback completion
+- keep proof honest on the current build after each hardening wave
+
+This phase is intentionally not:
+- a UI redesign pass
+- a new provider expansion wave
+- a new commercial package experiment
+- a fake "everything is finished" milestone
+
 ## Near-Term Order
 
 ### 1. Catalog Truth
@@ -41,6 +56,7 @@ Purpose:
 - keep `Chat -> in-chat generation -> create handoff -> result persistence` stable
 - ensure Chat and Create feel like one product with two surfaces, not two unrelated apps
 - keep degraded and blocked states honest in user-facing copy
+- remove cross-account browser leakage and stale shell behaviors before scale
 
 ### 3. Provider Truth
 
@@ -55,6 +71,7 @@ Purpose:
 - keep `version.json`, release ledger, and maintenance map on the same build
 - keep local verify, provider smoke, and staging verify aligned to that build
 - preserve `closure_ready=true` for the protected-beta baseline while public-paid gates remain explicit
+- never let a fresh implementation build read as "fully synced" if staging proof still belongs to an older build
 
 ## Market And Pricing Direction
 

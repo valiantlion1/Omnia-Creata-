@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from config.env import Environment
-from main import _requires_no_store_headers, app, settings
+from config.env import Environment, Settings
+from main import _requires_no_store_headers, _should_enforce_trusted_hosts, app, settings
 
 
 @pytest.fixture()
@@ -43,6 +43,26 @@ def test_api_responses_emit_hsts_for_staging(_restore_security_header_settings):
     assert response.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
 
 
+def test_trusted_hosts_are_required_for_staging_and_production():
+    assert _should_enforce_trusted_hosts(Settings(_env_file=None, jwt_secret="x" * 32)) is False
+    assert _should_enforce_trusted_hosts(
+        Settings(
+            _env_file=None,
+            jwt_secret="x" * 32,
+            environment=Environment.STAGING,
+            database_url="postgresql://user:pass@db.example.com:5432/studio",
+            supabase_url="https://example.supabase.co",
+            supabase_anon_key="anon-key",
+            supabase_service_role_key="x" * 32,
+            redis_url="redis://cache.example.com:6379/0",
+            state_store_backend="postgres",
+            asset_storage_backend="supabase",
+            public_web_base_url="https://studio.example.com",
+            public_api_base_url="https://api.example.com",
+        )
+    ) is True
+
+
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
@@ -53,6 +73,10 @@ def test_api_responses_emit_hsts_for_staging(_restore_security_header_settings):
         ("/v1/healthz/detail", True),
         ("/v1/profiles/me/export", True),
         ("/v1/projects/project-1/export", True),
+        ("/v1/assets/asset-1/content", True),
+        ("/v1/assets/asset-1/thumbnail", True),
+        ("/v1/assets/asset-1/preview", True),
+        ("/v1/assets/asset-1/blocked-preview", True),
         ("/v1/assets/asset-1/clean-export", True),
         ("/v1/version", False),
         ("/v1/healthz", False),
@@ -83,5 +107,17 @@ def test_public_share_route_responses_emit_no_store_headers(_restore_security_he
         response = client.get("/v1/shares/public/missing-share-token")
 
     assert response.status_code == 404
+    assert response.headers["Cache-Control"] == "no-store, private"
+    assert response.headers["Pragma"] == "no-cache"
+
+
+def test_asset_delivery_route_responses_emit_no_store_headers(_restore_security_header_settings):
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_api_docs = False
+
+    with TestClient(app) as client:
+        response = client.get("/v1/assets/asset-1/content?token=abcdefghijklmnop")
+
+    assert response.status_code in {403, 404}
     assert response.headers["Cache-Control"] == "no-store, private"
     assert response.headers["Pragma"] == "no-cache"

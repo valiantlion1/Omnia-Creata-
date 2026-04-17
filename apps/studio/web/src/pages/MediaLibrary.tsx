@@ -622,20 +622,20 @@ function MenuAction({
 
 function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (view: ViewMode) => void }) {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-white/[0.03] p-1 ring-1 ring-white/10 shadow-inner">
+    <div className="flex items-center gap-0.5 rounded-full bg-white/[0.03] p-0.5 ring-1 ring-white/[0.06]">
       <button
         onClick={() => onChange('grid')}
-        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${value === 'grid' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
         title="Grid view"
       >
-        <Grid2X2 className="h-4 w-4" />
+        <Grid2X2 className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={() => onChange('list')}
-        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 active:scale-90 ${value === 'list' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${value === 'list' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
         title="List view"
       >
-        <List className="h-4 w-4" />
+        <List className="h-3.5 w-3.5" />
       </button>
     </div>
   )
@@ -651,12 +651,12 @@ function FilterBar<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1">
       {options.map((option) => (
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`rounded-full px-4 py-1.5 text-[11px] font-bold tracking-wide transition-all duration-300 active:scale-95 ${value === option.id ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}
+          className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${value === option.id ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200'}`}
         >
           {option.label}
         </button>
@@ -700,26 +700,26 @@ function Toolbar({
   }, [searchRef])
 
   return (
-    <section className="border-b border-white/[0.06] pb-5 pt-2">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <section className="pb-3 pt-1">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[2rem] font-black tracking-[-0.05em] text-white font-display md:text-[2.4rem] drop-shadow-sm">{title}</h1>
-          <p className="mt-1 text-[13px] font-medium text-zinc-500">{description}</p>
-          {filters ? <div className="mt-4">{filters}</div> : null}
+          <h1 className="text-xl font-bold tracking-tight text-white md:text-[22px]">{title}</h1>
+          {description ? <p className="mt-0.5 text-[12px] text-zinc-500">{description}</p> : null}
+          {filters ? <div className="mt-3">{filters}</div> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <label className="group/search relative flex min-w-[220px] items-center gap-2.5 rounded-full bg-white/[0.03] px-4 py-2 text-[13px] text-zinc-400 ring-1 ring-white/10 transition-all duration-300 focus-within:ring-[rgb(var(--primary-light))/0.5] focus-within:bg-black/40 focus-within:shadow-[0_0_20px_rgba(var(--primary-light),0.15)]">
-            <Search className="h-4 w-4 transition-colors group-focus-within/search:text-[rgb(var(--primary-light))]" />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <label className="group/search relative flex min-w-[200px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-colors focus-within:ring-white/15">
+            <Search className="h-3.5 w-3.5 text-zinc-500" />
             <input
               id="studio-library-search"
               name="search"
               ref={(el) => setInputRef(el)}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search assets..."
+              placeholder="Search"
               className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-600"
             />
-            <div className="flex h-5 w-5 items-center justify-center rounded-md border border-white/10 bg-white/5 text-[10px] font-bold text-zinc-500 group-focus-within/search:opacity-0 transition-opacity">
+            <div className="flex h-4 w-4 items-center justify-center rounded border border-white/10 text-[9px] font-semibold text-zinc-500 group-focus-within/search:opacity-0 transition-opacity">
               /
             </div>
           </label>
@@ -744,13 +744,18 @@ function EmptyInline({
 }) {
   return (
     <section
-      className={`flex flex-col gap-3 py-6 ${
+      className={`flex flex-col gap-4 py-8 ${
         compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'
       }`}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111216]/60 text-zinc-300 ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(124,58,237,0.15)] backdrop-blur-md">{icon}</div>
-      <div className="text-base font-semibold text-white">{title}</div>
-      <div className={`text-sm leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
+      <div className="relative flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-[#1c1d24]/80 to-[#0c0d12]/60 text-zinc-300 ring-1 ring-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-xl">
+        <div className="absolute inset-0 rounded-[20px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.1),transparent_50%)]" />
+        <div className="relative z-10 drop-shadow-md">{icon}</div>
+      </div>
+      <div>
+        <div className="text-[15px] font-semibold tracking-tight text-white">{title}</div>
+        <div className={`mt-1.5 text-[13px] leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
+      </div>
     </section>
   )
 }
@@ -780,8 +785,8 @@ function PendingPreview({
 
   if (view === 'grid') {
     return (
-      <div className="space-y-3">
-        <div className="relative group/pending overflow-hidden rounded-[22px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-500 hover:ring-white/20">
+      <div className="space-y-2">
+        <div className="relative group/pending overflow-hidden rounded-[10px] bg-[#0c0d12] transition-all duration-300 hover:ring-1 hover:ring-white/10">
           {isBlocked || isFailed ? (
             <>
               <div className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.15),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.18),transparent_70%)]'} opacity-50 animate-digitize`} />
@@ -803,16 +808,16 @@ function PendingPreview({
           ) : (
             <>
               <div className="aspect-square w-full animate-pulse bg-gradient-to-b from-white/[0.05] to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.12)] via-transparent to-transparent animate-[oc-gen-glow_4s_ease-in-out_infinite]" />
+              <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.12)] via-transparent to-transparent animate-[oc-gen-glow_3s_ease-in-out_infinite]" />
               
               {/* Premium Scanning Laser */}
-              <div className="absolute inset-x-0 top-0 z-10 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_15px_rgb(var(--primary-light))] animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
-              <div className="absolute inset-x-0 h-20 bg-gradient-to-b from-[rgb(var(--primary-light)/0.15)] to-transparent opacity-40 animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
+              <div className="absolute inset-x-0 top-0 z-10 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_20px_rgba(var(--primary-light),0.8),0_0_8px_rgba(255,255,255,0.4)] animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
+              <div className="absolute inset-x-0 h-24 bg-gradient-to-b from-[rgb(var(--primary-light)/0.2)] to-transparent opacity-50 animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
               
-              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
-                <div className="relative flex h-10 w-10 items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.2)] animate-ping" />
-                  <div className="relative h-2.5 w-2.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 15px rgb(var(--primary-light)/0.8)' }} />
+              <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[4px]">
+                <div className="relative flex h-12 w-12 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping" style={{ animationDuration: '1.5s' }} />
+                  <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 20px rgb(var(--primary-light))' }} />
                 </div>
               </div>
             </>
@@ -830,8 +835,8 @@ function PendingPreview({
   }
 
   return (
-    <div className="group flex items-center gap-4 py-3.5 transition-all duration-300 hover:bg-white/[0.03] rounded-2xl px-3 -mx-3">
-      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
+    <div className="group flex items-center gap-4 py-3.5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.04] rounded-[16px] px-3 -mx-3 ring-1 ring-transparent hover:ring-white/[0.06]">
+      <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[12px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
         {isBlocked || isFailed ? (
           <>
             <div className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.2),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.22),transparent_70%)]'} animate-digitize`} />
@@ -844,12 +849,12 @@ function PendingPreview({
         ) : (
           <>
             <div className="h-full w-full bg-gradient-to-b from-white/[0.08] to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.15)] via-transparent to-transparent animate-[oc-gen-glow_4s_ease-in-out_infinite]" />
-            <div className="absolute inset-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-60 shadow-[0_0_10px_rgb(var(--primary-light))] animate-[oc-gen-scan_3s_ease-in-out_infinite]" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="relative flex h-6 w-6 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.2)] animate-ping" style={{ animationDuration: '2.5s' }} />
-                <div className="relative h-1.5 w-1.5 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.7)' }} />
+            <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.15)] via-transparent to-transparent animate-[oc-gen-glow_3s_ease-in-out_infinite]" />
+            <div className="absolute inset-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_20px_rgba(var(--primary-light),0.8)] animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
+            <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+              <div className="relative flex h-8 w-8 items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping" style={{ animationDuration: '1.5s' }} />
+                <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 15px rgb(var(--primary-light))' }} />
               </div>
             </div>
           </>
@@ -1311,12 +1316,12 @@ export default function MediaLibraryPage() {
 
   return (
     <>
-      <AppPage className="max-w-[1420px] gap-4 py-3.5">
+      <AppPage className="max-w-[1700px] gap-3 py-3">
         {section === 'images' ? (
           <>
             <Toolbar
-              title="My Images"
-              description="All your created images live here. Images in progress will appear while they're being made."
+              title="My images"
+              description=""
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1325,12 +1330,12 @@ export default function MediaLibraryPage() {
             />
 
             {pendingGenerations.length ? (
-              <section className="border-b border-white/[0.06] pb-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="text-sm font-medium text-white">In progress</div>
+              <section className="border-b border-white/[0.05] pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[13px] font-semibold text-white">In progress</div>
                   <StatusPill tone="brand">{pendingGenerations.length} running</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
                   {pendingGenerations.map((generation) => (
                     <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="generating" />
                   ))}
@@ -1339,17 +1344,17 @@ export default function MediaLibraryPage() {
             ) : null}
 
             {blockedGroups.length ? (
-              <section className="border-b border-white/[0.06] pb-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="text-sm font-medium text-white">Blocked</div>
+              <section className="border-b border-white/[0.05] pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[13px] font-semibold text-white">Blocked</div>
                   <StatusPill tone="warning">{blockedGroups.length} locked</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
                   {blockedGroups.map((group) => {
                     const asset = group.items[0]
                     return (
-                      <div key={group.id} className={activeView === 'grid' ? 'space-y-2' : 'group flex items-center gap-4 py-3'}>
-                        <div className={`relative overflow-hidden rounded-[18px] bg-[#111216] ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3)] ${activeView === 'grid' ? '' : 'h-14 w-14 shrink-0'}`}>
+                      <div key={group.id} className={activeView === 'grid' ? 'space-y-1.5' : 'group flex items-center gap-4 py-3'}>
+                        <div className={`relative overflow-hidden rounded-[10px] bg-[#111216] ${activeView === 'grid' ? '' : 'h-14 w-14 shrink-0'}`}>
                           <ProtectedAssetImage
                             sources={assetPreviewSources(asset)}
                             alt={group.title}
@@ -1375,12 +1380,12 @@ export default function MediaLibraryPage() {
             ) : null}
 
             {failedGenerations.length ? (
-              <section className="border-b border-white/[0.06] pb-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="text-sm font-medium text-white">Failed</div>
+              <section className="border-b border-white/[0.05] pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[13px] font-semibold text-white">Failed</div>
                   <StatusPill tone="danger">{failedGenerations.length} failed</StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3.5 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6' : 'mt-3.5 divide-y divide-white/[0.06]'}>
+                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
                   {failedGenerations.map((generation) => (
                     <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="failed" />
                   ))}
@@ -1399,31 +1404,31 @@ export default function MediaLibraryPage() {
                 />
               )
             ) : filteredImageGroups.length ? (
-              <section className="space-y-4">
+              <section className="space-y-3">
                 {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="group border-b border-white/[0.06] pb-4">
+                  <section key={group.id} className="group border-b border-white/[0.05] pb-3">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
                         <button
                           onClick={() => toggleGroupSelect(group.id)}
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all duration-200 ${
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
                             selectedGroups.has(group.id)
                               ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white'
-                              : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30 hover:bg-white/[0.06]'
+                              : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30'
                           }`}
                           title={selectedGroups.has(group.id) ? 'Deselect' : 'Select'}
                         >
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
                           </svg>
                         </button>
                         <div className="min-w-0">
-                          <div className="truncate text-[15px] font-semibold text-white">{group.title}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                          <div className="truncate text-[13px] font-semibold text-white/90">{group.title}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-zinc-600">
                             <span>{formatDate(group.createdAt)}</span>
                             {group.items.length > 1 && (
                               <>
-                                <span className="text-zinc-600">·</span>
+                                <span className="text-zinc-700">·</span>
                                 <span>{group.items.length} variations</span>
                               </>
                             )}
@@ -1527,39 +1532,39 @@ export default function MediaLibraryPage() {
                     </div>
 
                     {activeView === 'grid' ? (
-                      <div className="mt-4 grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                      <div className="mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7">
                         {group.items.map((asset, assetIndex) => {
                           const isLiked = metadataNumber(asset.metadata, 'like_count') ?? 0 > 0
                           return (
                             <div key={asset.id} className="group/card relative">
                               <button
                                 onClick={() => openPreview(group, assetIndex)}
-                                className="relative block w-full aspect-square overflow-hidden rounded-[24px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all duration-500 hover:ring-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)] hover:-translate-y-1 active:scale-[0.97]"
+                                className="relative block w-full aspect-square overflow-hidden rounded-[10px] bg-[#0c0d12] transition-all duration-300 hover:ring-1 hover:ring-white/10 active:scale-[0.98]"
                                 style={{ transform: 'translate3d(0,0,0)' }}
                               >
                                 <ProtectedAssetImage
                                   sources={assetPreviewSources(asset)}
                                   alt={assetDisplayTitle(asset)}
-                                  className="h-full w-full object-cover transition-transform duration-700 group-hover/card:scale-[1.08] group-hover/card:brightness-[0.85]"
+                                  className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03] group-hover/card:brightness-[0.9]"
                                   fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
-                                
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/card:opacity-100" />
+
                                 {group.items.length > 1 && (
-                                  <div className="absolute top-3 left-3 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-black text-white/90 backdrop-blur-md ring-1 ring-white/10">
+                                  <div className="absolute top-2 left-2 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-bold text-white/90 backdrop-blur-md">
                                     V{variantOrder(asset) + 1}
                                   </div>
                                 )}
                               </button>
 
-                              {/* Premium Hover Action Bar */}
-                              <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/10 p-1.5 opacity-0 backdrop-blur-xl ring-1 ring-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-300 group-hover/card:opacity-100 group-hover/card:-translate-y-1 animate-glass-reveal">
+                              {/* Hover Action Bar */}
+                              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 translate-y-3 items-center gap-1 rounded-full bg-black/40 p-1.5 opacity-0 backdrop-blur-xl ring-1 ring-white/[0.15] shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/card:pointer-events-auto group-hover/card:translate-y-0 group-hover/card:opacity-100">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); /* Heart logic if exists */ }}
-                                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 hover:scale-110 active:scale-90 ${isLiked ? 'text-rose-500 bg-rose-500/10' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                                  className={`flex h-[26px] w-[26px] items-center justify-center rounded-full transition-all duration-300 hover:bg-white/[0.1] active:scale-90 ${isLiked ? 'text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.3)]' : 'text-white/70 hover:text-white'}`}
                                   title="Like"
                                 >
-                                  <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
+                                  <Heart className={`h-[14px] w-[14px] ${isLiked ? 'fill-current' : ''}`} />
                                 </button>
                                 {!group.isChatOrigin && (
                                   <button
@@ -1567,22 +1572,21 @@ export default function MediaLibraryPage() {
                                       e.stopPropagation()
                                       openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
                                     }}
-                                    className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white hover:scale-110 active:scale-90"
-                                    title="Reuse Prompt"
+                                    className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-white/70 transition-all duration-300 hover:bg-white/[0.1] hover:text-white active:scale-90"
+                                    title="Reuse prompt"
                                   >
-                                    <Sparkles className="h-4 w-4" />
+                                    <Sparkles className="h-[14px] w-[14px]" />
                                   </button>
                                 )}
-                                <div className="h-4 w-px bg-white/10 mx-0.5" />
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleTrashGroup(group.id, group.title)
                                   }}
-                                  className="flex h-8 w-8 items-center justify-center rounded-full text-white/40 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-300 hover:scale-110 active:scale-90"
+                                  className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-white/50 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-300 active:scale-90"
                                   title="Trash"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-[14px] w-[14px]" />
                                 </button>
                               </div>
                             </div>
@@ -1595,9 +1599,9 @@ export default function MediaLibraryPage() {
                           <button
                             key={asset.id}
                             onClick={() => openPreview(group, assetIndex)}
-                            className="group/list-item flex w-full items-center gap-5 rounded-2xl px-3 py-3 text-left transition-all duration-300 hover:bg-white/5 active:scale-[0.99]"
+                            className="group/list-item flex w-full items-center gap-5 rounded-[18px] px-3 py-3 text-left transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.04] active:scale-[0.99] ring-1 ring-transparent hover:ring-white/[0.08]"
                           >
-                            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] ring-1 ring-white/10 shadow-lg transition-transform duration-500 group-hover/list-item:scale-105">
+                            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[14px] bg-[#0c0d12] shadow-lg transition-transform duration-500 group-hover/list-item:scale-105 group-hover/list-item:shadow-[0_8px_24px_rgba(0,0,0,0.6)]">
                               <ProtectedAssetImage
                                 sources={assetPreviewSources(asset)}
                                 alt={assetDisplayTitle(asset)}
@@ -1673,7 +1677,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Projects"
-              description="Projects keep related image sets together so you can revisit them anytime."
+              description=""
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1683,32 +1687,32 @@ export default function MediaLibraryPage() {
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
                     return (
-                      <div key={project.id} className="group space-y-3">
+                      <div key={project.id} className="group space-y-2">
                         <div className="relative" data-library-menu-root="true">
-                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[22px] bg-[#111216] ring-1 ring-white/[0.06] shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:ring-white/[0.12] group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.5)] group-hover:-translate-y-1">
+                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[10px] bg-[#111216] transition-all duration-300 group-hover:ring-1 group-hover:ring-white/10">
                             {cover ? (
                               <div className="relative overflow-hidden">
                                 <ProtectedAssetImage
                                   sources={assetPreviewSources(cover)}
                                   alt={project.title}
-                                  className="aspect-[16/10] w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
-                                  fallbackClassName="flex aspect-[16/10] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                  className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                                  fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-md ring-1 ring-white/10 opacity-0 translate-y-2 transition-all duration-500 group-hover:opacity-100 group-hover:translate-y-0">
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                                <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                                   <ImageIcon className="h-3 w-3" />
                                   {projectAssets.length}
                                 </div>
                               </div>
                             ) : (
-                              <div className="relative flex aspect-[16/10] items-center justify-center bg-gradient-to-br from-white/[0.02] to-transparent">
-                                <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white/[0.03] ring-1 ring-white/[0.06] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3">
-                                  <Folder className="h-6 w-6 text-zinc-600 transition-colors duration-300 group-hover:text-zinc-400" />
+                              <div className="relative flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-white/[0.02] to-transparent">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-white/[0.03] ring-1 ring-white/[0.06] transition-transform duration-300 group-hover:scale-105">
+                                  <Folder className="h-5 w-5 text-zinc-600 transition-colors group-hover:text-zinc-400" />
                                 </div>
                               </div>
                             )}
@@ -1773,9 +1777,9 @@ export default function MediaLibraryPage() {
                             </InlineActionMenu>
                           ) : null}
                         </div>
-                        <div className="min-w-0 px-1">
-                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{project.title}</div>
-                          <div className="mt-1.5 text-[11px] text-zinc-500 font-medium">
+                        <div className="min-w-0 px-0.5">
+                          <div className="truncate text-[12.5px] font-semibold text-white/90 transition-colors group-hover:text-white">{project.title}</div>
+                          <div className="mt-0.5 text-[10.5px] text-zinc-600">
                             {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} · {formatDate(project.updated_at)}
                           </div>
                         </div>
@@ -1907,7 +1911,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Favorites"
-              description="Saved visuals appear here when you favorite work from Create, Library, or public posts."
+              description=""
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1926,7 +1930,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Trash"
-              description="Deleted images stay here until you restore them or remove them forever."
+              description=""
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -1946,19 +1950,19 @@ export default function MediaLibraryPage() {
 
             {filteredTrash.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7">
                   {filteredTrash.map((asset) => (
-                    <div key={asset.id} className="space-y-2.5">
-                      <div key={asset.id} className="relative rounded-[20px]">
-                        <div className="overflow-hidden rounded-[20px] bg-white/[0.03]">
-                          <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-[4/5] w-full object-cover opacity-75" />
+                    <div key={asset.id} className="space-y-1.5">
+                      <div key={asset.id} className="relative rounded-[10px]">
+                        <div className="overflow-hidden rounded-[10px] bg-white/[0.03]">
+                          <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-square w-full object-cover opacity-75" />
                         </div>
-                        <div className="absolute right-2 top-2" data-library-menu-root="true">
+                        <div className="absolute right-1.5 top-1.5" data-library-menu-root="true">
                           <button
                             onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur transition hover:bg-black/50 hover:text-white"
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-zinc-300 backdrop-blur transition hover:bg-black/60 hover:text-white"
                           >
-                            <MoreHorizontal className="h-4 w-4" />
+                            <MoreHorizontal className="h-3.5 w-3.5" />
                           </button>
                           {actionMenu === `trash:${asset.id}` ? (
                             <InlineActionMenu>
@@ -1984,9 +1988,9 @@ export default function MediaLibraryPage() {
                           ) : null}
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <div className="truncate text-sm font-medium text-white">{asset.title}</div>
-                        <div className="text-xs text-zinc-500">Deleted {asset.deleted_at ? formatDate(asset.deleted_at) : 'recently'}</div>
+                      <div className="space-y-0.5 px-0.5">
+                        <div className="truncate text-[12px] font-medium text-white/80">{asset.title}</div>
+                        <div className="text-[10.5px] text-zinc-600">Deleted {asset.deleted_at ? formatDate(asset.deleted_at) : 'recently'}</div>
                       </div>
                     </div>
                   ))}

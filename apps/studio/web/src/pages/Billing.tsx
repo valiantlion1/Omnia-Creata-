@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, Minus, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 
@@ -10,6 +10,14 @@ import {
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
+import { InlineError } from '@/components/InlineError'
+import { useToast } from '@/components/Toast'
+
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
 
 function formatBillingStatusLabel(summary: BillingSummary) {
   if (summary.account_tier === 'free') return 'Free account'
@@ -41,29 +49,56 @@ function formatCreditPackLeadPrice(options: PublicPlansPayload['credit_packs']) 
 
 export default function BillingPage() {
   const { auth, isAuthenticated } = useStudioAuth()
+  const { addToast } = useToast()
   const isRoot = auth?.identity?.root_admin || auth?.identity?.owner_mode
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [publicPlans, setPublicPlans] = useState<PublicPlansPayload | null>(null)
   const [loading, setLoading] = useState(false)
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [plansError, setPlansError] = useState<string | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   usePageMeta(
     'Plans & Billing',
     'Review Studio plans, credits, and checkout availability.',
   )
 
-  useEffect(() => {
-    studioApi.getPublicPlans().then(setPublicPlans).catch(() => {})
+  const loadPublicPlans = useCallback(async () => {
+    setPlansLoading(true)
+    setPlansError(null)
+    try {
+      const payload = await studioApi.getPublicPlans()
+      setPublicPlans(payload)
+    } catch (err) {
+      setPlansError(errorMessage(err, 'Could not load Studio plans.'))
+    } finally {
+      setPlansLoading(false)
+    }
   }, [])
 
-  useEffect(() => {
+  const loadBillingSummary = useCallback(async () => {
     if (!isAuthenticated) return
     setLoading(true)
-    studioApi.getBillingSummary()
-      .then(setBilling)
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    setSummaryError(null)
+    try {
+      const payload = await studioApi.getBillingSummary()
+      setBilling(payload)
+    } catch (err) {
+      setSummaryError(errorMessage(err, 'Could not load your billing summary.'))
+    } finally {
+      setLoading(false)
+    }
   }, [isAuthenticated])
+
+  useEffect(() => {
+    void loadPublicPlans()
+  }, [loadPublicPlans])
+
+  useEffect(() => {
+    void loadBillingSummary()
+  }, [loadBillingSummary])
 
   const isUnlimitedAccess = Boolean(billing?.credits.unlimited || isRoot)
   const availableCheckoutKinds = new Set<CheckoutKind>((billing?.checkout_options ?? []).map((option) => option.kind))
@@ -119,13 +154,20 @@ export default function BillingPage() {
 
   const handleCheckout = async (kind: CheckoutKind) => {
     setCheckoutLoading(kind)
+    setCheckoutError(null)
     try {
       const result = await studioApi.checkout(kind)
       if (typeof result.checkout_url === 'string' && result.checkout_url) {
         window.location.assign(result.checkout_url)
+        return
       }
+      const msg = 'Checkout is not available for this plan on your account yet.'
+      setCheckoutError(msg)
+      addToast('warning', msg)
     } catch (err) {
-      console.error('Checkout failed:', err)
+      const msg = errorMessage(err, 'Checkout could not be started. Please try again.')
+      setCheckoutError(msg)
+      addToast('error', msg)
     } finally {
       setCheckoutLoading(null)
     }
@@ -155,6 +197,49 @@ export default function BillingPage() {
           </p>
         </div>
       )}
+
+      {plansError ? (
+        <InlineError
+          title="Studio plans unavailable"
+          message={plansError}
+          onRetry={() => { void loadPublicPlans() }}
+          retryDisabled={plansLoading}
+          retryLabel={plansLoading ? 'Retrying…' : 'Try again'}
+        />
+      ) : null}
+
+      {isAuthenticated && summaryError ? (
+        <InlineError
+          title="Billing summary failed to load"
+          message={summaryError}
+          onRetry={() => { void loadBillingSummary() }}
+          retryDisabled={loading}
+          retryLabel={loading ? 'Retrying…' : 'Try again'}
+        />
+      ) : null}
+
+      {checkoutError ? (
+        <InlineError
+          title="Checkout unavailable"
+          message={checkoutError}
+          onRetry={() => setCheckoutError(null)}
+          retryLabel="Dismiss"
+        />
+      ) : null}
+
+      {isAuthenticated && !billing && loading ? (
+        <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-4 py-6 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading your billing summary…
+        </div>
+      ) : null}
+
+      {!publicPlans && plansLoading && !plansError ? (
+        <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-4 py-6 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading plans…
+        </div>
+      ) : null}
 
       {isAuthenticated && billing && !isUnlimitedAccess && !hasAnyCheckoutEnabled ? (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] p-4 text-amber-100">

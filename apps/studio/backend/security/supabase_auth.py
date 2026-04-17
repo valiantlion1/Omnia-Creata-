@@ -10,6 +10,10 @@ class SupabaseAuthError(Exception):
     pass
 
 
+class SupabaseAuthUnavailableError(SupabaseAuthError):
+    pass
+
+
 @dataclass
 class SupabaseSession:
     access_token: str
@@ -38,6 +42,14 @@ class SupabaseAuthClient:
         accepted_privacy: bool,
         accepted_usage_policy: bool,
         marketing_opt_in: bool,
+        accepted_terms_at: str | None = None,
+        terms_version: str | None = None,
+        accepted_privacy_at: str | None = None,
+        privacy_version: str | None = None,
+        accepted_usage_policy_at: str | None = None,
+        usage_policy_version: str | None = None,
+        marketing_opt_in_at: str | None = None,
+        marketing_consent_version: str | None = None,
     ) -> SupabaseSession:
         payload = {
             "email": email,
@@ -46,9 +58,17 @@ class SupabaseAuthClient:
                 "display_name": display_name,
                 "username": username,
                 "accepted_terms": accepted_terms,
+                "accepted_terms_at": accepted_terms_at,
+                "terms_version": terms_version,
                 "accepted_privacy": accepted_privacy,
+                "accepted_privacy_at": accepted_privacy_at,
+                "privacy_version": privacy_version,
                 "accepted_usage_policy": accepted_usage_policy,
+                "accepted_usage_policy_at": accepted_usage_policy_at,
+                "usage_policy_version": usage_policy_version,
                 "marketing_opt_in": marketing_opt_in,
+                "marketing_opt_in_at": marketing_opt_in_at,
+                "marketing_consent_version": marketing_consent_version,
             },
         }
         response = await self._request("POST", "/auth/v1/signup", json=payload)
@@ -107,12 +127,14 @@ class SupabaseAuthClient:
                     headers=request_headers,
                 )
         except httpx.TimeoutException as exc:
-            raise SupabaseAuthError("Supabase auth request timed out") from exc
+            raise SupabaseAuthUnavailableError("Supabase auth request timed out") from exc
         except httpx.HTTPError as exc:
-            raise SupabaseAuthError("Supabase auth request failed") from exc
+            raise SupabaseAuthUnavailableError("Supabase auth request failed") from exc
 
         payload = self._safe_json(response)
         if response.status_code >= 400:
+            if response.status_code >= 500:
+                raise SupabaseAuthUnavailableError("Supabase auth is temporarily unavailable right now.")
             message = (
                 payload.get("msg")
                 or payload.get("message")

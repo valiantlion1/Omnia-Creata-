@@ -14,10 +14,11 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { isAuthenticated, signIn, signInWithProvider, completeOAuthSignIn, consumeRedirectAfterAuth } = useStudioAuth()
 
-  const nextPath = useMemo(
-    () => sanitizeStudioRedirectPath(new URLSearchParams(location.search).get('next')),
-    [location.search],
-  )
+  const explicitNextPath = useMemo(() => {
+    const rawNextPath = new URLSearchParams(location.search).get('next')
+    return rawNextPath ? sanitizeStudioRedirectPath(rawNextPath) : null
+  }, [location.search])
+  const nextPath = explicitNextPath ?? sanitizeStudioRedirectPath(null)
   const isOAuthCallback = useMemo(() => {
     const searchParams = new URLSearchParams(location.search)
     const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''))
@@ -44,9 +45,10 @@ export default function LoginPage() {
     if (!isAuthenticated) return
     setGoogleBusy(false)
     setOauthCompleting(false)
-    const redirect = consumeRedirectAfterAuth() || nextPath
+    const storedRedirect = consumeRedirectAfterAuth()
+    const redirect = explicitNextPath || storedRedirect || nextPath
     navigate(redirect, { replace: true })
-  }, [consumeRedirectAfterAuth, isAuthenticated, navigate, nextPath])
+  }, [consumeRedirectAfterAuth, explicitNextPath, isAuthenticated, navigate, nextPath])
 
   useEffect(() => {
     if (!isOAuthCallback) return
@@ -81,7 +83,9 @@ export default function LoginPage() {
 
     try {
       await signIn(email.trim().toLowerCase(), password, captchaToken ?? undefined)
-      navigate(nextPath, { replace: true })
+      const storedRedirect = consumeRedirectAfterAuth()
+      const redirect = explicitNextPath || storedRedirect || nextPath
+      navigate(redirect, { replace: true })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to log in right now.')
       if (TURNSTILE_SITE_KEY) {

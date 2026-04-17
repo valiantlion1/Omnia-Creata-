@@ -6,6 +6,12 @@ import json
 from datetime import datetime, timedelta, timezone
 from config.env import get_settings, reveal_secret
 from ..models import *
+from ..models.identity import (
+    MARKETING_CONSENT_VERSION,
+    PRIVACY_VERSION,
+    TERMS_VERSION,
+    USAGE_POLICY_VERSION,
+)
 from ..profile_ops import build_identity_export, purge_identity_state
 from ..creative_profile_ops import attach_creative_profile
 from ..generation_admission_ops import count_incomplete_generations_for_identity
@@ -26,6 +32,21 @@ class DeletedIdentityError(PermissionError):
         self.identity_id = identity_id
         self.deleted_at = deleted_at
         super().__init__("Account has been permanently deleted.")
+
+
+def _coerce_optional_datetime(value: datetime | str | None) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+    return None
 
 if TYPE_CHECKING:
     from ..service import StudioService
@@ -151,9 +172,17 @@ class IdentityService:
             display_name=getattr(auth_user, "username", None) or "Creator",
             username=(getattr(auth_user, "metadata", {}) or {}).get("username") or None,
             accepted_terms=bool(getattr(auth_user, "metadata", {}).get("accepted_terms")),
+            accepted_terms_at=(getattr(auth_user, "metadata", {}) or {}).get("accepted_terms_at"),
+            terms_version=(getattr(auth_user, "metadata", {}) or {}).get("terms_version"),
             accepted_privacy=bool(getattr(auth_user, "metadata", {}).get("accepted_privacy")),
+            accepted_privacy_at=(getattr(auth_user, "metadata", {}) or {}).get("accepted_privacy_at"),
+            privacy_version=(getattr(auth_user, "metadata", {}) or {}).get("privacy_version"),
             accepted_usage_policy=bool(getattr(auth_user, "metadata", {}).get("accepted_usage_policy")),
+            accepted_usage_policy_at=(getattr(auth_user, "metadata", {}) or {}).get("accepted_usage_policy_at"),
+            usage_policy_version=(getattr(auth_user, "metadata", {}) or {}).get("usage_policy_version"),
             marketing_opt_in=bool(getattr(auth_user, "metadata", {}).get("marketing_opt_in")),
+            marketing_opt_in_at=(getattr(auth_user, "metadata", {}) or {}).get("marketing_opt_in_at"),
+            marketing_consent_version=(getattr(auth_user, "metadata", {}) or {}).get("marketing_consent_version"),
         )
         billing_state = await self._resolve_billing_state_for_identity(identity)
         return self.serialize_identity(identity, billing_state=billing_state)
@@ -178,9 +207,17 @@ class IdentityService:
         root_admin: bool = False,
         local_access: bool = False,
         accepted_terms: bool = False,
+        accepted_terms_at: datetime | str | None = None,
+        terms_version: str | None = None,
         accepted_privacy: bool = False,
+        accepted_privacy_at: datetime | str | None = None,
+        privacy_version: str | None = None,
         accepted_usage_policy: bool = False,
+        accepted_usage_policy_at: datetime | str | None = None,
+        usage_policy_version: str | None = None,
         marketing_opt_in: bool = False,
+        marketing_opt_in_at: datetime | str | None = None,
+        marketing_consent_version: str | None = None,
         bio: str = "",
         avatar_url: str | None = None,
         default_visibility: Optional[Visibility] = None,
@@ -239,6 +276,22 @@ class IdentityService:
                     created_at=now,
                     updated_at=now,
                 )
+                self._apply_consent_audit_fields(
+                    identity,
+                    now=now,
+                    accepted_terms=accepted_terms,
+                    accepted_terms_at=accepted_terms_at,
+                    terms_version=terms_version,
+                    accepted_privacy=accepted_privacy,
+                    accepted_privacy_at=accepted_privacy_at,
+                    privacy_version=privacy_version,
+                    accepted_usage_policy=accepted_usage_policy,
+                    accepted_usage_policy_at=accepted_usage_policy_at,
+                    usage_policy_version=usage_policy_version,
+                    marketing_opt_in=marketing_opt_in,
+                    marketing_opt_in_at=marketing_opt_in_at,
+                    marketing_consent_version=marketing_consent_version,
+                )
                 if privileged_flags["is_owner"]:
                     self._apply_privileged_identity_overrides(identity)
                 state.identities[identity.id] = identity
@@ -287,10 +340,22 @@ class IdentityService:
                 identity.owner_mode = identity.owner_mode or owner_mode
                 identity.root_admin = identity.root_admin or root_admin
                 identity.local_access = identity.local_access or local_access
-                identity.accepted_terms = identity.accepted_terms or accepted_terms
-                identity.accepted_privacy = identity.accepted_privacy or accepted_privacy
-                identity.accepted_usage_policy = identity.accepted_usage_policy or accepted_usage_policy
-                identity.marketing_opt_in = identity.marketing_opt_in or marketing_opt_in
+                self._apply_consent_audit_fields(
+                    identity,
+                    now=now,
+                    accepted_terms=accepted_terms,
+                    accepted_terms_at=accepted_terms_at,
+                    terms_version=terms_version,
+                    accepted_privacy=accepted_privacy,
+                    accepted_privacy_at=accepted_privacy_at,
+                    privacy_version=privacy_version,
+                    accepted_usage_policy=accepted_usage_policy,
+                    accepted_usage_policy_at=accepted_usage_policy_at,
+                    usage_policy_version=usage_policy_version,
+                    marketing_opt_in=marketing_opt_in,
+                    marketing_opt_in_at=marketing_opt_in_at,
+                    marketing_consent_version=marketing_consent_version,
+                )
                 identity.bio = bio or identity.bio
                 identity.avatar_url = avatar_url or identity.avatar_url
                 if default_visibility is not None:
@@ -365,9 +430,17 @@ class IdentityService:
             "root_admin": False,
             "local_access": False,
             "accepted_terms": False,
+            "accepted_terms_at": None,
+            "terms_version": None,
             "accepted_privacy": False,
+            "accepted_privacy_at": None,
+            "privacy_version": None,
             "accepted_usage_policy": False,
+            "accepted_usage_policy_at": None,
+            "usage_policy_version": None,
             "marketing_opt_in": False,
+            "marketing_opt_in_at": None,
+            "marketing_consent_version": None,
             "workspace_id": None,
             "temp_block_until": None,
             "manual_review_state": ManualReviewState.NONE.value,
@@ -427,6 +500,65 @@ class IdentityService:
     ) -> None:
         payload = {"event": event, **fields}
         logger.log(level, "security_event %s", json.dumps(payload, ensure_ascii=True, sort_keys=True))
+
+
+    def _resolve_consent_version(self, configured_version: str | None, fallback: str) -> str:
+        candidate = (configured_version or "").strip()
+        return candidate or fallback
+
+
+    def _apply_consent_audit_fields(
+        self,
+        identity: OmniaIdentity,
+        *,
+        now: datetime,
+        accepted_terms: bool,
+        accepted_terms_at: datetime | str | None,
+        terms_version: str | None,
+        accepted_privacy: bool,
+        accepted_privacy_at: datetime | str | None,
+        privacy_version: str | None,
+        accepted_usage_policy: bool,
+        accepted_usage_policy_at: datetime | str | None,
+        usage_policy_version: str | None,
+        marketing_opt_in: bool,
+        marketing_opt_in_at: datetime | str | None,
+        marketing_consent_version: str | None,
+    ) -> None:
+        if accepted_terms:
+            identity.accepted_terms = True
+        if identity.accepted_terms:
+            if identity.accepted_terms_at is None:
+                identity.accepted_terms_at = _coerce_optional_datetime(accepted_terms_at) or identity.created_at or now
+            if not identity.terms_version:
+                identity.terms_version = self._resolve_consent_version(terms_version, TERMS_VERSION)
+
+        if accepted_privacy:
+            identity.accepted_privacy = True
+        if identity.accepted_privacy:
+            if identity.accepted_privacy_at is None:
+                identity.accepted_privacy_at = _coerce_optional_datetime(accepted_privacy_at) or identity.created_at or now
+            if not identity.privacy_version:
+                identity.privacy_version = self._resolve_consent_version(privacy_version, PRIVACY_VERSION)
+
+        if accepted_usage_policy:
+            identity.accepted_usage_policy = True
+        if identity.accepted_usage_policy:
+            if identity.accepted_usage_policy_at is None:
+                identity.accepted_usage_policy_at = _coerce_optional_datetime(accepted_usage_policy_at) or identity.created_at or now
+            if not identity.usage_policy_version:
+                identity.usage_policy_version = self._resolve_consent_version(usage_policy_version, USAGE_POLICY_VERSION)
+
+        if marketing_opt_in:
+            identity.marketing_opt_in = True
+        if identity.marketing_opt_in:
+            if identity.marketing_opt_in_at is None:
+                identity.marketing_opt_in_at = _coerce_optional_datetime(marketing_opt_in_at) or identity.created_at or now
+            if not identity.marketing_consent_version:
+                identity.marketing_consent_version = self._resolve_consent_version(
+                    marketing_consent_version,
+                    MARKETING_CONSENT_VERSION,
+                )
 
 
     def _apply_identity_moderation_flag_locked(
@@ -950,4 +1082,3 @@ class IdentityService:
                 logging.getLogger(__name__).warning("Failed to delete user from Supabase auth: %s", e)
                 
         return True
-

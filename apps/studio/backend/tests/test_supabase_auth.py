@@ -3,7 +3,7 @@ import httpx
 
 import security.auth as auth_module
 from config.env import get_settings
-from security.supabase_auth import SupabaseAuthClient, SupabaseAuthError
+from security.supabase_auth import SupabaseAuthClient, SupabaseAuthUnavailableError
 
 
 class _TimeoutingClient:
@@ -22,7 +22,34 @@ async def test_supabase_request_wraps_timeout_as_auth_error(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: _TimeoutingClient())
     client = SupabaseAuthClient("https://example.supabase.co", "anon-key")
 
-    with pytest.raises(SupabaseAuthError, match="timed out"):
+    with pytest.raises(SupabaseAuthUnavailableError, match="timed out"):
+        await client.get_user("token")
+
+
+class _StaticResponseClient:
+    def __init__(self, response: httpx.Response):
+        self.response = response
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def request(self, *args, **kwargs):
+        return self.response
+
+
+@pytest.mark.asyncio
+async def test_supabase_request_wraps_server_errors_as_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: _StaticResponseClient(httpx.Response(503, json={"message": "temporary"})),
+    )
+    client = SupabaseAuthClient("https://example.supabase.co", "anon-key")
+
+    with pytest.raises(SupabaseAuthUnavailableError, match="temporarily unavailable"):
         await client.get_user("token")
 
 

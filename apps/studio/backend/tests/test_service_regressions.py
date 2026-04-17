@@ -34,6 +34,12 @@ from studio_platform.models import (
     utc_now,
 )
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, ProviderResult
+from studio_platform.models.identity import (
+    MARKETING_CONSENT_VERSION,
+    PRIVACY_VERSION,
+    TERMS_VERSION,
+    USAGE_POLICY_VERSION,
+)
 from studio_platform.service import DeletedIdentityError, StudioService
 from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
@@ -1937,6 +1943,7 @@ async def test_send_chat_message_allows_attachment_without_text(tmp_path: Path):
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -1983,6 +1990,7 @@ async def test_send_chat_message_titles_new_conversation_from_attachment_seed(tm
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -2123,6 +2131,7 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
         username="userone",
         workspace_id="ws-user-1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -2241,6 +2250,7 @@ async def test_chat_fallback_metadata_marks_provider_degradation(tmp_path: Path)
     identity = OmniaIdentity(
         email="fallback-chat@example.com",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -2287,6 +2297,7 @@ async def test_chat_follow_up_refinement_carries_prior_generation_bridge_when_fa
     identity = OmniaIdentity(
         email="followup-chat@example.com",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -2337,6 +2348,7 @@ async def test_chat_generation_fallback_response_uses_profile_specific_direction
     identity = OmniaIdentity(
         email="product-chat@example.com",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -2377,6 +2389,7 @@ async def test_chat_follow_up_edit_fallback_preserves_prior_blueprint_fields(tmp
     identity = OmniaIdentity(
         email="followup-edit@example.com",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         monthly_credits_remaining=1200,
         monthly_credit_allowance=1200,
     )
@@ -3305,8 +3318,10 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_local_processing(tmp_path: Path):
     settings = get_settings()
+    original_environment = settings.environment
     original_mode = settings.generation_runtime_mode
     original_redis_url = settings.redis_url
+    settings.environment = Environment.DEVELOPMENT
     settings.generation_runtime_mode = "web"
     settings.redis_url = ""
     service: StudioService | None = None
@@ -3316,9 +3331,9 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
         from PIL import Image
 
         class _TestProvider:
-            name = "test-provider"
-            rollout_tier = "fallback"
-            billable = False
+            name = "runware"
+            rollout_tier = "primary"
+            billable = True
             capabilities = ProviderCapabilities(workflows=("text_to_image",))
 
             async def is_available(self) -> bool:
@@ -3355,6 +3370,13 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
 
         providers = ProviderRegistry()
         providers.providers = [_TestProvider()]
+        providers._providers_by_name = {
+            provider.name: provider for provider in providers.providers
+        }
+        providers._provider_circuits = {
+            provider.name: provider_module.ProviderCircuitState()
+            for provider in providers.providers
+        }
         store = StudioStateStore(tmp_path / "state.json")
         service = StudioService(store, providers, tmp_path / "media")
         await service.initialize()
@@ -3366,6 +3388,7 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
             username="userone",
             workspace_id="ws-user-1",
             plan=IdentityPlan.PRO,
+            subscription_status=SubscriptionStatus.ACTIVE,
             monthly_credits_remaining=1200,
             monthly_credit_allowance=1200,
         )
@@ -3416,6 +3439,7 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
         )
         assert health["generation_worker"]["processing_active"] is True
     finally:
+        settings.environment = original_environment
         settings.generation_runtime_mode = original_mode
         settings.redis_url = original_redis_url
         if service is not None:
@@ -3521,6 +3545,7 @@ async def test_worker_runtime_mode_picks_up_new_queued_jobs_after_startup(tmp_pa
             username="userone",
             workspace_id="ws-user-1",
             plan=IdentityPlan.PRO,
+            subscription_status=SubscriptionStatus.ACTIVE,
             monthly_credits_remaining=1200,
             monthly_credit_allowance=1200,
         )
@@ -3641,6 +3666,7 @@ async def test_web_runtime_mode_with_shared_broker_enqueues_generation_for_exter
             username="userone",
             workspace_id="ws-user-web-broker",
             plan=IdentityPlan.PRO,
+            subscription_status=SubscriptionStatus.ACTIVE,
             monthly_credits_remaining=1200,
             monthly_credit_allowance=1200,
         )
@@ -3722,6 +3748,7 @@ async def test_worker_runtime_mode_processes_jobs_claimed_from_shared_broker(tmp
             username="userone",
             workspace_id="ws-user-shared-broker",
             plan=IdentityPlan.PRO,
+            subscription_status=SubscriptionStatus.ACTIVE,
             monthly_credits_remaining=1200,
             monthly_credit_allowance=1200,
         )
@@ -4973,6 +5000,55 @@ async def test_ensure_identity_applies_privileged_overrides_for_configured_owner
         settings.studio_root_admin_emails = original_root_admin_emails
         if service is not None:
             await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_ensure_identity_backfills_consent_audit_fields_for_legacy_records(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    created_at = utc_now()
+    identity = OmniaIdentity(
+        id="user-legacy",
+        email="legacy@example.com",
+        display_name="Legacy User",
+        username="legacy-user",
+        workspace_id="ws-user-legacy",
+        accepted_terms=True,
+        accepted_privacy=True,
+        accepted_usage_policy=True,
+        marketing_opt_in=True,
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Legacy User Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    try:
+        refreshed = await service.ensure_identity(
+            user_id=identity.id,
+            email=identity.email,
+            display_name=identity.display_name,
+            username=identity.username,
+        )
+
+        assert refreshed.accepted_terms_at == created_at
+        assert refreshed.terms_version == TERMS_VERSION
+        assert refreshed.accepted_privacy_at == created_at
+        assert refreshed.privacy_version == PRIVACY_VERSION
+        assert refreshed.accepted_usage_policy_at == created_at
+        assert refreshed.usage_policy_version == USAGE_POLICY_VERSION
+        assert refreshed.marketing_opt_in_at == created_at
+        assert refreshed.marketing_consent_version == MARKETING_CONSENT_VERSION
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.asyncio

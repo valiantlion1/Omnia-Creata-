@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sqlite3
 import time
@@ -23,6 +24,7 @@ POSTGRES_RECORDS_TABLE = "studio_state_records"
 POSTGRES_METADATA_TABLE = "studio_state_metadata"
 STORE_SCHEMA_VERSION = "2"
 POSTGRES_WRITE_LOCK_KEY = 902417531
+logger = logging.getLogger("omnia.studio.store")
 
 
 def _utc_now_iso() -> str:
@@ -96,6 +98,24 @@ def _load_bootstrap_state(path: Path) -> tuple[StudioState | None, str | None]:
     if suffix in {".sqlite", ".sqlite3", ".db"}:
         return _load_sqlite_state_file(path), "sqlite"
     return None, None
+
+
+def _load_state_from_rows(rows: list[tuple[str, str, Any]]) -> StudioState:
+    payload: dict[str, dict[str, Any]] = {
+        collection: {}
+        for collection in STATE_COLLECTIONS
+    }
+    for collection, model_id, raw_payload in rows:
+        try:
+            payload.setdefault(collection, {})[model_id] = _normalize_loaded_payload(raw_payload)
+        except (TypeError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Skipping malformed Studio state row while loading durable store: collection=%s model_id=%s (%s)",
+                collection,
+                model_id,
+                exc,
+            )
+    return StudioState.model_validate(payload)
 
 
 def _redact_postgres_dsn(dsn: str) -> str:
@@ -399,16 +419,14 @@ class SqliteStudioStateStore:
         return row is not None
 
     def _read_state_from_connection(self, connection: sqlite3.Connection) -> StudioState:
-        payload: dict[str, dict[str, Any]] = {
-            collection: {}
-            for collection in STATE_COLLECTIONS
-        }
         rows = connection.execute(
             "SELECT collection, model_id, payload FROM records ORDER BY collection, model_id"
         ).fetchall()
-        for row in rows:
-            payload.setdefault(row["collection"], {})[row["model_id"]] = json.loads(row["payload"])
-        return StudioState.model_validate(payload)
+        normalized_rows = [
+            (row["collection"], row["model_id"], row["payload"])
+            for row in rows
+        ]
+        return _load_state_from_rows(normalized_rows)
 
     def _replace_state_sync(
         self,
@@ -713,10 +731,6 @@ class PostgresStudioStateStore:
             return cursor.fetchone() is not None
 
     def _read_state_from_connection(self, connection) -> StudioState:
-        payload: dict[str, dict[str, Any]] = {
-            collection: {}
-            for collection in STATE_COLLECTIONS
-        }
         with connection.cursor() as cursor:
             cursor.execute(
                 f"""
@@ -726,9 +740,7 @@ class PostgresStudioStateStore:
                 """
             )
             rows = cursor.fetchall()
-        for collection, model_id, raw_payload in rows:
-            payload.setdefault(collection, {})[model_id] = _normalize_loaded_payload(raw_payload)
-        return StudioState.model_validate(payload)
+        return _load_state_from_rows(rows)
 
     def _acquire_write_lock_sync(self, connection) -> None:
         # Serialize durable-state writes across backend and worker processes.
@@ -871,6 +883,8 @@ def _resolve_store_path(raw_path: str | None, default_path: Path) -> Path:
 
 
 def _normalize_loaded_payload(value: Any) -> Any:
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
     if isinstance(value, str):
         return json.loads(value)
     return value

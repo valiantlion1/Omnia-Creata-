@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Globe, Heart, Layers, Lock, Search, Sparkles, Star, Users, X, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Globe, Heart, Layers, Lock, Search, Sparkles, Star, Users, X, Zap } from 'lucide-react'
 
 import { AppPage, ButtonChip, SkeletonMasonry, StatusPill } from '@/components/StudioPrimitives'
 import { useLightbox } from '@/components/Lightbox'
@@ -10,17 +10,12 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 import { usePageMeta } from '@/lib/usePageMeta'
 
-function metadataString(metadata: Record<string, unknown>, key: string) {
-  const value = metadata[key]
-  return typeof value === 'string' ? value : undefined
-}
-
 function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md" onClick={onClose}>
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0d12]/95 p-8 shadow-[0_36px_120px_rgba(0,0,0,0.6)]"
+        className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-white/[0.06] bg-[#0c0d12]/60 p-8 shadow-[0_36px_120px_-20px_rgba(0,0,0,0.8),0_0_40px_rgba(255,255,255,0.03)] backdrop-blur-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -88,7 +83,7 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 px-4 backdrop-blur-lg" onClick={onClose}>
       <div
-        className="relative w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#0a0d12]/98 p-8 shadow-[0_36px_120px_rgba(0,0,0,0.7)] md:p-10"
+        className="relative w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/[0.06] bg-[#0c0d12]/60 p-8 shadow-[0_36px_120px_-20px_rgba(0,0,0,0.8),0_0_40px_rgba(255,255,255,0.03)] backdrop-blur-3xl md:p-10"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -309,85 +304,61 @@ function PostCard({
   post,
   locked,
   onLike,
-  index,
   onOpen,
 }: {
   post: PublicPost
   locked: boolean
   onLike: (post: PublicPost) => void
-  index: number
   onOpen: (post: PublicPost) => void
 }) {
   const previewAssets = post.preview_assets.length ? post.preview_assets : post.cover_asset ? [post.cover_asset] : []
   const heroAsset = previewAssets[0] ?? null
-  const aspectClass =
-    index % 6 === 0
-      ? 'aspect-[4/5]'
-      : index % 6 === 1
-        ? 'aspect-square'
-        : index % 6 === 2
-          ? 'aspect-[5/6]'
-          : index % 6 === 3
-            ? 'aspect-[4/5]'
-            : index % 6 === 4
-              ? 'aspect-square'
-              : 'aspect-[5/6]'
-
   return (
-    <article className="group relative mb-6 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.3)] rounded-[26px]">
-      <div className="relative overflow-hidden rounded-[26px] bg-[#111216] border border-white/[0.04]">
+    <article className="group relative mb-2 break-inside-avoid transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:z-10 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_20px_rgba(255,255,255,0.05)]">
+      <div className="relative overflow-hidden rounded-[12px] bg-[#0e1014] ring-1 ring-white/[0.04] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:ring-white/[0.15]">
         <button type="button" onClick={() => onOpen(post)} className="block w-full text-left">
           {heroAsset ? (
             <img
               src={heroAsset.thumbnail_url ?? heroAsset.url}
               alt={heroAsset.title}
-              className={`w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04] ${aspectClass}`}
+              className="w-full h-auto object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05]"
               loading="lazy"
             />
           ) : (
-            <div className={`w-full bg-white/[0.03] ${aspectClass}`} />
+            <div className="w-full aspect-square bg-white/[0.03]" />
           )}
 
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 opacity-60 transition duration-500 group-hover:opacity-100" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 opacity-0 transition duration-500 translate-y-4 group-hover:translate-y-0 group-hover:opacity-100">
-            <div className="line-clamp-2 text-sm font-semibold tracking-tight text-white/95 leading-relaxed drop-shadow-md">
-              {post.prompt ? post.prompt : post.title}
-            </div>
-            <div className="mt-2.5 flex items-center justify-between border-t border-white/10 pt-2.5">
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
-                <span className="font-bold text-white/90 drop-shadow-sm">@{post.owner_username}</span>
-                <span className="opacity-50">·</span>
-                <span>{new Date(post.created_at).toLocaleDateString()}</span>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/85 opacity-0 transition duration-300 group-hover:opacity-100" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end px-3 pb-3 opacity-0 transition duration-300 group-hover:opacity-100">
+            {post.prompt || post.title ? (
+              <div className="line-clamp-2 text-[12px] font-medium leading-snug text-white/95 drop-shadow-md">
+                {post.prompt ? post.prompt : post.title}
               </div>
+            ) : null}
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-zinc-300">
+              <span className="font-semibold text-white/90">@{post.owner_username}</span>
             </div>
           </div>
         </button>
 
-        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5 opacity-0 -translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
-          {post.style_tags.slice(0, 2).map((tag) => (
-            <StatusPill key={tag} tone="neutral" className="border-white/10 bg-black/40 backdrop-blur-md text-white/80">
-              {tag}
-            </StatusPill>
-          ))}
-          {previewAssets.length > 1 ? (
-            <StatusPill tone="neutral" className="border-white/10 bg-black/40 backdrop-blur-md">
-              {previewAssets.length} <Sparkles className="inline ml-0.5 h-2.5 w-2.5 opacity-60" />
-            </StatusPill>
-          ) : null}
-        </div>
+        {previewAssets.length > 1 && (
+          <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-sm opacity-0 transition group-hover:opacity-100">
+            {previewAssets.length}
+          </div>
+        )}
 
-        <div className="absolute right-3 top-3 flex items-center gap-2">
+        <div className="absolute right-2 top-2 opacity-0 transition duration-300 group-hover:opacity-100">
           <button
             onClick={() => onLike(post)}
             className={locked
-              ? 'inline-flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-md ring-1 ring-white/10 transition hover:bg-black/60'
-              : `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium backdrop-blur-md ring-1 transition-all duration-300 ${
+              ? 'inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-semibold text-white/90 backdrop-blur-sm ring-1 ring-white/10 transition hover:bg-black/70'
+              : `inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold backdrop-blur-sm ring-1 transition ${
                   post.viewer_has_liked
-                    ? 'bg-white text-black ring-white shadow-[0_0_12px_rgba(255,255,255,0.4)]'
-                    : 'bg-black/40 text-white/90 ring-white/10 hover:bg-black/60 hover:ring-white/20'
+                    ? 'bg-white text-black ring-white'
+                    : 'bg-black/55 text-white/90 ring-white/10 hover:bg-black/75'
                 }`}
           >
-            {locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : <Heart className={`h-3.5 w-3.5 ${post.viewer_has_liked ? 'fill-current text-rose-500' : 'opacity-70'}`} />}
+            {locked ? <Lock className="h-3 w-3" /> : <Heart className={`h-3 w-3 ${post.viewer_has_liked ? 'fill-current text-rose-500' : ''}`} />}
             <span>{post.like_count}</span>
           </button>
         </div>
@@ -400,25 +371,30 @@ function ExploreLightbox({
   post,
   open,
   onClose,
+  onLike,
+  locked,
 }: {
   post: PublicPost | null
   open: boolean
   onClose: () => void
+  onLike: (post: PublicPost) => void
+  locked: boolean
 }) {
   const [assetIndex, setAssetIndex] = useState(0)
-  const { openLightbox } = useLightbox()
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     setAssetIndex(0)
+    setCopied(false)
   }, [post?.id])
 
   useEffect(() => {
     if (!open) return undefined
+    document.body.style.overflow = 'hidden'
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
       if (!post) return
-
       const previewAssets = post.preview_assets.length ? post.preview_assets : post.cover_asset ? [post.cover_asset] : []
       if (!previewAssets.length) return
       if (event.key === 'ArrowRight') {
@@ -430,7 +406,10 @@ function ExploreLightbox({
     }
 
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = ''
+    }
   }, [onClose, open, post])
 
   if (!open || !post) return null
@@ -438,138 +417,182 @@ function ExploreLightbox({
   const previewAssets = post.preview_assets.length ? post.preview_assets : post.cover_asset ? [post.cover_asset] : []
   const activeAsset = previewAssets[assetIndex] ?? previewAssets[0] ?? null
   const canStep = previewAssets.length > 1
+  const authorInitial = (post.owner_display_name || post.owner_username).charAt(0).toUpperCase()
+
+  const copyPrompt = () => {
+    if (!post.prompt) return
+    navigator.clipboard.writeText(post.prompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    })
+  }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/88 px-4 py-6 backdrop-blur-md" onClick={onClose}>
-      <div
-        className="relative grid w-full max-w-[1280px] gap-5 rounded-[28px] border border-white/[0.08] bg-[#0a0d12] p-4 shadow-[0_36px_120px_rgba(0,0,0,0.6)] md:grid-cols-[minmax(0,1fr)_320px] md:p-5"
-        onClick={(event) => event.stopPropagation()}
+    <div
+      className="fixed inset-0 z-[100] flex bg-black/90 backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] animate-in fade-in"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+        className="absolute right-6 top-6 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-zinc-400 ring-1 ring-white/[0.1] backdrop-blur-md transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-110 hover:bg-white/[0.1] hover:text-white"
+        title="Close (ESC)"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-zinc-300 transition hover:bg-white hover:text-black"
-          title="Close preview"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <X className="h-4 w-4" />
+      </button>
 
-        <div className="min-w-0">
-          <div className="group relative overflow-hidden rounded-[24px] bg-black/50">
-            {activeAsset ? (
-              <div className="relative">
-                <img
-                  src={activeAsset.url}
-                  alt={activeAsset.title}
-                  className="max-h-[78vh] min-h-[320px] w-full cursor-zoom-in object-contain"
-                  onClick={() => openLightbox(activeAsset.url, activeAsset.title, {
-                    title: post.title,
-                    prompt: post.prompt,
-                    authorName: post.owner_display_name,
-                    authorUsername: post.owner_username,
-                    likes: post.like_count,
-                    aspectRatio: metadataString(activeAsset.metadata, 'aspect_ratio')
-                  })}
-                />
-              </div>
-            ) : (
-              <div className="flex min-h-[420px] items-center justify-center text-sm text-zinc-500">No preview available</div>
-            )}
+      {/* Image area */}
+      <div
+        className="flex flex-1 items-center justify-center p-4 md:p-10 relative min-w-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {activeAsset ? (
+          <img
+            src={activeAsset.url}
+            alt={activeAsset.title}
+            className="max-h-[90vh] max-w-full rounded-2xl object-contain shadow-[0_40px_100px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.06]"
+            style={{ animation: 'oc-img-reveal 0.55s cubic-bezier(0.16,1,0.3,1) both' }}
+          />
+        ) : (
+          <div className="flex min-h-[420px] items-center justify-center text-sm text-zinc-500">No preview available</div>
+        )}
 
-            {canStep ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setAssetIndex((current) => (current - 1 + previewAssets.length) % previewAssets.length)}
-                  className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-white hover:text-black"
-                  title="Previous image"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAssetIndex((current) => (current + 1) % previewAssets.length)}
-                  className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-white hover:text-black"
-                  title="Next image"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </>
-            ) : null}
-          </div>
-
-          {previewAssets.length > 1 ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {previewAssets.map((asset, index) => (
-                <button
-                  key={asset.id}
-                  type="button"
-                  onClick={() => setAssetIndex(index)}
-                  className={`overflow-hidden rounded-2xl border transition ${
-                    index === assetIndex ? 'border-white/70 opacity-100' : 'border-white/[0.08] opacity-65 hover:opacity-100'
-                  }`}
-                >
-                  <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="h-20 w-20 object-cover" />
-                </button>
-              ))}
+        {canStep && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setAssetIndex((c) => (c - 1 + previewAssets.length) % previewAssets.length) }}
+              className="absolute left-4 md:left-6 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/90 ring-1 ring-white/[0.1] backdrop-blur-md transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-110 hover:bg-white/[0.1] hover:text-white"
+              title="Previous (←)"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setAssetIndex((c) => (c + 1) % previewAssets.length) }}
+              className="absolute right-4 md:right-6 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/90 ring-1 ring-white/[0.1] backdrop-blur-md transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-110 hover:bg-white/[0.1] hover:text-white"
+              title="Next (→)"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white/80 ring-1 ring-white/[0.08] backdrop-blur-sm">
+              {assetIndex + 1} / {previewAssets.length}
             </div>
-          ) : null}
+          </>
+        )}
+      </div>
+
+      {/* Sidebar */}
+      <aside
+        className="hidden md:flex w-[320px] shrink-0 flex-col gap-5 border-l border-white/[0.05] bg-[#08090b] p-6 overflow-y-auto"
+        style={{ animation: 'oc-fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Author */}
+        <Link
+          to={`/u/${post.owner_username}`}
+          className="flex items-center gap-3 pb-5 border-b border-white/[0.05] transition hover:opacity-90"
+        >
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+            style={{ background: 'linear-gradient(135deg, rgb(var(--primary)/0.4), rgb(var(--accent)/0.3))' }}
+          >
+            {authorInitial}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white truncate">
+              {post.owner_display_name || post.owner_username}
+            </div>
+            <div className="text-[12px] text-zinc-500">@{post.owner_username}</div>
+          </div>
+        </Link>
+
+        {/* Title */}
+        {post.title && (
+          <h2 className="text-base font-semibold text-white/90 leading-snug">{post.title}</h2>
+        )}
+
+        {/* Prompt */}
+        {post.prompt && (
+          <div className="space-y-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">Prompt</div>
+            <p className="text-[13px] leading-[1.7] text-zinc-400 whitespace-pre-wrap">{post.prompt}</p>
+            <button
+              type="button"
+              onClick={copyPrompt}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 transition hover:text-zinc-200"
+            >
+              <Copy className="h-3 w-3" />
+              {copied ? 'Copied' : 'Copy prompt'}
+            </button>
+          </div>
+        )}
+
+        {/* Tags */}
+        {post.style_tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {post.style_tags.slice(0, 6).map((tag) => (
+              <StatusPill key={tag} tone="neutral" className="text-[10px]">
+                {tag}
+              </StatusPill>
+            ))}
+          </div>
+        )}
+
+        {/* Date */}
+        <div className="text-[11px] text-zinc-600">
+          {new Date(post.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
         </div>
 
-        <aside className="flex min-h-0 flex-col justify-between gap-5 rounded-[22px] bg-[#0d1117] p-4 ring-1 ring-white/[0.05] md:ml-1">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-600">Gallery</div>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">{post.title}</h2>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
-              <Link to={`/u/${post.owner_username}`} className="font-medium text-white transition hover:text-zinc-300">
-                @{post.owner_username}
-              </Link>
-              <span className="text-zinc-600">/</span>
-              <span>{new Date(post.created_at).toLocaleDateString()}</span>
-            </div>
+        {/* Actions */}
+        <div className="mt-auto flex flex-col gap-2 pt-4 border-t border-white/[0.05]">
+          <button
+            type="button"
+            onClick={() => onLike(post)}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              locked
+                ? 'bg-white/[0.05] text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08]'
+                : post.viewer_has_liked
+                  ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-[1.02] active:scale-[0.98]'
+                  : 'bg-white/[0.06] text-white ring-1 ring-white/[0.08] hover:bg-white/[0.1] hover:scale-[1.02] active:scale-[0.98]'
+            }`}
+          >
+            {locked ? <Lock className="h-4 w-4" /> : <Heart className={`h-4 w-4 ${post.viewer_has_liked ? 'fill-current text-rose-500' : ''}`} />}
+            <span>{post.like_count} {post.like_count === 1 ? 'like' : 'likes'}</span>
+          </button>
+          <Link
+            to={`/u/${post.owner_username}`}
+            className="inline-flex items-center justify-center rounded-full bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 ring-1 ring-white/[0.06] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.08] hover:text-white hover:scale-[1.02] active:scale-[0.98]"
+          >
+            View @{post.owner_username}
+          </Link>
+        </div>
 
-            {post.style_tags.length ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {post.style_tags.slice(0, 4).map((tag) => (
-                  <StatusPill key={tag} tone="neutral">
-                    {tag}
-                  </StatusPill>
-                ))}
-              </div>
-            ) : null}
-
-            <p className="mt-5 line-clamp-5 text-sm leading-7 text-zinc-400">{post.prompt}</p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-zinc-400">
-              <Heart className={`h-4 w-4 ${post.viewer_has_liked ? 'fill-current text-white' : ''}`} />
-              <span>{post.like_count} likes</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to={`/u/${post.owner_username}`}
-                className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]"
-              >
-                View profile
-              </Link>
+        {/* Thumbnail strip */}
+        {canStep && (
+          <div className="flex gap-1.5 overflow-x-auto border-t border-white/[0.05] pt-4">
+            {previewAssets.map((asset, index) => (
               <button
+                key={asset.id}
                 type="button"
-                onClick={onClose}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                onClick={() => setAssetIndex(index)}
+                className={`shrink-0 overflow-hidden rounded-md transition ${
+                  index === assetIndex ? 'ring-2 ring-white/90' : 'opacity-55 hover:opacity-100'
+                }`}
               >
-                Back to Gallery
+                <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="h-14 w-14 object-cover" />
               </button>
-            </div>
+            ))}
           </div>
-        </aside>
-      </div>
+        )}
+      </aside>
     </div>
   )
 }
 
 export default function DashboardPage() {
-  usePageMeta('Gallery', 'Discover AI-generated art, curated showcases, and creative atmospheres on Omnia Creata.')
+  usePageMeta('Explore — Omnia Creata Studio', 'What the community is making on Omnia Creata Studio.')
   const location = useLocation()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
@@ -643,32 +666,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppPage className="max-w-[1500px] gap-0 py-8">
-
-      {/* ── Gallery Header ── */}
-      <section className="px-1 pb-8">
-        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-600 mb-4">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>Omnia Creata</span>
-        </div>
-        <h1
-          className="text-4xl font-bold tracking-tight sm:text-5xl"
-          style={{
-            background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          Gallery
-        </h1>
-        <p className="mt-3 text-base text-zinc-400 max-w-xl">
-          Discover AI art from the community, explore curated showcases, and browse visual atmosphere references.
-        </p>
-      </section>
+    <AppPage className="max-w-[1700px] gap-0 py-5 md:py-6">
 
       {/* ── Tab Bar ── */}
-      <section className="mb-8 flex flex-wrap items-center gap-3 border-b border-white/[0.06] pb-5">
+      <section className="mb-4 flex flex-wrap items-center gap-3 pb-3">
         <div className="flex items-center gap-1.5">
           {galleryTabs.map((tab) => {
             const Icon = tab.icon
@@ -677,9 +678,9 @@ export default function DashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-[13px] font-semibold transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                   isActive
-                    ? 'text-white ring-1 ring-white/10 shadow-[0_2px_16px_rgba(0,0,0,0.3)]'
+                    ? 'text-white ring-1 ring-white/10 shadow-[0_0_20px_rgba(var(--primary-light),0.15)]'
                     : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
                 }`}
                 style={isActive ? { background: 'linear-gradient(135deg, rgb(var(--primary)/0.25), rgb(var(--primary)/0.08))' } : undefined}
@@ -724,31 +725,31 @@ export default function DashboardPage() {
 
       {/* ── Community Tab ── */}
       {galleryTab === 'community' && (
-        <section className="space-y-6">
+        <section className="space-y-3">
           {postsQuery.isLoading ? (
-            <SkeletonMasonry count={12} />
+            <SkeletonMasonry count={18} />
           ) : filteredPosts.length > 0 ? (
             <>
-              <div className="text-[12px] text-zinc-600 font-medium">
-                {filteredPosts.length} result{filteredPosts.length === 1 ? '' : 's'}
+              <div className="text-[11px] text-zinc-600 font-medium px-0.5">
+                {filteredPosts.length} {filteredPosts.length === 1 ? 'result' : 'results'}
                 {searchQuery ? ` for "${searchQuery}"` : ''}
-                {' '}· {sortOptions.find((o) => o.id === sort)?.label ?? 'Trending'}
+                {' · '}{sortOptions.find((o) => o.id === sort)?.label ?? 'Trending'}
               </div>
-              <div className="columns-2 gap-4 md:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]">
-                {filteredPosts.map((post: PublicPost, index: number) => (
-                  <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} index={index} onOpen={setSelectedPost} />
+              <div className="columns-2 gap-2 sm:columns-3 md:columns-4 xl:columns-5 2xl:columns-6 [column-fill:_balance]">
+                {filteredPosts.map((post: PublicPost) => (
+                  <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} onOpen={setSelectedPost} />
                 ))}
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="flex flex-col items-center justify-center py-28 text-center animate-in fade-in duration-500">
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-[20px] mb-6 ring-1 ring-white/[0.08]"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.08), rgb(var(--accent)/0.08))' }}
+                className="flex h-20 w-20 items-center justify-center rounded-[24px] mb-8 ring-1 ring-white/[0.08] shadow-[0_0_40px_rgba(var(--primary-light),0.1)]"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.1), rgb(var(--accent)/0.1))' }}
               >
-                <Users className="h-7 w-7 text-zinc-500" />
+                <Users className="h-8 w-8 text-zinc-400" />
               </div>
-              <div className="text-xl font-semibold text-zinc-200">
+              <div className="text-2xl font-semibold tracking-[-0.02em] text-zinc-200">
                 {searchQuery ? `No results for "${searchQuery}"` : 'Nothing is live here yet'}
               </div>
               <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
@@ -771,16 +772,13 @@ export default function DashboardPage() {
 
       {/* ── Showcase Tab ── */}
       {galleryTab === 'showcase' && (
-        <section className="space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="space-y-0.5">
-              <div className="text-sm font-semibold text-white">Curated References</div>
-              <div className="text-[12px] text-zinc-600">{showcaseReferences.length} hand-selected Studio outputs</div>
-            </div>
+        <section className="space-y-3">
+          <div className="text-[11px] text-zinc-600 font-medium px-0.5">
+            {showcaseReferences.length} hand-picked Studio outputs
           </div>
-          <div className="columns-2 gap-4 md:columns-3 xl:columns-4 [column-fill:_balance]">
+          <div className="columns-2 gap-2 sm:columns-3 md:columns-4 xl:columns-5 2xl:columns-6 [column-fill:_balance]">
             {showcaseReferences.map((item, i) => (
-              <div key={item.id} className="group relative mb-5 break-inside-avoid shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(0,0,0,0.6),0_0_0_1px_rgb(var(--primary-light)/0.25)] rounded-[24px]">
+              <div key={item.id} className="group relative mb-2 break-inside-avoid">
                 <button
                   type="button"
                   onClick={() => openLightbox(item.src, item.label, {
@@ -789,33 +787,26 @@ export default function DashboardPage() {
                     authorUsername: 'studio',
                     prompt: item.prompt,
                   })}
-                  className="relative overflow-hidden rounded-[24px] bg-[#111216] border border-white/[0.04] w-full text-left block cursor-zoom-in"
+                  className="relative overflow-hidden rounded-[10px] bg-[#0e1014] w-full text-left block cursor-zoom-in"
                 >
                   <img
                     src={item.src}
                     alt={item.label}
                     loading="lazy"
-                    className={`w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04] ${
+                    className={`w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] ${
                       i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-square' : 'aspect-[5/6]'
                     }`}
                   />
 
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/85 opacity-50 transition duration-500 group-hover:opacity-100" />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/85 opacity-0 transition duration-300 group-hover:opacity-100" />
 
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end p-4 opacity-0 transition duration-500 translate-y-3 group-hover:translate-y-0 group-hover:opacity-100">
-                    <div className="text-[13px] font-semibold text-white/95 leading-snug drop-shadow-md">{item.label}</div>
-                    <div className="mt-1 text-[11px] text-zinc-400">{item.prompt.slice(0, 60)}…</div>
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end px-3 pb-3 opacity-0 transition duration-300 group-hover:opacity-100">
+                    <div className="text-[12px] font-semibold text-white/95 leading-snug drop-shadow-md">{item.label}</div>
                   </div>
 
-                  <div className="pointer-events-none absolute left-3 top-3 opacity-0 -translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
-                    <StatusPill tone="brand" className="border-white/10 bg-black/50 backdrop-blur-md text-white/90 ring-1 ring-white/10">
-                      {item.tag}
-                    </StatusPill>
-                  </div>
-
-                  <div className="pointer-events-none absolute right-3 top-3 opacity-0 translate-x-2 transition duration-500 group-hover:opacity-100 group-hover:translate-x-0">
-                    <div className="flex items-center gap-1 rounded-full bg-black/50 backdrop-blur-md px-2.5 py-1 text-[11px] text-zinc-300 ring-1 ring-white/10">
-                      <Heart className="h-3 w-3 opacity-70" />
+                  <div className="pointer-events-none absolute right-2 top-2 opacity-0 transition duration-300 group-hover:opacity-100">
+                    <div className="flex items-center gap-1 rounded-full bg-black/55 backdrop-blur-sm px-2 py-1 text-[10px] text-white/90 ring-1 ring-white/10">
+                      <Heart className="h-3 w-3" />
                       <span>{item.likes}</span>
                     </div>
                   </div>
@@ -828,52 +819,45 @@ export default function DashboardPage() {
 
       {/* ── Atmospheres Tab ── */}
       {galleryTab === 'atmospheres' && (
-        <section className="space-y-6">
-          <div className="space-y-0.5">
-            <div className="text-sm font-semibold text-white">Atmosphere Boards</div>
-            <div className="text-[12px] text-zinc-600">Visual mood references for prompt direction and style exploration</div>
+        <section className="space-y-3">
+          <div className="text-[11px] text-zinc-600 font-medium px-0.5">
+            {atmosphereReferences.length} mood boards · tap any card for full view
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {atmosphereReferences.map((atm) => (
               <button
                 key={atm.id}
                 type="button"
                 onClick={() => openLightbox(atm.src, atm.label, { title: atm.label, prompt: atm.mood })}
-                className="group relative overflow-hidden rounded-[20px] border border-white/[0.04] bg-[#0d0e12] cursor-zoom-in transition-all duration-500 hover:-translate-y-0.5 hover:border-white/[0.12] hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                className="group relative overflow-hidden rounded-[10px] bg-[#0e1014] cursor-zoom-in transition-transform duration-300"
               >
                 <div className="aspect-[3/4] w-full overflow-hidden">
                   <img
                     src={atm.src}
                     alt={atm.label}
                     loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                   />
                 </div>
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
-                <div className="absolute inset-x-0 bottom-0 p-3.5 text-left">
-                  <div className="text-[13px] font-semibold text-white leading-tight">{atm.label}</div>
-                  <div className="mt-1 text-[10px] text-zinc-500 leading-relaxed">{atm.mood}</div>
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/85 opacity-0 transition duration-300 group-hover:opacity-100" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-3 text-left opacity-0 transition duration-300 group-hover:opacity-100">
+                  <div className="text-[12px] font-semibold text-white leading-tight drop-shadow-md">{atm.label}</div>
                 </div>
               </button>
             ))}
-          </div>
-          <div className="rounded-[20px] border border-white/[0.04] bg-white/[0.015] p-5 flex items-start gap-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-zinc-400">
-              <Layers className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-sm font-medium text-zinc-300">Using atmospheres in your prompts</div>
-              <p className="mt-1 text-[12px] text-zinc-500 leading-relaxed max-w-2xl">
-                Each atmosphere captures a distinct visual language. Click any board to view it full-size, then use the mood tags as prompt keywords — combine multiple atmospheres to build layered, unique styles.
-              </p>
-            </div>
           </div>
         </section>
       )}
 
       <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
       <WelcomeOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
-      <ExploreLightbox post={selectedPost} open={Boolean(selectedPost)} onClose={() => setSelectedPost(null)} />
+      <ExploreLightbox
+        post={selectedPost}
+        open={Boolean(selectedPost)}
+        onClose={() => setSelectedPost(null)}
+        onLike={handleLike}
+        locked={!canUseAccount}
+      />
     </AppPage>
   )
 }

@@ -30,6 +30,10 @@ Already strong:
 - generation runtime, asset persistence, and project/library surfaces are real product behavior
 - billing and entitlement summaries are first-class backend payloads
 - launch-readiness, provider smoke, and staging verification exist as operator truth surfaces
+- Create prompt history is now account-scoped per browser identity instead of one shared local bucket
+- optional analytics can now stay off until the user explicitly allows them
+- policy acceptance now carries accepted-at plus policy-version audit fields instead of only booleans
+- login redirect intent is now stable across both direct sign-in and the OAuth callback path instead of being vulnerable to stale stored redirect leakage
 
 Still open:
 - `abuse_hardening`
@@ -39,6 +43,26 @@ Still open:
 
 Those remain real launch gates.
 They should be solved honestly, not narrated away.
+
+## Current Phase 1 Hardening Truth
+
+The current Phase 1 hardening slice tightened three launch-facing seams without opening a new feature surface:
+- prompt history isolation on `Create`
+- consent-gated optional analytics
+- server-authoritative policy acceptance audit trail
+
+Current proof on build `2026.04.17.127`:
+- local verify: pass
+- provider smoke: pass
+- backend pytest: pass (`521 passed`)
+- focused web auth tests: pass (`7 passed`)
+- browser auth shell checks: pass
+- protected staging: latest artefact is still build `.125` warning with `closure_ready=true`
+
+Interpretation:
+- local, provider, backend, and auth-shell behavior are current-build true on `.127`
+- protected-beta closure remains historically preserved
+- fresh `.127` protected-staging proof is still pending before anyone should narrate full proof sync
 
 ## Current Launch Doctrine
 

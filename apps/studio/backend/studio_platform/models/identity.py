@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field
 
 from .common import utc_now
 
+TERMS_VERSION = "2026-04"
+PRIVACY_VERSION = "2026-04"
+USAGE_POLICY_VERSION = "2026-04"
+MARKETING_CONSENT_VERSION = "2026-04"
+
 
 class IdentityPlan(str, Enum):
     GUEST = "guest"
@@ -45,9 +50,17 @@ class OmniaIdentity(BaseModel):
     root_admin: bool = False
     local_access: bool = False
     accepted_terms: bool = False
+    accepted_terms_at: Optional[datetime] = None
+    terms_version: Optional[str] = None
     accepted_privacy: bool = False
+    accepted_privacy_at: Optional[datetime] = None
+    privacy_version: Optional[str] = None
     accepted_usage_policy: bool = False
+    accepted_usage_policy_at: Optional[datetime] = None
+    usage_policy_version: Optional[str] = None
     marketing_opt_in: bool = False
+    marketing_opt_in_at: Optional[datetime] = None
+    marketing_consent_version: Optional[str] = None
     bio: str = ""
     avatar_url: Optional[str] = None
     default_visibility: Visibility = Visibility.PRIVATE

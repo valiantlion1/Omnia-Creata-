@@ -433,9 +433,17 @@ async def get_current_user(
                 "local_access": bool(app_metadata.get("local_access") or user_metadata.get("local_access") or owner_email_match),
                 "username": (user_metadata.get("username") or email.split("@")[0] or "").strip().lower(),
                 "accepted_terms": bool(user_metadata.get("accepted_terms")),
+                "accepted_terms_at": user_metadata.get("accepted_terms_at"),
+                "terms_version": user_metadata.get("terms_version"),
                 "accepted_privacy": bool(user_metadata.get("accepted_privacy")),
+                "accepted_privacy_at": user_metadata.get("accepted_privacy_at"),
+                "privacy_version": user_metadata.get("privacy_version"),
                 "accepted_usage_policy": bool(user_metadata.get("accepted_usage_policy")),
+                "accepted_usage_policy_at": user_metadata.get("accepted_usage_policy_at"),
+                "usage_policy_version": user_metadata.get("usage_policy_version"),
                 "marketing_opt_in": bool(user_metadata.get("marketing_opt_in")),
+                "marketing_opt_in_at": user_metadata.get("marketing_opt_in_at"),
+                "marketing_consent_version": user_metadata.get("marketing_consent_version"),
                 "supabase": True,
             }
             return User(

@@ -4,7 +4,15 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from studio_platform.models import GenerationJob, IdentityPlan, OmniaIdentity, PromptSnapshot, Project, StudioWorkspace
+from studio_platform.models import (
+    GenerationJob,
+    IdentityPlan,
+    OmniaIdentity,
+    PromptSnapshot,
+    Project,
+    StudioWorkspace,
+    SubscriptionStatus,
+)
 from studio_platform.providers import ProviderRegistry
 from studio_platform.service import StudioService
 from studio_platform.services.asset_protection import GeneratedAssetProtectionPipeline
@@ -56,6 +64,7 @@ async def test_generated_assets_keep_watermarked_delivery_and_owner_clean_export
         display_name="User One",
         username="userone",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-user-1",
     )
     workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")

@@ -22,21 +22,46 @@ import { usePageVisibility } from '@/lib/usePageVisibility'
 
 /* ─── Prompt history ──────────────────────────────── */
 
-const PROMPT_HISTORY_KEY = 'omnia-prompt-history'
+const LEGACY_PROMPT_HISTORY_KEY = 'omnia-prompt-history'
+const PROMPT_HISTORY_KEY_PREFIX = 'omnia-prompt-history:'
 
-function usePromptHistory() {
-  const [history, setHistory] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) ?? '[]') as string[] } catch { return [] }
-  })
+function buildPromptHistoryStorageKey(scope: string) {
+  return `${PROMPT_HISTORY_KEY_PREFIX}${scope}`
+}
+
+function readPromptHistory(storageKey: string, { allowLegacyFallback = false }: { allowLegacyFallback?: boolean } = {}) {
+  try {
+    const scopedHistory = JSON.parse(localStorage.getItem(storageKey) ?? '[]') as string[]
+    if (Array.isArray(scopedHistory) && scopedHistory.length > 0) {
+      return scopedHistory
+    }
+    if (allowLegacyFallback) {
+      const legacyHistory = JSON.parse(localStorage.getItem(LEGACY_PROMPT_HISTORY_KEY) ?? '[]') as string[]
+      if (Array.isArray(legacyHistory)) {
+        return legacyHistory
+      }
+    }
+  } catch {
+    return []
+  }
+  return []
+}
+
+function usePromptHistory(storageKey: string, { allowLegacyFallback = false }: { allowLegacyFallback?: boolean } = {}) {
+  const [history, setHistory] = useState<string[]>(() => readPromptHistory(storageKey, { allowLegacyFallback }))
+
+  useEffect(() => {
+    setHistory(readPromptHistory(storageKey, { allowLegacyFallback }))
+  }, [allowLegacyFallback, storageKey])
 
   const push = useCallback((prompt: string) => {
     if (!prompt.trim()) return
     setHistory((prev) => {
       const next = [prompt.trim(), ...prev.filter((p) => p !== prompt.trim())].slice(0, 12)
-      localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next))
+      localStorage.setItem(storageKey, JSON.stringify(next))
       return next
     })
-  }, [])
+  }, [storageKey])
 
   return { history, push }
 }
@@ -234,7 +259,15 @@ export default function CreatePage() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
   const [sharingToastId, setSharingToastId] = useState<string | null>(null)
-  const { history: promptHistory, push: pushPromptHistory } = usePromptHistory()
+  const promptHistoryStorageKey = useMemo(() => {
+    if (auth?.identity?.id) {
+      return buildPromptHistoryStorageKey(auth.identity.id)
+    }
+    return buildPromptHistoryStorageKey('guest-browser')
+  }, [auth?.identity?.id])
+  const { history: promptHistory, push: pushPromptHistory } = usePromptHistory(promptHistoryStorageKey, {
+    allowLegacyFallback: !auth?.identity?.id,
+  })
 
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
@@ -726,7 +759,7 @@ export default function CreatePage() {
         <div className="glass-card overflow-visible p-[2px]">
           
           {/* Prompt Box */}
-          <div className="relative z-10 flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80">
+          <div className="relative z-10 flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80 focus-within:ring-1 focus-within:ring-white/[0.08] focus-within:shadow-[0_20px_80px_-20px_rgba(255,255,255,0.06)]">
             
             {/* Subtle bottom border line */}
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
@@ -819,8 +852,8 @@ export default function CreatePage() {
               rows={1}
               disabled={runningJobs > 0}
               placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
-              className={`w-full resize-none bg-transparent text-[1.1rem] font-medium leading-[1.8] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              style={{ minHeight: '120px' }}
+              className={`w-full resize-none bg-transparent text-[1.1rem] md:text-[1.25rem] font-normal leading-[1.6] tracking-[-0.01em] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              style={{ minHeight: '140px' }}
             />
 
             {/* ✨ Improve & Random buttons */}
@@ -849,7 +882,7 @@ export default function CreatePage() {
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
                 title="Improve prompt with AI"
-                className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.04] px-4 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.1] shadow-lg transition hover:bg-white/[0.08] hover:text-white hover:ring-white/[0.15] disabled:cursor-not-allowed disabled:opacity-40"
+                className="group flex h-9 items-center gap-1.5 rounded-full bg-[rgb(var(--primary-light)/0.05)] px-4 text-[12px] font-semibold tracking-wide text-[rgb(var(--primary-light))] ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_0_15px_rgba(var(--primary-light),0.1)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[rgb(var(--primary-light)/0.1)] hover:ring-[rgb(var(--primary-light)/0.4)] hover:shadow-[0_0_20px_rgba(var(--primary-light),0.2)] hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
                 {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Improved' : 'Improve Prompt'}
@@ -983,7 +1016,7 @@ export default function CreatePage() {
                 <button
                   ref={ratioPickerButtonRef}
                   onClick={() => setRatioPickerOpen((value) => !value)}
-                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                  className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="flex h-[22px] w-[22px] items-center justify-center opacity-90">
                     <div className={`border-2 ${activeAspect.aspect} w-full rounded-sm border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.18)]`} />
@@ -1030,7 +1063,7 @@ export default function CreatePage() {
                 <button
                   ref={modelPickerButtonRef}
                   onClick={() => setModelPickerOpen((value) => !value)}
-                  className="flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.03] px-4 text-left ring-1 ring-white/[0.04] transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                  className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Quality</div>
@@ -1085,10 +1118,10 @@ export default function CreatePage() {
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
-                className="group relative flex h-12 w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-xl px-8 text-[14px] font-bold text-black bg-white transition hover:scale-[1.02] hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 shadow-[0_0_24px_rgba(255,255,255,0.2)]"
+                className="group relative flex h-12 w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-[14px] px-10 text-[14px] font-bold text-black bg-white transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-[1.02] hover:bg-white hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none shadow-[0_0_24px_rgba(255,255,255,0.15)]"
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  {submittingCount ? <RefreshCw className="h-4 w-4 animate-spin text-black/80" /> : <Wand2 className="h-4.5 w-4.5 text-black" />}
+                  {submittingCount ? <RefreshCw className="h-4.5 w-4.5 animate-spin text-black/80" /> : <Wand2 className="h-4.5 w-4.5 text-black" />}
                   {submittingCount ? 'Creating…' : 'Generate'}
                 </span>
               </button>

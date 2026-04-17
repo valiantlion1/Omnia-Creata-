@@ -44,6 +44,12 @@ service = StudioService(state_store, providers, MEDIA_DIR)
 rate_limiter = build_rate_limiter(settings)
 
 
+def _should_enforce_trusted_hosts(current_settings) -> bool:
+    return current_settings.environment in {Environment.STAGING, Environment.PRODUCTION} and bool(
+        current_settings.allowed_hosts_list
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_auth(
@@ -81,7 +87,7 @@ app.add_middleware(
     expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
 
-if settings.environment == Environment.PRODUCTION:
+if _should_enforce_trusted_hosts(settings):
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
 
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -100,6 +106,8 @@ def _requires_no_store_headers(path: str) -> bool:
     if normalized.startswith("/v1/owner/"):
         return True
     if normalized.startswith("/v1/shares"):
+        return True
+    if normalized.startswith("/v1/assets/") and normalized.endswith(("/content", "/thumbnail", "/preview", "/blocked-preview")):
         return True
     if normalized in {"/v1/settings/bootstrap", "/v1/healthz/detail", "/v1/profiles/me/export"}:
         return True

@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlparse
 import jwt
 import pytest
 
+from config.env import Environment, Settings, reveal_secret
 from security.moderation import ModerationResult
 from studio_platform.models import (
     IdentityPlan,
@@ -22,6 +23,7 @@ from studio_platform.models import (
     utc_now,
 )
 from studio_platform.providers import ProviderRegistry
+from studio_platform.share_ops import hash_share_token
 from studio_platform.service import StudioService
 from studio_platform.store import StudioStateStore
 
@@ -31,6 +33,34 @@ async def _build_service(tmp_path: Path) -> tuple[StudioService, StudioStateStor
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     await service.initialize()
     return service, store
+
+
+@pytest.mark.asyncio
+async def test_development_asset_delivery_secret_is_persisted_and_not_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import studio_platform.service as service_module
+
+    runtime_root = tmp_path / "runtime-root"
+    custom_settings = Settings(
+        _env_file=None,
+        environment=Environment.DEVELOPMENT,
+        studio_runtime_root=str(runtime_root),
+    )
+    monkeypatch.setattr(service_module, "get_settings", lambda: custom_settings)
+
+    first_store = StudioStateStore(tmp_path / "first-state.json")
+    second_store = StudioStateStore(tmp_path / "second-state.json")
+    first_service = StudioService(first_store, ProviderRegistry(), tmp_path / "media-first")
+    second_service = StudioService(second_store, ProviderRegistry(), tmp_path / "media-second")
+    await first_service.initialize()
+    await second_service.initialize()
+
+    try:
+        assert first_service._asset_token_secret == second_service._asset_token_secret
+        assert first_service._asset_token_secret != reveal_secret(custom_settings.jwt_secret)
+        assert (runtime_root / "config" / "asset-delivery-secret.txt").exists()
+    finally:
+        await first_service.shutdown()
+        await second_service.shutdown()
 
 
 async def _seed_identity_project_asset(
@@ -384,6 +414,42 @@ async def test_asset_delivery_token_hashes_legacy_public_share_scope(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_legacy_secret_signed_asset_token_still_resolves_delivery(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "legacy-secret-signed-delivery.png"
+    render_path.write_bytes(b"legacy-secret-signed-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        token = jwt.encode(
+            {
+                "sub": "asset-delivery",
+                "asset_id": asset.id,
+                "variant": "content",
+                "identity_id": identity.id,
+                "share_id": None,
+                "public_preview": False,
+                "exp": utc_now() + timedelta(minutes=5),
+                "iat": utc_now(),
+            },
+            service._legacy_asset_token_secret,
+            algorithm="HS256",
+        )
+
+        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
+
+        assert delivery.local_path == render_path
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_hashed_legacy_share_scope_still_resolves_asset_delivery(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)
@@ -412,6 +478,42 @@ async def test_hashed_legacy_share_scope_still_resolves_asset_delivery(tmp_path:
             variant="content",
             identity_id=None,
             share_token=raw_share_token,
+        )
+
+        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
+
+        assert delivery.local_path == render_path
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_legacy_secret_share_hash_still_resolves_asset_delivery(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "legacy-secret-share-hash-delivery.png"
+    render_path.write_bytes(b"legacy-secret-share-hash-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        share, public_token = await service.create_share(identity.id, None, asset.id)
+        legacy_hash = hash_share_token(public_token, secret=service._legacy_asset_token_secret)
+        await store.mutate(
+            lambda state: (
+                setattr(state.shares[share.id], "token", ""),
+                setattr(state.shares[share.id], "token_hash", legacy_hash),
+            )
+        )
+        token = service._create_asset_delivery_token(
+            asset_id=asset.id,
+            variant="content",
+            identity_id=None,
+            share_token=public_token,
         )
 
         delivery = await service.resolve_asset_delivery(asset.id, token, "content")

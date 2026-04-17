@@ -9,11 +9,18 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
-const shouldEnablePosthog = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
+const isPostHogConfigured = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
+const COOKIE_PREFERENCES_KEY = 'oc-studio-cookie-preferences-v1'
 let posthogBootstrapPromise: Promise<{
   Provider: ComponentType<{ client: unknown; children: ReactNode }>
   client: unknown
 }> | null = null
+
+type CookiePreferences = {
+  analytics: boolean
+  decided_at: string
+  version: 1
+}
 
 const AccountPage = lazy(() => import('@/pages/Account'))
 const BillingPage = lazy(() => import('@/pages/Billing'))
@@ -38,6 +45,61 @@ function ShellFriendlyDocumentationPage() {
   return (
     <div className="[&>header]:hidden [&>div>footer]:hidden">
       <DocumentationPage />
+    </div>
+  )
+}
+
+function readCookiePreferences(): CookiePreferences | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(COOKIE_PREFERENCES_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CookiePreferences>
+    if (typeof parsed.analytics !== 'boolean') return null
+    return {
+      analytics: parsed.analytics,
+      decided_at: typeof parsed.decided_at === 'string' ? parsed.decided_at : new Date().toISOString(),
+      version: 1,
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeCookiePreferences(preferences: CookiePreferences) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(preferences))
+}
+
+function CookieConsentBanner({ onDecision }: { onDecision: (analytics: boolean) => void }) {
+  return (
+    <div className="fixed inset-x-0 bottom-4 z-[80] flex justify-center px-4">
+      <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0c0c10]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-white">Studio analytics preference</p>
+            <p className="max-w-2xl text-sm text-zinc-300">
+              Essential storage keeps Studio signed in. Optional analytics only starts if you allow it, so we can measure aggregate product quality without forcing tracking by default.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onDecision(false)}
+              className="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/20 hover:text-white"
+            >
+              Essential only
+            </button>
+            <button
+              type="button"
+              onClick={() => onDecision(true)}
+              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
+            >
+              Allow analytics
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -70,9 +132,11 @@ function PostHogBoundary({ children }: { children: ReactNode }) {
     Provider: ComponentType<{ client: unknown; children: ReactNode }>
     client: unknown
   } | null>(null)
+  const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences | null>(() => readCookiePreferences())
+  const analyticsAllowed = Boolean(cookiePreferences?.analytics)
 
   useEffect(() => {
-    if (!shouldEnablePosthog) return undefined
+    if (!isPostHogConfigured || !analyticsAllowed) return undefined
 
     let cancelled = false
     void loadPostHog().then((state) => {
@@ -84,14 +148,31 @@ function PostHogBoundary({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [analyticsAllowed])
 
-  if (!shouldEnablePosthog || !providerState) {
-    return <>{children}</>
+  const handleConsentDecision = (analytics: boolean) => {
+    const nextPreferences: CookiePreferences = {
+      analytics,
+      decided_at: new Date().toISOString(),
+      version: 1,
+    }
+    writeCookiePreferences(nextPreferences)
+    setCookiePreferences(nextPreferences)
   }
 
-  const { Provider, client } = providerState
-  return <Provider client={client}>{children}</Provider>
+  const renderedChildren = !isPostHogConfigured || !analyticsAllowed || !providerState
+    ? children
+    : (() => {
+        const { Provider, client } = providerState
+        return <Provider client={client}>{children}</Provider>
+      })()
+
+  return (
+    <>
+      {renderedChildren}
+      {isPostHogConfigured && cookiePreferences === null ? <CookieConsentBanner onDecision={handleConsentDecision} /> : null}
+    </>
+  )
 }
 
 function RouteFallback({ withShell = false }: { withShell?: boolean }) {

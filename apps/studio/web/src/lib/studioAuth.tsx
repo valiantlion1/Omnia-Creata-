@@ -133,23 +133,39 @@ function getOAuthCallbackKey() {
   return `${currentUrl.pathname}?${currentUrl.searchParams.toString()}#${currentUrl.hash.replace(/^#/, '')}`
 }
 
-function getOAuthRedirectUrl() {
+export function buildOAuthRedirectUrl(nextPath = DEFAULT_STUDIO_REDIRECT_PATH) {
+  const safeNextPath = sanitizeStudioRedirectPath(nextPath)
   const localOriginPattern = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i
 
+  const configuredBaseUrl = import.meta.env.VITE_AUTH_REDIRECT_BASE_URL?.trim()
   if (typeof window !== 'undefined' && localOriginPattern.test(window.location.origin)) {
-    return `${window.location.origin.replace(/\/$/, '')}/login?oauth=1`
+    const redirectUrl = new URL('/login', `${window.location.origin.replace(/\/$/, '')}/`)
+    redirectUrl.searchParams.set('oauth', '1')
+    redirectUrl.searchParams.set('next', safeNextPath)
+    return redirectUrl.toString()
   }
 
-  const configuredBaseUrl = import.meta.env.VITE_AUTH_REDIRECT_BASE_URL?.trim()
   if (configuredBaseUrl) {
-    return `${configuredBaseUrl.replace(/\/$/, '')}/login?oauth=1`
+    const redirectUrl = new URL('/login', `${configuredBaseUrl.replace(/\/$/, '')}/`)
+    redirectUrl.searchParams.set('oauth', '1')
+    redirectUrl.searchParams.set('next', safeNextPath)
+    return redirectUrl.toString()
   }
 
   if (typeof window === 'undefined') {
-    return '/login?oauth=1'
+    return `/login?oauth=1&next=${encodeURIComponent(safeNextPath)}`
   }
 
-  return `${window.location.origin}/login?oauth=1`
+  const redirectUrl = new URL('/login', `${window.location.origin.replace(/\/$/, '')}/`)
+  redirectUrl.searchParams.set('oauth', '1')
+  redirectUrl.searchParams.set('next', safeNextPath)
+  return redirectUrl.toString()
+}
+
+function isRetryableOAuthAuthSyncError(error: unknown) {
+  if (isRecoverableSessionError(error)) return true
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /offline right now|temporarily unavailable|request failed with 503|timed out|timeout/i.test(message)
 }
 
 function isOAuthCallbackUrl() {
@@ -341,7 +357,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
     }
     clearPersistedAuthState()
     setStudioPostAuthRedirect(safeNextPath)
-    const redirectTo = getOAuthRedirectUrl()
+    const redirectTo = buildOAuthRedirectUrl(safeNextPath)
     logAuthTrace('oauth_sign_in_started', { provider, redirectTo, nextPath: safeNextPath })
     const { error } = await supabaseBrowser.auth.signInWithOAuth({
       provider,
@@ -408,7 +424,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
         authSyncError = error
       }
 
-      if (authSyncError && isRecoverableSessionError(authSyncError)) {
+      if (authSyncError && isRetryableOAuthAuthSyncError(authSyncError)) {
         logAuthTrace('oauth_callback_backend_auth_retrying', {
           message: authSyncError instanceof Error ? authSyncError.message : String(authSyncError),
         })
@@ -431,7 +447,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
             break
           } catch (retryError) {
             authSyncError = retryError
-            if (!isRecoverableSessionError(retryError)) {
+            if (!isRetryableOAuthAuthSyncError(retryError)) {
               break
             }
           }

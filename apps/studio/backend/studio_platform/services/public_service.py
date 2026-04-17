@@ -641,7 +641,7 @@ class PublicService:
         return self.serialize_share_record(updated)
 
     async def get_public_share(self, token: str) -> Dict[str, Any]:
-        share = await self.service.store.get_share_by_public_token(token, secret=self.service._asset_token_secret)
+        share = await self.service._get_share_by_public_token(token)
         if share is None:
             raise KeyError("Share not found")
         if share.revoked_at is not None:

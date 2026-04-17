@@ -199,6 +199,11 @@ class LibraryService:
             if share_token
             else None
         )
+        legacy_share_token_hash = (
+            hash_share_token(share_token, secret=self.service._legacy_asset_token_secret)
+            if share_token and self.service._legacy_asset_token_secret != self.service._asset_token_secret
+            else None
+        )
         payload = {
             "sub": "asset-delivery",
             "asset_id": asset_id,
@@ -206,6 +211,7 @@ class LibraryService:
             "identity_id": identity_id,
             "share_id": share_id,
             "share_token_hash": share_token_hash,
+            "legacy_share_token_hash": legacy_share_token_hash,
             "public_preview": public_preview,
             "exp": expires_at,
             "iat": utc_now(),
@@ -213,10 +219,16 @@ class LibraryService:
         return jwt.encode(payload, self.service._asset_token_secret, algorithm="HS256")
 
     def verify_asset_delivery_token(self, token: str, *, asset_id: str, variant: str) -> Dict[str, Any]:
-        try:
-            payload = jwt.decode(token, self.service._asset_token_secret, algorithms=["HS256"])
-        except jwt.InvalidTokenError as exc:
-            raise PermissionError("Invalid asset token") from exc
+        last_error: jwt.InvalidTokenError | None = None
+        payload: Dict[str, Any] | None = None
+        for secret in self.service._asset_token_secrets:
+            try:
+                payload = jwt.decode(token, secret, algorithms=["HS256"])
+                break
+            except jwt.InvalidTokenError as exc:
+                last_error = exc
+        if payload is None:
+            raise PermissionError("Invalid asset token") from last_error
 
         if payload.get("sub") != "asset-delivery":
             raise PermissionError("Invalid asset token")
@@ -228,6 +240,7 @@ class LibraryService:
             not payload.get("identity_id")
             and not payload.get("share_id")
             and not payload.get("share_token_hash")
+            and not payload.get("legacy_share_token_hash")
             and not payload.get("share_token")
             and not payload.get("public_preview")
         ):
@@ -404,7 +417,13 @@ class LibraryService:
             if claims.get("share_id"):
                 await self.assert_share_access_by_id(asset, str(claims["share_id"]))
             elif claims.get("share_token_hash"):
-                await self.assert_share_access_by_public_token_hash(asset, str(claims["share_token_hash"]))
+                try:
+                    await self.assert_share_access_by_public_token_hash(asset, str(claims["share_token_hash"]))
+                except PermissionError:
+                    legacy_share_token_hash = claims.get("legacy_share_token_hash")
+                    if not legacy_share_token_hash:
+                        raise
+                    await self.assert_share_access_by_public_token_hash(asset, str(legacy_share_token_hash))
             elif claims.get("share_token"):
                 await self.assert_share_access_by_public_token(asset, str(claims["share_token"]))
             elif claims.get("public_preview"):
@@ -580,10 +599,7 @@ class LibraryService:
         self.assert_share_record_matches_asset(asset, share)
 
     async def assert_share_access_by_public_token(self, asset: MediaAsset, share_token: str) -> None:
-        share = await self.service.store.get_share_by_public_token(
-            share_token,
-            secret=self.service._asset_token_secret,
-        )
+        share = await self.service._get_share_by_public_token(share_token)
         if share is None:
             raise PermissionError("Share access denied")
         await self.assert_share_owner_public_access(share)
@@ -594,10 +610,7 @@ class LibraryService:
         self.assert_share_record_matches_asset(asset, share)
 
     async def assert_share_access_by_public_token_hash(self, asset: MediaAsset, share_token_hash: str) -> None:
-        share = await self.service.store.get_share_by_public_token_hash(
-            share_token_hash,
-            secret=self.service._asset_token_secret,
-        )
+        share = await self.service._get_share_by_public_token_hash(share_token_hash)
         if share is None:
             raise PermissionError("Share access denied")
         await self.assert_share_owner_public_access(share)

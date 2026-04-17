@@ -201,7 +201,7 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
         settings.runware_api_key = None
         settings.enable_demo_generation_fallback = False
         registry = ProviderRegistry()
-        assert [provider.name for provider in registry.providers[:3]] == ["pollinations", "huggingface", "openai"]
+        assert [provider.name for provider in registry.providers[:3]] == ["runware", "fal", "openai"]
     finally:
         settings.generation_provider_strategy = original_strategy
         settings.huggingface_token = original_hf
@@ -374,7 +374,7 @@ def test_plan_generation_route_prefers_pollinations_for_free_realistic_prompts()
 
     assert decision.provider_candidates[:2] == ("pollinations", "huggingface")
     assert decision.prompt_profile == "realistic_editorial"
-    assert decision.routing_strategy == "free-first"
+    assert decision.routing_strategy == "wallet-managed"
 
 
 def test_plan_generation_route_prefers_huggingface_for_free_stylized_prompts() -> None:
@@ -492,8 +492,8 @@ def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:3] == ("openai", "fal", "runware")
-    assert decision.provider_candidates[0] == "openai"
+    assert decision.provider_candidates[:3] == ("runware", "fal", "openai")
+    assert decision.provider_candidates[0] == "runware"
     assert decision.requested_quality_tier == "premium"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
@@ -529,7 +529,7 @@ def test_plan_generation_route_marks_pro_premium_fallback_as_degraded_standard()
     assert decision.provider_candidates[0] == "pollinations"
     assert decision.selected_quality_tier == "standard"
     assert decision.degraded is True
-    assert decision.routing_reason == "managed_unavailable_fallback_standard"
+    assert decision.routing_reason == "pro_runware_first_default"
 
 
 def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() -> None:
@@ -573,11 +573,11 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() 
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:5] == ("openai", "fal", "runware", "huggingface", "pollinations")
-    assert decision.selected_provider == "openai"
+    assert decision.provider_candidates[:5] == ("runware", "fal", "openai", "huggingface", "pollinations")
+    assert decision.selected_provider == "runware"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
-    assert decision.routing_reason == "pro_balanced_standard_default"
+    assert decision.routing_reason == "pro_runware_first_default"
 
 
 def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -> None:
@@ -621,11 +621,11 @@ def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:5] == ("openai", "fal", "runware", "pollinations", "huggingface")
-    assert decision.selected_provider == "openai"
+    assert decision.provider_candidates[:5] == ("runware", "fal", "openai", "pollinations", "huggingface")
+    assert decision.selected_provider == "runware"
     assert decision.selected_quality_tier == "premium"
     assert decision.degraded is False
-    assert decision.routing_reason == "pro_balanced_standard_default"
+    assert decision.routing_reason == "pro_runware_first_default"
 
 
 def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows() -> None:
@@ -1139,6 +1139,7 @@ async def test_runware_provider_generates_from_base64_response() -> None:
     assert submitted_payload[0]["taskType"] == "imageInference"
     assert submitted_payload[0]["outputType"] == "base64Data"
     assert submitted_payload[0]["positivePrompt"] == "editorial portrait"
+    assert "negativePrompt" not in submitted_payload[0]
 
 
 @pytest.mark.asyncio

@@ -195,12 +195,12 @@ export default function ProjectPage() {
                 const likeCount = typeof asset.metadata.like_count === 'number' ? asset.metadata.like_count : 0
 
                 return (
-                <div key={asset.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                <div key={asset.id} className="group/projectcard overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-white/[0.04] hover:ring-white/[0.12] hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
                   <div className="group relative overflow-hidden">
                     <ProtectedAssetImage
                       sources={assetPreviewSources(asset)}
                       alt={asset.display_title ?? asset.title}
-                      className={`aspect-square w-full object-cover ${canOpenPreview ? 'cursor-zoom-in' : ''} ${asset.protection_state === 'blocked' ? 'blur-[10px] saturate-50' : ''}`}
+                      className={`aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105 ${canOpenPreview ? 'cursor-zoom-in' : ''} ${asset.protection_state === 'blocked' ? 'blur-[10px] saturate-50' : ''}`}
                       fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                       onClick={() => {
                         if (!canOpenPreview) return
@@ -229,20 +229,20 @@ export default function ProjectPage() {
                       />
                     ) : null}
                     {asset.protection_state === 'blocked' ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-sm">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/12 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200 ring-1 ring-amber-500/20">
-                          <Lock className="h-3.5 w-3.5" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-md">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300 ring-1 ring-amber-500/30 shadow-[0_0_20px_rgba(252,211,77,0.2)]">
+                          <Lock className="h-4 w-4" />
                           Blocked
                         </div>
                       </div>
                     ) : null}
                   </div>
-                  <div className="p-4">
-                    <div className="text-sm font-semibold text-white">{asset.display_title ?? asset.title}</div>
-                    <div className="mt-1 text-[11px] text-zinc-500">
+                  <div className="p-5">
+                    <div className="text-[14px] font-semibold tracking-tight text-white">{asset.display_title ?? asset.title}</div>
+                    <div className="mt-1 text-[11px] text-zinc-500 font-medium">
                       {asset.protection_state === 'blocked' ? 'Under review' : ''}
                     </div>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">{asset.prompt}</p>
+                    <p className="mt-2.5 line-clamp-2 text-[13px] leading-6 text-zinc-400">{asset.prompt}</p>
                   </div>
                 </div>
                 )
@@ -276,20 +276,20 @@ export default function ProjectPage() {
           {generations.length ? (
             <div className="mt-5 space-y-3">
               {generations.map((generation) => (
-                <div key={generation.job_id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div key={generation.job_id} className="rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.05] p-5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.04] hover:ring-white/[0.12] hover:shadow-[0_12px_30px_rgba(0,0,0,0.4)]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-white">{generation.display_model_label ?? generation.model}</div>
+                    <div className="text-[14px] font-semibold tracking-tight text-white">{generation.display_model_label ?? generation.model}</div>
                     <StatusPill tone={normalizeJobStatus(generation.status) === 'succeeded' ? 'success' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'warning' : ['failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(generation.status)) ? 'danger' : 'brand'}>
                       {normalizeJobStatus(generation.status) === 'succeeded' ? 'Complete' : normalizeJobStatus(generation.status) === 'running' ? 'Processing' : normalizeJobStatus(generation.status) === 'queued' ? 'Queued' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'Retrying' : normalizeJobStatus(generation.status) === 'cancelled' ? 'Cancelled' : normalizeJobStatus(generation.status) === 'timed_out' ? 'Timed out' : 'Failed'}
                     </StatusPill>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
+                  <p className="mt-3.5 text-[13px] leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
                     <button
                       onClick={() => saveStyleMutation.mutate(generation.prompt_snapshot.prompt)}
                       disabled={saveStyleMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-xs font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                       {saveStyleMutation.isPending ? 'Saving style...' : 'Save as style'}

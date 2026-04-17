@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.16.125",
+  "build": "2026.04.17.127",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-16",
-  "notes": "Final frozen-tree bookkeeping and proof-sync build after the narrow provider smoke drift fix; no new frontend or backend feature wave is introduced in this bump."
+  "releaseDate": "2026-04-17",
+  "notes": "Phase 1 auth-stability hardening wave: OAuth redirect intent now survives the full provider roundtrip, callback sync retries transient auth-service outages more honestly, and current-build proof was refreshed again after the login seam fix. Protected staging still needs a current-build rerun."
 }

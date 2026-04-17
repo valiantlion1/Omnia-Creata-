@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from config.env import Environment, Settings
-from runtime_logging import configure_runtime_logging
+from runtime_logging import RedactingLogFilter, configure_runtime_logging
 
 
 def test_settings_runtime_root_prefers_localappdata(monkeypatch):
@@ -54,6 +54,26 @@ def test_runtime_logging_creates_external_log_directory(tmp_path):
     }
     assert str((log_root / "backend.app.log").resolve()) in file_handler_paths
     assert str((log_root / "backend.error.log").resolve()) in file_handler_paths
+    assert any(
+        any(isinstance(log_filter, RedactingLogFilter) for log_filter in handler.filters)
+        for handler in logging.getLogger().handlers
+    )
+
+
+def test_redacting_log_filter_masks_secret_like_message_content():
+    record = logging.LogRecord(
+        name="omnia.test",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg="Authorization header: %s",
+        args=("Bearer sk-or-v1-secret-token-1234567890",),
+        exc_info=None,
+    )
+
+    assert RedactingLogFilter().filter(record) is True
+    assert "***REDACTED***" in record.args[0]
+    assert "sk-or-v1-secret-token-1234567890" not in record.args[0]
 
 
 def test_settings_enable_demo_auth_defaults_to_development_only():

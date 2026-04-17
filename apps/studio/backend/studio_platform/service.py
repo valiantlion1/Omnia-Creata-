@@ -6,6 +6,7 @@ import hmac
 import logging
 import os
 import re
+import secrets
 import socket
 from contextlib import suppress
 from datetime import datetime, timedelta
@@ -87,6 +88,45 @@ _TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)
 _PROVIDER_SPEND_GUARDRAIL_USER_MESSAGE = (
     "Image generation is temporarily unavailable right now. Please try again later."
 )
+_DEVELOPMENT_LEGACY_ASSET_SECRET = "omnia-creata-local-dev-secret-2026"
+_DEVELOPMENT_JWT_FALLBACK = "dev-jwt-secret-0123456789abcdef0123456789abcdef"
+_ASSET_DELIVERY_SECRET_CONTEXT = "omnia-studio-asset-delivery:v2"
+_ASSET_DELIVERY_SECRET_FILENAME = "asset-delivery-secret.txt"
+
+
+def _derive_scoped_secret(seed: str, *, scope: str) -> str:
+    return hmac.new(
+        seed.encode("utf-8"),
+        scope.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _load_or_create_development_delivery_secret(runtime_root: Path) -> str:
+    secret_path = runtime_root / "config" / _ASSET_DELIVERY_SECRET_FILENAME
+    secret_path.parent.mkdir(parents=True, exist_ok=True)
+    if secret_path.exists():
+        existing = secret_path.read_text(encoding="utf-8").strip()
+        if len(existing) >= 32:
+            return existing
+
+    generated = secrets.token_urlsafe(48)
+    secret_path.write_text(generated, encoding="utf-8")
+    return generated
+
+
+def _resolve_asset_delivery_secrets(*, settings, configured_jwt_secret: str) -> tuple[str, str]:
+    legacy_secret = configured_jwt_secret or _DEVELOPMENT_LEGACY_ASSET_SECRET
+
+    if settings.environment != Environment.DEVELOPMENT:
+        return _derive_scoped_secret(legacy_secret, scope=_ASSET_DELIVERY_SECRET_CONTEXT), legacy_secret
+
+    using_default_development_secret = configured_jwt_secret in {"", _DEVELOPMENT_JWT_FALLBACK}
+    if using_default_development_secret:
+        seed = _load_or_create_development_delivery_secret(settings.runtime_root_path)
+    else:
+        seed = configured_jwt_secret
+    return _derive_scoped_secret(seed, scope=_ASSET_DELIVERY_SECRET_CONTEXT), legacy_secret
 
 class GenerationCapacityError(ValueError):
     def __init__(
@@ -136,9 +176,14 @@ class StudioService:
         configured_asset_secret = reveal_secret(settings.jwt_secret).strip()
         if not configured_asset_secret and settings.environment != Environment.DEVELOPMENT:
             raise RuntimeError("JWT secret must be configured outside local development.")
-        self._asset_token_secret = configured_asset_secret or "omnia-creata-local-dev-secret-2026"
+        self._asset_token_secret, self._legacy_asset_token_secret = _resolve_asset_delivery_secrets(
+            settings=settings,
+            configured_jwt_secret=configured_asset_secret,
+        )
         self._asset_token_ttl_seconds = 3600
-        self.asset_protection = GeneratedAssetProtectionPipeline(secret=self._asset_token_secret)
+        self.asset_protection = GeneratedAssetProtectionPipeline(
+            secret=configured_asset_secret or _DEVELOPMENT_LEGACY_ASSET_SECRET
+        )
         self.asset_storage = build_asset_storage_registry(settings, media_dir)
         self.llm_gateway = StudioLLMGateway()
         self.generation_runtime = GenerationRuntime(
@@ -358,14 +403,46 @@ class StudioService:
         root_admin: bool = False,
         local_access: bool = False,
         accepted_terms: bool = False,
+        accepted_terms_at: datetime | str | None = None,
+        terms_version: str | None = None,
         accepted_privacy: bool = False,
+        accepted_privacy_at: datetime | str | None = None,
+        privacy_version: str | None = None,
         accepted_usage_policy: bool = False,
+        accepted_usage_policy_at: datetime | str | None = None,
+        usage_policy_version: str | None = None,
         marketing_opt_in: bool = False,
+        marketing_opt_in_at: datetime | str | None = None,
+        marketing_consent_version: str | None = None,
         bio: str = "",
         avatar_url: str | None = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
-        return await self.identity.ensure_identity(user_id=user_id, email=email, display_name=display_name, username=username, desired_plan=desired_plan, owner_mode=owner_mode, root_admin=root_admin, local_access=local_access, accepted_terms=accepted_terms, accepted_privacy=accepted_privacy, accepted_usage_policy=accepted_usage_policy, marketing_opt_in=marketing_opt_in, bio=bio, avatar_url=avatar_url, default_visibility=default_visibility)
+        return await self.identity.ensure_identity(
+            user_id=user_id,
+            email=email,
+            display_name=display_name,
+            username=username,
+            desired_plan=desired_plan,
+            owner_mode=owner_mode,
+            root_admin=root_admin,
+            local_access=local_access,
+            accepted_terms=accepted_terms,
+            accepted_terms_at=accepted_terms_at,
+            terms_version=terms_version,
+            accepted_privacy=accepted_privacy,
+            accepted_privacy_at=accepted_privacy_at,
+            privacy_version=privacy_version,
+            accepted_usage_policy=accepted_usage_policy,
+            accepted_usage_policy_at=accepted_usage_policy_at,
+            usage_policy_version=usage_policy_version,
+            marketing_opt_in=marketing_opt_in,
+            marketing_opt_in_at=marketing_opt_in_at,
+            marketing_consent_version=marketing_consent_version,
+            bio=bio,
+            avatar_url=avatar_url,
+            default_visibility=default_visibility,
+        )
 
     def _resolve_privileged_email_flags(self, email: str) -> Dict[str, bool]:
         return self.identity._resolve_privileged_email_flags(email=email)
@@ -581,6 +658,26 @@ class StudioService:
             raw_token.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
+
+    @property
+    def _asset_token_secrets(self) -> tuple[str, ...]:
+        if self._legacy_asset_token_secret and self._legacy_asset_token_secret != self._asset_token_secret:
+            return (self._asset_token_secret, self._legacy_asset_token_secret)
+        return (self._asset_token_secret,)
+
+    async def _get_share_by_public_token(self, raw_token: str) -> ShareLink | None:
+        for secret in self._asset_token_secrets:
+            share = await self.store.get_share_by_public_token(raw_token, secret=secret)
+            if share is not None:
+                return share
+        return None
+
+    async def _get_share_by_public_token_hash(self, token_hash: str) -> ShareLink | None:
+        for secret in self._asset_token_secrets:
+            share = await self.store.get_share_by_public_token_hash(token_hash, secret=secret)
+            if share is not None:
+                return share
+        return None
 
     def _serialize_share_record(self, share: ShareLink) -> Dict[str, Any]:
         return self.public.serialize_share_record(share)

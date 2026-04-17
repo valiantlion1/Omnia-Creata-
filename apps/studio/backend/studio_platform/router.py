@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 import hmac
 import hashlib
 import ipaddress
@@ -20,12 +21,13 @@ from security.captcha import (
     verify_captcha_token,
 )
 from security.rate_limit import RateLimiter
-from security.supabase_auth import SupabaseAuthError
+from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
 from security.moderation import check_prompt_safety, ModerationResult
 
 from .asset_storage import AssetStorageError
 from .experience_contract_ops import attach_chat_experience
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
+from .models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 
 
@@ -203,6 +205,30 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             detail="This session belongs to an account that has been permanently deleted.",
         ) from exc
 
+    def _identity_consent_kwargs(
+        metadata: Dict[str, Any],
+        *,
+        defaults: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        fallback = defaults or {}
+        return {
+            "accepted_terms": bool(metadata.get("accepted_terms", fallback.get("accepted_terms", False))),
+            "accepted_terms_at": metadata.get("accepted_terms_at") or fallback.get("accepted_terms_at"),
+            "terms_version": metadata.get("terms_version") or fallback.get("terms_version"),
+            "accepted_privacy": bool(metadata.get("accepted_privacy", fallback.get("accepted_privacy", False))),
+            "accepted_privacy_at": metadata.get("accepted_privacy_at") or fallback.get("accepted_privacy_at"),
+            "privacy_version": metadata.get("privacy_version") or fallback.get("privacy_version"),
+            "accepted_usage_policy": bool(
+                metadata.get("accepted_usage_policy", fallback.get("accepted_usage_policy", False))
+            ),
+            "accepted_usage_policy_at": metadata.get("accepted_usage_policy_at") or fallback.get("accepted_usage_policy_at"),
+            "usage_policy_version": metadata.get("usage_policy_version") or fallback.get("usage_policy_version"),
+            "marketing_opt_in": bool(metadata.get("marketing_opt_in", fallback.get("marketing_opt_in", False))),
+            "marketing_opt_in_at": metadata.get("marketing_opt_in_at") or fallback.get("marketing_opt_in_at"),
+            "marketing_consent_version": metadata.get("marketing_consent_version")
+            or fallback.get("marketing_consent_version"),
+        }
+
     async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser]) -> AuthUser:
         current = _require_auth(auth_user)
         metadata = getattr(current, "metadata", {}) or {}
@@ -212,10 +238,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 email=current.email or f"{current.id}@omnia.local",
                 display_name=getattr(current, "username", None) or current.email or "Omnia User",
                 username=metadata.get("username") or None,
-                accepted_terms=bool(metadata.get("accepted_terms")),
-                accepted_privacy=bool(metadata.get("accepted_privacy")),
-                accepted_usage_policy=bool(metadata.get("accepted_usage_policy")),
-                marketing_opt_in=bool(metadata.get("marketing_opt_in")),
+                **_identity_consent_kwargs(metadata),
             )
         except DeletedIdentityError as exc:
             _raise_deleted_identity_session(exc)
@@ -269,8 +292,19 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         }
 
     def _build_client_key(request: Request, scope: str, identifier: Optional[str] = None) -> str:
-        client_host = request.client.host if request.client else "unknown"
-        return f"{scope}:{identifier or client_host}"
+        if identifier is not None:
+            return f"{scope}:{identifier}"
+        client_host = _request_client_ip(request) or "unknown"
+        return f"{scope}:{client_host}"
+
+    def _normalize_forwarded_ip(value: str | None) -> str | None:
+        candidate = str(value or "").strip()
+        if not candidate:
+            return None
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            return None
 
     def _request_client_ip(request: Request) -> str | None:
         client_host = request.client.host if request.client else None
@@ -289,9 +323,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 raw_value = str(request.headers.get(header_name) or "").strip()
                 if not raw_value:
                     continue
-                candidate = raw_value.split(",")[0].strip()
+                candidate = _normalize_forwarded_ip(raw_value.split(",")[0].strip())
                 if candidate:
                     return candidate
+        normalized_client_host = _normalize_forwarded_ip(client_host)
+        if normalized_client_host:
+            return normalized_client_host
         return client_host
 
     async def _consume_rate_limit(
@@ -426,6 +463,21 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
 
         try:
+            consent_recorded_at = datetime.now(timezone.utc).isoformat()
+            signup_consent_defaults: Dict[str, Any] = {
+                "accepted_terms": payload.accepted_terms,
+                "accepted_terms_at": consent_recorded_at if payload.accepted_terms else None,
+                "terms_version": TERMS_VERSION if payload.accepted_terms else None,
+                "accepted_privacy": payload.accepted_privacy,
+                "accepted_privacy_at": consent_recorded_at if payload.accepted_privacy else None,
+                "privacy_version": PRIVACY_VERSION if payload.accepted_privacy else None,
+                "accepted_usage_policy": payload.accepted_usage_policy,
+                "accepted_usage_policy_at": consent_recorded_at if payload.accepted_usage_policy else None,
+                "usage_policy_version": USAGE_POLICY_VERSION if payload.accepted_usage_policy else None,
+                "marketing_opt_in": payload.marketing_opt_in,
+                "marketing_opt_in_at": consent_recorded_at if payload.marketing_opt_in else None,
+                "marketing_consent_version": MARKETING_CONSENT_VERSION if payload.marketing_opt_in else None,
+            }
             session = await supabase_client.sign_up(
                 email=payload.email.strip().lower(),
                 password=payload.password,
@@ -435,7 +487,17 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 accepted_privacy=payload.accepted_privacy,
                 accepted_usage_policy=payload.accepted_usage_policy,
                 marketing_opt_in=payload.marketing_opt_in,
+                accepted_terms_at=signup_consent_defaults["accepted_terms_at"],
+                terms_version=signup_consent_defaults["terms_version"],
+                accepted_privacy_at=signup_consent_defaults["accepted_privacy_at"],
+                privacy_version=signup_consent_defaults["privacy_version"],
+                accepted_usage_policy_at=signup_consent_defaults["accepted_usage_policy_at"],
+                usage_policy_version=signup_consent_defaults["usage_policy_version"],
+                marketing_opt_in_at=signup_consent_defaults["marketing_opt_in_at"],
+                marketing_consent_version=signup_consent_defaults["marketing_consent_version"],
             )
+        except SupabaseAuthUnavailableError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
         except SupabaseAuthError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -453,10 +515,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             display_name=display_name,
             username=(user_metadata.get("username") or payload.username).strip().lower(),
             desired_plan=IdentityPlan.FREE,
-            accepted_terms=bool(user_metadata.get("accepted_terms", payload.accepted_terms)),
-            accepted_privacy=bool(user_metadata.get("accepted_privacy", payload.accepted_privacy)),
-            accepted_usage_policy=bool(user_metadata.get("accepted_usage_policy", payload.accepted_usage_policy)),
-            marketing_opt_in=bool(user_metadata.get("marketing_opt_in", payload.marketing_opt_in)),
+            **_identity_consent_kwargs(user_metadata, defaults=signup_consent_defaults),
         )
         return {
             "access_token": session.access_token,
@@ -478,6 +537,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 email=payload.email.strip().lower(),
                 password=payload.password,
             )
+        except SupabaseAuthUnavailableError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
         except SupabaseAuthError as exc:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
 
@@ -494,10 +555,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             display_name=display_name,
             username=(user_metadata.get("username") or user_data.get("email", "").split("@")[0]).strip().lower(),
             desired_plan=IdentityPlan.FREE,
-            accepted_terms=bool(user_metadata.get("accepted_terms")),
-            accepted_privacy=bool(user_metadata.get("accepted_privacy")),
-            accepted_usage_policy=bool(user_metadata.get("accepted_usage_policy")),
-            marketing_opt_in=bool(user_metadata.get("marketing_opt_in")),
+            **_identity_consent_kwargs(user_metadata),
         )
         return {
             "access_token": session.access_token,

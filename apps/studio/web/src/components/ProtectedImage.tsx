@@ -64,16 +64,16 @@ export function ProtectedImage({
 export function WatermarkBadge({ size = 'sm' }: { size?: 'sm' | 'md' }) {
   return (
     <img
-      src="/omnia-crest.png"
-      alt=""
+      src="/omnia-logo.png"
+      alt="Omnia Creata"
       draggable={false}
-      className={`pointer-events-none absolute bottom-2.5 right-2.5 select-none ${
-        size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
+      className={`pointer-events-none absolute bottom-3 right-3 select-none ${
+        size === 'md' ? 'h-7 w-7' : 'h-5 w-5'
       }`}
       style={{
         pointerEvents: 'none',
-        opacity: 0.4,
-        filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))',
+        opacity: 0.9,
+        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 10px rgba(220,180,50,0.25))',
       } as CSSProperties}
     />
   )
