@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-17
+Last updated: 2026-04-18
 
 ## Current baseline
 
@@ -12,10 +12,17 @@ Last updated: 2026-04-17
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.17.127`. This wave is still the same narrow Phase 1 hardening track, but it now also closes a real auth-seam bug: stale post-auth redirect intent can no longer leak from an earlier OAuth attempt into a later direct login and override the explicit route the user actually requested.
-- Current-build proof is stronger but still intentionally partial. Local verify passes on `.127`, provider smoke also passes on `.127`, full backend pytest is green again, and browser verification now proves `.127` on the login/subscription surfaces. The latest protected staging artefact is still `.125 warning` with `closure_ready=true`, so current staging closure has not yet been rerun on `.127`.
+- Current implementation build is `2026.04.18.129`. This wave stays inside the same Phase 1 track, but it closes a consent-honesty gap that the Cookie Policy was already promising away: users can now reopen analytics consent from the footer or Settings, and the live PostHog client follows that browser preference instead of treating the first banner click as the end of the story.
+- Current-build proof is still intentionally partial. Focused web consent regressions, `type-check`, and production `build` are green on `.129`, and browser smoke now confirms telemetry requests only appear after consent and stop again after revocation. Protected staging is still only proven on the older `.125 warning` artefact with `closure_ready=true` because current staging bring-up is blocked when Docker engine is not running.
 
 ## Recent stabilization wins
+
+- `.129` turns analytics consent into a revisitable browser control instead of a one-shot banner. Studio now has a shared cookie-preferences state, a reusable cookie-preferences dialog, a footer trigger, and a Settings row so users can revisit optional analytics consent without clearing browser storage.
+- The same wave also fixes the live behavior contract behind that UI. PostHog still boots only after consent, but once loaded it now opts in and back out cleanly when the saved preference changes, so revoking analytics is a real runtime change rather than only a remembered label in local storage.
+
+- `.128` tightens the public paid surface without opening a redesign wave. The shared legal shell now resolves known placeholder text into prelaunch-safe truth, Studio has a dedicated refund policy route, and billing now links directly to that refund contract instead of leaving users to infer it from Terms copy alone.
+- The same build also finishes a doctrine drift that had survived multiple auth waves: new accounts now default into `Create`. Email signup, Google signup bootstrap, and the default post-auth redirect all point at `Create`, which matches the product story that Studio is an image-first product rather than a gallery-first shell.
+- Current-build proof also moved with that wave. Focused web regressions, `type-check`, and `build` are green on `.128`, `verify-studio-local.ps1` passes on `.128`, and current-build provider smoke is back to `ok=5`, `skipped=2`, `error=0`. Protected staging still remains blocked at environment bring-up time while Docker engine is off, so no one should narrate `.128` as fully proof-synced yet.
 
 - `.127` finishes the current auth-stability slice instead of leaving it half-proven. OAuth callback sync now treats transient auth-service outages as retryable, the login shell preserves explicit `?next=` intent all the way through the provider roundtrip, and stale stored redirect state now gets consumed on direct password login instead of hijacking a later callback path.
 - The same wave re-established full proof discipline on the current build. Full backend pytest is green with `521 passed`, focused web auth regressions are green with `7 passed`, Studio web still passes `type-check` and `build`, `verify-studio-local.ps1` passes on `.127`, current-build provider smoke remains `ok=5`, `skipped=2`, `error=0`, and browser checks confirm `/login`, `/billing`, `/plan`, and the simulated signed-in OAuth callback path all behave honestly on build `.127`.

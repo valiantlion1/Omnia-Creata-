@@ -187,6 +187,13 @@ export default function BillingPage() {
         <p className="text-zinc-500 max-w-xl text-[15px] leading-relaxed">
           Manage your plan, track credits, and unlock more from Studio.
         </p>
+        <p className="max-w-xl text-sm leading-relaxed text-zinc-400">
+          Billing questions, cancellations, and refund expectations are documented in the{' '}
+          <Link to="/legal/refunds" className="text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white">
+            Refund Policy
+          </Link>
+          .
+        </p>
       </section>
 
       {isRoot && (

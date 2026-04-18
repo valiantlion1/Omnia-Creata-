@@ -34,6 +34,8 @@ Already strong:
 - optional analytics can now stay off until the user explicitly allows them
 - policy acceptance now carries accepted-at plus policy-version audit fields instead of only booleans
 - login redirect intent is now stable across both direct sign-in and the OAuth callback path instead of being vulnerable to stale stored redirect leakage
+- legal routes now resolve prelaunch-safe truth instead of raw placeholders, including a dedicated refund policy route
+- signup and default post-auth fallback now land in `Create`, which matches the intended first-run product flow better than `Explore`
 
 Still open:
 - `abuse_hardening`
@@ -52,17 +54,19 @@ The current Phase 1 hardening slice tightened three launch-facing seams without 
 - server-authoritative policy acceptance audit trail
 
 Current proof on build `2026.04.17.127`:
+Current proof on build `2026.04.18.128`:
+- focused web legal/auth tests: pass (`7 passed`)
+- web type-check: pass
+- web build: pass
 - local verify: pass
-- provider smoke: pass
-- backend pytest: pass (`521 passed`)
-- focused web auth tests: pass (`7 passed`)
-- browser auth shell checks: pass
-- protected staging: latest artefact is still build `.125` warning with `closure_ready=true`
+- provider smoke: pass (`ok=5`, `skipped=2`, `error=0`)
+- protected staging: current-build rerun blocked because Docker engine is not running; latest artefact is still build `.125` warning with `closure_ready=true`
 
 Interpretation:
-- local, provider, backend, and auth-shell behavior are current-build true on `.127`
+- the legal and onboarding surface changes are current-build true on `.128`
 - protected-beta closure remains historically preserved
-- fresh `.127` protected-staging proof is still pending before anyone should narrate full proof sync
+- local and provider proof are current-build true on `.128`
+- full proof sync is still blocked on protected staging bring-up, so `.128` is not narrated as fully synced
 
 ## Current Launch Doctrine
 

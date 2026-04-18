@@ -41,8 +41,8 @@ describe('BillingPage', () => {
 
     expect(await screen.findByRole('heading', { name: /your subscription/i })).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByText('Creator')).toBeInTheDocument()
-      expect(screen.getByText('Pro')).toBeInTheDocument()
+      expect(screen.getAllByText('Creator').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Pro').length).toBeGreaterThan(0)
     })
     expect(await screen.findByText(/420/)).toBeInTheDocument()
   })
@@ -117,10 +117,9 @@ describe('BillingPage', () => {
 
     renderWithProviders(<BillingPage />, { route: '/billing' })
 
-    const upgradeButton = await screen.findByRole('button', { name: /upgrade now|current plan/i })
+    const upgradeButton = await screen.findByRole('button', { name: /^upgrade now$/i })
     expect(upgradeButton).toBeInTheDocument()
-    const buyPackButtons = await screen.findAllByRole('button', { name: /^buy$/i })
-    await userEvent.click(buyPackButtons[0])
+    await userEvent.click(upgradeButton)
 
     const alerts = await screen.findAllByRole('alert')
     const checkoutAlert = alerts.find((node) => /checkout unavailable/i.test(node.textContent ?? ''))

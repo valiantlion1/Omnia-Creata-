@@ -66,6 +66,20 @@ describe('LoginPage', () => {
     expect(signInMock).toHaveBeenCalledTimes(1)
   })
 
+  it('falls back to Create when no explicit redirect is present', async () => {
+    signInMock.mockResolvedValueOnce(undefined)
+    consumeRedirectAfterAuthMock.mockReturnValueOnce(null)
+
+    renderWithProviders(<LoginPage />, { route: '/login' })
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'founder@omniacreata.com')
+    await userEvent.type(screen.getByLabelText(/password/i), 'correct-password')
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+
+    expect(signInMock).toHaveBeenCalledTimes(1)
+    expect(navigateMock).toHaveBeenCalledWith('/create', { replace: true })
+  })
+
   it('falls back to a generic message when signIn throws a non-Error value', async () => {
     signInMock.mockRejectedValueOnce('network down')
 

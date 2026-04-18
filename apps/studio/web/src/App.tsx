@@ -1,26 +1,24 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { CookieConsentBanner, CookiePreferencesDialog } from '@/components/CookiePreferences'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LightboxProvider } from '@/components/Lightbox'
 
 import StudioShell from '@/components/StudioShell'
 import { ToastProvider } from '@/components/Toast'
+import {
+  StudioCookiePreferencesProvider,
+  useStudioCookiePreferences,
+} from '@/lib/studioCookiePreferences'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
 const isPostHogConfigured = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
-const COOKIE_PREFERENCES_KEY = 'oc-studio-cookie-preferences-v1'
 let posthogBootstrapPromise: Promise<{
   Provider: ComponentType<{ client: unknown; children: ReactNode }>
   client: unknown
 }> | null = null
-
-type CookiePreferences = {
-  analytics: boolean
-  decided_at: string
-  version: 1
-}
 
 const AccountPage = lazy(() => import('@/pages/Account'))
 const BillingPage = lazy(() => import('@/pages/Billing'))
@@ -38,6 +36,11 @@ const SharedPage = lazy(() => import('@/pages/Shared'))
 const SignupPage = lazy(() => import('@/pages/Signup'))
 const CommunityPage = lazy(() => import('@/pages/Community'))
 const AnalyticsPage = lazy(() => import('@/pages/Analytics'))
+const LegalTermsPage = lazy(() => import('@/pages/legal/Terms'))
+const LegalPrivacyPage = lazy(() => import('@/pages/legal/Privacy'))
+const LegalRefundsPage = lazy(() => import('@/pages/legal/Refunds'))
+const LegalAcceptableUsePage = lazy(() => import('@/pages/legal/AcceptableUse'))
+const LegalCookiesPage = lazy(() => import('@/pages/legal/Cookies'))
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
 const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
 
@@ -49,59 +52,10 @@ function ShellFriendlyDocumentationPage() {
   )
 }
 
-function readCookiePreferences(): CookiePreferences | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(COOKIE_PREFERENCES_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<CookiePreferences>
-    if (typeof parsed.analytics !== 'boolean') return null
-    return {
-      analytics: parsed.analytics,
-      decided_at: typeof parsed.decided_at === 'string' ? parsed.decided_at : new Date().toISOString(),
-      version: 1,
-    }
-  } catch {
-    return null
-  }
-}
-
-function writeCookiePreferences(preferences: CookiePreferences) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(preferences))
-}
-
-function CookieConsentBanner({ onDecision }: { onDecision: (analytics: boolean) => void }) {
-  return (
-    <div className="fixed inset-x-0 bottom-4 z-[80] flex justify-center px-4">
-      <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0c0c10]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-white">Studio analytics preference</p>
-            <p className="max-w-2xl text-sm text-zinc-300">
-              Essential storage keeps Studio signed in. Optional analytics only starts if you allow it, so we can measure aggregate product quality without forcing tracking by default.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onDecision(false)}
-              className="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/20 hover:text-white"
-            >
-              Essential only
-            </button>
-            <button
-              type="button"
-              onClick={() => onDecision(true)}
-              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
-            >
-              Allow analytics
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+type PostHogRuntimeClient = {
+  opt_in_capturing?: () => void
+  opt_out_capturing?: () => void
+  stopSessionRecording?: () => void
 }
 
 function loadPostHog() {
@@ -127,19 +81,48 @@ function loadPostHog() {
   return posthogBootstrapPromise
 }
 
-function PostHogBoundary({ children }: { children: ReactNode }) {
+export function resetPostHogBootstrapPromiseForTests() {
+  posthogBootstrapPromise = null
+}
+
+export function PostHogBoundary({ children }: { children: ReactNode }) {
   const [providerState, setProviderState] = useState<{
     Provider: ComponentType<{ client: unknown; children: ReactNode }>
     client: unknown
   } | null>(null)
-  const [cookiePreferences, setCookiePreferences] = useState<CookiePreferences | null>(() => readCookiePreferences())
-  const analyticsAllowed = Boolean(cookiePreferences?.analytics)
+  const { analyticsAllowed } = useStudioCookiePreferences()
+  const allowLiveCapture = !import.meta.env.DEV || import.meta.env.MODE === 'test'
 
   useEffect(() => {
-    if (!isPostHogConfigured || !analyticsAllowed) return undefined
+    if (!isPostHogConfigured) return undefined
+
+    if (!analyticsAllowed) {
+      const client = providerState?.client as PostHogRuntimeClient | undefined
+      client?.stopSessionRecording?.()
+      client?.opt_out_capturing?.()
+      return undefined
+    }
+
+    if (providerState) {
+      if (allowLiveCapture) {
+        const client = providerState.client as PostHogRuntimeClient
+        client.opt_in_capturing?.()
+      }
+      return undefined
+    }
 
     let cancelled = false
     void loadPostHog().then((state) => {
+      if (cancelled) {
+        const client = state.client as PostHogRuntimeClient
+        client.stopSessionRecording?.()
+        client.opt_out_capturing?.()
+        return
+      }
+      if (allowLiveCapture) {
+        const client = state.client as PostHogRuntimeClient
+        client.opt_in_capturing?.()
+      }
       if (!cancelled) {
         setProviderState(state)
       }
@@ -148,17 +131,7 @@ function PostHogBoundary({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [analyticsAllowed])
-
-  const handleConsentDecision = (analytics: boolean) => {
-    const nextPreferences: CookiePreferences = {
-      analytics,
-      decided_at: new Date().toISOString(),
-      version: 1,
-    }
-    writeCookiePreferences(nextPreferences)
-    setCookiePreferences(nextPreferences)
-  }
+  }, [allowLiveCapture, analyticsAllowed, providerState])
 
   const renderedChildren = !isPostHogConfigured || !analyticsAllowed || !providerState
     ? children
@@ -170,7 +143,8 @@ function PostHogBoundary({ children }: { children: ReactNode }) {
   return (
     <>
       {renderedChildren}
-      {isPostHogConfigured && cookiePreferences === null ? <CookieConsentBanner onDecision={handleConsentDecision} /> : null}
+      <CookieConsentBanner analyticsAvailable={isPostHogConfigured} />
+      <CookiePreferencesDialog analyticsAvailable={isPostHogConfigured} />
     </>
   )
 }
@@ -193,9 +167,17 @@ function PublicRoutes() {
       <Route path="/help" element={<DocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
-      <Route path="/terms" element={<Navigate to="/help#terms" replace />} />
-      <Route path="/privacy" element={<Navigate to="/help#privacy" replace />} />
-      <Route path="/usage-policy" element={<Navigate to="/help#usage-policy" replace />} />
+      <Route path="/legal/terms" element={<LegalTermsPage />} />
+      <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
+      <Route path="/legal/refunds" element={<LegalRefundsPage />} />
+      <Route path="/legal/acceptable-use" element={<LegalAcceptableUsePage />} />
+      <Route path="/legal/cookies" element={<LegalCookiesPage />} />
+      <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
+      <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
+      <Route path="/refunds" element={<Navigate to="/legal/refunds" replace />} />
+      <Route path="/refund-policy" element={<Navigate to="/legal/refunds" replace />} />
+      <Route path="/usage-policy" element={<Navigate to="/legal/acceptable-use" replace />} />
+      <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
       <Route path="/learn" element={<Navigate to="/help" replace />} />
       <Route path="/u/:username" element={<AccountPage />} />
       <Route path="/home" element={<Navigate to="/landing" replace />} />
@@ -230,9 +212,17 @@ function ProtectedRoutes() {
       <Route path="/help" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
-      <Route path="/terms" element={<Navigate to="/help#terms" replace />} />
-      <Route path="/privacy" element={<Navigate to="/help#privacy" replace />} />
-      <Route path="/usage-policy" element={<Navigate to="/help#usage-policy" replace />} />
+      <Route path="/legal/terms" element={<LegalTermsPage />} />
+      <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
+      <Route path="/legal/refunds" element={<LegalRefundsPage />} />
+      <Route path="/legal/acceptable-use" element={<LegalAcceptableUsePage />} />
+      <Route path="/legal/cookies" element={<LegalCookiesPage />} />
+      <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
+      <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
+      <Route path="/refunds" element={<Navigate to="/legal/refunds" replace />} />
+      <Route path="/refund-policy" element={<Navigate to="/legal/refunds" replace />} />
+      <Route path="/usage-policy" element={<Navigate to="/legal/acceptable-use" replace />} />
+      <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
       <Route path="/learn" element={<Navigate to="/help" replace />} />
       <Route path="/subscription" element={<BillingPage />} />
       <Route path="/billing" element={<Navigate to="/subscription" replace />} />
@@ -267,8 +257,12 @@ function AppFrame() {
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||
     location.pathname === '/privacy' ||
+    location.pathname === '/refunds' ||
+    location.pathname === '/refund-policy' ||
     location.pathname === '/usage-policy' ||
+    location.pathname === '/cookies' ||
     location.pathname === '/learn' ||
+    location.pathname.startsWith('/legal/') ||
     location.pathname.startsWith('/elements/')
   const isAlwaysPublic =
     location.pathname === '/' ||
@@ -282,8 +276,12 @@ function AppFrame() {
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||
     location.pathname === '/privacy' ||
+    location.pathname === '/refunds' ||
+    location.pathname === '/refund-policy' ||
     location.pathname === '/usage-policy' ||
+    location.pathname === '/cookies' ||
     location.pathname === '/learn' ||
+    location.pathname.startsWith('/legal/') ||
     location.pathname.startsWith('/u/')
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const shouldRenderWithShell = isPublicShellRoute || canRenderWithShell
@@ -325,19 +323,21 @@ function AppFrame() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <PostHogBoundary>
-        <ToastProvider>
-          <LightboxProvider>
-            <Router>
-              <Suspense fallback={null}>
-                <ShortcutModal />
-                <CommandPalette />
-              </Suspense>
-              <AppFrame />
-            </Router>
-          </LightboxProvider>
-        </ToastProvider>
-      </PostHogBoundary>
+      <StudioCookiePreferencesProvider>
+        <PostHogBoundary>
+          <ToastProvider>
+            <LightboxProvider>
+              <Router>
+                <Suspense fallback={null}>
+                  <ShortcutModal />
+                  <CommandPalette />
+                </Suspense>
+                <AppFrame />
+              </Router>
+            </LightboxProvider>
+          </ToastProvider>
+        </PostHogBoundary>
+      </StudioCookiePreferencesProvider>
     </ErrorBoundary>
   )
 }

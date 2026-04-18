@@ -45,13 +45,13 @@ function buildPlanCards(payload: PublicPlansPayload | undefined): PlanCard[] {
     name: 'Free',
     price: 'Free',
     cadence: 'forever',
-    tagline: 'Start creating, no card required.',
+    tagline: 'Open your workspace before you spend.',
     bullets: [
-      'Full creative canvas',
-      'Personal library for everything you make',
-      'Upgrade whenever you are ready',
+      'Personal workspace, library, and saved history',
+      'Buy wallet credits only when you are ready to generate',
+      'Upgrade later for Chat and higher capacity',
     ],
-    cta: 'Start free',
+    cta: 'Open your workspace',
     recommended: false,
     highlighted: false,
   }

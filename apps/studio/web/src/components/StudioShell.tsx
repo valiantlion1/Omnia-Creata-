@@ -66,7 +66,7 @@ const elementsNav: NavItem[] = [
 ]
 
 const utilityNav: NavItem[] = [
-  { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/usage-policy', '/learn'] },
+  { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/refunds', '/refund-policy', '/usage-policy', '/cookies', '/learn', '/legal/terms', '/legal/privacy', '/legal/refunds', '/legal/acceptable-use', '/legal/cookies'] },
   { to: '/subscription', label: 'Billing', icon: CreditCard, aliases: ['/billing', '/plan'] },
   { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'], expandOnMainClick: true },
 ]

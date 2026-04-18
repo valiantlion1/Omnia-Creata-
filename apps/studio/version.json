@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.17.127",
+  "build": "2026.04.18.129",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-17",
-  "notes": "Phase 1 auth-stability hardening wave: OAuth redirect intent now survives the full provider roundtrip, callback sync retries transient auth-service outages more honestly, and current-build proof was refreshed again after the login seam fix. Protected staging still needs a current-build rerun."
+  "releaseDate": "2026-04-18",
+  "notes": "Phase 1 consent honesty wave: Studio now exposes a real cookie-preferences control from the footer and Settings so analytics consent can be revisited after the first banner decision, and live PostHog opt-in/opt-out now follows that saved browser preference instead of treating consent like a one-time gate. Protected staging still needs a current-build rerun."
 }

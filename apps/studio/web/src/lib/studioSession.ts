@@ -1,6 +1,6 @@
 let memoryToken: string | null = null;
 let memoryPostAuthRedirect: string | null = null;
-export const DEFAULT_STUDIO_REDIRECT_PATH = '/explore';
+export const DEFAULT_STUDIO_REDIRECT_PATH = '/create';
 const POST_AUTH_REDIRECT_STORAGE_KEY = 'oc-studio-post-auth-redirect';
 
 export function sanitizeStudioRedirectPath(path: string | null | undefined, fallback = DEFAULT_STUDIO_REDIRECT_PATH) {

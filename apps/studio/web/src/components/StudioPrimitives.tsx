@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Link } from 'react-router-dom'
 import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
+import { useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 
 export function AppPage({
   children,
@@ -198,6 +199,8 @@ export function StatusPill({
 }
 
 export function LegalFooter({ className }: { className?: string }) {
+  const { openPreferences } = useStudioCookiePreferences()
+
   return (
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -209,15 +212,21 @@ export function LegalFooter({ className }: { className?: string }) {
           <span className="text-zinc-600">build {APP_BUILD_LABEL}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Link to="/help#terms" className="transition hover:text-white">
+          <Link to="/legal/terms" className="transition hover:text-white">
             Terms
           </Link>
-          <Link to="/help#privacy" className="transition hover:text-white">
+          <Link to="/legal/privacy" className="transition hover:text-white">
             Privacy
           </Link>
-          <Link to="/help#usage-policy" className="transition hover:text-white">
-            Usage Policy
+          <Link to="/legal/acceptable-use" className="transition hover:text-white">
+            Acceptable Use
           </Link>
+          <Link to="/legal/cookies" className="transition hover:text-white">
+            Cookies
+          </Link>
+          <button type="button" onClick={openPreferences} className="bg-transparent p-0 text-left transition hover:text-white">
+            Cookie preferences
+          </button>
           <Link to="/help#faq" className="transition hover:text-white">
             FAQ
           </Link>

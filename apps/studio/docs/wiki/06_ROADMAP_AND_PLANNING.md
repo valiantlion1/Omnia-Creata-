@@ -33,6 +33,8 @@ Current Phase 1 baseline is the narrow hardening slice that makes the paid surfa
 - gate optional analytics behind explicit consent
 - keep policy acceptance auditable with timestamp + version fields
 - keep auth redirect intent stable across password login and OAuth callback completion
+- make legal and refund surfaces honest enough for a real paid product shell
+- make `Create` the real first-run destination for new accounts
 - keep proof honest on the current build after each hardening wave
 
 This phase is intentionally not:

@@ -7,6 +7,7 @@ import { TurnstileWidget } from '@/components/TurnstileWidget'
 import { useStudioAuth } from '@/lib/studioAuth'
 
 const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
+const NEW_ACCOUNT_REDIRECT_PATH = '/create?welcome=1'
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -27,7 +28,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    navigate('/explore?welcome=1', { replace: true })
+    navigate(NEW_ACCOUNT_REDIRECT_PATH, { replace: true })
   }, [isAuthenticated, navigate])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -39,7 +40,7 @@ export default function SignupPage() {
     }
 
     if (!acceptedLegal) {
-      setError('Please accept the Terms, Privacy Policy, and Usage Policy to continue.')
+      setError('Please accept the Terms, Privacy Policy, and Acceptable Use Policy to continue.')
       return
     }
     if (TURNSTILE_SITE_KEY && !captchaToken) {
@@ -62,7 +63,7 @@ export default function SignupPage() {
         acceptedUsagePolicy: acceptedLegal,
         marketingOptIn,
       })
-      navigate('/explore?welcome=1', { replace: true })
+      navigate(NEW_ACCOUNT_REDIRECT_PATH, { replace: true })
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to create your account right now.')
       if (TURNSTILE_SITE_KEY) {
@@ -79,7 +80,7 @@ export default function SignupPage() {
     setError(null)
 
     try {
-      await signInWithProvider(provider, '/explore?welcome=1')
+      await signInWithProvider(provider, NEW_ACCOUNT_REDIRECT_PATH)
     } catch (googleError) {
       setError(googleError instanceof Error ? googleError.message : `${provider} sign up could not start.`)
       setGoogleBusy(false)
@@ -239,9 +240,9 @@ export default function SignupPage() {
                   className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
                 />
                 <span>
-                  I agree to the <Link to="/help#terms" className="text-white hover:text-zinc-200">Terms</Link>,{' '}
-                  <Link to="/help#privacy" className="text-white hover:text-zinc-200">Privacy Policy</Link>, and{' '}
-                  <Link to="/help#usage-policy" className="text-white hover:text-zinc-200">Usage Policy</Link>.
+                  I agree to the <Link to="/legal/terms" className="text-white hover:text-zinc-200">Terms</Link>,{' '}
+                  <Link to="/legal/privacy" className="text-white hover:text-zinc-200">Privacy Policy</Link>, and{' '}
+                  <Link to="/legal/acceptable-use" className="text-white hover:text-zinc-200">Acceptable Use</Link>.
                 </span>
               </label>
               <label className="flex items-start gap-3 text-zinc-400">

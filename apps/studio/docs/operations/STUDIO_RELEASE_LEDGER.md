@@ -18,6 +18,27 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.18.129`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.128` made the legal/public surface more honest, but the cookie-consent contract was still incomplete in exactly the place the Cookie Policy promised otherwise. Users could make the first banner choice, yet there was no real footer or Settings control to revisit analytics consent later, and revoking consent did not have a live client path because the PostHog boundary only understood the one-time bootstrap case.
+- What:
+  `.129` turns that into a real product control instead of policy theater. Studio now has a shared browser-level cookie-preferences state, a reusable cookie-preferences dialog, a footer trigger, and a Settings entry so users can reopen analytics consent after the banner decision without clearing storage or waiting for a new browser session.
+  The PostHog boundary now follows that saved preference live. Allowing analytics still boots PostHog only after consent, but revoking analytics now actively opts the client out and stops session recording instead of leaving the already-loaded SDK in an ambiguous state. Focused frontend regressions now cover both the footer reopen path and the live PostHog opt-in/opt-out transition, and current-build proof on `.129` includes those tests plus Studio web `type-check`, production `build`, and a browser smoke run that shows telemetry requests only after consent and no longer after revocation.
+
+### `0.6.0-alpha` / build `2026.04.18.128`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.127` stabilized auth intent and proof, but the Phase 1 public paid surface was still too loose in ways users would feel immediately: legal routes were partly scaffolded but still placeholder-heavy, there was no dedicated refund policy page, new accounts still defaulted into `Explore` instead of `Create`, and parts of the public pricing story still implied a looser free tier than the actual wallet-backed contract.
+- What:
+  `.128` is a revenue-ready surface honesty wave. Studio now has a dedicated `/legal/refunds` route, the shared legal shell resolves known placeholders into real prelaunch disclosure text, and the legal nav can point users across terms, privacy, refunds, acceptable use, and cookies without leaving raw placeholder tokens behind.
+  The onboarding contract is also tighter on this build. Signup completion, Google signup bootstrap, and the default post-auth fallback now all target `Create` instead of `Explore`, which finally matches the product doctrine that new users should enter Studio through the image-making surface first. Public pricing and billing copy are also a little more honest about the current commercial truth: free accounts open the workspace and library first, while billing now links directly to the refund policy instead of leaving refund expectations implied.
+  Current-build proof is now partially refreshed on `.128`: legal/auth regressions pass with `7 passed`, Studio web passes `type-check`, production `build` passes with the new refund page chunk present, `verify-studio-local.ps1` passes on `.128`, and current-build provider smoke is green again with `ok=5`, `skipped=2`, `error=0`. Protected staging still does not have current-build proof because the Docker-based staging bring-up is blocked while Docker engine is not running on this machine.
+
 ### `0.6.0-alpha` / build `2026.04.17.127`
 - Date: `2026-04-17`
 - Codename: `Foundation`

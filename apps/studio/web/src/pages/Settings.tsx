@@ -28,6 +28,7 @@ import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
@@ -89,6 +90,7 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
 export default function SettingsPage() {
   usePageMeta('Settings', 'Customize your Omnia Creata Studio preferences and account.')
   const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
+  const { openPreferences, preferences: cookiePreferences } = useStudioCookiePreferences()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
@@ -139,6 +141,7 @@ export default function SettingsPage() {
 
   const health = healthQuery.data as HealthResponse | undefined
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
+  const cookiePreferenceSummary = getCookiePreferenceSummary(cookiePreferences)
   useEffect(() => {
     setPendingVisibility(null)
   }, [auth?.identity.default_visibility])
@@ -432,6 +435,23 @@ export default function SettingsPage() {
                       <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                         Export Archive
                       </button>
+                    }
+                  />
+                  <SettingsRow 
+                    icon={Shield}
+                    title="Cookie preferences"
+                    description="Revisit analytics consent for this browser. Essential storage stays on; optional PostHog analytics only runs when you allow it."
+                    action={
+                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <StatusPill tone={cookiePreferences?.analytics ? 'brand' : 'neutral'}>{cookiePreferenceSummary}</StatusPill>
+                        <button
+                          type="button"
+                          onClick={openPreferences}
+                          className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        >
+                          Manage cookies
+                        </button>
+                      </div>
                     }
                   />
                 </SettingsCard>

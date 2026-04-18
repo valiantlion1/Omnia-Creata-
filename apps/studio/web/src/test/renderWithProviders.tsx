@@ -3,7 +3,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, type RenderOptions } from '@testing-library/react'
 
+import { LightboxProvider } from '@/components/Lightbox'
 import { ToastProvider } from '@/components/Toast'
+import { StudioCookiePreferencesProvider } from '@/lib/studioCookiePreferences'
 
 export function createTestQueryClient() {
   return new QueryClient({
@@ -24,9 +26,13 @@ export function renderWithProviders(
 ) {
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
-      </ToastProvider>
+      <StudioCookiePreferencesProvider>
+        <ToastProvider>
+          <LightboxProvider>
+            <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+          </LightboxProvider>
+        </ToastProvider>
+      </StudioCookiePreferencesProvider>
     </QueryClientProvider>
   )
   return { queryClient, ...render(ui, { wrapper: Wrapper, ...options }) }

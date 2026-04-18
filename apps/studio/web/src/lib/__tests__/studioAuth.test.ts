@@ -20,7 +20,7 @@ describe('buildOAuthRedirectUrl', () => {
 
     const expectedBase = `${window.location.origin}/login`
     expect(buildOAuthRedirectUrl('https://evil.example/prompt' as never)).toBe(
-      `${expectedBase}?oauth=1&next=%2Fexplore`,
+      `${expectedBase}?oauth=1&next=%2Fcreate`,
     )
   })
 })

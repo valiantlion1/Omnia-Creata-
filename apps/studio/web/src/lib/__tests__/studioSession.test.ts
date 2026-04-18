@@ -27,6 +27,6 @@ describe('studioSession post-auth redirect persistence', () => {
     window.sessionStorage.setItem('oc-studio-post-auth-redirect', 'https://evil.example/steal')
 
     const sessionModule = await import('@/lib/studioSession')
-    expect(sessionModule.getStudioPostAuthRedirect()).toBe('/explore')
+    expect(sessionModule.getStudioPostAuthRedirect()).toBe('/create')
   })
 })
