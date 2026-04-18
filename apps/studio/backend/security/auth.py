@@ -427,10 +427,14 @@ async def get_current_user(
                 or email.split("@")[0]
                 or "Creator"
             )
+            # Privilege flags are trusted only from Supabase `app_metadata` (admin-scope)
+            # or from the server-side email allowlist. `user_metadata` is writable by the
+            # end user via their own access token (PATCH /auth/v1/user), so reading
+            # privilege bits from there is a direct privilege-escalation vector.
             metadata: Dict[str, Any] = {
-                "owner_mode": bool(app_metadata.get("owner_mode") or user_metadata.get("owner_mode") or owner_email_match),
-                "root_admin": bool(app_metadata.get("root_admin") or user_metadata.get("root_admin") or root_admin_match),
-                "local_access": bool(app_metadata.get("local_access") or user_metadata.get("local_access") or owner_email_match),
+                "owner_mode": bool(app_metadata.get("owner_mode") or owner_email_match),
+                "root_admin": bool(app_metadata.get("root_admin") or root_admin_match),
+                "local_access": bool(app_metadata.get("local_access") or owner_email_match),
                 "username": (user_metadata.get("username") or email.split("@")[0] or "").strip().lower(),
                 "accepted_terms": bool(user_metadata.get("accepted_terms")),
                 "accepted_terms_at": user_metadata.get("accepted_terms_at"),

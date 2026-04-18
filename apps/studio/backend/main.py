@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from config.env import Environment, get_settings
+from config.env import Environment, get_settings, reveal_secret
 from security.auth import AuthConfig, setup_auth
 from security.rate_limit import build_rate_limiter
 from runtime_logging import configure_runtime_logging
@@ -54,7 +54,7 @@ def _should_enforce_trusted_hosts(current_settings) -> bool:
 async def lifespan(app: FastAPI):
     setup_auth(
         AuthConfig(
-            secret_key=settings.jwt_secret.get_secret_value() if settings.jwt_secret else "",
+            secret_key=reveal_secret(settings.jwt_secret),
             algorithm=settings.jwt_algorithm,
         )
     )

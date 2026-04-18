@@ -1,33 +1,31 @@
 # FastAPI and ASGI server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
 
 # Pydantic for data validation
-pydantic==2.5.0
-pydantic-settings==2.1.0
+pydantic==2.10.3
+pydantic-settings==2.7.0
 
 # HTTP client
-aiohttp==3.9.1
-httpx==0.25.2
+httpx==0.28.1
 
 # File handling
-aiofiles==23.2.0
+aiofiles==24.1.0
 
 # Image processing
-Pillow==10.1.0
+Pillow==10.4.0
 
 # Environment variables
-python-dotenv==1.0.0
+python-dotenv==1.0.1
 
 # Logging and monitoring
-structlog==23.2.0
+structlog==24.4.0
 
-# Background tasks and queuing
-celery==5.3.4
-redis==5.0.1
+# Queue broker
+redis==5.2.1
 
 # Database (optional, for future use)
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 # sqlalchemy==2.0.23
 # alembic==1.13.1
 # asyncpg==0.29.0  # PostgreSQL
@@ -45,19 +43,17 @@ psycopg2-binary==2.9.9
 cryptography==44.0.3
 PyJWT==2.10.1
 passlib[bcrypt]==1.7.4
-python-jose[cryptography]==3.3.0
 
 # Testing (development)
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.2  # For testing FastAPI
+pytest==8.3.4
+pytest-asyncio==0.24.0
 
 # Code quality (development)
-black==23.11.0
-isort==5.12.0
-flake8==6.1.0
-mypy==1.7.1
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+mypy==1.13.0
 
 # Documentation
-mkdocs==1.5.3
-mkdocs-material==9.4.8
+mkdocs==1.6.1
+mkdocs-material==9.5.48
