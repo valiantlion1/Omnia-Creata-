@@ -110,6 +110,8 @@ class GenerationJob(BaseModel):
     routing_strategy: str = "free-first"
     routing_reason: str = "free_standard_default"
     prompt_profile: str = "generic"
+    moderation_tier: str = "auto"
+    moderation_reason: Optional[str] = None
     provider_candidates: List[str] = Field(default_factory=list)
     output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)

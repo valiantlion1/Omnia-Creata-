@@ -37,6 +37,7 @@ type NavItem = {
   aliases?: string[]
   exactAliases?: string[]
   expandOnMainClick?: boolean
+  openInNewTab?: boolean
 }
 
 type NavChild = {
@@ -65,7 +66,7 @@ const elementsNav: NavItem[] = [
 ]
 
 const utilityNav: NavItem[] = [
-  { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/refunds', '/refund-policy', '/usage-policy', '/cookies', '/learn', '/legal/terms', '/legal/privacy', '/legal/refunds', '/legal/acceptable-use', '/legal/cookies'] },
+  { to: '/help', label: 'Help', icon: BookOpen, openInNewTab: true, aliases: ['/docs', '/faq', '/terms', '/privacy', '/refunds', '/refund-policy', '/usage-policy', '/cookies', '/learn', '/legal/terms', '/legal/privacy', '/legal/refunds', '/legal/acceptable-use', '/legal/cookies'] },
   { to: '/subscription', label: 'Billing', icon: CreditCard, aliases: ['/billing', '/plan'] },
   { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'] },
 ]
@@ -137,6 +138,19 @@ function Section({
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate font-medium">{item.label}</span>
                   </button>
+                ) : item.openInNewTab ? (
+                  <a
+                    href={getOpenTarget?.(item) ?? item.to}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onNavigate}
+                    title={collapsed ? item.label : undefined}
+                    className={`${rowClasses} ${collapsed ? 'justify-center' : 'flex-1 gap-2.5'}`}
+                  >
+                    {!collapsed && activeBar}
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {!collapsed ? <span className="truncate font-medium">{item.label}</span> : null}
+                  </a>
                 ) : (
                   <Link
                     to={getOpenTarget?.(item) ?? item.to}
@@ -184,7 +198,7 @@ function Section({
                         to={child.to}
                         onClick={onNavigate}
                         className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] transition ${
-                          childActive ? 'bg-white/[0.07] text-white' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-white'
+                          childActive ? 'bg-white/[0.08] text-white shadow-[inset_1.5px_0_0_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-white'
                         }`}
                       >
                         <ChildIcon className="h-3.5 w-3.5 shrink-0" />
@@ -204,7 +218,7 @@ function Section({
                           to={child.to}
                           onClick={onNavigate}
                           className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 text-[12px] transition ${
-                            childActive ? 'bg-white/[0.07] text-white' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-white'
+                          childActive ? 'bg-white/[0.08] text-white shadow-[inset_1.5px_0_0_rgba(255,255,255,0.4)]' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-white'
                           }`}
                         >
                           <ChildIcon className="h-3.5 w-3.5 shrink-0" />

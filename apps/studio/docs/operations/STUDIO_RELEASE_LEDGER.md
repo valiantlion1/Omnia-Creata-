@@ -18,6 +18,56 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.19.160`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.159` closed a real signed-session Settings regression, but Studio still had two launch-facing truth gaps: moderation on image prompts was too blunt for normal adult fashion/glamour requests, and the current build bookkeeping was lagging behind what the backend and web gates could actually prove.
+- What:
+  `.160` replaces the old one-note image prompt blocking with a layered moderation path. Explicit sexual content, minor sexualization, and exploitative abuse still hard-stop, but reviewable adult-adjacent requests such as swimwear, lingerie styling, sensual editorial framing, cleavage-focused styling, or clothing-color edits now flow through a stricter review lane instead of being auto-killed at Studio's own gate. Generation jobs now persist the moderation tier/reason, provider execution can forward provider-aware moderation hints, public posts can be reported, moderation appeals and owner-side moderation case queues now exist, owner health exposes moderation summary counts, and provider truth now publishes an explicit `engine_matrix` that marks launch lanes as `required`, `optional`, or `disabled`.
+  Verification on `.160` is now source-and-runtime honest. From `apps/studio/backend`, targeted pytest slices covering moderation cases, provider truth, launch readiness, owner health spine, router moderation routes, and the earlier moderation/security/provider suites pass. From `apps/studio/web`, `npm run type-check`, `npm run build`, and `npm run test:ci -- src/pages/__tests__/Dashboard.test.tsx src/pages/__tests__/Documentation.test.tsx` pass. Runtime proof was refreshed too: `ops/start-studio-local.ps1` rebuilt the local stack and wrote a passing `.160` `local-verify-latest.json`; live provider smoke refreshed on `.160` and kept the real blocker visible (`runware` fails with `insufficientCredits`, `fal` is not configured in this environment, while `openrouter` and `openai` chat probes pass); protected staging rebuilt and verified on `.160`, but without an owner bearer token that staging report remains `warning` with `closure_ready=false`.
+
+### `0.6.0-alpha` / build `2026.04.19.159`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.158` kept Studio's premium image doctrine honest, but the rebuilt signed-session account/security pass immediately exposed one narrower live UX break on mobile-height settings surfaces: the `Credentials` and `Active sessions` dialogs were still vertically centered even when their content exceeded the viewport, which pushed the title and close affordance above the visible screen in a real signed-in browser session.
+- What:
+  `.159` makes those two Settings security dialogs behave like the already-compacted profile editor. On narrow viewports the overlays now anchor from the top with viewport-bounded panel height plus internal scrolling, so the header, close control, and first actionable content stay reachable instead of rendering above the viewport. No account-surface redesign was needed; the same signed-session wave also rechecked `/account` featured-artwork state plus the inline signed-in sidebar footer shortcuts on the current build.
+  Verification on `.159` is frontend-scoped and live-session honest. Studio web targeted `Settings` tests pass, including a new modal-shell regression assertion for the top-anchored mobile layout. A real signed-in Playwright pass on build `.159` confirms `/settings` `Credentials`, `Active sessions`, and the compact profile editor on desktop plus narrow viewport, and confirms the signed-in `/account` footer shortcuts still navigate correctly. The current signed account had `0` published items, so there was no live featured-artwork lightbox opening path to verify in this session. Studio web `type-check` and production `build` are still blocked by an unrelated existing syntax error in `src/pages/MediaLibrary.tsx`.
+
+### `0.6.0-alpha` / build `2026.04.19.158`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.157` restored backend regression truth, but the image-lane doctrine still had one obvious gap: `Premium` was marketed like the flagship lane while the actual canonical model still pointed at `FLUX.2 Pro`. With `Fast` already modernized to `FLUX.2 [klein] 9B` and `Standard` already moved to `Qwen-Image-2512`, leaving `Premium` on the older `Pro` lane meant Studio's public image ladder still stopped short of the strongest premium Runware path we could reasonably justify.
+- What:
+  `.158` promotes the public `Premium` lane to `FLUX.2 [max]`. The canonical premium model id now resolves to `flux-2-max`, older `flux-2-pro` plus legacy premium aliases still normalize forward for compatibility, Runware premium AIR ids now target `bfl:7@1`, and backend premium cost estimation now follows the official `$0.07` first-megapixel plus `$0.03` per extra-megapixel basis. The launch-economics lock also stops being vague about the image matrix: `Runware` remains the shared primary execution provider, `fal` is the managed secondary only when configured and current-build proven, and `OpenAI image` plus fallback-only providers remain explicitly outside the normal public launch-grade path.
+  Verification on `.158` is targeted backend proof. Provider routing/pricing tests, provider-truth tests, generation-pricing tests, and backend spine tests pass from `apps/studio/backend`. This wave did not re-run local verify, provider smoke, or protected staging, so runtime proof outside targeted backend tests still belongs to the last fresh environment artifact set.
+
+### `0.6.0-alpha` / build `2026.04.19.157`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.156` moved the public `Standard` lane onto `Qwen-Image-2512`, but PR #8 had also left one explicit backend-only follow-up undone: rerun the broad Studio backend regression pass after the auth-hardening and active `studio_platform/*` wave settled. When that backend sweep was finally rerun from the correct `apps/studio/backend` workspace, it exposed a smaller but real cluster of fallout around wallet-backed managed-lane previews, explicit OpenAI image QA routing, and one brittle identity-deletion assertion that was checking a stale in-memory object instead of persisted store truth.
+- What:
+  `.157` closes that deferred backend regression sweep with the smallest backend/test changes needed to make the suite honest again. Wallet-backed free accounts now stay on managed lanes when those lanes are actually available, but still fall back to the development zero-cost route when managed lanes are absent. Explicit premium-QA-capable OpenAI image providers are again represented in the paid and wallet-backed preview/forecast paths without reopening the default development cost-safe OpenAI lane as a normal routing target. The identity-deletion regression now asserts against saved snapshot state, which is where the cleanup truth actually lives.
+  Verification on `.157` is backend-only and full-coverage. A monolithic `python -m pytest -q` run from `apps/studio/backend` still exceeded the single-process timeout window, so the full backend suite was rerun there as four pytest shards and all of them passed: `test_service_regressions.py` (`85 passed`), `test_router_security.py + test_launch_readiness.py` (`95 passed`), `test_billing_ops.py + test_providers.py + test_llm_gateway.py + test_router_generation.py + test_chat_ops.py` (`142 passed`), and the remaining backend modules (`219 passed`). That gives current backend proof of `541 passed` on `.157` without falsely claiming a one-shot monolithic pass that did not complete in time.
+
+### `0.6.0-alpha` / build `2026.04.19.156`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.155` finished the lingering billing-honesty contract, but the public `Standard` image lane was still mapped to `FLUX.2 Dev`. That left Studio's current model doctrine in an awkward spot: `Fast` was intentionally cheap and modern, `Premium` was already positioned as the hero lane, yet `Standard` still leaned on a more prototype/research-flavored default that was pricier than needed for everyday output.
+- What:
+  `.156` moves the public `Standard` lane to `Qwen-Image-2512`. The canonical Studio model id now resolves to `qwen-image-2512`, legacy `flux-2-dev` and `sdxl-base` names still normalize forward for compatibility, Runware text/reference AIR ids now point at Alibaba's Qwen image route, and the backend's fallback economics dossier plus launch-economics lock all use the cheaper `$0.0051` anchor instead of the older `$0.0096` FLUX Dev basis. This wave also explicitly locks the lane-topology doctrine in product docs: one real primary per lane, secondary only when launch-grade, backup lanes treated as resilience rather than equal public promises.
+  Verification on `.156` is targeted backend proof. Provider routing/pricing tests, provider-truth tests, generation-pricing tests, and backend spine tests pass from `apps/studio/backend`. This wave did not re-run local verify, provider smoke, or protected staging, so current runtime proof outside targeted backend tests still belongs to the last fresh environment artifact set.
+
 ### `0.6.0-alpha` / build `2026.04.19.155`
 - Date: `2026-04-19`
 - Codename: `Foundation`

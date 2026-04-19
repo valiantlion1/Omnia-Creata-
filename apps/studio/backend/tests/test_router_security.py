@@ -18,7 +18,21 @@ from security.auth import User, UserRole, create_user_tokens, get_current_user, 
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
 from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
-from studio_platform.models import IdentityPlan, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioWorkspace, SubscriptionStatus, Visibility, utc_now
+from studio_platform.models import (
+    IdentityPlan,
+    MediaAsset,
+    ModerationCase,
+    ModerationCaseSource,
+    ModerationCaseStatus,
+    OmniaIdentity,
+    Project,
+    PublicPost,
+    ShareLink,
+    StudioWorkspace,
+    SubscriptionStatus,
+    Visibility,
+    utc_now,
+)
 from studio_platform.models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
@@ -2944,5 +2958,142 @@ async def test_auth_me_exposes_provider_context_from_current_user_metadata(tmp_p
         assert payload["identity"]["auth_provider"] == "google"
         assert payload["identity"]["auth_providers"] == ["google"]
         assert payload["identity"]["credentials_managed_by_provider"] is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_post_report_route_uses_user_and_ip_rate_limits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_report_public_post(identity_id: str, post_id: str, *, reason_code: str, detail: str):
+        return ModerationCase(
+            id="case-report-1",
+            subject="post",
+            source=ModerationCaseSource.PUBLIC_REPORT,
+            decision_tier="review",
+            reason_code=reason_code,
+            visibility_effect="hidden_pending_review",
+            status=ModerationCaseStatus.OPEN,
+            actor_or_reporter=identity_id,
+            target_identity_id="owner-1",
+            target_post_id=post_id,
+            description=detail,
+        )
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.report_public_post = fake_report_public_post  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/posts/post-1/report",
+            headers={"X-Test-User": "viewer-1"},
+            json={"reason_code": "unsafe_public", "detail": "Please review this post."},
+        )
+
+    try:
+        assert response.status_code == 201
+        payload = response.json()["case"]
+        assert payload["id"] == "case-report-1"
+        assert payload["source"] == "public_report"
+        assert any("posts:report" in key and limit == 24 and window == 3600 for key, limit, window in calls)
+        assert any("posts:report:ip" in key and limit == 40 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_moderation_appeal_and_admin_case_routes_work_for_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    owner_identity = OmniaIdentity(
+        id="owner-1",
+        email="owner-1@example.com",
+        display_name="Owner",
+        username="owner-1",
+        workspace_id="ws-owner-1",
+        owner_mode=True,
+        root_admin=True,
+        local_access=True,
+    )
+
+    async def fake_submit_moderation_appeal(
+        identity_id: str,
+        *,
+        linked_case_id: str | None,
+        subject,
+        subject_id: str | None,
+        reason_code: str,
+        detail: str,
+    ):
+        return ModerationCase(
+            id="case-appeal-1",
+            subject="post",
+            source=ModerationCaseSource.APPEAL,
+            decision_tier="review",
+            reason_code=reason_code,
+            visibility_effect="none",
+            status=ModerationCaseStatus.OPEN,
+            actor_or_reporter=identity_id,
+            target_identity_id=identity_id,
+            target_post_id=subject_id,
+            linked_case_id=linked_case_id,
+            description=detail,
+        )
+
+    async def fake_list_moderation_cases(*, status=None, source=None, limit=200):
+        return [
+            {
+                "id": "case-report-1",
+                "source": "public_report",
+                "status": "open",
+                "reason_code": "unsafe_public",
+            }
+        ]
+
+    async def fake_ensure_identity(*args, **kwargs):
+        return owner_identity
+
+    async def fake_get_identity(identity_id: str):
+        return owner_identity
+
+    monkeypatch.setattr(service, "submit_moderation_appeal", fake_submit_moderation_appeal)
+    monkeypatch.setattr(service, "list_moderation_cases", fake_list_moderation_cases)
+    monkeypatch.setattr(service, "ensure_identity", fake_ensure_identity)
+    monkeypatch.setattr(service, "get_identity", fake_get_identity)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        appeal_response = await client.post(
+            "/v1/moderation/appeals",
+            headers={"X-Test-User": "owner-1"},
+            json={"linked_case_id": "case-report-1", "subject": "post", "subject_id": "post-1", "detail": "Please review again."},
+        )
+        admin_response = await client.get(
+            "/v1/admin/moderation/cases",
+            headers={
+                "X-Test-User": "owner-1",
+                "X-Test-Owner-Mode": "true",
+                "X-Test-Root-Admin": "true",
+                "X-Test-Local-Access": "true",
+            },
+        )
+
+    try:
+        assert appeal_response.status_code == 201
+        assert appeal_response.json()["case"]["source"] == "appeal"
+        assert admin_response.status_code == 200
+        assert admin_response.json()["cases"][0]["id"] == "case-report-1"
     finally:
         await service.shutdown()

@@ -85,7 +85,7 @@ export function DashboardView() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label={locale === "tr" ? "Toplam entry" : "Total entries"} value={String(dashboard.totalPrompts).padStart(2, "0")} />
+        <MetricCard label={locale === "tr" ? "Toplam entry" : "Total entries"} value={String(dashboard.totalEntries).padStart(2, "0")} />
         <MetricCard label={locale === "tr" ? "Projeler" : "Projects"} value={String(projects.length).padStart(2, "0")} />
         <MetricCard label={locale === "tr" ? "Favoriler" : "Favorites"} value={String(entries.filter((entry) => entry.isFavorite).length).padStart(2, "0")} />
       </section>

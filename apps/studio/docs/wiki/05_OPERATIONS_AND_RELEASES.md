@@ -12,6 +12,12 @@ Studio operational truth lives in these files:
 
 Hidden operator truth for `surface -> tier -> provider -> model -> fallback -> cost` should now be read from owner health detail `ai_control_plane`, especially `ai_control_plane.surface_matrix`, instead of being reconstructed from scattered docs.
 
+## Production Hardening Roadmap
+
+The canonical alpha-to-production hardening plan now lives in the [Studio Production Roadmap](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_PRODUCTION_ROADMAP.md).
+Use that document when sequencing Studio's move from the current prelaunch stack to beta, public launch, growth, and future hyperscale architecture.
+It defines the capacity ladder, the eight hardening pillars, and the numbered work-package catalog future Codex sessions should implement against.
+
 ## Version Discipline
 
 Every meaningful Studio change should:

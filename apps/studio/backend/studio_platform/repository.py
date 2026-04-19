@@ -20,6 +20,7 @@ from .models import (
     GenerationJob,
     JobStatus,
     MediaAsset,
+    ModerationCase,
     DeletedIdentityTombstone,
     OmniaIdentity,
     PromptSnapshot,
@@ -254,6 +255,12 @@ class StudioRepository:
             return sorted(styles, key=lambda item: item.updated_at, reverse=True)
 
         return await self.read(query)
+
+    async def get_moderation_case(self, case_id: str) -> ModerationCase | None:
+        return await self.get_model("moderation_cases", case_id, ModerationCase)
+
+    async def list_moderation_cases(self) -> list[ModerationCase]:
+        return await self.list_models("moderation_cases", ModerationCase)
 
     async def get_prompt_memory_for_identity(self, identity_id: str) -> PromptMemoryProfile | None:
         def query(state: StudioState) -> PromptMemoryProfile | None:

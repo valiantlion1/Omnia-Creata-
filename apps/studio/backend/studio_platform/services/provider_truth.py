@@ -1281,6 +1281,79 @@ def _build_provider_economics_truth(
     }
 
 
+def _build_engine_matrix(
+    *,
+    chat_truth: dict[str, Any],
+    image_truth: dict[str, Any],
+) -> list[dict[str, Any]]:
+    matrix: list[dict[str, Any]] = []
+    chat_primary = str(chat_truth.get("primary_provider") or chat_truth.get("selected_provider") or "").strip().lower()
+    chat_fallback = str(chat_truth.get("fallback_provider") or "").strip().lower()
+    image_selected = str(image_truth.get("selected_provider") or "").strip().lower()
+
+    for provider in chat_truth.get("providers", []):
+        if not isinstance(provider, dict):
+            continue
+        provider_name = str(provider.get("provider") or "").strip().lower()
+        configured = bool(provider.get("configured"))
+        if provider_name and provider_name == chat_primary:
+            role = "required"
+        elif configured:
+            role = "optional"
+        else:
+            role = "disabled"
+        matrix.append(
+            {
+                "surface": "chat",
+                "provider": provider_name,
+                "role": role,
+                "configured": configured,
+                "runtime_available": bool(provider.get("runtime_available")),
+                "smoke_verified_for_current_build": bool(provider.get("smoke_verified_for_current_build")),
+                "launch_grade": bool(provider.get("launch_grade")),
+                "lane_class": provider.get("lane_class"),
+                "service_tier": provider.get("service_tier"),
+                "status": provider.get("status"),
+                "detail": provider.get("detail"),
+                "selected": provider_name == chat_primary,
+                "fallback": bool(chat_fallback and provider_name == chat_fallback),
+            }
+        )
+
+    for provider in image_truth.get("providers", []):
+        if not isinstance(provider, dict):
+            continue
+        provider_name = str(provider.get("provider") or "").strip().lower()
+        configured = bool(provider.get("configured"))
+        lane_class = str(provider.get("lane_class") or "").strip().lower()
+        if provider_name and provider_name == image_selected:
+            role = "required"
+        elif configured and lane_class in {"managed_backup", "fallback_only"}:
+            role = "optional"
+        else:
+            role = "disabled"
+        matrix.append(
+            {
+                "surface": "image",
+                "provider": provider_name,
+                "role": role,
+                "configured": configured,
+                "runtime_available": bool(provider.get("runtime_available")),
+                "smoke_verified_for_current_build": bool(provider.get("smoke_verified_for_current_build")),
+                "launch_grade": bool(provider.get("launch_grade")),
+                "lane_class": provider.get("lane_class"),
+                "service_tier": None,
+                "status": provider.get("status"),
+                "detail": provider.get("detail"),
+                "selected": provider_name == image_selected,
+                "fallback": lane_class in {"managed_backup", "fallback_only"},
+            }
+        )
+
+    matrix.sort(key=lambda item: (item["surface"], {"required": 0, "optional": 1, "disabled": 2}.get(item["role"], 3), item["provider"]))
+    return matrix
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -1315,6 +1388,7 @@ def build_provider_truth_report(
         image_truth=image_truth,
         economics_dossier=economics_dossier,
     )
+    engine_matrix = _build_engine_matrix(chat_truth=chat_truth, image_truth=image_truth)
     if chat_truth["status"] == "blocked" or image_truth["status"] == "blocked":
         status = "blocked"
         summary = "Studio still lacks a trustworthy launch-grade AI provider mix."
@@ -1335,4 +1409,5 @@ def build_provider_truth_report(
         "mix": provider_mix,
         "chat": chat_truth,
         "image": image_truth,
+        "engine_matrix": engine_matrix,
     }

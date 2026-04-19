@@ -112,12 +112,12 @@ def build_provider_economics_dossier(
         },
         "standard": {
             "provider": "runware",
-            "reference_model": "runware:400@1",
+            "reference_model": "alibaba:qwen-image@2512",
             "pricing_source": "runware_public_model_page",
         },
         "premium": {
             "provider": "runware",
-            "reference_model": "bfl:5@1",
+            "reference_model": "bfl:7@1",
             "pricing_source": "runware_bfl_official",
         },
         "signature_internal": {

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Final
 
 STUDIO_FAST_MODEL_ID: Final[str] = "flux-2-klein"
-STUDIO_STANDARD_MODEL_ID: Final[str] = "flux-2-dev"
-STUDIO_PREMIUM_MODEL_ID: Final[str] = "flux-2-pro"
+STUDIO_STANDARD_MODEL_ID: Final[str] = "qwen-image-2512"
+STUDIO_PREMIUM_MODEL_ID: Final[str] = "flux-2-max"
 STUDIO_SIGNATURE_MODEL_ID: Final[str] = "flux-2-flex"
 
 STUDIO_MODEL_ID_ALIASES: Final[dict[str, str]] = {
@@ -26,12 +26,25 @@ STUDIO_MODEL_ID_ALIASES: Final[dict[str, str]] = {
     "flux.2 [klein] 9b": STUDIO_FAST_MODEL_ID,
     "flux.2 dev": STUDIO_STANDARD_MODEL_ID,
     "flux.2-dev": STUDIO_STANDARD_MODEL_ID,
+    "flux-2-dev": STUDIO_STANDARD_MODEL_ID,
     "flux2-dev": STUDIO_STANDARD_MODEL_ID,
     "flux.2 [dev]": STUDIO_STANDARD_MODEL_ID,
+    "qwen-image-2512": STUDIO_STANDARD_MODEL_ID,
+    "qwen image 2512": STUDIO_STANDARD_MODEL_ID,
+    "alibaba-qwen-image-2512": STUDIO_STANDARD_MODEL_ID,
+    "alibaba:qwen-image@2512": STUDIO_STANDARD_MODEL_ID,
+    "flux.2 max": STUDIO_PREMIUM_MODEL_ID,
+    "flux.2-max": STUDIO_PREMIUM_MODEL_ID,
+    "flux-2-max": STUDIO_PREMIUM_MODEL_ID,
+    "flux2-max": STUDIO_PREMIUM_MODEL_ID,
+    "flux.2 [max]": STUDIO_PREMIUM_MODEL_ID,
     "flux.2 pro": STUDIO_PREMIUM_MODEL_ID,
     "flux.2-pro": STUDIO_PREMIUM_MODEL_ID,
+    "flux-2-pro": STUDIO_PREMIUM_MODEL_ID,
     "flux2-pro": STUDIO_PREMIUM_MODEL_ID,
     "flux.2 [pro]": STUDIO_PREMIUM_MODEL_ID,
+    "bfl:7@1": STUDIO_PREMIUM_MODEL_ID,
+    "bfl:5@1": STUDIO_PREMIUM_MODEL_ID,
     "flux.2 flex": STUDIO_SIGNATURE_MODEL_ID,
     "flux.2-flex": STUDIO_SIGNATURE_MODEL_ID,
     "flux2-flex": STUDIO_SIGNATURE_MODEL_ID,
@@ -54,15 +67,15 @@ STUDIO_MODEL_OPENAI_QUALITY_HINTS: Final[dict[str, str]] = {
 
 STUDIO_RUNWARE_TEXT_MODEL_AIR_IDS: Final[dict[str, str]] = {
     STUDIO_FAST_MODEL_ID: "runware:400@2",
-    STUDIO_STANDARD_MODEL_ID: "runware:400@1",
-    STUDIO_PREMIUM_MODEL_ID: "bfl:5@1",
+    STUDIO_STANDARD_MODEL_ID: "alibaba:qwen-image@2512",
+    STUDIO_PREMIUM_MODEL_ID: "bfl:7@1",
     STUDIO_SIGNATURE_MODEL_ID: "bfl:6@1",
 }
 
 STUDIO_RUNWARE_REFERENCE_MODEL_AIR_IDS: Final[dict[str, str]] = {
     STUDIO_FAST_MODEL_ID: "runware:400@2",
-    STUDIO_STANDARD_MODEL_ID: "runware:400@1",
-    STUDIO_PREMIUM_MODEL_ID: "bfl:5@1",
+    STUDIO_STANDARD_MODEL_ID: "alibaba:qwen-image@2512",
+    STUDIO_PREMIUM_MODEL_ID: "bfl:7@1",
     STUDIO_SIGNATURE_MODEL_ID: "bfl:6@1",
 }
 
@@ -75,9 +88,9 @@ STUDIO_RUNWARE_MODEL_DEFAULTS: Final[dict[str, dict[str, object]]] = {
         "prompt_upsampling": False,
     },
     STUDIO_STANDARD_MODEL_ID: {
-        "steps": 28,
-        "cfg_scale": 4.0,
-        "acceleration": "medium",
+        "steps": None,
+        "cfg_scale": None,
+        "acceleration": None,
         "true_cfg_scale": None,
         "prompt_upsampling": False,
     },

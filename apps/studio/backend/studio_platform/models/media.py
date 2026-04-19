@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from .common import utc_now
 from .identity import Visibility
+from .moderation import ModerationVisibilityEffect
 
 
 class MediaAsset(BaseModel):
@@ -36,6 +37,10 @@ class PublicPost(BaseModel):
     cover_asset_id: Optional[str] = None
     asset_ids: List[str] = Field(default_factory=list)
     visibility: Visibility = Visibility.PUBLIC
+    moderation_tier: str = "auto"
+    moderation_reason: Optional[str] = None
+    visibility_effect: ModerationVisibilityEffect = ModerationVisibilityEffect.NONE
+    moderation_case_ids: List[str] = Field(default_factory=list)
     style_tags: List[str] = Field(default_factory=list)
     liked_by: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)

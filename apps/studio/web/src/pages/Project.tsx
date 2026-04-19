@@ -151,7 +151,7 @@ export default function ProjectPage() {
         actions={
           <>
             {!isChatSurface ? (
-              <Link to={`/create?projectId=${project.id}`} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+              <Link to={`/create?projectId=${project.id}`} className="group inline-flex items-center gap-2 rounded-[20px] bg-white px-5 py-3 text-sm font-semibold text-black transition-all duration-300 hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]">
                 Open Create
               </Link>
             ) : null}
@@ -159,17 +159,17 @@ export default function ProjectPage() {
               <button
                 onClick={() => exportMutation.mutate()}
                 disabled={exportMutation.isPending}
-                className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                className="group rounded-[20px] border border-white/10 bg-white/[0.02] px-5 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-white/[0.02] disabled:hover:border-white/10"
               >
                 <span className="inline-flex items-center gap-2">
-                  <Download className="h-4 w-4" />
+                  <Download className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
                   {exportMutation.isPending ? 'Exporting...' : 'Export project'}
                 </span>
               </button>
             ) : null}
             <button
               onClick={() => shareMutation.mutate()}
-              className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/[0.06]"
+              className="group rounded-[20px] border border-white/10 bg-white/[0.02] px-5 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] active:scale-95"
             >
               Share project
             </button>
@@ -207,7 +207,8 @@ export default function ProjectPage() {
                 const likeCount = typeof asset.metadata.like_count === 'number' ? asset.metadata.like_count : 0
 
                 return (
-                <div key={asset.id} className="group/projectcard overflow-hidden rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-white/[0.04] hover:ring-white/[0.12] hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
+                <div key={asset.id} className="group/projectcard relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#13151c] hover:ring-white/[0.15] hover:shadow-[0_24px_50px_rgba(0,0,0,0.5)]">
+                  <div className="absolute -inset-px rounded-[24px] bg-gradient-to-b from-white/5 to-transparent opacity-0 transition-opacity duration-500 group-hover/projectcard:opacity-100" />
                   <div className="group relative overflow-hidden">
                     <ProtectedAssetImage
                       sources={assetPreviewSources(asset)}
@@ -249,12 +250,12 @@ export default function ProjectPage() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="p-5">
-                    <div className="text-[14px] font-semibold tracking-tight text-white">{asset.display_title ?? asset.title}</div>
+                  <div className="relative z-10 p-5">
+                    <div className="text-[14px] font-semibold tracking-tight text-white transition-colors group-hover/projectcard:text-white">{asset.display_title ?? asset.title}</div>
                     <div className="mt-1 text-[11px] text-zinc-500 font-medium">
                       {asset.protection_state === 'blocked' ? 'Under review' : ''}
                     </div>
-                    <p className="mt-2.5 line-clamp-2 text-[13px] leading-6 text-zinc-400">{asset.prompt}</p>
+                    <p className="mt-2.5 line-clamp-2 text-[13px] leading-6 text-zinc-400 transition-colors group-hover/projectcard:text-zinc-300">{asset.prompt}</p>
                   </div>
                 </div>
                 )
@@ -288,15 +289,16 @@ export default function ProjectPage() {
           {generations.length ? (
             <div className="mt-5 space-y-3">
               {generations.map((generation) => (
-                <div key={generation.job_id} className="rounded-[20px] bg-white/[0.02] ring-1 ring-white/[0.05] p-5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.04] hover:ring-white/[0.12] hover:shadow-[0_12px_30px_rgba(0,0,0,0.4)]">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                <div key={generation.job_id} className="group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] p-5 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:bg-[#13151c] hover:ring-white/[0.14] hover:shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
+                  <div className="absolute -inset-px rounded-[24px] bg-gradient-to-b from-white/5 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                  <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-[14px] font-semibold tracking-tight text-white">{generation.display_model_label ?? generation.model}</div>
                     <StatusPill tone={normalizeJobStatus(generation.status) === 'succeeded' ? 'success' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'warning' : ['failed', 'cancelled', 'timed_out'].includes(normalizeJobStatus(generation.status)) ? 'danger' : 'brand'}>
                       {normalizeJobStatus(generation.status) === 'succeeded' ? 'Complete' : normalizeJobStatus(generation.status) === 'running' ? 'Processing' : normalizeJobStatus(generation.status) === 'queued' ? 'Queued' : normalizeJobStatus(generation.status) === 'retryable_failed' ? 'Retrying' : normalizeJobStatus(generation.status) === 'cancelled' ? 'Cancelled' : normalizeJobStatus(generation.status) === 'timed_out' ? 'Timed out' : 'Failed'}
                     </StatusPill>
                   </div>
-                  <p className="mt-3.5 text-[13px] leading-6 text-zinc-400">{generation.prompt_snapshot.prompt}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <p className="relative z-10 mt-3.5 text-[13px] leading-6 text-zinc-400 transition-colors group-hover:text-zinc-300">{generation.prompt_snapshot.prompt}</p>
+                  <div className="relative z-10 mt-4 flex flex-wrap gap-2">
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
                     <button
                       onClick={() => saveStyleMutation.mutate(generation)}

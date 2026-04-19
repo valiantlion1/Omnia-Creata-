@@ -923,98 +923,62 @@ export default function ElementsPage() {
     <>
       <div className="mx-auto flex w-full max-w-[1620px] flex-col gap-8 px-4 py-8 md:px-6">
         <section className="space-y-4">
-          <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-wider text-zinc-500">
+          <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-zinc-500">
             <Palette className="h-4 w-4" />
             <span>Style Library</span>
           </div>
-          <h1
-            className="text-4xl font-semibold tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
+          <h1 className="text-4xl font-bold tracking-tight text-white md:text-[40px]">
             Styles & Presets
           </h1>
-          <p className="max-w-3xl text-lg text-zinc-400">
-            Explore curated looks, then keep the ones you actually reuse. Saved styles are not just labels: they can carry prompt text, exclusions, model choices, ratio defaults, and Create settings you want to bring back later.
+          <p className="max-w-2xl text-lg leading-relaxed text-zinc-400">
+            Explore curated visual directions and keep the ones you reuse. Styles carry your preferred prompts, exclusions, and Create settings.
           </p>
         </section>
 
-        <section className="rounded-[28px] border border-white/[0.08] bg-white/[0.03] p-5 ring-1 ring-white/[0.04]">
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">What this page is for</p>
-              <div className="mt-3 text-sm leading-7 text-zinc-400">
-                <p>
-                  <span className="font-semibold text-white">Explore</span> is the official library of reusable visual directions.
-                  Save one and it lands in <span className="font-semibold text-white">My Styles</span>.
-                </p>
-                <p className="mt-2">
-                  <span className="font-semibold text-white">My Styles</span> is your working preset shelf. Use a preset to reopen Create with its saved setup, or add only the text direction when you want to mix it with something new.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: 'Full preset', value: 'Prompt text + model + ratio + exclusions' },
-                { label: 'Add only text', value: 'Reuse the look without forcing the whole setup' },
-              ].map((item) => (
-                <div key={item.label} className="rounded-[22px] border border-white/[0.08] bg-black/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{item.label}</div>
-                  <div className="mt-2 text-sm leading-6 text-zinc-300">{item.value}</div>
-                </div>
-              ))}
-            </div>
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.04] bg-white/[0.02] p-1 backdrop-blur-md">
+            <button
+              onClick={() => setTab('explore')}
+              className={`relative rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ${
+                tab === 'explore'
+                  ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                  : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'
+              }`}
+            >
+              Explore
+            </button>
+            <button
+              onClick={() => setTab('my')}
+              className={`relative rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 ${
+                tab === 'my'
+                  ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                  : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'
+              }`}
+            >
+              My Styles
+            </button>
           </div>
-        </section>
 
-        <section className="flex items-center gap-3">
-          <button
-            onClick={() => setTab('explore')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition-all ${
-              tab === 'explore'
-                ? 'text-white shadow-[0_0_15px_rgba(124,58,237,0.3)]'
-                : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.08]'
-            }`}
-            style={tab === 'explore' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
-          >
-            Explore
-          </button>
-          <button
-            onClick={() => setTab('my')}
-            className={`rounded-full px-5 py-2.5 text-sm font-medium transition-all ${
-              tab === 'my'
-                ? 'text-white shadow-[0_0_15px_rgba(124,58,237,0.3)]'
-                : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.08]'
-            }`}
-            style={tab === 'my' ? { background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' } : undefined}
-          >
-            My Styles
-          </button>
-        </section>
-
-        <section className="flex flex-wrap items-center gap-2">
-          {categories.map((cat) => {
-            const Icon = cat.icon
-            const active = activeCategory === cat.key
-            return (
-              <button
-                key={cat.key}
-                onClick={() => setActiveCategory(cat.key)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition-all ${
-                  active
-                    ? 'bg-white/[0.08] text-white ring-1 ring-white/[0.15]'
-                    : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
-                }`}
-              >
-                <Icon className={`h-3.5 w-3.5 ${active ? 'text-[rgb(var(--primary))]' : ''}`} />
-                {cat.label}
-              </button>
-            )
-          })}
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-full border border-white/[0.04] bg-white/[0.02] p-1 backdrop-blur-md overflow-x-auto scrollbar-hide">
+            {categories.map((cat) => {
+              const Icon = cat.icon
+              const active = activeCategory === cat.key
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveCategory(cat.key)}
+                  className={`relative flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-300 ${
+                    active
+                      ? 'bg-white/[0.08] text-white shadow-[0_0_15px_rgba(255,255,255,0.1)] ring-1 ring-white/[0.12]'
+                      : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white'
+                  }`}
+                >
+                  <Icon className={`h-3.5 w-3.5 ${active ? 'text-white' : 'text-zinc-500'}`} />
+                  {cat.label}
+                </button>
+              )
+            })}
+          </div>
         </section>
 
         {tab === 'explore' ? (

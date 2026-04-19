@@ -214,6 +214,8 @@ class StudioImageProvider(ABC):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         raise NotImplementedError
 
@@ -335,6 +337,8 @@ class FalProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         if not self.api_key:
             raise ProviderTemporaryError("fal.ai is not configured")
@@ -669,6 +673,8 @@ class RunwareProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         if not self.api_key:
             raise ProviderTemporaryError("Runware is not configured")
@@ -760,10 +766,10 @@ class RunwareProvider(StudioImageProvider):
         if normalized_model == STUDIO_FAST_MODEL_ID:
             return round(0.00078 * megapixels + (0.00078 * reference_megapixels), 6)
         if normalized_model == STUDIO_STANDARD_MODEL_ID:
-            return round(0.0096 * megapixels + (0.0096 * reference_megapixels), 6)
+            return round(0.0051 * megapixels + (0.0051 * reference_megapixels), 6)
         if normalized_model == STUDIO_PREMIUM_MODEL_ID:
-            output_cost = 0.03 + max(0, megapixels - 1) * 0.015
-            input_cost = 0.015 * reference_megapixels
+            output_cost = 0.07 + max(0, megapixels - 1) * 0.03
+            input_cost = 0.03 * reference_megapixels
             return round(output_cost + input_cost, 6)
         if is_signature_model_id(normalized_model):
             output_cost = 0.06 * megapixels
@@ -954,6 +960,8 @@ class OpenAIImageProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         if not self.api_key:
             raise ProviderTemporaryError("OpenAI image provider is not configured")
@@ -975,6 +983,7 @@ class OpenAIImageProvider(StudioImageProvider):
                 size=requested_size,
                 quality=quality,
                 model=request_model,
+                moderation_tier=moderation_tier,
             )
         else:
             if reference_image is None:
@@ -985,6 +994,7 @@ class OpenAIImageProvider(StudioImageProvider):
                 quality=quality,
                 model=request_model,
                 reference_image=reference_image,
+                moderation_tier=moderation_tier,
             )
 
         image_bytes, mime_type = await self._extract_image_bytes(response_payload)
@@ -1025,12 +1035,14 @@ class OpenAIImageProvider(StudioImageProvider):
         size: str,
         quality: str,
         model: str,
+        moderation_tier: str,
     ) -> dict[str, object]:
         payload = {
             "model": model,
             "prompt": prompt,
             "size": size,
             "quality": quality,
+            "moderation": "low" if str(moderation_tier or "").strip().lower() == "low" else "auto",
             "output_format": "png",
         }
         async with self._build_client() as client:
@@ -1065,12 +1077,14 @@ class OpenAIImageProvider(StudioImageProvider):
         quality: str,
         model: str,
         reference_image: ProviderReferenceImage,
+        moderation_tier: str,
     ) -> dict[str, object]:
         data = {
             "model": model,
             "prompt": prompt,
             "size": size,
             "quality": quality,
+            "moderation": "low" if str(moderation_tier or "").strip().lower() == "low" else "auto",
             "output_format": "png",
         }
         files = {
@@ -1292,6 +1306,8 @@ class PollinationsProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         if not self.enabled:
             raise ProviderTemporaryError("Pollinations is disabled")
@@ -1415,6 +1431,8 @@ class HuggingFaceImageProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         if not self.api_token:
             raise ProviderTemporaryError("HuggingFace provider is disabled")
@@ -1582,6 +1600,8 @@ class DemoImageProvider(StudioImageProvider):
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> ProviderResult:
         image = Image.new("RGBA", (width, height), (12, 16, 28, 255))
         draw = ImageDraw.Draw(image)
@@ -2142,6 +2162,8 @@ class ProviderRegistry:
         steps: int = 30,
         cfg_scale: float = 6.5,
         workflow: str = "text_to_image",
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
         provider_candidates: Sequence[str] | None = None,
     ) -> ProviderResult:
         last_error: Optional[Exception] = None
@@ -2177,6 +2199,8 @@ class ProviderRegistry:
                     steps=steps,
                     cfg_scale=cfg_scale,
                     workflow=workflow,
+                    moderation_tier=moderation_tier,
+                    moderation_reason=moderation_reason,
                 )
                 latency_ms = (time.monotonic() - started_at) * 1000
                 self._record_provider_success(provider.name, latency_ms)

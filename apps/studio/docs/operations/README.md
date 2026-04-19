@@ -21,6 +21,11 @@ Bu klasorun mantigi:
 - tarihsel planlari current truth gibi gostermemek
 - build, verify ve maintenance bilgisini tek yerde toplamak
 
+## Planning
+
+- [Production Roadmap](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_PRODUCTION_ROADMAP.md)
+  alpha-prelaunch stack'i public launch, growth ve hyperscale kapasite basamaklarina tasiyan kanonik hardening roadmap'i ve work package catalog'u
+
 Aktif urun frame'i `Controlled Public Paid Launch`tir.
 `Protected Beta Hardening` ise hala korunmasi gereken tarihsel/current-build baseline proof olarak okunur.
 

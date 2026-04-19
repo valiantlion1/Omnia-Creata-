@@ -24,6 +24,9 @@ from studio_platform.service import StudioService
 from studio_platform.studio_model_contract import (
     STUDIO_FAST_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+    normalize_studio_model_id,
+    resolve_runware_model_air_id,
 )
 from studio_platform.store import StudioStateStore
 
@@ -131,6 +134,26 @@ def test_validate_model_for_identity_honors_effective_free_plan_when_subscriptio
         validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
 
 
+def test_standard_model_contract_normalizes_legacy_aliases_to_qwen() -> None:
+    model = get_model_catalog_entry_or_raise("flux-2-dev")
+
+    assert model.id == STUDIO_STANDARD_MODEL_ID
+    assert model.estimated_cost == pytest.approx(0.0051)
+    assert normalize_studio_model_id("sdxl-base") == STUDIO_STANDARD_MODEL_ID
+    assert normalize_studio_model_id("alibaba:qwen-image@2512") == STUDIO_STANDARD_MODEL_ID
+    assert resolve_runware_model_air_id("flux-2-dev") == "alibaba:qwen-image@2512"
+
+
+def test_premium_model_contract_normalizes_legacy_aliases_to_flux_max() -> None:
+    model = get_model_catalog_entry_or_raise("flux-2-pro")
+
+    assert model.id != "flux-2-pro"
+    assert model.estimated_cost == pytest.approx(0.07)
+    assert normalize_studio_model_id("flux-2-pro") == model.id
+    assert normalize_studio_model_id("bfl:5@1") == model.id
+    assert resolve_runware_model_air_id("flux-2-pro") == "bfl:7@1"
+
+
 def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
     launch_readiness = {
         "launch_gate": {"status": "ready"},
@@ -162,6 +185,33 @@ def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
     assert payload["platform_readiness"] == launch_readiness["platform_readiness"]
     assert payload["truth_sync"] == launch_readiness["truth_sync"]
     assert payload["provider_economics_dossier"]["report_kind"] == "provider_economics_dossier"
+
+
+def test_build_owner_health_payload_keeps_moderation_summary() -> None:
+    payload = build_owner_health_payload(
+        overall_status="healthy",
+        provider_status=[{"name": "openai", "status": "healthy"}],
+        counts={"identities": 1},
+        generation_runtime_mode="all",
+        generation_queue={"queued": 0},
+        generation_broker_payload={"enabled": False, "detail": "local_queue_only"},
+        worker_id="worker-1",
+        worker_processing_active=True,
+        generation_routing={"default_strategy": "free-first"},
+        chat_routing={"primary_provider": "openai"},
+        data_authority={"mode": "sqlite"},
+        moderation_summary={
+            "open_case_count": 2,
+            "open_report_count": 1,
+            "open_appeal_count": 1,
+            "actioned_case_count": 0,
+            "hidden_pending_review_post_count": 1,
+            "private_only_post_count": 3,
+        },
+    )
+
+    assert payload["moderation_summary"]["open_case_count"] == 2
+    assert payload["moderation_summary"]["hidden_pending_review_post_count"] == 1
 
 
 def test_build_owner_ai_control_plane_keeps_surface_matrix_and_contract_freeze() -> None:

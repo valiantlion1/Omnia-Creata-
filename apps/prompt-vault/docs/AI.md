@@ -30,7 +30,7 @@ The AI layer exists only to help users:
 
 ### Route
 
-- [`apps/web/src/app/api/ai/assist/route.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/api/ai/assist/route.ts)
+- [`../web/src/app/api/ai/assist/route.ts`](../web/src/app/api/ai/assist/route.ts)
 
 This route:
 
@@ -44,8 +44,8 @@ This route:
 
 ### Provider abstraction
 
-- [`apps/web/src/lib/ai/provider-types.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/provider-types.ts)
-- [`apps/web/src/lib/ai/service.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/service.ts)
+- [`../web/src/lib/ai/provider-types.ts`](../web/src/lib/ai/provider-types.ts)
+- [`../web/src/lib/ai/service.ts`](../web/src/lib/ai/service.ts)
 
 Providers are swappable behind a common interface:
 
@@ -65,8 +65,8 @@ The current active provider is controlled by backend environment variables.
 
 ## Rate limiting and abuse protection
 
-- in-memory per-actor rate limiting is implemented in [`apps/web/src/lib/ai/rate-limit.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/rate-limit.ts)
-- request logging is implemented in [`apps/web/src/lib/ai/logging.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/logging.ts)
+- in-memory per-actor rate limiting is implemented in [`../web/src/lib/ai/rate-limit.ts`](../web/src/lib/ai/rate-limit.ts)
+- request logging is implemented in [`../web/src/lib/ai/logging.ts`](../web/src/lib/ai/logging.ts)
 - optional persistent logging can use the Supabase service-role path on the server only
 
 ## Data handling

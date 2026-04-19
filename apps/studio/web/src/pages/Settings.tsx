@@ -213,8 +213,8 @@ function ActiveSessionsDialog({
   const otherSessions = sessions.filter((session) => !session.current)
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/75 px-4 py-4 backdrop-blur-md sm:items-center sm:py-8">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
         <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -235,7 +235,7 @@ function ActiveSessionsDialog({
           </div>
         </div>
 
-        <div className="space-y-4 px-6 py-6 sm:px-7">
+        <div className="space-y-4 overflow-y-auto px-6 py-6 sm:px-7">
           <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -584,8 +584,8 @@ function CredentialsDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/75 px-4 py-4 backdrop-blur-md sm:items-center sm:py-8">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
         <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -606,7 +606,7 @@ function CredentialsDialog({
           </div>
         </div>
 
-        <div className="space-y-4 px-6 py-6 sm:px-7">
+        <div className="space-y-4 overflow-y-auto px-6 py-6 sm:px-7">
           <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1211,7 +1211,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <a
-                      href="mailto:support@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
+                      href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
                       className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:scale-105"
                     >
                       <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" /> Contact Support

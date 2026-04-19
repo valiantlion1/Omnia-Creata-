@@ -236,6 +236,48 @@ async def load_owner_security_summary(store) -> dict[str, int]:
     return await store.read(query)
 
 
+async def load_owner_moderation_summary(store) -> dict[str, int]:
+    def query(state: StudioState) -> dict[str, int]:
+        open_case_count = 0
+        open_report_count = 0
+        open_appeal_count = 0
+        actioned_case_count = 0
+        hidden_pending_review_post_count = 0
+        private_only_post_count = 0
+
+        for case in state.moderation_cases.values():
+            status_value = str(case.status.value if hasattr(case.status, "value") else case.status).strip().lower()
+            source_value = str(case.source.value if hasattr(case.source, "value") else case.source).strip().lower()
+            if status_value in {"open", "under_review"}:
+                open_case_count += 1
+                if source_value == "public_report":
+                    open_report_count += 1
+                if source_value == "appeal":
+                    open_appeal_count += 1
+            if status_value == "actioned":
+                actioned_case_count += 1
+
+        for post in state.posts.values():
+            effect_value = str(
+                post.visibility_effect.value if hasattr(post.visibility_effect, "value") else post.visibility_effect
+            ).strip().lower()
+            if effect_value == "hidden_pending_review":
+                hidden_pending_review_post_count += 1
+            elif effect_value == "private_only":
+                private_only_post_count += 1
+
+        return {
+            "open_case_count": open_case_count,
+            "open_report_count": open_report_count,
+            "open_appeal_count": open_appeal_count,
+            "actioned_case_count": actioned_case_count,
+            "hidden_pending_review_post_count": hidden_pending_review_post_count,
+            "private_only_post_count": private_only_post_count,
+        }
+
+    return await store.read(query)
+
+
 async def build_owner_health_detail_extensions(
     *,
     store,
@@ -253,6 +295,7 @@ async def build_owner_health_detail_extensions(
     build_public_plan_payload: Callable[[], Mapping[str, Any]],
 ) -> dict[str, Any]:
     security_summary = await load_owner_security_summary(store)
+    moderation_summary = await load_owner_moderation_summary(store)
     operator_artifacts = load_owner_health_artifacts(settings)
     provider_smoke_report = operator_artifacts["provider_smoke"]
     startup_verification_report = operator_artifacts["startup_verification"]
@@ -336,6 +379,7 @@ async def build_owner_health_detail_extensions(
         )
     return {
         "security_summary": security_summary,
+        "moderation_summary": moderation_summary,
         "provider_smoke_report": provider_smoke_report,
         "startup_verification_report": startup_verification_report,
         "deployment_verification_report": deployment_verification_report,
@@ -391,6 +435,7 @@ def build_owner_health_payload(
     chat_routing: Mapping[str, Any],
     data_authority: Mapping[str, Any],
     security_summary: Mapping[str, Any] | None = None,
+    moderation_summary: Mapping[str, Any] | None = None,
     provider_smoke_report: Mapping[str, Any] | None = None,
     startup_verification_report: Mapping[str, Any] | None = None,
     deployment_verification_report: Mapping[str, Any] | None = None,
@@ -419,6 +464,8 @@ def build_owner_health_payload(
     }
     if security_summary is not None:
         payload["security_summary"] = dict(security_summary)
+    if moderation_summary is not None:
+        payload["moderation_summary"] = dict(moderation_summary)
     if provider_smoke_report is not None:
         payload["provider_smoke"] = dict(provider_smoke_report)
     if startup_verification_report is not None:

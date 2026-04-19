@@ -912,6 +912,7 @@ export default function DashboardPage() {
         </section>
       )}
 
+      <WelcomeOverlay open={showWelcome} onClose={() => setShowWelcome(false)} />
       <AuthPromptModal open={authPromptOpen} onClose={() => setAuthPromptOpen(false)} />
       
       <ExploreLightbox

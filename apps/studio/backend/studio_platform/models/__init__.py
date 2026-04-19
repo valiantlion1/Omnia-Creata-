@@ -38,6 +38,14 @@ from .access_session import StudioAccessSession
 from .login_attempt import StudioLoginAttemptRecord
 from .state import StudioState
 from .style import StudioStyle
+from .moderation import (
+    ModerationCase,
+    ModerationCaseSource,
+    ModerationCaseStatus,
+    ModerationCaseSubject,
+    ModerationResolution,
+    ModerationVisibilityEffect,
+)
 
 __all__ = [
     "utc_now",
@@ -82,6 +90,12 @@ __all__ = [
     "PlanCatalogEntry",
     "StudioPersona",
     "StudioStyle",
+    "ModerationCase",
+    "ModerationCaseSource",
+    "ModerationCaseStatus",
+    "ModerationCaseSubject",
+    "ModerationResolution",
+    "ModerationVisibilityEffect",
     "PromptMemoryProfile",
     "StudioAccessSession",
     "StudioLoginAttemptRecord",

@@ -11,10 +11,12 @@ from .models import (
     GenerationOutput,
     JobStatus,
     MediaAsset,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     PromptSnapshot,
     PublicPost,
     StudioState,
+    Visibility,
 )
 
 
@@ -97,6 +99,8 @@ def create_generation_job_record(
     routing_strategy: str = "free-first",
     routing_reason: str = "free_standard_default",
     prompt_profile: str = "generic",
+    moderation_tier: str = "auto",
+    moderation_reason: Optional[str] = None,
     provider_candidates: Optional[list[str]] = None,
     reserved_credit_cost: int = 0,
     final_credit_cost: Optional[int] = None,
@@ -124,6 +128,8 @@ def create_generation_job_record(
         routing_strategy=routing_strategy,
         routing_reason=routing_reason,
         prompt_profile=prompt_profile,
+        moderation_tier=moderation_tier,
+        moderation_reason=moderation_reason,
         provider_candidates=list(provider_candidates or []),
         reserved_credit_cost=reserved_credit_cost,
         final_credit_cost=final_credit_cost,
@@ -318,6 +324,13 @@ def build_generated_asset_metadata(
         "routing_strategy": job.routing_strategy,
         "routing_reason": job.routing_reason,
         "prompt_profile": job.prompt_profile,
+        "moderation_tier": job.moderation_tier,
+        "moderation_reason": job.moderation_reason,
+        "visibility_effect": (
+            ModerationVisibilityEffect.PRIVATE_ONLY.value
+            if str(job.moderation_tier or "").strip().lower() == "low"
+            else ModerationVisibilityEffect.NONE.value
+        ),
         "model": job.model,
         "seed": seed if seed is not None else job.prompt_snapshot.seed,
         "steps": job.prompt_snapshot.steps,
@@ -473,7 +486,15 @@ def apply_completed_generation_to_state(
     state.projects[project.id] = project
 
     identity = state.identities[current_job.identity_id]
+    review_routed = str(current_job.moderation_tier or "").strip().lower() == "low"
     visibility = identity.default_visibility
+    visibility_effect = (
+        ModerationVisibilityEffect.PRIVATE_ONLY
+        if review_routed
+        else ModerationVisibilityEffect.NONE
+    )
+    if visibility_effect == ModerationVisibilityEffect.PRIVATE_ONLY:
+        visibility = Visibility.PRIVATE
     state.posts[current_job.id] = PublicPost(
         id=current_job.id,
         workspace_id=current_job.workspace_id,
@@ -486,6 +507,9 @@ def apply_completed_generation_to_state(
         cover_asset_id=created_assets[0].id if created_assets else None,
         asset_ids=[asset.id for asset in created_assets],
         visibility=visibility,
+        moderation_tier=current_job.moderation_tier,
+        moderation_reason=current_job.moderation_reason,
+        visibility_effect=visibility_effect,
         style_tags=style_tags,
         liked_by=[],
         created_at=current_job.created_at,

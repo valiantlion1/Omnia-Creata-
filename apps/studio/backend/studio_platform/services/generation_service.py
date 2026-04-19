@@ -659,6 +659,8 @@ class GenerationService:
         seed: int,
         aspect_ratio: str,
         output_count: int = 1,
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
     ) -> GenerationJob:
         identity = await self.service.get_identity(identity_id)
         self.service._assert_identity_action_allowed(
@@ -822,6 +824,8 @@ class GenerationService:
             routing_strategy=effective_routing_decision.routing_strategy,
             routing_reason=effective_routing_decision.routing_reason,
             prompt_profile=effective_routing_decision.prompt_profile,
+            moderation_tier=moderation_tier,
+            moderation_reason=moderation_reason,
             provider_candidates=list(filtered_provider_candidates),
             reserved_credit_cost=pricing_quote.reserved_credit_cost,
             credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",

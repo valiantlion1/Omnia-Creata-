@@ -132,6 +132,7 @@ export default function BillingPage() {
 
     return [
       { feature: 'Studio chat', free: free.can_access_chat, creator: creator.can_access_chat, pro: pro.can_access_chat },
+      { feature: 'Image model access', free: 'Core', creator: 'Newer', pro: 'Newest + advanced' },
       {
         feature: 'Bundled monthly image credits',
         free: false,

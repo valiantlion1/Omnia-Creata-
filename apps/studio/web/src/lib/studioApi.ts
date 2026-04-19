@@ -374,6 +374,52 @@ export function getCreativeProfileLabel(modelId: string | null | undefined, fall
   }
 }
 
+function getStudioModelFamilyName(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized.includes('flux-2-max') || normalized.includes('flux.2 max') || normalized.includes('flux 2 max')) {
+    return 'FLUX.2 Max'
+  }
+  if (normalized.includes('flux-2-flex') || normalized.includes('flux.2 flex') || normalized.includes('flux 2 flex')) {
+    return 'FLUX.2 Flex'
+  }
+  if (normalized.includes('flux-2-klein') || normalized.includes('flux.2 klein') || normalized.includes('flux 2 klein')) {
+    return 'FLUX.2'
+  }
+  if (normalized.includes('nano-banana-2') || normalized.includes('nano banana 2')) {
+    return 'Nano Banana 2'
+  }
+  if (normalized.includes('nano-banana') || normalized.includes('nano banana')) {
+    return 'Nano Banana'
+  }
+  if (normalized.includes('qwen-image') || normalized.includes('qwen image')) {
+    return 'Qwen Image'
+  }
+  if (normalized.includes('flux.2') || normalized.includes('flux-2') || normalized.includes('flux2')) {
+    return 'FLUX.2'
+  }
+  if (normalized.includes('flux.1') || normalized.includes('flux-1') || normalized.includes('flux1')) {
+    return 'FLUX.1'
+  }
+  if (normalized.includes('imagen-4') || normalized.includes('imagen 4')) {
+    return 'Imagen 4'
+  }
+  if (normalized.includes('imagen-3') || normalized.includes('imagen 3')) {
+    return 'Imagen 3'
+  }
+  return null
+}
+
+export function getStudioModelDisplayName(modelId: string | null | undefined, fallbackLabel?: string | null) {
+  const directFamily = getStudioModelFamilyName(modelId)
+  if (directFamily) return directFamily
+  const fallbackFamily = getStudioModelFamilyName(fallbackLabel)
+  if (fallbackFamily) return fallbackFamily
+  if (fallbackLabel?.trim()) return cleanCreativeProfileLabel(fallbackLabel)
+  if (modelId?.trim()) return cleanCreativeProfileLabel(modelId)
+  return 'Studio'
+}
+
 export type AccessSession = {
   id: string
   session_id: string

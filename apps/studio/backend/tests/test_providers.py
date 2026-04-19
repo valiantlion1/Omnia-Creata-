@@ -1322,6 +1322,7 @@ async def test_openai_image_provider_generates_from_b64_json_response() -> None:
     assert submitted_payload["model"] == "gpt-image-1.5"
     assert submitted_payload["quality"] == "high"
     assert submitted_payload["size"] == "1024x1024"
+    assert submitted_payload["moderation"] == "auto"
     assert "Avoid: blurry, low detail" in str(submitted_payload["prompt"])
 
 
@@ -1380,6 +1381,8 @@ async def test_openai_image_provider_uses_edit_endpoint_for_reference_workflow()
     assert b"medium" in seen_body
     assert b'name="size"' in seen_body
     assert b"1024x1536" in seen_body
+    assert b'name="moderation"' in seen_body
+    assert b"auto" in seen_body
 
 
 @pytest.mark.asyncio
@@ -1422,6 +1425,46 @@ async def test_openai_image_provider_uses_draft_model_for_draft_lane() -> None:
     assert submitted_payload["model"] == "gpt-image-1-mini"
     assert submitted_payload["quality"] == "low"
     assert submitted_payload["size"] == "1024x1024"
+    assert submitted_payload["moderation"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_uses_low_moderation_for_reviewable_prompt() -> None:
+    submitted_payload: dict[str, object] = {}
+    png_bytes = image_bytes(width=1024, height=1024)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal submitted_payload
+        submitted_payload = json.loads(request.content.decode("utf-8"))
+        assert request.url.path == "/v1/images/generations"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "b64_json": base64.b64encode(png_bytes).decode("ascii"),
+                    }
+                ]
+            },
+        )
+
+    provider = OpenAIImageProvider(
+        "openai-key",
+        image_model="gpt-image-1.5",
+        transport=httpx.MockTransport(handler),
+    )
+    await provider.generate(
+        prompt="editorial swimsuit portrait on a beach boardwalk",
+        negative_prompt="blurry, low detail",
+        width=1024,
+        height=1024,
+        seed=13,
+        model_id="realvis-xl",
+        moderation_tier="low",
+        moderation_reason="bikini",
+    )
+
+    assert submitted_payload["moderation"] == "low"
 
 
 def test_openai_image_provider_estimates_draft_and_final_lane_costs() -> None:

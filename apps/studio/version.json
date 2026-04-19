@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.19.155",
+  "build": "2026.04.19.160",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-19",
-  "notes": "Public auth, billing, and plan payloads no longer carry `max_resolution`, so Studio stops leaking unfinished resolution promises back into the product through API responses, shared typings, or test fixtures."
+  "notes": "Layered moderation now routes reviewable adult-adjacent image prompts through provider-aware low-moderation lanes while explicit sexual or exploitative requests still block, and the current web and backend verification gates are back in sync with the same build."
 }

@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
+import { Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { useToast } from '@/components/Toast'
 import {
   getCreativeProfileKey,
-  getCreativeProfileLabel,
   describeGenerationLaneTrust,
   formatGenerationGuideSummary,
+  getStudioModelDisplayName,
   isTerminalJobStatus,
   normalizeJobStatus,
   studioApi,
   type Generation,
+  type GenerationCreditGuideEntry,
+  type IdentityPlan,
   type JobStatus,
   type ModelCatalogEntry,
 } from '@/lib/studioApi'
@@ -146,7 +148,6 @@ const aspectOrder: Array<keyof typeof aspectPresets> = ['1:1', '16:9', '9:16', '
 const DEFAULT_CREATE_STEPS = 28
 const DEFAULT_CFG_SCALE = 6.5
 const DEFAULT_OUTPUT_COUNT = 1
-const createFirstRunSteps = ['Prompt', 'Finish', 'Format', 'Library'] as const
 
 /* ─── Toast types ──────────────────────────────────── */
 
@@ -212,23 +213,54 @@ function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
     .sort((a, b) => Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost)
 }
 
-function getProprietaryModelName(id: string, originalLabel: string): string {
-  return getCreativeProfileLabel(id, originalLabel)
+function getPlanRank(plan: IdentityPlan | null | undefined) {
+  switch (plan) {
+    case 'guest':
+      return 0
+    case 'creator':
+      return 2
+    case 'pro':
+      return 3
+    case 'free':
+    default:
+      return 1
+  }
 }
 
-function getCreateQualityDescription(id: string, fallbackDescription?: string | null) {
-  switch (getCreativeProfileKey(id)) {
-    case 'fast':
-      return 'Quick starts for ideas, framing, and fresh variations.'
-    case 'standard':
-      return 'Balanced detail for everyday image work when you want a clean, dependable result.'
-    case 'premium':
-      return 'Richer light, materials, and polish for images you want to keep.'
-    case 'signature':
-      return 'Reserved for internal art-direction workflows.'
+function formatPlanLabel(plan: IdentityPlan | null | undefined) {
+  switch (plan) {
+    case 'creator':
+      return 'Creator'
+    case 'pro':
+      return 'Pro'
+    case 'guest':
+      return 'Guest'
+    case 'free':
     default:
-      return fallbackDescription?.trim() || 'A Studio finish matched to your current plan.'
+      return 'Free'
   }
+}
+
+function resolveDisplayedCreditCost(
+  model: Pick<ModelCatalogEntry, 'credit_cost'>,
+  guide?: Pick<GenerationCreditGuideEntry, 'reserved_credit_cost' | 'quoted_credit_cost' | 'settlement_credit_cost'>,
+) {
+  const candidates = [
+    guide?.reserved_credit_cost,
+    guide?.quoted_credit_cost,
+    guide?.settlement_credit_cost,
+    model.credit_cost,
+  ]
+  return candidates.find((value) => typeof value === 'number' && value > 0) ?? 0
+}
+
+function isModelLockedForPlan(
+  model: ModelCatalogEntry,
+  activePlan: IdentityPlan | null | undefined,
+  canAccessAllModels: boolean,
+) {
+  if (canAccessAllModels) return false
+  return getPlanRank(activePlan) < getPlanRank(model.min_plan)
 }
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
@@ -325,13 +357,30 @@ export default function CreatePage() {
     () => models.filter((entry) => getCreativeProfileKey(entry.id) !== 'signature'),
     [models],
   )
+  const creditGuideByModelId = useMemo(
+    () =>
+      new Map(
+        (billingQuery.data?.generation_credit_guide?.models ?? []).map((entry) => [entry.model_id, entry] as const),
+      ),
+    [billingQuery.data],
+  )
+  const activeAccountTier = billingQuery.data?.account_tier ?? auth?.identity?.plan ?? 'free'
+  const canAccessAllModels = Boolean(auth?.identity.owner_mode || auth?.identity.root_admin)
+  const accessibleModels = useMemo(
+    () => visibleModels.filter((entry) => !isModelLockedForPlan(entry, activeAccountTier, canAccessAllModels)),
+    [activeAccountTier, canAccessAllModels, visibleModels],
+  )
   const selectedModel = useMemo(
-    () => visibleModels.find((entry) => entry.id === selectedModelId) ?? visibleModels[0],
-    [selectedModelId, visibleModels],
+    () => visibleModels.find((entry) => entry.id === selectedModelId) ?? accessibleModels[0] ?? visibleModels[0],
+    [accessibleModels, selectedModelId, visibleModels],
   )
   const selectedModelCreditGuide = useMemo(
     () => billingQuery.data?.generation_credit_guide?.models?.find((entry) => entry.model_id === selectedModel?.id) ?? null,
     [billingQuery.data, selectedModel],
+  )
+  const selectedModelCreditCost = useMemo(
+    () => (selectedModel ? resolveDisplayedCreditCost(selectedModel, selectedModelCreditGuide ?? undefined) : 0),
+    [selectedModel, selectedModelCreditGuide],
   )
   const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
   const draftProjectId = settingsQuery.data?.draft_projects?.compose ?? null
@@ -352,7 +401,6 @@ export default function CreatePage() {
   )
   const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
   const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
-  const showFirstRunGuide = searchParams.get('welcome') === '1'
   const isOutOfCredits = !hasUnlimitedCredits && runtimeCredits <= 0
   const activeAspect = aspectPresets[aspectRatio]
   const orderedAspectOptions = useMemo(
@@ -372,11 +420,11 @@ export default function CreatePage() {
   /* ─── Effects ─────────────────────────────────── */
 
   useEffect(() => {
-    if (!visibleModels.length) return
-    if (!visibleModels.some((entry) => entry.id === selectedModelId)) {
-      setSelectedModelId(visibleModels[0].id)
+    if (!accessibleModels.length) return
+    if (!accessibleModels.some((entry) => entry.id === selectedModelId)) {
+      setSelectedModelId(accessibleModels[0].id)
     }
-  }, [selectedModelId, visibleModels])
+  }, [accessibleModels, selectedModelId])
 
   useEffect(() => {
     if (!requestedProjectId) return
@@ -746,7 +794,7 @@ export default function CreatePage() {
             <p className="mt-1 text-sm text-zinc-500">
               {isOutOfCredits
                 ? 'Shape the prompt now, then top up when you are ready to run it.'
-                : 'Describe the image, choose a finish, then run it.'}
+                : 'Describe the image, pick the model, then run it.'}
             </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
@@ -1022,9 +1070,9 @@ export default function CreatePage() {
                   className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Finish</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Model</div>
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Fast'}
+                      {selectedModel ? getStudioModelDisplayName(selectedModel.id, selectedModel.label) : 'FLUX.2'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -1034,23 +1082,43 @@ export default function CreatePage() {
                   <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
                     {visibleModels.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
+                      const locked = isModelLockedForPlan(entry, activeAccountTier, canAccessAllModels)
+                      const guide = creditGuideByModelId.get(entry.id)
+                      const displayedCreditCost = resolveDisplayedCreditCost(entry, guide)
                       return (
                         <button
                           key={entry.id}
+                          type="button"
+                          disabled={locked}
                           onClick={() => { setSelectedModelId(entry.id); setModelPickerOpen(false); }}
+                          aria-label={`${getStudioModelDisplayName(entry.id, entry.label)} model, ${displayedCreditCost} credits${entry.min_plan !== 'free' ? `, ${formatPlanLabel(entry.min_plan)}` : ''}`}
                           className={`flex w-full items-start justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
-                            active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
+                            active
+                              ? 'bg-white/[0.08] text-white'
+                              : locked
+                                ? 'cursor-not-allowed text-zinc-600'
+                                : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
                           }`}
                         >
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[13px] font-semibold tracking-wide">
                               {active ? <Check className="h-3.5 w-3.5 text-white" /> : <span className="h-3.5 w-3.5" />}
-                              <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
+                              <span className="truncate">{getStudioModelDisplayName(entry.id, entry.label)}</span>
                             </div>
-                            <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">
-                              {getCreateQualityDescription(entry.id, entry.description)}
+                            <div className="mt-1 pl-[1.3rem] flex flex-wrap items-center gap-2 text-[11px] leading-5 text-zinc-500">
+                              <span>{displayedCreditCost.toLocaleString()} credits</span>
+                              {entry.min_plan !== 'free' ? (
+                                <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                                  {formatPlanLabel(entry.min_plan)}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
+                          {locked ? (
+                            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                              Locked
+                            </span>
+                          ) : null}
                         </button>
                       )
                     })}
@@ -1065,7 +1133,7 @@ export default function CreatePage() {
                 <div className="flex flex-col items-end mr-2">
                   <div className="text-[12px] font-bold text-white tracking-wide flex items-center gap-1.5">
                     <Sparkles className="h-3 w-3 text-[rgb(var(--baseline))]" style={{ color: 'rgb(var(--primary-light))' }} />
-                    {selectedModelCreditGuide ? selectedModelCreditGuide.reserved_credit_cost : selectedModel.credit_cost} Credits
+                    {selectedModelCreditCost} Credits
                   </div>
                   <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Per Image</div>
                 </div>

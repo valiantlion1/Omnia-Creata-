@@ -29,12 +29,12 @@ This blueprint should stay durable even if:
 - the implementation stack evolves
 - new team members join
 
-Supporting docs such as [PRODUCT.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PRODUCT.md), [ARCHITECTURE.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/ARCHITECTURE.md), [DATA-MODEL.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/DATA-MODEL.md), [AI.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/AI.md), and [PLAY-STORE.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PLAY-STORE.md) can be refined under this master plan.
+Supporting docs such as [PRODUCT.md](./PRODUCT.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [DATA-MODEL.md](./DATA-MODEL.md), [AI.md](./AI.md), and [PLAY-STORE.md](./PLAY-STORE.md) can be refined under this master plan.
 
 Operational companion docs:
 
-- [EXECUTION-PLAN.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/EXECUTION-PLAN.md)
-- [FOUNDER-MINIMAL-ACTIONS.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/FOUNDER-MINIMAL-ACTIONS.md)
+- [EXECUTION-PLAN.md](./EXECUTION-PLAN.md)
+- [FOUNDER-MINIMAL-ACTIONS.md](./FOUNDER-MINIMAL-ACTIONS.md)
 
 ---
 

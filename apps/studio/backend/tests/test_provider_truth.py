@@ -598,6 +598,64 @@ class TestPublicPaidUsageReadiness:
             settings.protected_beta_image_provider = original_image
             settings.openai_api_key = original_key
 
+
+class TestEngineMatrix:
+    def test_engine_matrix_marks_required_optional_and_disabled_lanes(self) -> None:
+        settings = get_settings()
+        current_build = load_version_info().build
+        original_chat = settings.protected_beta_chat_provider
+        original_image = settings.protected_beta_image_provider
+        original_openai_tier = settings.openai_service_tier
+        original_openrouter_tier = settings.openrouter_service_tier
+        original_openai_key = settings.openai_api_key
+        original_fal_key = settings.fal_api_key
+        settings.protected_beta_chat_provider = "openai"
+        settings.protected_beta_image_provider = "openai"
+        settings.openai_service_tier = "paid"
+        settings.openrouter_service_tier = "paid"
+        settings.openai_api_key = "test-key"
+        settings.fal_api_key = "fal-key"
+        try:
+            result = build_provider_truth_report(
+                settings=settings,
+                provider_status=[
+                    {"name": "openai", "status": "healthy"},
+                    {"name": "fal", "status": "healthy"},
+                ],
+                chat_routing=_make_chat_routing(
+                    providers={
+                        "openai": _provider_payload("openai"),
+                        "openrouter": _provider_payload("openrouter"),
+                        "gemini": _provider_payload("gemini", configured=False),
+                    },
+                    primary="openai",
+                    fallback="openrouter",
+                ),
+                provider_smoke_report=_make_smoke_report(
+                    build=current_build,
+                    results=[
+                        {"provider_name": "openai", "surface": "chat", "status": "ok"},
+                        {"provider_name": "openai", "surface": "image", "lane": "draft", "status": "ok"},
+                    ],
+                ),
+                cost_telemetry=None,
+            )
+            matrix = {(row["surface"], row["provider"]): row for row in result["engine_matrix"]}
+
+            assert matrix[("chat", "openai")]["role"] == "required"
+            assert matrix[("chat", "openrouter")]["role"] == "optional"
+            assert matrix[("chat", "gemini")]["role"] == "disabled"
+            assert matrix[("image", "openai")]["role"] == "required"
+            assert matrix[("image", "fal")]["role"] == "optional"
+            assert matrix[("image", "demo")]["role"] == "disabled"
+        finally:
+            settings.protected_beta_chat_provider = original_chat
+            settings.protected_beta_image_provider = original_image
+            settings.openai_service_tier = original_openai_tier
+            settings.openrouter_service_tier = original_openrouter_tier
+            settings.openai_api_key = original_openai_key
+            settings.fal_api_key = original_fal_key
+
     def test_public_paid_reports_configured_but_unproven_managed_backup(self) -> None:
         settings = get_settings()
         current_build = load_version_info().build

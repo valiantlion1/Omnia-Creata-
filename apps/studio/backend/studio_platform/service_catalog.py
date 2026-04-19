@@ -151,12 +151,12 @@ def build_public_plan_catalog(
     return {
         IdentityPlan.FREE: {
             "public_id": "free_account",
-            "summary": "Free accounts can use Create with wallet credits, but Studio chat unlocks only on paid plans and image generation is never bundled for free at launch.",
+            "summary": "Use Create with wallet credits on the free account. Studio chat unlocks on paid plans.",
             "feature_summary": [
-                "Direct Create access on the same Studio account",
-                "Studio chat stays locked on the free account",
+                "Core image models with wallet credits",
                 "No bundled image generation credits",
                 "Can buy wallet credit packs without a subscription",
+                "Studio chat stays locked on the free account",
                 "Projects, library, and saved styles stay on the same account",
             ],
             "price_usd": 0,
@@ -167,12 +167,13 @@ def build_public_plan_catalog(
         },
         IdentityPlan.CREATOR: {
             "public_id": "creator",
-            "summary": "Paid everyday plan for Create plus Chat with recurring credits and a durable wallet-backed workflow.",
+            "summary": "Paid everyday plan for Create, Chat, and recurring monthly credits.",
             "feature_summary": [
                 "Recurring monthly credits",
                 "Standard Studio chat",
-                "Core Create, Library, Project, and share workflow",
+                "Newer image models",
                 "Add wallet credit packs for heavier bursts",
+                "Core Create, Library, Project, and share workflow",
             ],
             "price_usd": checkout_catalog[CheckoutKind.CREATOR_MONTHLY]["price_usd"],
             "billing_period": "month",
@@ -182,9 +183,10 @@ def build_public_plan_catalog(
         },
         IdentityPlan.PRO: {
             "public_id": "pro",
-            "summary": "Premium subscription for higher limits, premium chat lanes, and the strongest Studio execution path.",
+            "summary": "Higher limits, premium chat lanes, and access to Studio's newest image models.",
             "feature_summary": [
                 "Larger recurring monthly credits",
+                "Advanced and newest image models",
                 "Premium chat lanes",
                 "Higher generation and queue limits",
                 "Clean exports and fuller sharing access",

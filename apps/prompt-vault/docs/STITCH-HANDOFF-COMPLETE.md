@@ -69,12 +69,12 @@ This blueprint should stay durable even if:
 - the implementation stack evolves
 - new team members join
 
-Supporting docs such as [PRODUCT.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PRODUCT.md), [ARCHITECTURE.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/ARCHITECTURE.md), [DATA-MODEL.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/DATA-MODEL.md), [AI.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/AI.md), and [PLAY-STORE.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PLAY-STORE.md) can be refined under this master plan.
+Supporting docs such as [PRODUCT.md](./PRODUCT.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [DATA-MODEL.md](./DATA-MODEL.md), [AI.md](./AI.md), and [PLAY-STORE.md](./PLAY-STORE.md) can be refined under this master plan.
 
 Operational companion docs:
 
-- [EXECUTION-PLAN.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/EXECUTION-PLAN.md)
-- [FOUNDER-MINIMAL-ACTIONS.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/FOUNDER-MINIMAL-ACTIONS.md)
+- [EXECUTION-PLAN.md](./EXECUTION-PLAN.md)
+- [FOUNDER-MINIMAL-ACTIONS.md](./FOUNDER-MINIMAL-ACTIONS.md)
 
 ---
 
@@ -1504,7 +1504,7 @@ Whenever one of the following changes, this file must be updated:
 - environment strategy
 - founder responsibilities
 
-This document should remain the practical "what happens next" reference under the master [BLUEPRINT.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/BLUEPRINT.md).
+This document should remain the practical "what happens next" reference under the master [BLUEPRINT.md](./BLUEPRINT.md).
 
 ---
 
@@ -1858,7 +1858,7 @@ The AI layer exists only to help users:
 
 ### Route
 
-- [`apps/web/src/app/api/ai/assist/route.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/api/ai/assist/route.ts)
+- [`../web/src/app/api/ai/assist/route.ts`](../web/src/app/api/ai/assist/route.ts)
 
 This route:
 
@@ -1872,8 +1872,8 @@ This route:
 
 ### Provider abstraction
 
-- [`apps/web/src/lib/ai/provider-types.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/provider-types.ts)
-- [`apps/web/src/lib/ai/service.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/service.ts)
+- [`../web/src/lib/ai/provider-types.ts`](../web/src/lib/ai/provider-types.ts)
+- [`../web/src/lib/ai/service.ts`](../web/src/lib/ai/service.ts)
 
 Providers are swappable behind a common interface:
 
@@ -1893,8 +1893,8 @@ The current active provider is controlled by backend environment variables.
 
 ## Rate limiting and abuse protection
 
-- in-memory per-actor rate limiting is implemented in [`apps/web/src/lib/ai/rate-limit.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/rate-limit.ts)
-- request logging is implemented in [`apps/web/src/lib/ai/logging.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/lib/ai/logging.ts)
+- in-memory per-actor rate limiting is implemented in [`../web/src/lib/ai/rate-limit.ts`](../web/src/lib/ai/rate-limit.ts)
+- request logging is implemented in [`../web/src/lib/ai/logging.ts`](../web/src/lib/ai/logging.ts)
 - optional persistent logging can use the Supabase service-role path on the server only
 
 ## Data handling
@@ -2037,10 +2037,10 @@ The current active provider is controlled by backend environment variables.
 
 ## Implemented
 
-- Web app manifest at [`apps/web/src/app/manifest.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/manifest.ts)
-- Generated app icons at [`apps/web/src/app/icon.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/icon.tsx) and [`apps/web/src/app/apple-icon.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/apple-icon.tsx)
-- Service worker registration at [`apps/web/src/components/shared/service-worker-register.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/shared/service-worker-register.tsx)
-- Shell caching service worker at [`apps/web/public/sw.js`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/public/sw.js)
+- Web app manifest at [`../web/src/app/manifest.ts`](../web/src/app/manifest.ts)
+- Generated app icons at [`../web/src/app/icon.tsx`](../web/src/app/icon.tsx) and [`../web/src/app/apple-icon.tsx`](../web/src/app/apple-icon.tsx)
+- Service worker registration at [`../web/src/components/shared/service-worker-register.tsx`](../web/src/components/shared/service-worker-register.tsx)
+- Shell caching service worker at [`../web/public/sw.js`](../web/public/sw.js)
 - Responsive desktop + mobile navigation
 - Installable standalone launch behavior
 
@@ -2153,11 +2153,11 @@ This repository intentionally lays that groundwork without pretending the hard s
 
 ## Implementation
 
-- Locale definitions live in [`packages/types/src/index.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/packages/types/src/index.ts)
-- Shared dictionaries live in [`packages/i18n/src/index.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/packages/i18n/src/index.ts)
-- Locale providers are mounted in [`apps/web/src/app/[locale]/layout.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/[locale]/layout.tsx)
-- Locale switching is handled by [`apps/web/src/components/shared/language-switcher.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/shared/language-switcher.tsx)
-- Proxy-based locale redirects are handled in [`apps/web/src/proxy.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/proxy.ts)
+- Locale definitions live in [`../packages/types/src/index.ts`](../packages/types/src/index.ts)
+- Shared dictionaries live in [`../packages/i18n/src/index.ts`](../packages/i18n/src/index.ts)
+- Locale providers are mounted in [`../web/src/app/[locale]/layout.tsx`](../web/src/app/[locale]/layout.tsx)
+- Locale switching is handled by [`../web/src/components/shared/language-switcher.tsx`](../web/src/components/shared/language-switcher.tsx)
+- Proxy-based locale redirects are handled in [`../web/src/proxy.ts`](../web/src/proxy.ts)
 
 ## Why this structure
 

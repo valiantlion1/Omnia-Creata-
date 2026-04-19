@@ -107,8 +107,8 @@ export function ButtonChip({
   return (
     <span
       className={clsx(
-        'inline-flex items-center justify-center rounded-full px-3.5 py-1.5 text-xs transition-all duration-300 ease-out active:scale-[0.97]',
-        active ? 'bg-white text-black' : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/8',
+        'inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-all duration-300 ease-out active:scale-[0.97]',
+        active ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.08] hover:text-white hover:ring-white/[0.15]',
         className,
       )}
     >
@@ -169,11 +169,14 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <section className="border-y border-dashed border-white/[0.06] py-10 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.04] text-base text-white ring-1 ring-white/8 shadow-[0_0_20px_-4px_rgba(124,58,237,0.2)]">+</div>
-      <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</h3>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">{description}</p>
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    <section className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.04] bg-[#0c0d12] px-8 py-16 text-center transition-all duration-700 hover:border-white/[0.08] hover:bg-[#101116] hover:shadow-[0_0_80px_rgba(0,0,0,0.5)]">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02),transparent_50%)] transition-opacity duration-700 group-hover:opacity-100 opacity-0" />
+      <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.02] text-xl font-light text-zinc-400 ring-1 ring-white/10 shadow-[0_0_30px_-5px_rgba(255,255,255,0.05)] transition-transform duration-700 group-hover:scale-110 group-hover:text-white group-hover:ring-white/20">
+        <div className="relative h-4 w-4 rounded-full bg-current shadow-[0_0_15px_currentColor] opacity-60 transition-opacity duration-500 group-hover:opacity-100" />
+      </div>
+      <h3 className="relative text-xl font-semibold tracking-tight text-white transition-colors group-hover:text-white/90">{title}</h3>
+      <p className="relative mx-auto mt-3 max-w-sm text-sm leading-6 text-zinc-500 transition-colors group-hover:text-zinc-400">{description}</p>
+      {action ? <div className="relative mt-8 flex justify-center">{action}</div> : null}
     </section>
   )
 }
@@ -392,3 +395,4 @@ export function EditTextDialog({
     </div>
   )
 }
+

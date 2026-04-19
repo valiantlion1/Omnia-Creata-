@@ -30,10 +30,10 @@ _DIMENSION_MULTIPLE = 64
 # a live cost quote for the exact request. The active doctrine is modern
 # Runware-first lanes rather than older SDXL/RealVis/Juggernaut era defaults.
 #
-# Official/public anchors checked on 2026-04-18:
+# Official/public anchors checked on 2026-04-19:
 #   FLUX.2 [klein] 9B   1024x1024 ~ $0.00078 / image
-#   FLUX.2 [dev]        featured 1 MP example ~ $0.0096 / image
-#   FLUX.2 [pro]        first MP $0.03, then $0.015 per extra MP
+#   Qwen-Image-2512     1024x1024 ~ $0.0051 / image
+#   FLUX.2 [max]        first MP $0.07, then $0.03 per extra MP
 #   FLUX.2 [flex]       1024x1024 $0.06 / image
 
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
@@ -53,10 +53,10 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     STUDIO_STANDARD_MODEL_ID: ModelCatalogEntry(
         id=STUDIO_STANDARD_MODEL_ID,
         label="Standard",
-        description="Balanced FLUX.2 Dev quality for dependable detail, stronger prompt control, and modern everyday output.",
+        description="Balanced Qwen image quality for dependable detail, stronger text and layout handling, and modern everyday output.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
-        estimated_cost=0.010,
+        estimated_cost=0.0051,
         max_width=1536,
         max_height=1536,
         runtime="cloud",
@@ -65,10 +65,10 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
     STUDIO_PREMIUM_MODEL_ID: ModelCatalogEntry(
         id=STUDIO_PREMIUM_MODEL_ID,
         label="Premium",
-        description="Production-ready FLUX.2 Pro output for polished hero images, premium product visuals, and presentation-grade final picks.",
+        description="Flagship FLUX.2 Max output for premium campaign visuals, multi-reference hero shots, and highest-control final picks.",
         min_plan=IdentityPlan.CREATOR,
         credit_cost=12,
-        estimated_cost=0.030,
+        estimated_cost=0.070,
         max_width=2048,
         max_height=2048,
         featured=True,

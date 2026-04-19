@@ -4,7 +4,7 @@ Bu dokuman, OmniaVault UI/UX iyilestirme surecinde Figma ile kod tarafinin ayni 
 
 ## 1) Tasarim token kaynagi
 
-- Ana token kaynagi: [`apps/web/src/app/globals.css`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/globals.css)
+- Ana token kaynagi: [`../web/src/app/globals.css`](../web/src/app/globals.css)
 - Tema yapisi: `:root` (light) + `.dark` (dark)
 - Kritik semantic tokenlar:
   - `--background`, `--background-elevated`
@@ -38,10 +38,10 @@ Bu dokuman, OmniaVault UI/UX iyilestirme surecinde Figma ile kod tarafinin ayni 
 
 ## 4) Component kaynagi ve eslestirme
 
-- Primitive UI katmani: [`apps/web/src/components/ui/primitives.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/ui/primitives.tsx)
-- App shell ve navigation: [`apps/web/src/components/app/app-shell.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/app-shell.tsx)
-- Dashboard: [`apps/web/src/components/app/dashboard-view.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/dashboard-view.tsx)
-- Library & filters: [`apps/web/src/components/app/library-view.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/library-view.tsx)
+- Primitive UI katmani: [`../web/src/components/ui/primitives.tsx`](../web/src/components/ui/primitives.tsx)
+- App shell ve navigation: [`../web/src/components/app/app-shell.tsx`](../web/src/components/app/app-shell.tsx)
+- Dashboard: [`../web/src/components/app/dashboard-view.tsx`](../web/src/components/app/dashboard-view.tsx)
+- Library & filters: [`../web/src/components/app/library-view.tsx`](../web/src/components/app/library-view.tsx)
 
 Figma component isimlendirmesi onerisi:
 - `PV/Button/Primary|Secondary|Ghost`
@@ -69,14 +69,14 @@ Figma component isimlendirmesi onerisi:
 
 ## 7) PWA / wrapper UI uyumu
 
-- Manifest: [`apps/web/src/app/manifest.ts`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/manifest.ts)
+- Manifest: [`../web/src/app/manifest.ts`](../web/src/app/manifest.ts)
 - Standalone safe-area: app shell icinde `env(safe-area-inset-*)` kullanimi
-- Service worker shell fallback: [`apps/web/public/sw.js`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/public/sw.js)
+- Service worker shell fallback: [`../web/public/sw.js`](../web/public/sw.js)
 
 ## 8) i18n parity kurali (EN + TR)
 
 - Tum yeni label/metinler i18n anahtari ile tanimlanir.
-- Mesaj kaynagi: [`packages/i18n/src/index.ts`](C:/Users/valiantlion/Desktop/Prompt%20Vault/packages/i18n/src/index.ts)
+- Mesaj kaynagi: [`../packages/i18n/src/index.ts`](../packages/i18n/src/index.ts)
 - Placeholder, ham key, yari ceviri kabul edilmez.
 
 ## 9) Guvenlik siniri (AI katmani)
@@ -148,15 +148,15 @@ Figma tarafinda kullanilacak ana dosya yapisi:
 
 ## 12) Kod-Figma mapping onceligi
 
-- Foundation degisikligi varsa once [`apps/web/src/app/globals.css`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/globals.css)
-- Primitive degisikligi varsa once [`apps/web/src/components/ui/primitives.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/ui/primitives.tsx)
-- Navigation/shell degisikligi varsa once [`apps/web/src/components/app/app-shell.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/app-shell.tsx)
+- Foundation degisikligi varsa once [`../web/src/app/globals.css`](../web/src/app/globals.css)
+- Primitive degisikligi varsa once [`../web/src/components/ui/primitives.tsx`](../web/src/components/ui/primitives.tsx)
+- Navigation/shell degisikligi varsa once [`../web/src/components/app/app-shell.tsx`](../web/src/components/app/app-shell.tsx)
 - Card/list/detail/editor polish'i icin:
-  - [`apps/web/src/components/app/prompt-card.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/prompt-card.tsx)
-  - [`apps/web/src/components/app/dashboard-view.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/dashboard-view.tsx)
-  - [`apps/web/src/components/app/library-view.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/library-view.tsx)
-  - [`apps/web/src/components/app/prompt-editor.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/prompt-editor.tsx)
-  - [`apps/web/src/components/app/prompt-detail-view.tsx`](C:/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/app/prompt-detail-view.tsx)
+  - [`../web/src/components/app/prompt-card.tsx`](../web/src/components/app/prompt-card.tsx)
+  - [`../web/src/components/app/dashboard-view.tsx`](../web/src/components/app/dashboard-view.tsx)
+  - [`../web/src/components/app/library-view.tsx`](../web/src/components/app/library-view.tsx)
+  - [`../web/src/components/app/prompt-editor.tsx`](../web/src/components/app/prompt-editor.tsx)
+  - [`../web/src/components/app/prompt-detail-view.tsx`](../web/src/components/app/prompt-detail-view.tsx)
 
 ## 13) Figma audit kural seti
 

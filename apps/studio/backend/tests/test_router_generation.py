@@ -20,7 +20,7 @@ async def _safe_prompt(_: str):
     return router_module.ModerationResult.SAFE, None
 
 
-def _build_generation_job() -> GenerationJob:
+def _build_generation_job(**overrides: object) -> GenerationJob:
     return GenerationJob(
         id="job-test",
         workspace_id="ws-user-1",
@@ -56,6 +56,7 @@ def _build_generation_job() -> GenerationJob:
             seed=1,
             aspect_ratio="1:1",
         ),
+        **overrides,
     )
 
 
@@ -612,5 +613,66 @@ async def test_generation_endpoint_rejects_soft_block_with_403_and_no_job_creati
     try:
         assert response.status_code == 403
         assert create_generation_called is False
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_allows_review_prompt_and_passes_low_moderation_tier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def review(_: str):
+        return router_module.PromptModerationDecision(
+            result=router_module.ModerationResult.REVIEW,
+            reason="bikini",
+            provider_moderation="low",
+            provider_review_required=True,
+        )
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", review)
+    captured_kwargs: dict[str, object] = {}
+
+    async def fake_create_generation(**kwargs: object) -> GenerationJob:
+        captured_kwargs.update(kwargs)
+        return _build_generation_job(
+            moderation_tier=str(kwargs.get("moderation_tier") or "auto"),
+            moderation_reason=str(kwargs.get("moderation_reason") or "") or None,
+        )
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial swimsuit portrait",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 202
+        assert captured_kwargs["moderation_tier"] == "low"
+        assert captured_kwargs["moderation_reason"] == "bikini"
+        payload = response.json()
+        assert payload["moderation"] == {
+            "tier": "low",
+            "reason": "bikini",
+            "review_routed": True,
+        }
     finally:
         await service.shutdown()

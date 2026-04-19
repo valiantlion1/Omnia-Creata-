@@ -270,6 +270,7 @@ function AppFrame() {
     location.pathname === '/billing' ||
     location.pathname === '/plan' ||
     location.pathname === '/help' ||
+    location.pathname.startsWith('/help/') ||
     location.pathname.startsWith('/docs') ||
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||
@@ -289,6 +290,7 @@ function AppFrame() {
     location.pathname.startsWith('/shared/')
   const isPublicCapable =
     location.pathname === '/help' ||
+    location.pathname.startsWith('/help/') ||
     location.pathname.startsWith('/docs') ||
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||

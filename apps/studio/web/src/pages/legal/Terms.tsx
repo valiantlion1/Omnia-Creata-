@@ -1,4 +1,4 @@
-import { LegalList, LegalPage, LegalPlaceholder, LegalSection, type LegalTocItem } from '@/components/LegalPage'
+﻿import { LegalList, LegalPage, LegalPlaceholder, LegalSection, type LegalTocItem } from '@/components/LegalPage'
 import { LEGAL_EFFECTIVE_DATE_LABEL, LEGAL_LAST_UPDATED_LABEL } from '@/lib/legalConfig'
 
 const toc: LegalTocItem[] = [
@@ -96,7 +96,7 @@ export default function TermsPage() {
           <strong className="text-white">3.2 Account creation.</strong> You agree to provide accurate,
           current, and complete information when registering, and to keep that information up to date.
           You are responsible for safeguarding your credentials and for all activity that occurs through
-          your Account. Notify us at <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:security@omniacreata.com">security@omniacreata.com</a> without undue delay
+          your Account. Notify us at <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> without undue delay
           if you suspect unauthorized access.
         </p>
         <p>
@@ -108,7 +108,7 @@ export default function TermsPage() {
           you are not located in, under the control of, or a national or resident of any country subject
           to comprehensive sanctions, and that you are not on any restricted-person list administered by
           the United Nations, the European Union, the United Kingdom, the United States, or the Republic
-          of Türkiye.
+          of TÃ¼rkiye.
         </p>
       </LegalSection>
 
@@ -194,7 +194,7 @@ export default function TermsPage() {
         </p>
         <p>
           <strong className="text-white">6.5 Billing disputes.</strong> Billing disputes should be sent
-          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a>. Where Paddle is required to handle a dispute
+          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>. Where Paddle is required to handle a dispute
           under applicable consumer or payment law, we will cooperate with them to resolve it.
         </p>
       </LegalSection>
@@ -210,7 +210,7 @@ export default function TermsPage() {
           <strong className="text-white">7.2 Standard refund policy.</strong> Outside of cases where
           the Service materially malfunctions on our side or a charge is clearly unauthorized, we do
           not refund fees paid for elapsed time on a running subscription. Requests must be submitted
-          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a> within 14 days of the disputed transaction.
+          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> within 14 days of the disputed transaction.
         </p>
         <p>
           <strong className="text-white">7.3 Mandatory consumer rights.</strong> This Section does not
@@ -318,7 +318,7 @@ export default function TermsPage() {
         <p>
           <strong className="text-white">11.3 DMCA / copyright notices.</strong> If you believe User
           Content or Generated Output published through the Service infringes your copyright, send a
-          written notice to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:legal@omniacreata.com">legal@omniacreata.com</a> including: (a) your physical or
+          written notice to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> including: (a) your physical or
           electronic signature; (b) identification of the copyrighted work; (c) identification of the
           allegedly infringing material and a URL; (d) your contact information; (e) a statement of
           good-faith belief that the use is not authorized; and (f) a statement, under penalty of
@@ -436,7 +436,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="s19" title="19. Consumer rights (EU, UK, Türkiye)">
+      <LegalSection id="s19" title="19. Consumer rights (EU, UK, TÃ¼rkiye)">
         <p>
           <strong className="text-white">19.1 EU/UK right of withdrawal.</strong> If you are a
           consumer located in the European Union or the United Kingdom, you may have a statutory
@@ -447,8 +447,8 @@ export default function TermsPage() {
           supplied.
         </p>
         <p>
-          <strong className="text-white">19.2 Türkiye.</strong> If you are a consumer resident in
-          Türkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
+          <strong className="text-white">19.2 TÃ¼rkiye.</strong> If you are a consumer resident in
+          TÃ¼rkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
           on Distance Contracts apply and are not limited by these Terms. Nothing in these Terms
           removes any non-waivable consumer right available to you under Turkish law.
         </p>
@@ -517,7 +517,7 @@ export default function TermsPage() {
         <p>
           We may send legal notices to the email address associated with your Account or display them
           in the Service. You must send legal notices to us at{' '}
-          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:legal@omniacreata.com">legal@omniacreata.com</a>, with a copy by post to{' '}
+          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>, with a copy by post to{' '}
           <LegalPlaceholder>Registered Address</LegalPlaceholder>. Notices are deemed given when sent
           by email, or when delivered to the postal address, whichever is earlier.
         </p>
@@ -527,7 +527,7 @@ export default function TermsPage() {
         <p>
           These Terms and any dispute arising out of or relating to them or the Service are governed
           by the laws of the{' '}
-          <LegalPlaceholder>Governing Jurisdiction — e.g. Republic of Türkiye</LegalPlaceholder>,
+          <LegalPlaceholder>Governing Jurisdiction â€” e.g. Republic of TÃ¼rkiye</LegalPlaceholder>,
           without regard to its conflict of laws principles. The United Nations Convention on
           Contracts for the International Sale of Goods does not apply. This choice of law does not
           deprive consumers of the protection of mandatory provisions of the law of their country of
@@ -539,7 +539,7 @@ export default function TermsPage() {
         <p>
           <strong className="text-white">27.1 Informal resolution.</strong> Before bringing a formal
           claim, you agree to first contact us at{' '}
-          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:legal@omniacreata.com">legal@omniacreata.com</a>{' '}
+          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>{' '}
           and attempt in good faith to resolve the dispute. Most concerns can be resolved quickly this
           way.
         </p>
@@ -572,10 +572,10 @@ export default function TermsPage() {
         </p>
         <LegalList
           items={[
-            <span>General legal inquiries: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:legal@omniacreata.com">legal@omniacreata.com</a></span>,
-            <span>Billing and refunds: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a></span>,
-            <span>Product support: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:support@omniacreata.com">support@omniacreata.com</a></span>,
-            <span>Safety and abuse: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:safety@omniacreata.com">safety@omniacreata.com</a></span>,
+            <span>General legal inquiries: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
+            <span>Billing and refunds: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
+            <span>Product support: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
+            <span>Safety and abuse: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
             <span>Postal address: <LegalPlaceholder>Registered Address</LegalPlaceholder></span>,
           ]}
         />

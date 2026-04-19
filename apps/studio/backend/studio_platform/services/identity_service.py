@@ -683,6 +683,12 @@ class IdentityService:
                 identity_id=identity_id,
                 reason_code=reason_code,
             )
+        await self.service.moderation_cases.record_generation_block_case(
+            identity_id=identity_id,
+            decision_tier=moderation_result.value,
+            reason_code=reason_code,
+            prompt=reason,
+        )
 
 
     def _assert_identity_action_allowed(

@@ -6,7 +6,20 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ..entitlement_ops import resolve_entitlements
 from ..generation_ops import infer_style_tags
-from ..models import GenerationJob, JobStatus, ManualReviewState, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioState, Visibility, utc_now
+from ..models import (
+    GenerationJob,
+    JobStatus,
+    ManualReviewState,
+    MediaAsset,
+    ModerationVisibilityEffect,
+    OmniaIdentity,
+    Project,
+    PublicPost,
+    ShareLink,
+    StudioState,
+    Visibility,
+    utc_now,
+)
 from ..share_ops import build_public_share_payload, build_share_token_preview, create_share_record
 
 if TYPE_CHECKING:
@@ -34,6 +47,26 @@ class PublicService:
             if generation.status != JobStatus.SUCCEEDED:
                 continue
             if generation.id in state.posts:
+                existing = state.posts[generation.id]
+                expected_effect = self._merged_visibility_effect(
+                    self.post_visibility_effect(existing),
+                    self._generation_visibility_effect(generation),
+                )
+                changed = False
+                if existing.moderation_tier != generation.moderation_tier:
+                    existing.moderation_tier = generation.moderation_tier
+                    changed = True
+                if existing.moderation_reason != generation.moderation_reason:
+                    existing.moderation_reason = generation.moderation_reason
+                    changed = True
+                if self.post_visibility_effect(existing) != expected_effect:
+                    existing.visibility_effect = expected_effect
+                    if expected_effect != ModerationVisibilityEffect.NONE:
+                        existing.visibility = Visibility.PRIVATE
+                    changed = True
+                if changed:
+                    existing.updated_at = utc_now()
+                    state.posts[existing.id] = existing
                 continue
 
             identity = state.identities.get(generation.identity_id)
@@ -68,11 +101,18 @@ class PublicService:
                 prompt=generation.prompt_snapshot.prompt,
                 cover_asset_id=asset_ids[0],
                 asset_ids=asset_ids,
-                visibility=identity.default_visibility,
+                visibility=(
+                    Visibility.PRIVATE
+                    if self._generation_visibility_effect(generation) != ModerationVisibilityEffect.NONE
+                    else identity.default_visibility
+                ),
                 style_tags=infer_style_tags(generation),
                 liked_by=[],
                 created_at=generation.created_at,
                 updated_at=generation.updated_at,
+                moderation_tier=generation.moderation_tier,
+                moderation_reason=generation.moderation_reason,
+                visibility_effect=self._generation_visibility_effect(generation),
             )
 
     def normalize_public_posts_locked(self, state: StudioState) -> None:
@@ -89,6 +129,24 @@ class PublicService:
                 changed = True
             if post.owner_display_name != next_display_name:
                 post.owner_display_name = next_display_name
+                changed = True
+            generation = generations_by_id.get(post.id)
+            if generation is not None:
+                expected_effect = self._merged_visibility_effect(
+                    self.post_visibility_effect(post),
+                    self._generation_visibility_effect(generation),
+                )
+                if post.moderation_tier != generation.moderation_tier:
+                    post.moderation_tier = generation.moderation_tier
+                    changed = True
+                if post.moderation_reason != generation.moderation_reason:
+                    post.moderation_reason = generation.moderation_reason
+                    changed = True
+                if self.post_visibility_effect(post) != expected_effect:
+                    post.visibility_effect = expected_effect
+                    changed = True
+            if self.post_visibility_effect(post) != ModerationVisibilityEffect.NONE and post.visibility == Visibility.PUBLIC:
+                post.visibility = Visibility.PRIVATE
                 changed = True
             if post.visibility == Visibility.PUBLIC:
                 if self.should_hide_post_from_public(
@@ -159,6 +217,7 @@ class PublicService:
         *,
         assets_by_id: Dict[str, MediaAsset],
         identities_by_id: Dict[str, OmniaIdentity] | None = None,
+        generations_by_id: Dict[str, GenerationJob] | None = None,
         viewer_identity_id: str | None = None,
         public_preview: bool = False,
     ) -> Dict[str, Any]:
@@ -174,7 +233,9 @@ class PublicService:
         elif cover_asset is None or cover_asset.deleted_at is not None or not self.service.library.is_truthful_surface_asset(cover_asset):
             cover_asset = visible_assets[0] if visible_assets else None
         identity = identities_by_id.get(post.identity_id) if identities_by_id else None
-        return {
+        moderation_effect = self.post_visibility_effect(post)
+        owner_view = bool(viewer_identity_id and viewer_identity_id == post.identity_id)
+        payload = {
             "id": post.id,
             "owner_username": self.identity_public_username(identity, fallback=post.owner_username),
             "owner_display_name": self.identity_public_display_name(identity, fallback=post.owner_display_name),
@@ -199,7 +260,21 @@ class PublicService:
             "created_at": post.created_at.isoformat(),
             "project_id": None if public_preview else post.project_id,
             "style_tags": post.style_tags,
+            "moderation": {
+                "tier": post.moderation_tier,
+                "reason": post.moderation_reason,
+                "visibility_effect": moderation_effect.value,
+                "review_routed": moderation_effect != ModerationVisibilityEffect.NONE,
+            },
         }
+        if owner_view:
+            payload["publish_blockers"] = self.post_publish_blockers(
+                post,
+                identity=identity,
+                generations_by_id=generations_by_id or {},
+                assets_by_id=assets_by_id,
+            )
+        return payload
 
     async def get_post(self, post_id: str) -> PublicPost:
         post = await self.service.store.get_model("posts", post_id, PublicPost)
@@ -274,6 +349,7 @@ class PublicService:
                 post,
                 assets_by_id=assets_by_id,
                 identities_by_id=identities_by_id,
+                generations_by_id=generations_by_id,
                 viewer_identity_id=viewer_identity_id,
                 public_preview=True,
             )
@@ -322,6 +398,7 @@ class PublicService:
                 post,
                 assets_by_id=assets_by_id,
                 identities_by_id=identities_by_id,
+                generations_by_id=generations_by_id,
                 viewer_identity_id=identity_id,
                 public_preview=True,
             )
@@ -399,6 +476,7 @@ class PublicService:
             post,
             assets_by_id=assets_by_id,
             identities_by_id=identities_by_id,
+            generations_by_id=generations_by_id,
             viewer_identity_id=viewer_identity_id,
             public_preview=viewer_identity_id != post.identity_id,
         )
@@ -423,18 +501,15 @@ class PublicService:
             generations = await self.service.store.list_generations()
             assets_by_id = {asset.id: asset for asset in assets}
             generations_by_id = {generation.id: generation for generation in generations}
-            if self.should_hide_post_from_public(
+            blockers = self.post_publish_blockers(
                 post,
                 identity=identity,
                 generations_by_id=generations_by_id,
-            ) or not self.is_publicly_showcase_ready_post(post):
-                raise PermissionError("Only showcase-ready posts can be made public")
-            if not self.visible_post_assets(
-                assets_by_id,
-                post,
-                public_preview=True,
-            ):
-                raise PermissionError("Only ready, truthful results can be made public")
+                assets_by_id=assets_by_id,
+            )
+            if blockers:
+                summaries = ", ".join(str(item.get("summary") or item.get("code") or "blocked") for item in blockers[:3])
+                raise PermissionError(f"Only launch-safe showcase-ready posts can be made public: {summaries}")
 
         def mutation(state: StudioState) -> None:
             current = state.posts[post.id]
@@ -755,6 +830,38 @@ class PublicService:
             return fallback
         return (identity.display_name or fallback).strip() or fallback
 
+    def post_visibility_effect(self, post: PublicPost) -> ModerationVisibilityEffect:
+        effect = post.visibility_effect
+        if isinstance(effect, ModerationVisibilityEffect):
+            return effect
+        try:
+            return ModerationVisibilityEffect(str(effect or "").strip().lower())
+        except ValueError:
+            return ModerationVisibilityEffect.NONE
+
+    def _visibility_effect_rank(self, effect: ModerationVisibilityEffect) -> int:
+        if effect == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW:
+            return 2
+        if effect == ModerationVisibilityEffect.PRIVATE_ONLY:
+            return 1
+        return 0
+
+    def _merged_visibility_effect(
+        self,
+        current_effect: ModerationVisibilityEffect,
+        generation_effect: ModerationVisibilityEffect,
+    ) -> ModerationVisibilityEffect:
+        if self._visibility_effect_rank(generation_effect) > self._visibility_effect_rank(current_effect):
+            return generation_effect
+        return current_effect
+
+    def _generation_visibility_effect(self, generation: GenerationJob | None) -> ModerationVisibilityEffect:
+        if generation is None:
+            return ModerationVisibilityEffect.NONE
+        if str(generation.moderation_tier or "").strip().lower() == "low":
+            return ModerationVisibilityEffect.PRIVATE_ONLY
+        return ModerationVisibilityEffect.NONE
+
     def is_publicly_visible_identity(self, identity: OmniaIdentity | None) -> bool:
         if identity is None:
             return False
@@ -795,9 +902,106 @@ class PublicService:
         identity: OmniaIdentity | None,
         generations_by_id: Dict[str, GenerationJob],
     ) -> bool:
+        if self.post_visibility_effect(post) != ModerationVisibilityEffect.NONE:
+            return True
         if not self.is_publicly_visible_identity(identity):
             return True
         return self.generation_provider_for_post(post, generations_by_id) == "demo"
+
+    def post_publish_blockers(
+        self,
+        post: PublicPost,
+        *,
+        identity: OmniaIdentity | None,
+        generations_by_id: Dict[str, GenerationJob],
+        assets_by_id: Dict[str, MediaAsset],
+    ) -> list[dict[str, Any]]:
+        blockers: list[dict[str, Any]] = []
+        moderation_effect = self.post_visibility_effect(post)
+        if moderation_effect == ModerationVisibilityEffect.PRIVATE_ONLY:
+            blockers.append(
+                {
+                    "code": "moderation_private_only",
+                    "summary": "This generation is review-routed and must remain private.",
+                }
+            )
+        elif moderation_effect == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW:
+            blockers.append(
+                {
+                    "code": "moderation_pending_review",
+                    "summary": "A moderation report is open, so this post is hidden pending review.",
+                }
+            )
+        if identity is None:
+            blockers.append(
+                {
+                    "code": "identity_missing",
+                    "summary": "The owning identity could not be resolved.",
+                }
+            )
+        else:
+            if self.is_internal_identity(identity):
+                blockers.append(
+                    {
+                        "code": "internal_identity",
+                        "summary": "Internal identities cannot publish to the public Explore surface.",
+                    }
+                )
+            if identity.manual_review_state == ManualReviewState.REQUIRED:
+                blockers.append(
+                    {
+                        "code": "identity_manual_review",
+                        "summary": "This account is under manual review and cannot publish publicly right now.",
+                    }
+                )
+            if identity.temp_block_until and identity.temp_block_until > utc_now():
+                blockers.append(
+                    {
+                        "code": "identity_temp_block",
+                        "summary": "This account is temporarily blocked from public publishing right now.",
+                    }
+                )
+        if self.generation_provider_for_post(post, generations_by_id) == "demo":
+            blockers.append(
+                {
+                    "code": "demo_provider_output",
+                    "summary": "Demo-provider outputs are not eligible for public showcase publishing.",
+                }
+            )
+        if not self.is_publicly_safe_post(post):
+            blockers.append(
+                {
+                    "code": "public_safety_block",
+                    "summary": "Prompt or title content is not allowed on the public showcase surface.",
+                }
+            )
+        if not self.is_publicly_presentable_post(post):
+            blockers.append(
+                {
+                    "code": "public_presentability_block",
+                    "summary": "The post still needs clearer public-facing prompt or title quality before publishing.",
+                }
+            )
+        if not self.visible_post_assets(
+            assets_by_id,
+            post,
+            public_preview=True,
+        ):
+            blockers.append(
+                {
+                    "code": "no_truthful_assets",
+                    "summary": "Only ready, truthful assets can be shown on public surfaces.",
+                }
+            )
+        deduped: list[dict[str, Any]] = []
+        seen_codes: set[str] = set()
+        for blocker in blockers:
+            code = str(blocker.get("code") or "")
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+            deduped.append(blocker)
+        return deduped
 
     def is_publicly_safe_post(self, post: PublicPost) -> bool:
         prompt = (post.prompt or "").lower()

@@ -342,7 +342,7 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
         assert ledger_entry.id not in snapshot.credit_ledger
         assert webhook_receipt.id not in snapshot.billing_webhook_receipts
         assert owned_post.id not in snapshot.posts
-        assert surviving_post.liked_by == []
+        assert snapshot.posts[surviving_post.id].liked_by == []
     finally:
         settings.supabase_url = original_supabase_url
         settings.supabase_service_role_key = original_service_role_key

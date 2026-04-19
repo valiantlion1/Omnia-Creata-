@@ -18,7 +18,7 @@
 
 ## Environment variables
 
-Create `.env.local` in [`apps/web`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web) from [`apps/web/.env.example`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/.env.example):
+Create `.env.local` in [`../web`](../web) from [`../web/.env.example`](../web/.env.example):
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -36,7 +36,7 @@ Create `.env.local` in [`apps/web`](/Users/valiantlion/Desktop/Prompt%20Vault/ap
 ## Deployment steps
 
 1. Create a Supabase project.
-2. Apply [`supabase/migrations/202603140001_prompt_vault_init.sql`](/Users/valiantlion/Desktop/Prompt%20Vault/supabase/migrations/202603140001_prompt_vault_init.sql).
+2. Apply [`../supabase/migrations/202603140001_prompt_vault_init.sql`](../supabase/migrations/202603140001_prompt_vault_init.sql).
 3. Add the public Supabase URL and anon key to the web app environment.
 4. Add the server-only AI provider secrets and `SUPABASE_SERVICE_ROLE_KEY`.
 5. Deploy the web workspace to Vercel.

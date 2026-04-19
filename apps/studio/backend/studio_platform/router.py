@@ -31,11 +31,26 @@ from security.captcha import (
 )
 from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
-from security.moderation import check_prompt_safety, ModerationResult
+from security.moderation import PromptModerationDecision, check_prompt_safety, ModerationResult
 
 from .asset_storage import AssetStorageError
 from .experience_contract_ops import attach_chat_experience
-from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
+from .models import (
+    ChatAttachment,
+    ChatConversation,
+    ChatFeedback,
+    ChatMessage,
+    CheckoutKind,
+    GenerationJob,
+    IdentityPlan,
+    ModerationCaseSource,
+    ModerationCaseStatus,
+    ModerationCaseSubject,
+    ModerationVisibilityEffect,
+    PublicPost,
+    Visibility,
+    StudioPersona,
+)
 from .models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
 from .studio_model_contract import STUDIO_FAST_MODEL_ID
@@ -209,6 +224,28 @@ class PostUpdateRequest(BaseModel):
 class PostMoveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     project_id: str = Field(max_length=128)
+
+
+class PostReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason_code: str = Field(min_length=2, max_length=64)
+    detail: str = Field(default="", max_length=1200)
+
+
+class ModerationAppealRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    linked_case_id: Optional[str] = Field(default=None, max_length=128)
+    subject: Optional[ModerationCaseSubject] = None
+    subject_id: Optional[str] = Field(default=None, max_length=128)
+    reason_code: str = Field(default="appeal", min_length=2, max_length=64)
+    detail: str = Field(default="", max_length=1200)
+
+
+class ModerationCaseResolveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: ModerationCaseStatus
+    resolution_note: str = Field(min_length=1, max_length=1200)
+    visibility_effect: Optional[ModerationVisibilityEffect] = None
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -1218,8 +1255,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         await _consume_generation_rate_limits(request, auth_user)
         _require_verified_generation_account(auth_user)
 
-        mod_result, flagged_term = await check_prompt_safety(payload.prompt)
-        if mod_result != ModerationResult.SAFE:
+        moderation_decision = await check_prompt_safety(payload.prompt)
+        if isinstance(moderation_decision, PromptModerationDecision):
+            mod_result = moderation_decision.result
+            flagged_term = moderation_decision.reason
+            moderation_tier = moderation_decision.provider_moderation
+        else:
+            mod_result, flagged_term = moderation_decision
+            moderation_tier = "auto"
+
+        if mod_result in {ModerationResult.SOFT_BLOCK, ModerationResult.HARD_BLOCK}:
             await service.record_generation_moderation_block(
                 auth_user.id,
                 mod_result,
@@ -1246,6 +1291,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 seed=payload.seed,
                 aspect_ratio=payload.aspect_ratio,
                 output_count=payload.output_count,
+                moderation_tier=moderation_tier,
+                moderation_reason=flagged_term,
             )
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -1590,6 +1637,99 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         return {"post": post}
+
+    @router.post("/posts/{post_id}/report", status_code=status.HTTP_201_CREATED)
+    async def post_report_public_post(
+        post_id: str,
+        payload: PostReportRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "posts:report", limit=24, identifier=auth_user.id, window_seconds=3600)
+        await _consume_rate_limit(request, "posts:report:ip", limit=40, window_seconds=3600)
+        try:
+            case = await service.report_public_post(
+                auth_user.id,
+                post_id,
+                reason_code=payload.reason_code,
+                detail=payload.detail,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {"case": service.moderation_cases.serialize_case(case)}
+
+    @router.post("/moderation/appeals", status_code=status.HTTP_201_CREATED)
+    async def post_moderation_appeal(
+        payload: ModerationAppealRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "moderation:appeal", limit=12, identifier=auth_user.id, window_seconds=3600)
+        await _consume_rate_limit(request, "moderation:appeal:ip", limit=20, window_seconds=3600)
+        try:
+            case = await service.submit_moderation_appeal(
+                auth_user.id,
+                linked_case_id=payload.linked_case_id,
+                subject=payload.subject,
+                subject_id=payload.subject_id,
+                reason_code=payload.reason_code,
+                detail=payload.detail,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Moderation subject not found")
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {"case": service.moderation_cases.serialize_case(case)}
+
+    @router.get("/admin/moderation/cases")
+    async def get_admin_moderation_cases(
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+        status_filter: ModerationCaseStatus | None = Query(default=None, alias="status"),
+        source_filter: ModerationCaseSource | None = Query(default=None, alias="source"),
+        limit: int = Query(default=200, ge=1, le=500),
+    ):
+        await _require_owner(current_user)
+        cases = await service.list_moderation_cases(
+            status=status_filter,
+            source=source_filter,
+            limit=limit,
+        )
+        return {"cases": cases}
+
+    @router.patch("/admin/moderation/cases/{case_id}")
+    async def patch_admin_moderation_case(
+        case_id: str,
+        payload: ModerationCaseResolveRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _require_owner(current_user)
+        await _consume_rate_limit(
+            request,
+            "admin:moderation:resolve",
+            limit=60,
+            identifier=auth_user.id,
+            window_seconds=3600,
+        )
+        try:
+            case = await service.resolve_moderation_case(
+                auth_user.id,
+                case_id,
+                status=payload.status,
+                resolution_note=payload.resolution_note,
+                visibility_effect=payload.visibility_effect,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Moderation case not found")
+        return {"case": service.moderation_cases.serialize_case(case)}
 
     @router.post("/shares", status_code=status.HTTP_201_CREATED)
     async def post_shares(

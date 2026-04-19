@@ -237,6 +237,36 @@ describe('SettingsPage credentials flow', () => {
     })
   })
 
+  it('keeps the security dialogs top-anchored and scrollable for narrow viewports', async () => {
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    await userEvent.click(screen.getByRole('button', { name: /manage sign-in/i }))
+
+    const signInOverlay = screen
+      .getByRole('button', { name: /close sign-in dialog/i })
+      .closest('div.fixed.inset-0')
+    const signInPanel = screen
+      .getByRole('heading', { name: /sign-in & password/i })
+      .closest('div.flex.max-h-\\[calc\\(100vh-2rem\\)\\]')
+
+    expect(signInOverlay).toHaveClass('items-start', 'overflow-y-auto', 'sm:items-center')
+    expect(signInPanel).toHaveClass('flex-col', 'overflow-hidden')
+
+    await userEvent.click(screen.getByRole('button', { name: /close sign-in dialog/i }))
+    await userEvent.click(screen.getByRole('button', { name: /manage sessions/i }))
+
+    const sessionsOverlay = screen
+      .getByRole('button', { name: /close active sessions dialog/i })
+      .closest('div.fixed.inset-0')
+    const sessionsPanel = screen
+      .getByRole('heading', { name: /active sessions/i })
+      .closest('div.flex.max-h-\\[calc\\(100vh-2rem\\)\\]')
+
+    expect(sessionsOverlay).toHaveClass('items-start', 'overflow-y-auto', 'sm:items-center')
+    expect(sessionsPanel).toHaveClass('flex-col', 'overflow-hidden')
+  })
+
   it('shows recent Studio devices and signs out other sessions', async () => {
     renderWithProviders(<SettingsPage />)
 

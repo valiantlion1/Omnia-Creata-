@@ -71,6 +71,8 @@ class GenerationRuntime:
                 steps=job.prompt_snapshot.steps,
                 cfg_scale=job.prompt_snapshot.cfg_scale,
                 workflow=job.prompt_snapshot.workflow,
+                moderation_tier=job.moderation_tier,
+                moderation_reason=job.moderation_reason,
                 provider_candidates=job.provider_candidates or None,
             )
             provider_name = result.provider

@@ -1,20 +1,26 @@
-export const LEGAL_LAST_UPDATED_LABEL = 'April 18, 2026'
-export const LEGAL_EFFECTIVE_DATE_LABEL = 'April 18, 2026'
+export const LEGAL_LAST_UPDATED_LABEL = 'April 19, 2026'
+export const LEGAL_EFFECTIVE_DATE_LABEL = 'April 19, 2026'
 
+/**
+ * All contact addresses currently route to founder@omniacreata.com.
+ * When department aliases (Google Workspace groups or additional mailboxes)
+ * are set up, update only the values below — every legal page, help page,
+ * and signup flow pulls from this single source.
+ */
 export const LEGAL_CONTACTS = {
-  support: 'support@omniacreata.com',
-  billing: 'billing@omniacreata.com',
-  safety: 'safety@omniacreata.com',
-  privacy: 'privacy@omniacreata.com',
-  legal: 'legal@omniacreata.com',
-  security: 'security@omniacreata.com',
+  support: 'founder@omniacreata.com',
+  billing: 'founder@omniacreata.com',
+  safety: 'founder@omniacreata.com',
+  privacy: 'founder@omniacreata.com',
+  legal: 'founder@omniacreata.com',
+  security: 'founder@omniacreata.com',
 } as const
 
 export const LEGAL_PRELAUNCH_DISCLOSURE =
-  'Omnia Creata Studio is currently operated directly by its founder while formal company registration and public billing details are being finalized. Registered business details and any required regional representatives will be published before the self-serve public paid launch opens.'
+  'OmniaCreata Studio is currently operating under the OmniaCreata brand while formal business registration and public billing details are being finalized. Registered business details and any required regional representatives will be published before the self-serve public paid launch opens.'
 
 const LEGAL_PLACEHOLDER_MAP: Record<string, string> = {
-  'Omnia Creata Legal Entity Name': 'Omnia Creata, a founder-operated service',
+  'Omnia Creata Legal Entity Name': 'OmniaCreata Studio. Formal business registration details will be published before the self-serve public paid launch opens.',
   'Registered Address': 'Our registered business address will be published before the self-serve public paid launch opens.',
   'Company Registration No.': 'Formal company registration details will be published before the self-serve public paid launch opens.',
   'Governing Jurisdiction — e.g. Republic of Türkiye': 'Republic of Turkiye',

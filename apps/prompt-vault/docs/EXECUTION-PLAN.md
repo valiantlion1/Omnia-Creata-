@@ -369,4 +369,4 @@ Whenever one of the following changes, this file must be updated:
 - environment strategy
 - founder responsibilities
 
-This document should remain the practical "what happens next" reference under the master [BLUEPRINT.md](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/BLUEPRINT.md).
+This document should remain the practical "what happens next" reference under the master [BLUEPRINT.md](./BLUEPRINT.md).

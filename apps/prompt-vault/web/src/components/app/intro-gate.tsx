@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Locale } from "@prompt-vault/types";
 import { brand } from "@prompt-vault/config";
-import { BrandMark } from "@/components/shared/brand-mark";
 import { Badge, Button } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { localizeHref } from "@/lib/locale";

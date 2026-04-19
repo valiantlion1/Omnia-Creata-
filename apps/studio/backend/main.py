@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from config.env import Environment, get_settings
 from security.auth import AuthConfig, setup_auth
+from security.maintenance import MaintenanceMiddleware, load_maintenance_config
 from security.rate_limit import build_rate_limiter
 from runtime_logging import configure_runtime_logging
 from studio_platform.providers import ProviderRegistry
@@ -86,6 +87,10 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers_list,
     expose_headers=["Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
+
+maintenance_config = load_maintenance_config()
+if maintenance_config.enabled or maintenance_config.override_token:
+    app.add_middleware(MaintenanceMiddleware, config=maintenance_config)
 
 if _should_enforce_trusted_hosts(settings):
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)

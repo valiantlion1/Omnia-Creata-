@@ -240,6 +240,11 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   to { transform: translateX(0); opacity: 1; }
 }
 
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 /* ═══════════════════════════════════════════════════
    Generation animations
    ═══════════════════════════════════════════════════ */

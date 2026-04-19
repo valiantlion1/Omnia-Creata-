@@ -4,7 +4,7 @@ This workspace contains Vault, Omnia Creata's mobile-first web application and A
 
 Primary reference:
 
-- [Root README](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/README.md)
-- [Architecture](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/ARCHITECTURE.md)
-- [Deployment](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/DEPLOYMENT.md)
-- [Play Store](C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/PLAY-STORE.md)
+- [Root README](../README.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Deployment](../docs/DEPLOYMENT.md)
+- [Play Store](../docs/PLAY-STORE.md)

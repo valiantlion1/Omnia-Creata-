@@ -4,7 +4,6 @@ import { brand, releaseNotes } from "@prompt-vault/config";
 import { Download } from "lucide-react";
 import Link from "next/link";
 import { Badge, Button, Select } from "@/components/ui/primitives";
-import { formatDate } from "@/lib/format";
 import { localizeHref } from "@/lib/locale";
 import { useLocaleContext } from "@/providers/locale-provider";
 import { useVault } from "@/providers/vault-provider";

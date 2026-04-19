@@ -45,8 +45,13 @@ describe('BillingPage', () => {
       expect(screen.getAllByText('Pro').length).toBeGreaterThan(0)
     })
     expect(await screen.findByText(/420/)).toBeInTheDocument()
+    expect(screen.getByText(/image model access/i)).toBeInTheDocument()
+    expect(screen.getByText(/^newer$/i)).toBeInTheDocument()
+    expect(screen.getByText(/newest \+ advanced/i)).toBeInTheDocument()
     expect(screen.queryByText(/max resolution/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/up to \d+x\d+/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/qwen-image-2512/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/flux\.2/i)).not.toBeInTheDocument()
   })
 
   it('surfaces an InlineError with retry when public plans fail to load', async () => {

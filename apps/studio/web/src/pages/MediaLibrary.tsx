@@ -1225,20 +1225,20 @@ function ViewToggle({
   onChange: (view: ViewMode) => void
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-full bg-white/[0.03] p-0.5 ring-1 ring-white/[0.06]">
+    <div className="flex items-center gap-0.5 rounded-full border border-white/[0.04] bg-white/[0.02] p-1 backdrop-blur-md">
       <button
         onClick={() => onChange('grid')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${value === 'grid' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 ${value === 'grid' ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'text-zinc-500 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'}`}
         title="Grid view"
       >
-        <Grid2X2 className="h-3.5 w-3.5" />
+        <Grid2X2 className="h-4 w-4" />
       </button>
       <button
         onClick={() => onChange('list')}
-        className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors ${value === 'list' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-300 ${value === 'list' ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'text-zinc-500 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'}`}
         title="List view"
       >
-        <List className="h-3.5 w-3.5" />
+        <List className="h-4 w-4" />
       </button>
     </div>
   )
@@ -1254,12 +1254,12 @@ function FilterBar<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.04] bg-white/[0.02] p-1 backdrop-blur-md">
       {options.map((option) => (
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${value === option.id ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200'}`}
+          className={`relative rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-all duration-300 ${value === option.id ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'}`}
         >
           {option.label}
         </button>
@@ -1303,30 +1303,30 @@ function Toolbar({
   }, [searchRef])
 
   return (
-    <section className="pb-3 pt-1">
+    <section className="pb-4 pt-2">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-white md:text-[22px]">
             {title}
           </h1>
           {description ? (
-            <p className="mt-0.5 text-[12px] text-zinc-500">{description}</p>
+            <p className="mt-1 max-w-xl text-[12px] leading-5 text-zinc-500">{description}</p>
           ) : null}
           {filters ? <div className="mt-3">{filters}</div> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="group/search relative flex min-w-[200px] items-center gap-2 rounded-full bg-white/[0.03] px-3 py-1.5 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-colors focus-within:ring-white/15">
-            <Search className="h-3.5 w-3.5 text-zinc-500" />
+        <div className="flex flex-wrap items-center justify-end gap-2.5">
+          <label className="group/search relative flex min-w-[220px] items-center gap-2.5 rounded-2xl bg-white/[0.03] px-3.5 py-2 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 focus-within:ring-white/[0.15] focus-within:bg-white/[0.05] focus-within:shadow-[0_0_20px_rgba(255,255,255,0.03)]">
+            <Search className="h-3.5 w-3.5 text-zinc-500 transition-colors group-focus-within/search:text-zinc-300" />
             <input
               id="studio-library-search"
               name="search"
               ref={(el) => setInputRef(el)}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search"
+              placeholder="Search library…"
               className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-600"
             />
-            <div className="flex h-4 w-4 items-center justify-center rounded border border-white/10 text-[9px] font-semibold text-zinc-500 group-focus-within/search:opacity-0 transition-opacity">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] text-[9px] font-semibold text-zinc-600 group-focus-within/search:opacity-0 transition-opacity">
               /
             </div>
           </label>
@@ -1353,17 +1353,15 @@ function EmptyInline({
     <section
       className={`flex flex-col gap-4 py-8 ${compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'}`}
     >
-      <div className="relative flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-[#1c1d24]/80 to-[#0c0d12]/60 text-zinc-300 ring-1 ring-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-xl">
-        <div className="absolute inset-0 rounded-[20px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="relative z-10 drop-shadow-md">{icon}</div>
-      </div>
-      <div>
-        <div className="text-[15px] font-semibold tracking-tight text-white">
+      <div className={`group relative flex flex-col ${compact ? 'items-start text-left max-w-xl' : 'items-center text-center max-w-lg mx-auto py-10 px-8 rounded-[32px] bg-[#0c0d12]/50 ring-1 ring-white/[0.04] backdrop-blur-sm transition-all duration-500 hover:ring-white/[0.08] hover:bg-[#101116]/80'}`}>
+        <div className={`relative flex items-center justify-center rounded-[22px] bg-gradient-to-br from-[#1c1d24]/90 to-[#0c0d12]/80 text-zinc-400 ring-1 ring-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-500 group-hover:scale-110 group-hover:text-white group-hover:ring-white/[0.18] group-hover:shadow-[0_0_30px_rgba(124,58,237,0.15)] ${compact ? 'h-14 w-14 mb-4' : 'h-16 w-16 mb-5'}`}>
+          <div className="absolute inset-0 rounded-[22px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
+          <div className="relative z-10 drop-shadow-md">{icon}</div>
+        </div>
+        <div className="text-[16px] font-semibold tracking-tight text-white/95 group-hover:text-white transition-colors duration-300">
           {title}
         </div>
-        <div
-          className={`mt-1.5 text-[13px] leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}
-        >
+        <div className="mt-2 text-[13px] leading-relaxed text-zinc-500 group-hover:text-zinc-400 transition-colors duration-300">
           {description}
         </div>
       </div>
@@ -1381,15 +1379,16 @@ function ProjectHighlightsStrip({
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-[18px] border border-white/[0.05] bg-[#0c0d12] px-4 py-3.5"
+          className="group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] p-5 transition-all duration-400 hover:-translate-y-0.5 hover:ring-white/[0.12] hover:shadow-[0_16px_40px_rgba(0,0,0,0.3)] hover:bg-[#13151c]"
         >
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+          <div className="absolute -inset-px rounded-[24px] bg-gradient-to-b from-white/5 to-transparent opacity-0 transition-opacity duration-400 group-hover:opacity-100" />
+          <div className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 transition-colors group-hover:text-zinc-400">
             {item.label}
           </div>
-          <div className="mt-2 text-[22px] font-semibold tracking-tight text-white">
+          <div className="relative z-10 mt-3 text-[28px] font-semibold tracking-tight text-white/90 transition-colors group-hover:text-white">
             {item.value}
           </div>
-          <div className="mt-1 text-[11.5px] leading-5 text-zinc-500">
+          <div className="relative z-10 mt-1.5 text-[12px] leading-5 text-zinc-500">
             {item.detail}
           </div>
         </div>
@@ -2085,14 +2084,15 @@ export default function MediaLibraryPage() {
   }, [assetsByProject, composeProjects])
 
   const activeView = views[section]
+  const totalImageCount = filteredImageGroups.reduce((sum, g) => sum + g.items.length, 0)
   const imageViewDescription =
     activeView === 'grid'
-      ? 'Dense gallery for scanning image sets. Open any card for prompt, variations, and actions.'
-      : 'List view adds more context while keeping prompt details inside the lightbox.'
+      ? `${totalImageCount} image${totalImageCount === 1 ? '' : 's'} across ${filteredImageGroups.length} set${filteredImageGroups.length === 1 ? '' : 's'}. Open any card for prompt, variations, and actions.`
+      : `${totalImageCount} image${totalImageCount === 1 ? '' : 's'} in list view — more context per row, prompt details inside the lightbox.`
   const favoriteViewDescription =
     activeView === 'grid'
-      ? 'Saved public references you liked across Studio. Open any card for prompt reuse and source details.'
-      : 'List view surfaces creator, prompt context, and quick actions for the references you want to revisit.'
+      ? 'References you saved from the community. Open any card to reuse prompts or revisit the source.'
+      : 'Full context per reference — creator, prompt, and quick actions for work you want to revisit.'
   const isBusy =
     permanentDeleteMutation.isPending || emptyTrashMutation.isPending
 
@@ -2108,6 +2108,7 @@ export default function MediaLibraryPage() {
 
   useEffect(() => {
     if (!canLoadPrivate || section !== 'images') return
+    const twoMinutesAgo = Date.now() - 2 * 60 * 1000
     const unseen = [...generations]
       .sort(
         (left, right) =>
@@ -2116,7 +2117,9 @@ export default function MediaLibraryPage() {
       .find((generation) => {
         const state = generationLibraryState(generation)
         if (state !== 'failed' && state !== 'blocked') return false
-        const key = `${generation.job_id}:${state}:${generation.error_code ?? ''}:${generation.credit_status ?? ''}:${generation.completed_at ?? generation.created_at}`
+        const completedAt = generation.completed_at ?? generation.created_at
+        if (new Date(completedAt).getTime() < twoMinutesAgo) return false
+        const key = `${generation.job_id}:${state}:${generation.error_code ?? ''}:${generation.credit_status ?? ''}:${completedAt}`
         if (seenGenerationNoticeKeys.current.has(key)) return false
         seenGenerationNoticeKeys.current.add(key)
         return true
@@ -2129,7 +2132,7 @@ export default function MediaLibraryPage() {
 
   useEffect(() => {
     if (!passiveNotice) return
-    const timeout = window.setTimeout(() => setPassiveNotice(null), 4800)
+    const timeout = window.setTimeout(() => setPassiveNotice(null), 6000)
     return () => window.clearTimeout(timeout)
   }, [passiveNotice])
 
@@ -3133,7 +3136,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Projects"
-              description="Projects are your working containers. Use them to keep one campaign, character, client round, or visual direction together instead of losing context in the full library."
+              description={`${composeProjects.length} project${composeProjects.length === 1 ? '' : 's'} organising your work. Use them to keep one campaign, character, or visual direction together.`}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -3155,7 +3158,7 @@ export default function MediaLibraryPage() {
                       'create',
                     )
                   }
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                  className="group inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-[12px] font-semibold text-black transition-all duration-300 hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   New project
@@ -3178,7 +3181,7 @@ export default function MediaLibraryPage() {
                     return (
                       <article
                         key={project.id}
-                        className="group flex h-full flex-col rounded-[22px] border border-white/[0.05] bg-[#0c0d12] p-3.5 transition-all duration-300 hover:border-white/[0.1] hover:bg-[#101116]"
+                        className="group flex h-full flex-col rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] p-3 transition-all duration-400 hover:-translate-y-1 hover:ring-white/[0.14] hover:shadow-[0_24px_50px_rgba(0,0,0,0.5)] hover:bg-[#13151c]"
                       >
                         <div className="relative" data-library-menu-root="true">
                           <div className="rounded-[18px] bg-white/[0.02] p-2 ring-1 ring-white/[0.04]">
@@ -3187,14 +3190,14 @@ export default function MediaLibraryPage() {
                                 to={`/projects/${project.id}`}
                                 className="grid gap-2 sm:grid-cols-[minmax(0,1.35fr)_104px]"
                               >
-                                <div className="overflow-hidden rounded-[16px] bg-[#111216]">
-                                  <ProtectedAssetImage
-                                    sources={assetPreviewSources(cover)}
-                                    alt={project.title}
-                                    className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                                    fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                                  />
-                                </div>
+                                  <div className="overflow-hidden rounded-[16px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
+                                    <ProtectedAssetImage
+                                      sources={assetPreviewSources(cover)}
+                                      alt={project.title}
+                                      className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.08] group-hover:rotate-1"
+                                      fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                    />
+                                  </div>
                                 <div className="grid grid-rows-2 gap-2">
                                   {Array.from({ length: 2 }, (_, index) => {
                                     const asset = previewAssets[index] ?? null
@@ -3224,15 +3227,15 @@ export default function MediaLibraryPage() {
                             ) : (
                               <Link
                                 to={`/projects/${project.id}`}
-                                className="flex aspect-[4/3] flex-col items-center justify-center rounded-[16px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_55%)] text-center"
+                                className="flex aspect-[4/3] flex-col items-center justify-center rounded-[16px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
                               >
-                                <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.04] ring-1 ring-white/[0.08]">
-                                  <Folder className="h-5 w-5 text-zinc-500" />
+                                <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-transform duration-500 group-hover:scale-110">
+                                  <Folder className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
                                 </div>
-                                <div className="mt-4 text-[13px] font-medium text-zinc-300">
+                                <div className="mt-4 text-[13px] font-semibold text-zinc-300 transition-colors group-hover:text-white">
                                   Empty project shell
                                 </div>
-                                <div className="mt-1 max-w-[14rem] text-[11.5px] leading-5 text-zinc-500">
+                                <div className="mt-1.5 max-w-[14rem] text-[11px] leading-5 text-zinc-500">
                                   Hold a destination ready before the first run starts.
                                 </div>
                               </Link>
@@ -3246,7 +3249,7 @@ export default function MediaLibraryPage() {
                                   : `project:${project.id}`,
                               )
                             }
-                            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/70 hover:text-white opacity-80 hover:opacity-100"
+                            className="absolute right-3.5 top-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/80 hover:text-white hover:ring-white/30 opacity-0 group-hover:opacity-100"
                             title="Project actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
@@ -3401,18 +3404,20 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <section className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(124,58,237,0.12)] backdrop-blur-md">
-                  <Folder className="h-7 w-7" />
+              <section className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.04] bg-[#0c0d12]/50 px-8 py-20 text-center backdrop-blur-sm transition-all duration-700 hover:border-white/[0.08] hover:bg-[#101116]/80 hover:shadow-[0_0_80px_rgba(0,0,0,0.5)]">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02),transparent_50%)] opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+                <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-[#1c1d24]/90 to-[#0c0d12]/80 text-zinc-400 ring-1 ring-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-700 group-hover:scale-110 group-hover:text-white group-hover:ring-white/[0.18] group-hover:shadow-[0_0_30px_rgba(124,58,237,0.15)]">
+                  <div className="absolute inset-0 rounded-[22px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
+                  <Folder className="relative z-10 h-7 w-7 drop-shadow-md" />
                 </div>
-                <h3 className="text-lg font-bold text-white tracking-tight">
+                <h3 className="relative text-[18px] font-bold tracking-tight text-white/95 transition-colors group-hover:text-white">
                   No projects yet
                 </h3>
-                <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-zinc-500">
+                <p className="relative mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-zinc-500 transition-colors group-hover:text-zinc-400">
                   Projects keep related image sets together. Create one when you
                   want a dedicated space for a campaign, concept, or series.
                 </p>
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
                   <button
                     onClick={() =>
                       openProjectEditor(
@@ -3420,8 +3425,9 @@ export default function MediaLibraryPage() {
                         'create',
                       )
                     }
-                    className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
+                    className="group/btn relative flex items-center gap-2 overflow-hidden rounded-xl bg-white px-6 py-3 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
                   >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/10 to-transparent translate-x-[-100%] transition-transform duration-700 group-hover/btn:translate-x-[100%]" />
                     <Folder className="h-4 w-4" />
                     Create project
                   </button>
@@ -3776,7 +3782,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Trash"
-              description=""
+              description={filteredTrash.length ? `${filteredTrash.length} item${filteredTrash.length === 1 ? '' : 's'} awaiting permanent deletion. Restore anything you still need.` : 'Nothing in the trash right now.'}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -3964,15 +3970,22 @@ export default function MediaLibraryPage() {
       </AppPage>
 
       {section === 'images' && passiveNotice ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[70] flex justify-center px-4">
+        <div className="fixed inset-x-0 bottom-5 z-[70] flex justify-center px-4 animate-[slideUp_0.35s_ease-out]">
           <div
-            className={`max-w-xl rounded-full border px-4 py-2.5 text-center text-[11.5px] leading-5 text-white/90 shadow-[0_16px_48px_rgba(0,0,0,0.35)] backdrop-blur-2xl ${
+            className={`pointer-events-auto flex max-w-xl items-center gap-3 rounded-2xl border px-5 py-3 text-[12px] leading-5 text-white/90 shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-2xl ${
               passiveNotice.tone === 'warning'
-                ? 'border-amber-300/20 bg-[#17110a]/70'
-                : 'border-rose-300/20 bg-[#180d11]/72'
+                ? 'border-amber-400/20 bg-[#1a130a]/85'
+                : 'border-rose-400/20 bg-[#1a0d11]/85'
             }`}
           >
-            {passiveNotice.message}
+            <span className="flex-1">{passiveNotice.message}</span>
+            <button
+              onClick={() => setPassiveNotice(null)}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              title="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       ) : null}

@@ -38,7 +38,7 @@ type DraftComparable = {
 
 const PRIORITY_TYPES = ["idea", "prompt", "note", "workflow"] as const;
 
-function typeLabel(value: string, t: (path: string) => string, locale: "en" | "tr") {
+function typeLabel(value: string, t: (path: string) => string) {
   if (value === "prompt") return t("common.prompt");
   if (value === "idea") return t("common.idea");
   if (value === "workflow") return t("common.workflow");
@@ -126,7 +126,6 @@ export function PromptEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   const [draftBadge, setDraftBadge] = useState<DraftStateBadge | null>(null);
-  const [draftBadgeAt, setDraftBadgeAt] = useState<string | null>(null);
 
   const activeTypeOptions = useMemo(() => {
     const values = new Set<string>(PRIORITY_TYPES);
@@ -173,7 +172,6 @@ export function PromptEditor({
       setRating(activeDraft.rating ? String(activeDraft.rating) : "");
       setAdvancedOpen(mode !== "capture" || Boolean(activeDraft.projectId || activeDraft.tagIds.length));
       setDraftBadge("restored");
-      setDraftBadgeAt(activeDraft.updatedAt);
     } else if (existingEntry) {
       setTitle(existingEntry.title);
       setBody(existingEntry.body);
@@ -193,7 +191,6 @@ export function PromptEditor({
       setRating(existingEntry.rating ? String(existingEntry.rating) : "");
       setAdvancedOpen(true);
       setDraftBadge(null);
-      setDraftBadgeAt(null);
     } else {
       setTitle(""); setBody(""); setSummary(""); setNotes(""); setResultNotes("");
       setType("idea"); setCategoryId(defaultCategory); setProjectId("");
@@ -201,7 +198,7 @@ export function PromptEditor({
       setPlatforms(defaultPlatform ? [defaultPlatform] : []);
       setSourceLabel(""); setSourceUrl(""); setStatus("draft"); setRating("");
       setAdvancedOpen(mode !== "capture");
-      setDraftBadge(null); setDraftBadgeAt(null);
+      setDraftBadge(null);
     }
     setHydratedKey(nextHydratedKey);
   }, [activeDraft, dataset.tags, defaultCategory, defaultPlatform, existingEntry, hydratedKey, isReady, mode]);
@@ -269,7 +266,6 @@ export function PromptEditor({
         sourceUrl, sourceLabel, variables: draftVariables,
       }, { entryId: existingEntry?.id, draftId: activeDraftId });
       setDraftBadge("autosaved");
-      setDraftBadgeAt(new Date().toISOString());
     }, 1000);
 
     return () => window.clearTimeout(timer);
@@ -307,7 +303,7 @@ export function PromptEditor({
         sourceUrl, sourceLabel, variables: draftVariables,
       }, existingEntry?.id);
       discardDraft({ entryId: existingEntry?.id, draftId: activeDraftId });
-      setDraftBadge(null); setDraftBadgeAt(null);
+      setDraftBadge(null);
       router.push(localizeHref(locale, `/app/library/${savedId}`));
     } catch (error) {
       notify(error instanceof Error ? error.message : t("common.somethingWentWrong"));
@@ -361,7 +357,7 @@ export function PromptEditor({
               onClick={() => setType(item)}
               type="button"
             >
-              {typeLabel(item, t, locale)}
+              {typeLabel(item, t)}
             </button>
           ))}
         </div>

@@ -16,6 +16,7 @@ from .prompt_memory import PromptMemoryProfile
 from .style import StudioStyle
 from .access_session import StudioAccessSession
 from .login_attempt import StudioLoginAttemptRecord
+from .moderation import ModerationCase
 
 
 class StudioState(BaseModel):
@@ -37,4 +38,5 @@ class StudioState(BaseModel):
     prompt_memories: Dict[str, PromptMemoryProfile] = Field(default_factory=dict)
     access_sessions: Dict[str, StudioAccessSession] = Field(default_factory=dict)
     login_attempts: Dict[str, StudioLoginAttemptRecord] = Field(default_factory=dict)
+    moderation_cases: Dict[str, ModerationCase] = Field(default_factory=dict)
     migrations_applied: Dict[str, str] = Field(default_factory=dict)

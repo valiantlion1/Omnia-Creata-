@@ -47,8 +47,8 @@ These values are current backend truth from the Studio model catalog and pricing
 | Lane | Catalog Model | Min Plan | Quoted Credit Cost | Managed Hold / Settlement | Fallback Hold / Settlement | Worst-Case Revenue Floor (`Pro`) |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
 | `Fast` | `flux-2-klein` | `FREE` | `6` | `6` | `3` | `$0.12` |
-| `Standard` | `flux-2-dev` | `FREE` | `8` | `8` | `4` | `$0.16` |
-| `Premium` | `flux-2-pro` | `CREATOR` | `12` | `12` | `6` | `$0.24` |
+| `Standard` | `qwen-image-2512` | `FREE` | `8` | `8` | `4` | `$0.16` |
+| `Premium` | `flux-2-max` | `CREATOR` | `12` | `12` | `6` | `$0.24` |
 | `Signature (internal)` | `flux-2-flex` | `PRO` | `16` | `16` | `8` | `$0.32` |
 
 Rules behind the table:
@@ -65,8 +65,8 @@ Rules behind the table:
 - `Gemini 2.5 Pro`: `$1.25 / 1M input`, `$10.00 / 1M output` on Google's official pricing page.
 - `OpenRouter` fallback currently mirrors the same Google model family pricing on the official OpenRouter Google provider page for the selected Gemini lanes.
 - `Runware` public pricing confirms `FLUX.2 [klein] 9B` at about `$0.00078 / 1024x1024 image`.
-- `Runware` public pricing confirms `FLUX.2 [dev]` at about `$0.0096 / 1MP image`.
-- `Runware` public pricing confirms `FLUX.2 [pro]` at `$0.03` for the first megapixel plus `$0.015` per extra megapixel.
+- `Runware` public pricing confirms `Qwen-Image-2512` at about `$0.0051 / 1024x1024 image`.
+- `Runware` public pricing confirms `FLUX.2 [max]` at `$0.07` for the first megapixel plus `$0.03` per extra megapixel.
 - `Runware` public pricing confirms `FLUX.2 [flex]` at about `$0.06 / 1024x1024 image`.
 - `OpenAI GPT-image` remains a targeted QA/reference lane only; it is not part of the normal public routing doctrine in the current launch lock.
 
@@ -77,8 +77,8 @@ These are the economics anchors Studio should use right now:
 | Lane | Current Cost Basis | Status | Margin Reading Against `Pro` Revenue Floor |
 | --- | --- | --- | --- |
 | `Fast` | Runware `FLUX.2 [klein] 9B`: about `$0.00078 / image` | verified | green |
-| `Standard` | Runware `FLUX.2 [dev]`: about `$0.0096 / image` | verified | green |
-| `Premium` | Runware `FLUX.2 [pro]`: about `$0.03 / image` at 1MP | verified | green |
+| `Standard` | Runware `Qwen-Image-2512`: about `$0.0051 / image` | verified | green |
+| `Premium` | Runware `FLUX.2 [max]`: about `$0.07 / image` at 1MP and `$0.03` per extra MP | verified | caution |
 | `Signature (internal)` | Runware `FLUX.2 [flex]`: about `$0.06 / image` | verified | green |
 | `OpenAI image QA lane` | variable by size/quality; keep out of normal public routing | targeted QA only | not part of launch margin math |
 
@@ -117,6 +117,16 @@ These are now the operating rules for launch:
 7. If an expected provider cost for a public lane exceeds `50%` of that lane's conservative `Pro` revenue floor, Studio should not admit that route automatically for broad public traffic.
 8. If an expected provider cost exceeds `80%` of the lane's conservative `Pro` revenue floor, Studio should treat that route as blocked for default public usage unless founder/operator signoff explicitly overrides it for a narrow case.
 
+## Route Topology Lock
+
+- Each public image lane should have one explicit primary route only.
+- A secondary route is acceptable only when it is still launch-grade for that lane on quality, economics, and current-build smoke.
+- Backup routes are resilience lanes, not equal public promises; they should stay visibly managed-backup, fallback-only, or degraded.
+- Current target doctrine is:
+  - `Fast`: `Runware / FLUX.2 [klein] 9B` primary. Shared provider-level managed secondary stays `fal` when configured and current-build proven. Backup-only lanes stay `pollinations`, `huggingface`, and `demo`.
+  - `Standard`: `Runware / Qwen-Image-2512` primary. Shared provider-level managed secondary stays `fal` when configured and current-build proven. Backup-only lanes stay `pollinations`, `huggingface`, and `demo`.
+  - `Premium`: `Runware / FLUX.2 [max]` primary. Shared provider-level managed secondary stays `fal` when configured and current-build proven. `OpenAI image` may remain a targeted QA/operator backup, but it is not a normal public launch-grade lane.
+
 ## Burn Caps And Stop-Loss
 
 Until one real paid billing cycle proves healthy margin, Studio should use these pre-scale caps:
@@ -137,7 +147,8 @@ Operational reading:
 Risk begins under any of these conditions:
 - any non-Runware image lane quietly becomes the default implementation behind the public `Premium` lane.
 - backup-lane image traffic starts carrying normal public demand instead of selective overflow or QA usage.
-- `Standard` or `Premium` are promoted as fully economics-closed without the current FLUX.2 Runware quote set staying current-build true.
+- `Premium` silently expands into higher-megapixel `FLUX.2 [max]` usage without operators watching the spend effect against the current `12-credit` contract.
+- `Standard` or `Premium` are promoted as fully economics-closed without the current Runware quote set staying current-build true.
 - backup-lane image spend breaches its cap or begins dominating too much of total image spend.
 - a package or lane is marketed as generous before the underlying cost path is proven on the current build.
 
@@ -146,7 +157,7 @@ Risk begins under any of these conditions:
 - Keep `Free Account`, `Creator`, `Pro`, and `Credit Packs`.
 - Keep `Fast`, `Standard`, and `Premium` as the only public-facing image quality lanes.
 - Keep `Runware-first` as the default normal traffic image doctrine.
-- Keep the public image ladder on the modern FLUX.2 family: `flux-2-klein`, `flux-2-dev`, `flux-2-pro`.
+- Keep the public image ladder on the current approved set: `flux-2-klein`, `qwen-image-2512`, `flux-2-max`.
 - Keep `OpenAI image` out of the normal public routing path; use it only for targeted QA or deliberate operator-only cases.
 - Keep `provider_economics` open until the current-build Runware proof, backup-lane doctrine, and founder signoff are all aligned.
 

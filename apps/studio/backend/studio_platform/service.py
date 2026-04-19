@@ -40,6 +40,11 @@ from .models import (
     JobStatus,
     MediaAsset,
     ModelCatalogEntry,
+    ModerationCase,
+    ModerationCaseSource,
+    ModerationCaseStatus,
+    ModerationCaseSubject,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     DeletedIdentityTombstone,
     PlanCatalogEntry,
@@ -74,6 +79,7 @@ from .services.generation_service import GenerationService
 from .services.health_service import HealthService
 from .services.identity_service import DeletedIdentityError, IdentityService
 from .services.library_service import LibraryService
+from .services.moderation_case_service import ModerationCaseService
 from .services.project_service import ProjectService
 from .services.public_service import PublicService
 from .services.shell_service import ShellService
@@ -215,6 +221,7 @@ class StudioService:
         self.public = PublicService(self)
         self.shell = ShellService(self)
         self.access_sessions = AccessSessionService(self)
+        self.moderation_cases = ModerationCaseService(self)
 
     def _can_process_generations(self) -> bool:
         return self.generation._can_process_generations()
@@ -726,6 +733,11 @@ class StudioService:
             "pricing_lane": pricing_lane,
             "estimated_cost": job.estimated_cost,
             "estimated_cost_source": job.estimated_cost_source or "catalog_fallback",
+            "moderation": {
+                "tier": (job.moderation_tier or "auto"),
+                "reason": job.moderation_reason,
+                "review_routed": str(job.moderation_tier or "").strip().lower() not in {"", "auto"},
+            },
             "actual_cost_usd": job.actual_cost_usd,
             "credit_cost": job.credit_cost,
             "reserved_credit_cost": job.reserved_credit_cost,
@@ -1193,72 +1205,23 @@ class StudioService:
     async def _owned_post(self, identity_id: str, post_id: str) -> PublicPost:
         return await self.public.owned_post(identity_id, post_id)
 
-    async def list_public_posts(
-        self,
-        *,
-        sort: str = "trending",
-        viewer_identity_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        return await self.public.list_public_posts(
-            sort=sort,
-            viewer_identity_id=viewer_identity_id,
-        )
+    async def list_public_posts(self, *, sort: str = "trending", viewer_identity_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        return await self.public.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id)
 
     async def list_liked_posts(self, identity_id: str) -> List[Dict[str, Any]]:
         return await self.public.list_liked_posts(identity_id)
 
-    async def get_profile_payload(
-        self,
-        *,
-        username: Optional[str] = None,
-        identity_id: Optional[str] = None,
-        viewer_identity_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        return await self.public.get_profile_payload(
-            username=username,
-            identity_id=identity_id,
-            viewer_identity_id=viewer_identity_id,
-        )
+    async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
+        return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id)
 
-    async def update_profile(
-        self,
-        identity_id: str,
-        *,
-        display_name: Optional[str] = None,
-        bio: Optional[str] = None,
-        default_visibility: Optional[Visibility] = None,
-        featured_asset_id: Optional[str] = None,
-        featured_asset_id_provided: bool = False,
-    ) -> OmniaIdentity:
-        return await self.public.update_profile(
-            identity_id,
-            display_name=display_name,
-            bio=bio,
-            default_visibility=default_visibility,
-            featured_asset_id=featured_asset_id,
-            featured_asset_id_provided=featured_asset_id_provided,
-        )
+    async def update_profile(self, identity_id: str, *, display_name: Optional[str] = None, bio: Optional[str] = None, default_visibility: Optional[Visibility] = None, featured_asset_id: Optional[str] = None, featured_asset_id_provided: bool = False) -> OmniaIdentity:
+        return await self.public.update_profile(identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility, featured_asset_id=featured_asset_id, featured_asset_id_provided=featured_asset_id_provided)
 
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
-        return await self.public.get_post_payload(
-            post_id,
-            viewer_identity_id=viewer_identity_id,
-        )
+        return await self.public.get_post_payload(post_id, viewer_identity_id=viewer_identity_id)
 
-    async def update_post(
-        self,
-        identity_id: str,
-        post_id: str,
-        *,
-        title: Optional[str] = None,
-        visibility: Optional[Visibility] = None,
-    ) -> PublicPost:
-        return await self.public.update_post(
-            identity_id,
-            post_id,
-            title=title,
-            visibility=visibility,
-        )
+    async def update_post(self, identity_id: str, post_id: str, *, title: Optional[str] = None, visibility: Optional[Visibility] = None) -> PublicPost:
+        return await self.public.update_post(identity_id, post_id, title=title, visibility=visibility)
 
     async def like_post(self, identity_id: str, post_id: str) -> PublicPost:
         return await self.public.like_post(identity_id, post_id)
@@ -1273,12 +1236,7 @@ class StudioService:
         return await self.public.trash_post(identity_id, post_id)
 
     async def update_project(self, identity_id: str, project_id: str, *, title: str, description: str = "") -> Project:
-        return await self.projects.update_project(
-            identity_id,
-            project_id,
-            title=title,
-            description=description,
-        )
+        return await self.projects.update_project(identity_id, project_id, title=title, description=description)
 
     async def delete_project(self, identity_id: str, project_id: str) -> Dict[str, Any]:
         return await self.projects.delete_project(identity_id, project_id)
@@ -1349,6 +1307,18 @@ class StudioService:
     async def get_public_share(self, token: str) -> Dict[str, Any]:
         return await self.public.get_public_share(token)
 
+    async def report_public_post(self, reporter_identity_id: str, post_id: str, *, reason_code: str, detail: str) -> ModerationCase:
+        return await self.moderation_cases.report_public_post(reporter_identity_id=reporter_identity_id, post_id=post_id, reason_code=reason_code, detail=detail)
+
+    async def submit_moderation_appeal(self, identity_id: str, *, linked_case_id: str | None, subject: ModerationCaseSubject | None, subject_id: str | None, reason_code: str, detail: str) -> ModerationCase:
+        return await self.moderation_cases.submit_appeal(identity_id=identity_id, linked_case_id=linked_case_id, subject=subject, subject_id=subject_id, reason_code=reason_code, detail=detail)
+
+    async def list_moderation_cases(self, *, status: ModerationCaseStatus | None = None, source: ModerationCaseSource | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        return await self.moderation_cases.list_cases(status=status, source=source, limit=limit)
+
+    async def resolve_moderation_case(self, resolver_identity_id: str, case_id: str, *, status: ModerationCaseStatus, resolution_note: str, visibility_effect: ModerationVisibilityEffect | None) -> ModerationCase:
+        return await self.moderation_cases.resolve_case(resolver_identity_id=resolver_identity_id, case_id=case_id, status=status, resolution_note=resolution_note, visibility_effect=visibility_effect)
+
     async def billing_summary(self, identity_id: str) -> Dict[str, Any]:
         return await self.billing.billing_summary(identity_id=identity_id)
 
@@ -1358,20 +1328,10 @@ class StudioService:
     async def health(self, detail: bool = False) -> Dict[str, Any]:
         return await self.health_service.health(detail)
 
-    async def _provider_spend_guardrail_for_provider(
-        self,
-        *,
-        provider_name: str | None,
-        provider_billable: bool | None,
-        projected_cost_usd: float = 0.0,
-    ) -> ProviderSpendGuardrailStatus | None:
+    async def _provider_spend_guardrail_for_provider(self, *, provider_name: str | None, provider_billable: bool | None, projected_cost_usd: float = 0.0) -> ProviderSpendGuardrailStatus | None:
         return await self.billing._provider_spend_guardrail_for_provider(provider_name=provider_name, provider_billable=provider_billable, projected_cost_usd=projected_cost_usd)
 
-    async def _evaluate_monthly_spend_guardrail(
-        self,
-        *,
-        projected_cost_usd: float = 0.0,
-    ):
+    async def _evaluate_monthly_spend_guardrail(self, *, projected_cost_usd: float = 0.0):
         return await self.billing._evaluate_monthly_spend_guardrail(projected_cost_usd=projected_cost_usd)
 
     async def _build_provider_spend_guardrails_summary(self) -> Dict[str, Any]:
@@ -1412,47 +1372,24 @@ class StudioService:
         return await self.access_sessions.is_session_active(identity_id=identity_id, session_id=session_id)
 
     async def get_login_lockout_status(self, *, identifier: str | None, max_attempts: int, lockout_window: timedelta) -> Dict[str, Any] | None:
-        return await self.access_sessions.get_login_lockout_status(
-            identifier=identifier,
-            max_attempts=max_attempts,
-            lockout_window=lockout_window,
-        )
+        return await self.access_sessions.get_login_lockout_status(identifier=identifier, max_attempts=max_attempts, lockout_window=lockout_window)
 
     async def record_login_result(self, *, identifier: str | None, success: bool, lockout_window: timedelta) -> None:
-        await self.access_sessions.record_login_result(
-            identifier=identifier,
-            success=success,
-            lockout_window=lockout_window,
-        )
+        await self.access_sessions.record_login_result(identifier=identifier, success=success, lockout_window=lockout_window)
 
     def get_access_session_context_from_token(self, access_token: str | None) -> Dict[str, Any]:
         return self.access_sessions.session_context_from_token(access_token)
 
-    async def list_models_for_identity(
-        self,
-        identity: OmniaIdentity | None = None,
-    ) -> List[ModelCatalogEntry]:
+    async def list_models_for_identity(self, identity: OmniaIdentity | None = None) -> List[ModelCatalogEntry]:
         return await self.shell.list_models_for_identity(identity)
 
     async def get_model(self, model_id: str) -> ModelCatalogEntry:
         return await self.shell.get_model(model_id)
 
-    def _serialize_model_catalog_for_identity(
-        self,
-        *,
-        identity: OmniaIdentity,
-        model: ModelCatalogEntry,
-        billing_state: BillingStateSnapshot | None = None,
-    ) -> Dict[str, Any]:
+    def _serialize_model_catalog_for_identity(self, *, identity: OmniaIdentity, model: ModelCatalogEntry, billing_state: BillingStateSnapshot | None = None) -> Dict[str, Any]:
         return self.shell.serialize_model_catalog_for_identity(identity=identity, model=model, billing_state=billing_state)
 
-    def _validate_model_for_identity(
-        self,
-        identity: OmniaIdentity,
-        model: ModelCatalogEntry,
-        *,
-        billing_state: BillingStateSnapshot | None = None,
-    ) -> None:
+    def _validate_model_for_identity(self, identity: OmniaIdentity, model: ModelCatalogEntry, *, billing_state: BillingStateSnapshot | None = None) -> None:
         self.shell.validate_model_for_identity(identity, model, billing_state=billing_state)
 
     def _validate_dimensions_for_model(self, width: int, height: int, model: ModelCatalogEntry) -> None:
@@ -1461,12 +1398,7 @@ class StudioService:
     def _normalize_generation_aspect_ratio(self, aspect_ratio: str | None) -> str:
         return self.shell.normalize_generation_aspect_ratio(aspect_ratio)
 
-    def _resolve_generation_dimensions_for_model(
-        self,
-        *,
-        model: ModelCatalogEntry,
-        aspect_ratio: str,
-    ) -> tuple[int, int]:
+    def _resolve_generation_dimensions_for_model(self, *, model: ModelCatalogEntry, aspect_ratio: str) -> tuple[int, int]:
         return self.shell.resolve_generation_dimensions_for_model(model=model, aspect_ratio=aspect_ratio)
 
     def _refresh_monthly_credits_locked(self, state: StudioState, identity: OmniaIdentity) -> None:
@@ -1478,13 +1410,7 @@ class StudioService:
     def _fallback_enhanced_prompt(self, prompt: str) -> str:
         return self.generation._fallback_enhanced_prompt(prompt=prompt)
 
-    def _sanitize_generation_text(
-        self,
-        value: str,
-        *,
-        field_name: str,
-        max_length: int,
-    ) -> str:
+    def _sanitize_generation_text(self, value: str, *, field_name: str, max_length: int) -> str:
         return self.generation._sanitize_generation_text(value=value, field_name=field_name, max_length=max_length)
 
     async def require_owned_model(self, collection: str, model_id: str, model_type, identity_id: str):
@@ -1496,15 +1422,7 @@ class StudioService:
     async def _process_generation(self, job_id: str) -> None:
         return await self.generation._process_generation(job_id=job_id)
 
-    async def _update_job_status(
-        self,
-        job_id: str,
-        status: JobStatus,
-        provider: Optional[str] = None,
-        provider_billable: Optional[bool] = None,
-        error: Optional[str] = None,
-        error_code: Optional[str] = None,
-    ) -> Optional[GenerationJob]:
+    async def _update_job_status(self, job_id: str, status: JobStatus, provider: Optional[str] = None, provider_billable: Optional[bool] = None, error: Optional[str] = None, error_code: Optional[str] = None) -> Optional[GenerationJob]:
         return await self.generation._update_job_status(job_id=job_id, status=status, provider=provider, provider_billable=provider_billable, error=error, error_code=error_code)
 
     async def _get_generation_job_snapshot(self, job_id: str) -> Optional[GenerationJob]:
@@ -1516,12 +1434,7 @@ class StudioService:
     def _classify_generation_error_code(self, exc: Exception) -> str:
         return self.generation._classify_generation_error_code(exc=exc)
 
-    def _generation_retry_limit_for_job(
-        self,
-        job: GenerationJob,
-        *,
-        provider_billable: Optional[bool] = None,
-    ) -> int:
+    def _generation_retry_limit_for_job(self, job: GenerationJob, *, provider_billable: Optional[bool] = None) -> int:
         return self.generation._generation_retry_limit_for_job(job=job, provider_billable=provider_billable)
 
     def _log_generation_event(
@@ -1539,30 +1452,13 @@ class StudioService:
     ) -> None:
         return self.generation._log_generation_event(event=event, job=job, status=status, provider=provider, error=error, error_code=error_code, started_at=started_at, finished_at=finished_at, level=level)
 
-    async def _ensure_generation_capacity(
-        self,
-        *,
-        identity: OmniaIdentity,
-        project_id: str,
-        model_id: str,
-        prompt_snapshot: PromptSnapshot,
-        plan_config: PlanCatalogEntry,
-    ) -> None:
+    async def _ensure_generation_capacity(self, *, identity: OmniaIdentity, project_id: str, model_id: str, prompt_snapshot: PromptSnapshot, plan_config: PlanCatalogEntry) -> None:
         return await self.generation._ensure_generation_capacity(identity=identity, project_id=project_id, model_id=model_id, prompt_snapshot=prompt_snapshot, plan_config=plan_config)
 
     def _estimate_queue_wait_seconds(self, queued_jobs: int) -> int:
         return self.generation._estimate_queue_wait_seconds(queued_jobs=queued_jobs)
 
-    async def _create_asset_from_result(
-        self,
-        job: GenerationJob,
-        provider: str,
-        image_bytes: bytes,
-        mime_type: str,
-        variation_index: int = 0,
-        variation_count: int = 1,
-        seed: Optional[int] = None,
-    ) -> MediaAsset:
+    async def _create_asset_from_result(self, job: GenerationJob, provider: str, image_bytes: bytes, mime_type: str, variation_index: int = 0, variation_count: int = 1, seed: Optional[int] = None) -> MediaAsset:
         return await self.generation._create_asset_from_result(job=job, provider=provider, image_bytes=image_bytes, mime_type=mime_type, variation_index=variation_index, variation_count=variation_count, seed=seed)
 
     async def _load_generation_reference_image(self, job: GenerationJob) -> Optional[ProviderReferenceImage]:
@@ -1571,16 +1467,7 @@ class StudioService:
     async def _read_asset_bytes(self, asset: MediaAsset, *, variant: str) -> tuple[bytes, str]:
         return await self.generation._read_asset_bytes(asset=asset, variant=variant)
 
-    async def _store_asset_payload(
-        self,
-        *,
-        asset: MediaAsset,
-        image_bytes: bytes,
-        mime_type: str,
-        clean_image_bytes: Optional[bytes] = None,
-        clean_mime_type: Optional[str] = None,
-        storage_prefix: str,
-    ) -> None:
+    async def _store_asset_payload(self, *, asset: MediaAsset, image_bytes: bytes, mime_type: str, clean_image_bytes: Optional[bytes] = None, clean_mime_type: Optional[str] = None, storage_prefix: str) -> None:
         return await self.generation._store_asset_payload(asset=asset, image_bytes=image_bytes, mime_type=mime_type, clean_image_bytes=clean_image_bytes, clean_mime_type=clean_mime_type, storage_prefix=storage_prefix)
 
     def _extension_for_mime_type(self, mime_type: str) -> str:

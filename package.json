@@ -9,6 +9,8 @@
   },
   "scripts": {
     "repo:inventory": "node scripts/repo-inventory.mjs",
-    "repo:check": "node scripts/repo-check.mjs"
+    "repo:check": "node scripts/repo-check.mjs",
+    "repo:clean:plan": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/repo-clean-local-artifacts.ps1",
+    "repo:clean:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/repo-clean-local-artifacts.ps1 -Execute"
   }
 }

@@ -2,10 +2,10 @@
 
 ## Implemented
 
-- Web app manifest at [`apps/web/src/app/manifest.ts`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/manifest.ts)
-- Generated app icons at [`apps/web/src/app/icon.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/icon.tsx) and [`apps/web/src/app/apple-icon.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/app/apple-icon.tsx)
-- Service worker registration at [`apps/web/src/components/shared/service-worker-register.tsx`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/src/components/shared/service-worker-register.tsx)
-- Shell caching service worker at [`apps/web/public/sw.js`](/Users/valiantlion/Desktop/Prompt%20Vault/apps/web/public/sw.js)
+- Web app manifest at [`../web/src/app/manifest.ts`](../web/src/app/manifest.ts)
+- Generated app icons at [`../web/src/app/icon.tsx`](../web/src/app/icon.tsx) and [`../web/src/app/apple-icon.tsx`](../web/src/app/apple-icon.tsx)
+- Service worker registration at [`../web/src/components/shared/service-worker-register.tsx`](../web/src/components/shared/service-worker-register.tsx)
+- Shell caching service worker at [`../web/public/sw.js`](../web/public/sw.js)
 - Responsive desktop + mobile navigation
 - Installable standalone launch behavior
 

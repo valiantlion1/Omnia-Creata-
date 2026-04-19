@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
+import { Route, Routes } from 'react-router-dom'
 
 vi.mock('@/lib/studioAuth', () => ({
   useStudioAuth: () => ({
@@ -17,28 +18,51 @@ vi.mock('@/lib/usePageMeta', () => ({
 import DocumentationPage from '@/pages/Documentation'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
+function renderDocumentation(route: string) {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/help" element={<DocumentationPage />} />
+      <Route path="/help/:sectionId" element={<DocumentationPage />} />
+      <Route path="/learn" element={<DocumentationPage />} />
+      <Route path="/learn/:sectionId" element={<DocumentationPage />} />
+      <Route path="/docs" element={<DocumentationPage />} />
+      <Route path="/docs/:sectionId" element={<DocumentationPage />} />
+    </Routes>,
+    { route },
+  )
+}
+
+function expectLinkTarget(name: RegExp, href: string) {
+  expect(
+    screen
+      .getAllByRole('link', { name })
+      .some((link) => link.getAttribute('href') === href),
+  ).toBe(true)
+}
+
 describe('DocumentationPage', () => {
   it('keeps public help focused and routes deeper guidance into the manual', async () => {
-    renderWithProviders(<DocumentationPage />, { route: '/help' })
+    renderDocumentation('/help')
 
-    expect(await screen.findByRole('heading', { name: /everything you need to use studio confidently/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /studio manual/i })).toHaveAttribute('href', '/learn/prompt-craft')
-    expect(screen.getByRole('link', { name: /open full terms of service/i })).toHaveAttribute('href', '/legal/terms')
-    expect(screen.getByRole('link', { name: /open full privacy policy/i })).toHaveAttribute('href', '/legal/privacy')
-    expect(screen.getByRole('link', { name: /open full usage policy/i })).toHaveAttribute('href', '/legal/acceptable-use')
+    expect(await screen.findByRole('heading', { level: 1, name: /your first hour in studio/i })).toBeInTheDocument()
+    expectLinkTarget(/studio manual/i, '/learn/prompt-craft')
+    expectLinkTarget(/billing/i, '/help/billing')
+    expectLinkTarget(/account/i, '/help/account')
+    expectLinkTarget(/safety/i, '/help/safety')
     expect(screen.queryByRole('heading', { name: /writing prompts that actually work/i })).not.toBeInTheDocument()
   })
 
   it('keeps account guidance aligned with the current shell controls', async () => {
-    renderWithProviders(<DocumentationPage />, { route: '/help' })
+    renderDocumentation('/help/account')
 
+    expect(await screen.findByRole('heading', { level: 1, name: /your account and data/i })).toBeInTheDocument()
     expect(await screen.findByText(/recent studio devices that accessed your account/i)).toBeInTheDocument()
     expect(screen.getByText(/there is not a dedicated notifications screen in the studio shell yet/i)).toBeInTheDocument()
     expect(screen.getByText(/settings now gives those same fields a direct edit profile dialog inside general account/i)).toBeInTheDocument()
   })
 
   it('renders the long-form manual on learn routes', async () => {
-    renderWithProviders(<DocumentationPage />, { route: '/learn/prompt-craft' })
+    renderDocumentation('/learn/prompt-craft')
 
     expect((await screen.findAllByRole('heading', { name: /writing prompts that actually work/i })).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: /back to help/i })).toHaveAttribute('href', '/help')
