@@ -26,7 +26,7 @@ import {
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { studioApi, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
+import { studioApi, type ActiveSessionsPayload, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
@@ -142,13 +142,388 @@ function getAuthProviderManagementUrl(provider?: string | null) {
   }
 }
 
-function CredentialsDialog({
+function formatSessionTimestamp(value?: string | null) {
+  if (!value) return 'Unavailable'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unavailable'
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed)
+}
+
+function formatSessionRelativeTime(value?: string | null) {
+  if (!value) return 'Unavailable'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unavailable'
+  const deltaMs = Date.now() - parsed.getTime()
+  const deltaMinutes = Math.max(0, Math.round(deltaMs / 60000))
+  if (deltaMinutes < 1) return 'Just now'
+  if (deltaMinutes < 60) return `${deltaMinutes}m ago`
+  const deltaHours = Math.round(deltaMinutes / 60)
+  if (deltaHours < 24) return `${deltaHours}h ago`
+  const deltaDays = Math.round(deltaHours / 24)
+  return `${deltaDays}d ago`
+}
+
+function getActiveSessionsDescription(payload?: ActiveSessionsPayload | null) {
+  if (!payload || payload.session_count === 0) {
+    return 'Review the devices that accessed your Studio account recently.'
+  }
+  if (payload.other_session_count > 0) {
+    return `See this device and ${payload.other_session_count} other Studio access point${payload.other_session_count === 1 ? '' : 's'}.`
+  }
+  return 'This is the only Studio device we have seen recently.'
+}
+
+function getActiveSessionsBadgeLabel(payload?: ActiveSessionsPayload | null) {
+  if (!payload || payload.session_count === 0) return 'No devices yet'
+  return `${payload.session_count} active`
+}
+
+function SessionMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[16px] border border-white/[0.06] bg-black/20 px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{label}</div>
+      <div className="mt-2 text-sm text-white">{value}</div>
+    </div>
+  )
+}
+
+function ActiveSessionsDialog({
+  open,
+  sessionsPayload,
+  endingOtherSessions,
+  onClose,
+  onRefresh,
+  onEndOtherSessions,
+  onSignOutCurrent,
+}: {
+  open: boolean
+  sessionsPayload?: ActiveSessionsPayload | null
+  endingOtherSessions: boolean
+  onClose: () => void
+  onRefresh: () => Promise<unknown>
+  onEndOtherSessions: () => Promise<void>
+  onSignOutCurrent: () => Promise<void>
+}) {
+  if (!open) return null
+
+  const sessions = sessionsPayload?.sessions ?? []
+  const otherSessions = sessions.filter((session) => !session.current)
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
+      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+        <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Security</p>
+              <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Active sessions</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-7 text-zinc-400">
+                Review where Studio was opened recently. If something looks wrong, keep this device and sign the rest out.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+              aria-label="Close active sessions dialog"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-6 py-6 sm:px-7">
+          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-semibold text-white">Studio device overview</h3>
+                <p className="mt-1 text-sm leading-7 text-zinc-400">
+                  Essential session storage helps keep this device signed in and lets us show recent Studio access for security review.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone="neutral">{getActiveSessionsBadgeLabel(sessionsPayload)}</StatusPill>
+                {otherSessions.length > 0 ? (
+                  <StatusPill tone="brand">{otherSessions.length} other device{otherSessions.length === 1 ? '' : 's'}</StatusPill>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          {sessions.length === 0 ? (
+            <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+              <p className="text-sm leading-7 text-zinc-300">
+                Studio has not recorded a recent device snapshot for this account yet. Refresh after the current session settles and this device should appear here.
+              </p>
+            </section>
+          ) : (
+            <div className="max-h-[52vh] space-y-3 overflow-y-auto pr-1">
+              {sessions.map((session) => (
+                <section key={session.id} className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-white">{session.device_label}</h3>
+                      <p className="mt-1 text-sm leading-7 text-zinc-400">
+                        {session.surface_label} · {session.browser_label} · {session.os_label}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {session.current ? <StatusPill tone="brand">This device</StatusPill> : <StatusPill tone="neutral">Recent access</StatusPill>}
+                      {session.auth_provider ? <StatusPill tone="neutral">{getAuthProviderLabel(session.auth_provider)}</StatusPill> : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <SessionMeta label="Last active" value={`${formatSessionRelativeTime(session.last_seen_at)} · ${formatSessionTimestamp(session.last_seen_at)}`} />
+                    <SessionMeta label="First seen" value={formatSessionTimestamp(session.first_seen_at)} />
+                    <SessionMeta label="Network" value={session.network_label ?? session.host_label ?? 'Studio access'} />
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/[0.06] px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            className="rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            Refresh list
+          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => void onSignOutCurrent()}
+              className="rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+            >
+              Sign out this device
+            </button>
+            <button
+              type="button"
+              onClick={() => void onEndOtherSessions()}
+              disabled={!sessionsPayload?.can_sign_out_others || endingOtherSessions}
+              className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {endingOtherSessions ? 'Signing out other devices...' : 'Sign out other devices'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProfileEditorDialog({
   open,
   identity,
   profileSaving,
+  onClose,
+  onSaveProfile,
+}: {
+  open: boolean
+  identity: {
+    email?: string
+    username?: string | null
+    display_name?: string
+    bio?: string | null
+    default_visibility?: Visibility
+  } | null | undefined
+  profileSaving: boolean
+  onClose: () => void
+  onSaveProfile: (payload: { display_name: string; bio: string; default_visibility: Visibility }) => Promise<void>
+}) {
+  const [displayName, setDisplayName] = useState(identity?.display_name ?? '')
+  const [bio, setBio] = useState(identity?.bio ?? '')
+  const [defaultVisibility, setDefaultVisibility] = useState<Visibility>(identity?.default_visibility ?? 'public')
+  const [profileError, setProfileError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    setDisplayName(identity?.display_name ?? '')
+    setBio(identity?.bio ?? '')
+    setDefaultVisibility(identity?.default_visibility ?? 'public')
+    setProfileError(null)
+  }, [identity?.bio, identity?.default_visibility, identity?.display_name, open])
+
+  if (!open || !identity) return null
+
+  const normalizedDisplayName = displayName.trim()
+  const normalizedBio = bio.trim()
+  const originalDisplayName = (identity.display_name ?? '').trim()
+  const originalBio = (identity.bio ?? '').trim()
+  const originalVisibility = identity.default_visibility ?? 'public'
+  const canSaveProfile =
+    normalizedDisplayName.length > 0 &&
+    (normalizedDisplayName !== originalDisplayName ||
+      normalizedBio !== originalBio ||
+      defaultVisibility !== originalVisibility)
+
+  const handleSaveProfile = async () => {
+    setProfileError(null)
+    try {
+      await onSaveProfile({
+        display_name: normalizedDisplayName,
+        bio: normalizedBio,
+        default_visibility: defaultVisibility,
+      })
+      onClose()
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Profile changes could not be saved right now.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
+      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+        <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">General account</p>
+              <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Edit profile</h2>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-zinc-400">
+                Update the parts people actually see around Studio without leaving Settings. Your public handle stays fixed.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={profileSaving || !canSaveProfile}
+                className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {profileSaving ? 'Saving...' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 px-6 py-6 sm:px-7 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-3xl font-black text-white shadow-[0_0_40px_rgba(var(--primary),0.3)]">
+              {(normalizedDisplayName || identity.username || 'S').slice(0, 1).toUpperCase()}
+            </div>
+            <div className="mt-4 text-xl font-bold tracking-tight text-white">{normalizedDisplayName || 'Studio creator'}</div>
+            <div className="mt-1 text-sm font-medium text-zinc-400">@{identity.username ?? 'creator'}</div>
+            {identity.email ? <div className="mt-3 text-sm text-zinc-500">{identity.email}</div> : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <StatusPill tone={defaultVisibility === 'public' ? 'brand' : 'neutral'}>
+                {defaultVisibility === 'public' ? 'Public by default' : 'Private by default'}
+              </StatusPill>
+              <StatusPill tone="neutral">Handle locked</StatusPill>
+            </div>
+
+            <p className="mt-4 text-sm leading-6 text-zinc-400">
+              Display name and bio change how you appear around Studio. Public links and mentions keep using the same stable @{identity.username ?? 'creator'} handle.
+            </p>
+          </section>
+
+          <div className="space-y-4">
+            <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
+                  <p className="mt-1 text-sm leading-7 text-zinc-400">Choose the visible name and short profile copy people see around Studio.</p>
+                </div>
+                <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Display name</span>
+                  <input
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="How Studio should show your name"
+                    className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                  />
+                </label>
+
+                <div className="rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Public handle</div>
+                  <div className="mt-2 text-sm font-semibold text-white">@{identity.username ?? 'creator'}</div>
+                  <p className="mt-2 text-xs leading-6 text-zinc-500">Handles stay stable so links, mentions, and published ownership do not drift.</p>
+                </div>
+              </div>
+
+              <label className="mt-4 block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Bio</span>
+                <textarea
+                  value={bio}
+                  onChange={(event) => setBio(event.target.value.slice(0, 220))}
+                  rows={4}
+                  placeholder="Tell people what kind of work, style, or creative focus they should expect from you."
+                  className="mt-2 w-full resize-none rounded-[18px] bg-black/30 px-4 py-3 text-sm leading-7 text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                />
+              </label>
+              <p className="mt-2 text-xs leading-6 text-zinc-500">{bio.length}/220 characters</p>
+            </section>
+
+            <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[15px] font-semibold text-white">Profile defaults</h3>
+                  <p className="mt-1 text-sm leading-7 text-zinc-400">Choose whether new creations should start public or stay private until you share them.</p>
+                </div>
+                <div className="flex items-center gap-2 rounded-full bg-black/20 p-1 ring-1 ring-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => setDefaultVisibility('public')}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      defaultVisibility === 'public' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    Public
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDefaultVisibility('private')}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      defaultVisibility === 'private' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    Private
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className={`rounded-[18px] border px-4 py-3 ${defaultVisibility === 'public' ? 'border-violet-300/20 bg-violet-300/10 text-violet-100' : 'border-white/[0.06] bg-black/20 text-zinc-300'}`}>
+                  <div className="text-sm font-semibold">Public first</div>
+                  <p className="mt-1 text-xs leading-6 text-current/80">New work can appear on your public profile once you publish it.</p>
+                </div>
+                <div className={`rounded-[18px] border px-4 py-3 ${defaultVisibility === 'private' ? 'border-violet-300/20 bg-violet-300/10 text-violet-100' : 'border-white/[0.06] bg-black/20 text-zinc-300'}`}>
+                  <div className="text-sm font-semibold">Private first</div>
+                  <p className="mt-1 text-xs leading-6 text-current/80">New work stays personal until you intentionally share or publish it.</p>
+                </div>
+              </div>
+            </section>
+
+            {profileError ? <p className="text-sm text-rose-200">{profileError}</p> : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CredentialsDialog({
+  open,
+  identity,
   passwordSaving,
   onClose,
-  onSaveDisplayName,
   onSavePassword,
 }: {
   open: boolean
@@ -160,26 +535,20 @@ function CredentialsDialog({
     auth_providers?: string[]
     credentials_managed_by_provider?: boolean
   } | null | undefined
-  profileSaving: boolean
   passwordSaving: boolean
   onClose: () => void
-  onSaveDisplayName: (value: string) => Promise<void>
   onSavePassword: (value: string) => Promise<void>
 }) {
-  const [displayName, setDisplayName] = useState(identity?.display_name ?? '')
-  const [profileError, setProfileError] = useState<string | null>(null)
   const [nextPassword, setNextPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    setDisplayName(identity?.display_name ?? '')
-    setProfileError(null)
     setNextPassword('')
     setConfirmPassword('')
     setPasswordError(null)
-  }, [identity?.display_name, open])
+  }, [open])
 
   if (!open || !identity) return null
 
@@ -190,21 +559,11 @@ function CredentialsDialog({
   const showManagedProviderCopy = Boolean(identity.credentials_managed_by_provider || (primaryProvider && primaryProvider !== 'email'))
   const passwordChecks = PASSWORD_REQUIREMENTS.map((rule) => ({ ...rule, passed: rule.test(nextPassword) }))
   const passwordMismatch = confirmPassword.length > 0 && confirmPassword !== nextPassword
-  const canSaveDisplayName = displayName.trim().length > 0 && displayName.trim() !== (identity.display_name ?? '').trim()
   const canSavePassword =
     nextPassword.length > 0 &&
     confirmPassword.length > 0 &&
     !passwordMismatch &&
     passwordChecks.every((rule) => rule.passed)
-
-  const handleDisplayNameSave = async () => {
-    setProfileError(null)
-    try {
-      await onSaveDisplayName(displayName.trim())
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Display name could not be saved right now.')
-    }
-  }
 
   const handlePasswordSave = async () => {
     setPasswordError(null)
@@ -223,17 +582,17 @@ function CredentialsDialog({
         <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Account access</p>
-              <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Profile and sign-in</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Account security</p>
+              <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Sign-in & password</h2>
               <p className="mt-2 max-w-xl text-sm leading-7 text-zinc-400">
-                Your public handle stays fixed after account creation. Use display name for the name people see around Studio.
+                Profile editing lives in General Account. Use this surface to review the provider connected to Studio and update the password when Studio manages it.
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
-              aria-label="Close profile and sign-in dialog"
+              aria-label="Close sign-in dialog"
             >
               &times;
             </button>
@@ -244,49 +603,8 @@ function CredentialsDialog({
           <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
-                <p className="mt-1 text-sm leading-7 text-zinc-400">Display name is editable. Your public handle stays locked.</p>
-              </div>
-              <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
-            </div>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="block">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Display name</span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  placeholder="How Studio should show your name"
-                  className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
-                />
-              </label>
-
-              <div className="rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Public handle</div>
-                <div className="mt-2 text-sm font-semibold text-white">@{identity.username ?? 'creator'}</div>
-                <p className="mt-2 text-xs leading-6 text-zinc-500">Handles stay stable so links, mentions, and published ownership do not drift.</p>
-              </div>
-            </div>
-
-            {profileError ? <p className="mt-3 text-sm text-rose-200">{profileError}</p> : null}
-
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={handleDisplayNameSave}
-                disabled={profileSaving || !canSaveDisplayName}
-                className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {profileSaving ? 'Saving...' : 'Save display name'}
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
                 <h3 className="text-[15px] font-semibold text-white">Sign-in method</h3>
-                <p className="mt-1 text-sm leading-7 text-zinc-400">Studio keeps the login rules tied to the provider that owns your credentials.</p>
+                <p className="mt-1 text-sm leading-7 text-zinc-400">Studio keeps login rules tied to the provider that owns your credentials.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill tone={showManagedProviderCopy ? 'neutral' : 'brand'}>{providerLabel}</StatusPill>
@@ -382,7 +700,9 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
   const [notice, setNotice] = useState<{ tone: 'info' | 'success' | 'warning'; title: string; body: string } | null>(null)
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false)
+  const [activeSessionsDialogOpen, setActiveSessionsDialogOpen] = useState(false)
   const [pendingVisibility, setPendingVisibility] = useState<Visibility | null>(null)
   const activeDefaultVisibility = pendingVisibility ?? auth?.identity.default_visibility ?? 'public'
   const isGMMode = Boolean(auth?.identity.owner_mode)
@@ -396,7 +716,7 @@ export default function SettingsPage() {
     settingsTabs.push({ id: 'gm', icon: Crown, label: 'Control Center', mobileLabel: 'Studio' })
   }
 
-  useQuery({
+  const settingsBootstrapQuery = useQuery({
     queryKey: ['settings-bootstrap'],
     queryFn: () => studioApi.getSettingsBootstrap(),
     enabled: isAuthenticated,
@@ -436,12 +756,40 @@ export default function SettingsPage() {
   })
 
   const profileMutation = useMutation({
-    mutationFn: (payload: { display_name?: string }) => studioApi.updateMyProfile(payload),
+    mutationFn: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>
+      studioApi.updateMyProfile(payload),
+  })
+
+  const endOtherSessionsMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabaseBrowser.auth.signOut({ scope: 'others' })
+      if (error) throw error
+      return await studioApi.endOtherSettingsSessions()
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+        queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
+      ])
+      setNotice({
+        tone: 'success',
+        title: 'Other devices signed out',
+        body: 'Studio kept this device active and asked the rest to sign in again.',
+      })
+    },
+    onError: (error) => {
+      setNotice({
+        tone: 'warning',
+        title: 'Could not sign out other devices',
+        body: error instanceof Error ? error.message : 'Try again in a moment.',
+      })
+    },
   })
 
   const [passwordSaving, setPasswordSaving] = useState(false)
 
   const health = healthQuery.data as HealthResponse | undefined
+  const activeSessions = settingsBootstrapQuery.data?.active_sessions
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
   const cookiePreferenceSummary = getCookiePreferenceSummary(cookiePreferences)
   useEffect(() => {
@@ -513,22 +861,25 @@ export default function SettingsPage() {
   const primaryAuthProviderLabel = getAuthProviderLabel(primaryAuthProvider)
   const credentialsDescription =
     primaryAuthProvider === 'email'
-      ? 'Update your visible name here. Your public @handle stays fixed, and password changes apply to Studio sign-in.'
+      ? 'Review the sign-in method for this account and update the password used for Studio email sign-in.'
       : primaryAuthProvider
-        ? `Update your visible name here. Your public @handle stays fixed, and password changes stay with ${primaryAuthProviderLabel}.`
-        : 'Update your visible name here. Your public @handle stays fixed, and Studio will show the active sign-in provider when it is available.'
+        ? `Review the provider linked to this account. Password and recovery changes stay with ${primaryAuthProviderLabel}.`
+        : 'Review the active sign-in provider and any password controls available for this account.'
+  const activeSessionsDescription = getActiveSessionsDescription(activeSessions)
+  const activeSessionsBadgeLabel = getActiveSessionsBadgeLabel(activeSessions)
 
-  const handleDisplayNameSave = async (value: string) => {
-    await profileMutation.mutateAsync({ display_name: value })
+  const handleProfileSave = async (payload: { display_name: string; bio: string; default_visibility: Visibility }) => {
+    await profileMutation.mutateAsync(payload)
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['profile'] }),
       queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
       queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
     ])
+    setPendingVisibility(payload.default_visibility)
     setNotice({
       tone: 'success',
-      title: 'Display name updated',
-      body: 'Your updated visible name now flows through Studio while your public handle stays unchanged.',
+      title: 'Profile updated',
+      body: 'Your updated display name, bio, and profile defaults now flow through Studio while your public handle stays unchanged.',
     })
   }
 
@@ -545,6 +896,10 @@ export default function SettingsPage() {
     } finally {
       setPasswordSaving(false)
     }
+  }
+
+  const handleEndOtherSessions = async () => {
+    await endOtherSessionsMutation.mutateAsync()
   }
 
   return (
@@ -623,9 +978,13 @@ export default function SettingsPage() {
                     </div>
                   </div>
                     <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0 w-full md:w-auto">
-                      <Link to="/account" className="relative overflow-hidden flex items-center justify-center rounded-xl bg-white px-8 py-3.5 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDialogOpen(true)}
+                        className="relative overflow-hidden flex items-center justify-center rounded-xl bg-white px-8 py-3.5 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
+                      >
                         Edit Profile
-                      </Link>
+                      </button>
                       {!auth?.guest && (
                         <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3.5 text-[14px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.12] hover:text-white hover:border-white/[0.2] hover:shadow-lg">
                           <LogOut className="h-[16px] w-[16px]" /> Sign Out
@@ -809,7 +1168,7 @@ export default function SettingsPage() {
                           onClick={() => setCredentialsDialogOpen(true)}
                           className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         >
-                          Manage profile
+                          Manage sign-in
                         </button>
                       </div>
                     }
@@ -817,8 +1176,19 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={MonitorSmartphone}
                     title="Active Sessions"
-                    description="Device session management is not exposed in the Studio shell yet."
-                    action={<StatusPill tone="neutral">Unavailable</StatusPill>}
+                    description={activeSessionsDescription}
+                    action={
+                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <StatusPill tone={activeSessions?.can_sign_out_others ? 'brand' : 'neutral'}>{activeSessionsBadgeLabel}</StatusPill>
+                        <button
+                          type="button"
+                          onClick={() => setActiveSessionsDialogOpen(true)}
+                          className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        >
+                          Manage sessions
+                        </button>
+                      </div>
+                    }
                   />
                 </SettingsCard>
               </div>
@@ -928,14 +1298,28 @@ export default function SettingsPage() {
 
         </main>
       </div>
+      <ProfileEditorDialog
+        open={profileDialogOpen}
+        identity={auth?.identity}
+        profileSaving={profileMutation.isPending}
+        onClose={() => setProfileDialogOpen(false)}
+        onSaveProfile={handleProfileSave}
+      />
       <CredentialsDialog
         open={credentialsDialogOpen}
         identity={auth?.identity}
-        profileSaving={profileMutation.isPending}
         passwordSaving={passwordSaving}
         onClose={() => setCredentialsDialogOpen(false)}
-        onSaveDisplayName={handleDisplayNameSave}
         onSavePassword={handlePasswordSave}
+      />
+      <ActiveSessionsDialog
+        open={activeSessionsDialogOpen}
+        sessionsPayload={activeSessions}
+        endingOtherSessions={endOtherSessionsMutation.isPending}
+        onClose={() => setActiveSessionsDialogOpen(false)}
+        onRefresh={() => settingsBootstrapQuery.refetch()}
+        onEndOtherSessions={handleEndOtherSessions}
+        onSignOutCurrent={signOut}
       />
     </AppPage>
   )

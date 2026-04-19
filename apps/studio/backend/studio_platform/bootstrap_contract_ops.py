@@ -14,6 +14,7 @@ def build_settings_bootstrap_payload(
     chat_draft_id: str,
     styles: Mapping[str, Any],
     prompt_memory: Mapping[str, Any],
+    active_sessions: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
         "identity": dict(identity),
@@ -27,6 +28,7 @@ def build_settings_bootstrap_payload(
         },
         "styles": dict(styles),
         "prompt_memory": dict(prompt_memory),
+        "active_sessions": dict(active_sessions),
     }
 
 

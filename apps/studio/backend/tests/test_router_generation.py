@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 import studio_platform.router as router_module
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter
-from studio_platform.models import GenerationJob, PromptSnapshot
+from studio_platform.models import GenerationJob, JobStatus, PromptSnapshot
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import GenerationCapacityError, StudioService
@@ -180,6 +180,71 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["creative_profile"]["id"] == "fast"
         assert payload["creative_profile"]["label"] == "Fast"
         assert payload["render_experience"]["state"] == "fallback"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_returns_error_code_for_failed_jobs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_get_generation(_: str, __: str) -> GenerationJob:
+        job = _build_generation_job()
+        job.status = JobStatus.FAILED
+        job.error = "Runware flagged the output as potentially sensitive"
+        job.error_code = "safety_block"
+        job.credit_status = "released"
+        job.final_credit_cost = 0
+        return job
+
+    service.get_generation = fake_get_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/generations/job-test",
+            headers={"X-Test-User": "user-1"},
+        )
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["error_code"] == "safety_block"
+        assert payload["credit_status"] == "released"
+        assert payload["final_credit_cost"] == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_delete_generation_endpoint_returns_deleted_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    async def fake_delete_generation(identity_id: str, generation_id: str) -> dict[str, str]:
+        assert identity_id == "user-1"
+        assert generation_id == "job-test"
+        return {"generation_id": generation_id, "status": "deleted"}
+
+    service.delete_generation = fake_delete_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.delete(
+            "/v1/generations/job-test",
+            headers={"X-Test-User": "user-1"},
+        )
+
+    try:
+        assert response.status_code == 200
+        assert response.json() == {"generation_id": "job-test", "status": "deleted"}
     finally:
         await service.shutdown()
 

@@ -199,6 +199,13 @@ def test_build_settings_bootstrap_payload_keeps_signed_in_shell_contract() -> No
         chat_draft_id="draft-chat",
         styles={"catalog": [], "my_styles": [], "favorites": []},
         prompt_memory={"identity_id": "user-1"},
+        active_sessions={
+            "current_session_id": "session-current",
+            "sessions": [],
+            "session_count": 0,
+            "other_session_count": 0,
+            "can_sign_out_others": False,
+        },
     )
 
     for field in BOOTSTRAP_FIELDS:
@@ -206,6 +213,7 @@ def test_build_settings_bootstrap_payload_keeps_signed_in_shell_contract() -> No
     assert payload["draft_projects"] == {"compose": "draft-compose", "chat": "draft-chat"}
     assert payload["styles"]["favorites"] == []
     assert payload["prompt_memory"]["identity_id"] == "user-1"
+    assert payload["active_sessions"]["session_count"] == 0
 
 
 def test_contract_catalog_keeps_full_signed_in_shell_field_list() -> None:
@@ -218,6 +226,7 @@ def test_contract_catalog_keeps_full_signed_in_shell_field_list() -> None:
         "draft_projects",
         "styles",
         "prompt_memory",
+        "active_sessions",
     ]
 
     assert list(BOOTSTRAP_FIELDS) == expected
@@ -235,7 +244,7 @@ def test_studio_service_delegates_shell_bootstrap_and_model_catalog() -> None:
     service_path = Path(__file__).resolve().parents[1] / "studio_platform" / "service.py"
     source = service_path.read_text(encoding="utf-8")
 
-    assert "return await self.shell.get_settings_payload(identity_id)" in source
+    assert "return await self.shell.get_settings_payload(identity_id, current_session_id=current_session_id)" in source
     assert "return await self.shell.list_models_for_identity(identity)" in source
     assert "return await self.shell.get_model(model_id)" in source
 

@@ -14,6 +14,7 @@ from .telemetry import CostTelemetryEvent
 from .persona import StudioPersona
 from .prompt_memory import PromptMemoryProfile
 from .style import StudioStyle
+from .access_session import StudioAccessSession
 
 
 class StudioState(BaseModel):
@@ -33,4 +34,5 @@ class StudioState(BaseModel):
     personas: Dict[str, StudioPersona] = Field(default_factory=dict)
     styles: Dict[str, StudioStyle] = Field(default_factory=dict)
     prompt_memories: Dict[str, PromptMemoryProfile] = Field(default_factory=dict)
+    access_sessions: Dict[str, StudioAccessSession] = Field(default_factory=dict)
     migrations_applied: Dict[str, str] = Field(default_factory=dict)

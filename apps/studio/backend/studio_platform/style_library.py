@@ -103,6 +103,13 @@ def serialize_style_catalog_entry(
     saved_style: StudioStyle | None = None,
 ) -> dict[str, Any]:
     payload = dict(entry)
+    payload["text_mode"] = str(payload.get("text_mode") or "modifier")
+    payload["negative_prompt"] = str(payload.get("negative_prompt") or "")
+    payload["preferred_model_id"] = payload.get("preferred_model_id")
+    payload["preferred_aspect_ratio"] = payload.get("preferred_aspect_ratio")
+    payload["preferred_steps"] = payload.get("preferred_steps")
+    payload["preferred_cfg_scale"] = payload.get("preferred_cfg_scale")
+    payload["preferred_output_count"] = payload.get("preferred_output_count")
     payload["saved_style_id"] = saved_style.id if saved_style is not None else None
     payload["saved"] = saved_style is not None
     payload["favorite"] = bool(saved_style.favorite) if saved_style is not None else False

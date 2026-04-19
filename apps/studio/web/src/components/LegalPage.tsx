@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Printer } from 'lucide-react'
 
 import { AppPage, LegalFooter } from '@/components/StudioPrimitives'
@@ -57,8 +57,10 @@ export function LegalPage({
   metaDescription,
 }: LegalPageProps) {
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const isEmbedded = searchParams.get('embed') === '1'
   const normalizedTitle = normalizeLegalText(title)
   const normalizedSubtitle = subtitle ? normalizeLegalText(subtitle) : undefined
   const normalizedSummary = summary ? normalizeLegalText(summary) : undefined
@@ -71,8 +73,8 @@ export function LegalPage({
   )
 
   return (
-    <>
-      {!canRenderWithShell && (
+    <div className={isEmbedded ? 'min-h-screen bg-[#ece8e1]' : undefined}>
+      {!canRenderWithShell && !isEmbedded && (
         <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#07111a]/90 backdrop-blur-xl print:hidden">
           <div className="mx-auto flex max-w-[1380px] items-center justify-between px-5 py-4 md:px-8">
             <Link to="/landing" className="flex items-center gap-3">
@@ -98,7 +100,8 @@ export function LegalPage({
         </header>
       )}
 
-      <AppPage className="max-w-[1180px] gap-8 py-10">
+      <AppPage className={isEmbedded ? 'max-w-[1040px] gap-6 py-6' : 'max-w-[1180px] gap-8 py-10'}>
+        {!isEmbedded ? (
         <nav className="flex flex-wrap items-center gap-1.5 print:hidden" aria-label="Legal documents">
           {LEGAL_NAV.map((item) => {
             const active = location.pathname.startsWith(item.to)
@@ -117,67 +120,68 @@ export function LegalPage({
             )
           })}
         </nav>
+        ) : null}
 
-        <header className="border-b border-white/[0.06] pb-8">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+        <header className={isEmbedded ? 'rounded-[28px] border border-black/[0.08] bg-white px-8 py-8 shadow-[0_24px_60px_rgba(15,23,42,0.12)]' : 'border-b border-white/[0.06] pb-8'}>
+          <div className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${isEmbedded ? 'text-zinc-500' : 'text-zinc-500'}`}>
             Legal
           </div>
-          <h1 className="mt-2 text-[32px] font-semibold tracking-tight text-white md:text-[38px]">
+          <h1 className={`mt-2 text-[32px] font-semibold tracking-tight md:text-[38px] ${isEmbedded ? 'text-zinc-950' : 'text-white'}`}>
             {normalizedTitle}
           </h1>
           {normalizedSubtitle ? (
-            <p className="mt-3 max-w-3xl text-[14.5px] leading-[1.75] text-zinc-400">{normalizedSubtitle}</p>
+            <p className={`mt-3 max-w-3xl text-[14.5px] leading-[1.75] ${isEmbedded ? 'text-zinc-600' : 'text-zinc-400'}`}>{normalizedSubtitle}</p>
           ) : null}
-          <div className="mt-5 flex flex-wrap items-center gap-4 text-[11.5px] text-zinc-500">
+          <div className={`mt-5 flex flex-wrap items-center gap-4 text-[11.5px] ${isEmbedded ? 'text-zinc-500' : 'text-zinc-500'}`}>
             <span>
-              Last updated: <span className="text-zinc-300">{normalizedLastUpdated}</span>
+              Last updated: <span className={isEmbedded ? 'text-zinc-900' : 'text-zinc-300'}>{normalizedLastUpdated}</span>
             </span>
             {normalizedEffectiveDate ? (
               <>
-                <span className="text-zinc-700">|</span>
+                <span className={isEmbedded ? 'text-zinc-300' : 'text-zinc-700'}>|</span>
                 <span>
-                  Effective: <span className="text-zinc-300">{normalizedEffectiveDate}</span>
+                  Effective: <span className={isEmbedded ? 'text-zinc-900' : 'text-zinc-300'}>{normalizedEffectiveDate}</span>
                 </span>
               </>
             ) : null}
-            <span className="text-zinc-700">|</span>
+            <span className={isEmbedded ? 'text-zinc-300' : 'text-zinc-700'}>|</span>
             <button
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 text-zinc-500 transition hover:text-zinc-200 print:hidden"
+              className={`inline-flex items-center gap-1.5 transition print:hidden ${isEmbedded ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-500 hover:text-zinc-200'}`}
             >
               <Printer className="h-3 w-3" />
               Print
             </button>
           </div>
           {normalizedSummary ? (
-            <div className="mt-6 rounded-[12px] border border-white/[0.06] bg-[#0c0d12] p-4 print:border-zinc-400">
-              <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <div className={`mt-6 rounded-[12px] p-4 print:border-zinc-400 ${isEmbedded ? 'border border-black/[0.06] bg-[#f7f4ee]' : 'border border-white/[0.06] bg-[#0c0d12]'}`}>
+              <div className={`mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] ${isEmbedded ? 'text-zinc-500' : 'text-zinc-500'}`}>
                 Plain-language summary
               </div>
-              <div className="text-[13.5px] leading-[1.75] text-zinc-300">{normalizedSummary}</div>
+              <div className={`text-[13.5px] leading-[1.75] ${isEmbedded ? 'text-zinc-700' : 'text-zinc-300'}`}>{normalizedSummary}</div>
             </div>
           ) : null}
-          <div className="mt-3 rounded-[12px] border border-amber-400/15 bg-amber-400/[0.08] p-4 print:border-zinc-400">
-            <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+          <div className={`mt-3 rounded-[12px] p-4 print:border-zinc-400 ${isEmbedded ? 'border border-amber-400/25 bg-amber-100/70' : 'border border-amber-400/15 bg-amber-400/[0.08]'}`}>
+            <div className={`mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] ${isEmbedded ? 'text-amber-800' : 'text-amber-200'}`}>
               Business status
             </div>
-            <div className="text-[13.5px] leading-[1.75] text-amber-50/90">
+            <div className={`text-[13.5px] leading-[1.75] ${isEmbedded ? 'text-amber-950' : 'text-amber-50/90'}`}>
               {normalizeLegalText(LEGAL_PRELAUNCH_DISCLOSURE)}
             </div>
           </div>
         </header>
 
         <div className="grid items-start gap-10 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="hidden lg:block sticky top-24 print:hidden">
+          <aside className={`hidden print:hidden lg:block ${isEmbedded ? 'sticky top-6' : 'sticky top-24'}`}>
             <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
               Contents
             </div>
-            <nav className="space-y-0.5 rounded-[12px] border border-white/[0.04] bg-[#0c0d12] p-1.5">
+            <nav className={`space-y-0.5 rounded-[12px] p-1.5 ${isEmbedded ? 'border border-black/[0.06] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.08)]' : 'border border-white/[0.04] bg-[#0c0d12]'}`}>
               {toc.map((item) => (
                 <a
                   key={item.id}
                   href={`#${item.id}`}
-                  className="block rounded-[8px] px-3 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                  className={`block rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-colors ${isEmbedded ? 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'}`}
                 >
                   {normalizeLegalText(item.title)}
                 </a>
@@ -185,12 +189,12 @@ export function LegalPage({
             </nav>
           </aside>
 
-          <article className="legal-prose text-[14.5px] leading-[1.8] text-zinc-300">{children}</article>
+          <article className={`legal-prose text-[14.5px] leading-[1.8] ${isEmbedded ? 'rounded-[28px] border border-black/[0.06] bg-white px-8 py-8 text-zinc-700 shadow-[0_28px_70px_rgba(15,23,42,0.12)]' : 'text-zinc-300'}`}>{children}</article>
         </div>
 
-        {!canRenderWithShell ? <LegalFooter /> : null}
+        {!canRenderWithShell && !isEmbedded ? <LegalFooter /> : null}
       </AppPage>
-    </>
+    </div>
   )
 }
 

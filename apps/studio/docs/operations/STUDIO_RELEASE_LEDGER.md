@@ -18,6 +18,96 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.19.149`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.148` fixed the dead Favorites shelf, but the signed-in shell still had an obvious navigation blemish: `Settings` rendered as both the normal row and a second trailing gear shortcut in the expanded sidebar, which made the lower utility rail feel inconsistent and visually noisy compared with the rest of the shell.
+- What:
+  `.149` simplifies that rail back to one clean `Settings` entry. The expanded sidebar no longer shows a duplicate open-settings gear; instead, the row behaves like a normal nav item again. Guest routing stays honest by sending the Settings nav through the existing login intent instead of exposing a dead duplicate shortcut. Targeted StudioShell regression coverage was updated for the new single-item behavior, and Studio web `type-check` plus production `build` pass on this build.
+  This sidebar fix was not browser-smoked through the user's live signed-in IAB session in this wave, so the verification level remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.148`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.147` cleaned up failed-generation noise in `My images`, but `Library -> Favorites` was still an obvious broken surface. The route existed in the shell, yet it never queried the actual like data and always collapsed to a static empty state, which meant users could press the heart on public work and then find nothing when they opened the page that was supposed to collect those saved references.
+- What:
+  `.148` turns Favorites into a real library shelf. Studio now exposes a dedicated authenticated favorites endpoint backed by liked public posts, and the `Favorites` route renders those saved references in both grid and list modes with search, open-preview behavior, prompt reuse, creator navigation, and remove-from-favorites actions that actually work. The new preview flow is also honest about ownership: it keeps useful reference actions while avoiding owner-only controls like moving, deleting, or changing visibility on content that belongs to someone else.
+  Verification on `.148` is targeted and explicit. Backend regression coverage now includes liked-post listing and the new favorites route rate-limit contract. Frontend MediaLibrary tests cover the Favorites shelf plus grid/list and remove actions. Studio web `type-check` passes and production `build` passes. This auth-gated `/library/likes` surface was not browser-smoked through the user's live signed-in IAB session in this wave, so final signed-session behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.147`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.146` improved Chat feedback, but the image library still handled failed generations in a noisy and slightly dishonest way. Unrendered jobs were showing up directly in the main image surface with loud `FAILED` copy and a text CTA, even though the product already had a dedicated `Processing` lane. At the same time, the backend already released reserved credits on non-success outcomes, but the shell was not surfacing that truth clearly when a generation died because of moderation or provider/runtime failure.
+- What:
+  `.147` moves failed and safety-blocked generation jobs into the `Processing` lane and gives them calmer, more useful controls: retry is now icon-only, failed processing jobs can be removed directly from the lane, and the main `All` gallery is no longer interrupted by unrendered placeholders. The same wave also adds passive bottom notifications that explain whether a generation was stopped by safety review or by a provider/system issue, and those notices explicitly communicate credit return when the held credits were released. Backend-side, generation payloads now expose `error_code`, safety-like provider rejects are classified more honestly, and failed unrendered jobs can be deleted through a dedicated generation delete path without touching completed assets.
+  Verification on `.147` is targeted but multi-layer. Backend tests pass for safety-block credit release, failed-generation deletion, generation error-code serialization, and the generation delete route. Frontend MediaLibrary regression tests pass, web `type-check` passes, and production `build` passes. This auth-gated `/library/images` flow was not browser-smoked through the user's live signed-in IAB session in this wave, so final signed-session behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.146`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.145` made Styles honest and reusable, but the Chat surface still had one obvious interaction gap during live use: after sending a message, the conversation could sit visually still until the assistant response landed. The send button spinner helped a little, but it did not place that waiting state inside the conversation itself, so the product felt more inert than a premium copilot surface should.
+- What:
+  `.146` adds an in-thread assistant reply placeholder to Chat. While Studio is waiting on a message response, the timeline now shows a calm animated typing bubble with moving dots, so users get immediate conversational feedback in the same area where the answer will appear. The existing post-response text reveal remains intact; this wave specifically fills the silent gap before the assistant message arrives.
+  Verification on `.146` is frontend-scoped and explicit. A targeted `ChatBubble` test now covers the reply placeholder, Studio web `type-check` passes, and production `build` passes. The auth-gated `/chat` surface was not browser-smoked through the user's live signed-in IAB session in this wave, so final in-app behavior is source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.145`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.144` fixed the Settings profile-editing route hop, but `Elements > Styles` was still underselling itself and partly behaving like a dressed-up prompt note list. The page copy implied reusable looks, yet the actual save path from Create mostly captured raw prompt text, `My Styles` did not expose real edit or removal controls, and the difference between “use this as a full preset” versus “only add the text direction” was not obvious enough for a product surface that already looked finished.
+- What:
+  `.145` turns Styles into a real reusable preset shelf. Styles saved from Create and Project history now persist more than prompt text: they can carry negative prompt guardrails plus preferred model, aspect ratio, steps, guidance, and variation defaults. `Elements > My Styles` now presents that truth more explicitly, lets users reopen Create with the full saved preset or inject only the text direction, and adds an in-place style editor with removal flow so saved styles are actually manageable from the same surface that advertises them.
+  Verification on `.145` is targeted and honest. Backend style-service and router-security tests pass for the new blueprint/edit/delete contract, frontend `Elements` tests pass, and Studio web `type-check` plus production `build` were rerun on the new build. This auth-gated `/elements/styles` surface was not browser-smoked through a real signed-in Playwright session in this wave, so final UI behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.144`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.143` tightened billing honesty, but the top-level Settings account card still had one UX seam that felt obviously wrong in use. `Edit Profile` looked like it should open editable fields right there, yet it navigated away to `/account`, while the actual in-shell edit capability was hiding under `Privacy & Security > Credentials` behind copy that mixed profile editing and sign-in management together.
+- What:
+  `.144` is a narrow Settings navigation and profile-editing wave. The main `Edit Profile` action in General Account now opens a real in-place profile editor lightbox with editable display name, bio, and default visibility plus a top-right save action. At the same time, the old Credentials dialog has been narrowed to what it actually owns: sign-in provider review and password management. That keeps profile editing in the account surface where users expect it and makes the security surface read more honestly.
+  Verification on `.144` is frontend-scoped and explicit: targeted Settings tests pass, Studio web `type-check` passes, and production `build` passes. This auth-gated Settings flow was not browser-smoked through a real signed-in Playwright session in this wave, so final UI behavior is test/build-verified rather than live session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.143`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.142` improved several major frontend surfaces, but the subscription catalog was still promising more specificity than the current product contract could safely support. Plan cards and comparison copy were exposing concrete render resolutions even though Studio's real output story still depends on provider-native limits, future upscale policy, and whether dedicated post-processing lanes become part of the shipped offering.
+- What:
+  `.143` is a narrow billing-honesty wave. Subscription cards now advertise recurring credits without appending `up to ...` resolution promises, and the public comparison table no longer presents `Max resolution` as if that were a settled launch guarantee. The same pass also aligns local mock/test catalog copy with that tighter contract so demo and regression surfaces stop reintroducing resolution marketing language that the real product is intentionally avoiding for now.
+  Verification on `.143` is intentionally frontend-scoped: Studio web `type-check` passes, the targeted Billing page test passes, production `build` passes, and a browser smoke on `/subscription` confirms the plan grid no longer shows concrete resolution labels.
+
+### `0.6.0-alpha` / build `2026.04.19.142`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.141` made the Settings security area real, but several high-visibility frontend surfaces still read like unfinished product scaffolding. `Projects` did not explain its job well, its top-right action was too opaque, the shell rail toggle looked alive but could lose pointer capture at the edge, and Help had grown into one long mixed document that was trying to be public onboarding, account FAQ, legal orientation, and deep product manual all at once. The signup consent copy also still linked outward in a thin inline way instead of opening a readable contract surface where a user could actually inspect the policies.
+- What:
+  `.142` is the frontend clarity and documentation split wave. `Library -> Projects` now behaves much more like `My images`: users get richer grid and list cards, a clearer project purpose, real create/edit/continue/export actions, and empty states that point back into Create instead of leaving the surface ambiguous. Help is now split into a public `Help center` and a separate long-form `Studio manual` route, with sticky navigation on the public side and route-based deep guides for prompt craft, workflows, publishing, shortcuts, and troubleshooting. Signup now opens Terms, Privacy, and Acceptable Use inside a centered embedded legal reader with a document-style layout, while embedded legal routes intentionally bypass the Studio shell so the modal reads like a standalone agreement instead of a mini app inside an iframe.
+  The same wave also tightens shell feel and operator truth. The desktop sidebar edge toggle now has a more reliable hover/reveal pattern and no longer loses clickability behind main content. Verification on `.142` is frontend-focused and honest: targeted Documentation, Legal, Signup, and StudioShell tests pass, Studio web `type-check` passes, production `build` passes, and Playwright browser smoke confirms the public `/help`, `/learn/prompt-craft`, and `/signup` flows plus the embedded legal reader and sidebar collapse interaction. Auth-gated `/library/projects` was not browser-smoked with a signed-in session from Playwright, so the live render of that protected surface remains source/test/build-verified rather than session-level browser-verified in this wave.
+
+### `0.6.0-alpha` / build `2026.04.19.141`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.140` made `Credentials` real, but the next row down in the same security area was still an obvious fake. `Active Sessions` looked like a user security feature while only repeating that session management was unavailable, which meant Settings was still overstating what Studio could help users review after sign-in. The product story also needed a cleaner explanation for why browser storage and recent-access data exist at all: not for vague analytics theater, but for keeping sessions secure and giving users an understandable device-review surface.
+- What:
+  `.141` turns that row into a real account-security surface. Studio now records recent account access snapshots keyed to the current auth session, carries that session truth through `/v1/auth/me` and `/v1/settings/bootstrap`, and exposes a user-facing `Active sessions` dialog in Settings that shows the current device, recent browsers or installed-app sessions, when they were last active, and the network or host label we can safely show. The shell can now keep the current device active while signing out other Studio sessions, and the Help/account copy was updated so the account surface describes the new behavior honestly instead of talking like the feature does not exist yet.
+  Verification on `.141` is targeted to the changed account/session contract. Backend spine, router-security, and service-regression tests now cover `active_sessions` in bootstrap plus the new sign-out-others path; Settings frontend tests cover the recent-device dialog and the sign-out-others action; Studio web `type-check` and production `build` were rerun on the new build. Full environment-level local/provider/staging proof has not been rerun on `.141`, so the last live runtime artefacts still belong to `.137` until that proof loop is refreshed.
+
 ### `0.6.0-alpha` / build `2026.04.19.140`
 - Date: `2026-04-19`
 - Codename: `Foundation`

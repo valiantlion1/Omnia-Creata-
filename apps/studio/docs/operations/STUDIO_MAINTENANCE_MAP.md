@@ -12,11 +12,39 @@ Last updated: 2026-04-19
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.19.140`. This wave turns Settings credentials into a real account surface: the public `@username` stays locked, display names can change safely, auth payloads now expose provider context, and email/password accounts can update their password from inside the Studio shell while OAuth accounts remain honestly provider-managed.
-- Current proof on `.140` is code-and-behavior scoped, not a fresh environment proof refresh. Targeted backend regressions for identity truth plus provider context and frontend Settings tests for display-name/password flows are green on the new build, but the last live local/provider/staging artefacts still belong to `.137` and should keep being described that way until they are rerun.
-- The same `.140` wave also closes an auth-refresh truth bug. Existing identities no longer let incoming sign-in metadata silently overwrite a locked username or the Studio-owned display name after the user edits it locally.
+- Current implementation build is `2026.04.19.149`. This wave removes a noisy shell regression: the expanded sidebar now renders `Settings` as one clean nav item again instead of pairing the row with a second trailing gear shortcut.
+- Current proof on `.149` is targeted rather than a fresh full-environment pass. The StudioShell regression test passes, Studio web `type-check` passes, and production `build` passes. This shell fix was not browser-smoked through the user's live signed-in IAB session in this wave, so final behavior remains source/test/build-verified rather than session-level browser-verified.
+- The same `.149` wave keeps guest routing honest. Even without the duplicate shortcut, `Settings` still routes through the login intent for guests instead of dropping them onto an awkward dead-end settings path.
 
 ## Recent stabilization wins
+
+- `.149` removes a visually noisy utility-rail bug from the signed-in shell. `Settings` no longer appears as both the main row and a second open-settings gear in the expanded sidebar.
+- The same wave keeps the interaction model simpler. Users now get one obvious Settings entry in the open rail, while collapsed mode still preserves the compact icon-only navigation shape.
+
+- `.148` removes a dead library shelf from the signed-in experience. Liking public work now has a visible destination inside Favorites instead of silently writing state that the library UI never renders.
+- The same wave keeps the surface useful without faking ownership. Users can reopen saved references, reuse the prompt, jump to the creator, and remove the favorite, but they are not shown owner-only controls like moving or deleting a public post they do not own.
+
+- `.147` removes one of the noisier library regressions from the main image surface. Failed or safety-blocked renders no longer sit in `All` like broken deliverables; they stay in `Processing`, where users can retry or clear them without confusing the actual gallery.
+- The same wave also makes failure feedback calmer and more truthful. Moderation-driven stops and provider/system failures now produce short passive bottom notices, and those notices can explicitly say when reserved credits were returned.
+
+- `.146` removes a small but very noticeable dead-air moment from Chat. Users now see Studio actively replying inside the conversation timeline instead of only noticing a spinner in the composer.
+- The same wave keeps the motion restrained and product-safe. The pending state is expressed as a quiet assistant bubble with animated dots rather than a loud loading treatment or a separate system banner.
+
+- `.145` makes the Styles surface honest about what it is selling. Saved styles are no longer just loose prompt snippets hidden behind polished cards; they now round-trip as reusable Create presets with prompt direction, exclusions, and preferred execution defaults.
+- The same wave also fixes the management gap that made `My Styles` feel unfinished. Users can now edit a saved style in place, remove it from the shelf, and clearly choose between reopening Create with the full preset or adding only the style text into a new prompt.
+
+- `.144` removes a confusing route hop from the most obvious account action in Settings. `Edit Profile` now behaves like an edit action instead of a context-breaking navigation, which means users can actually change profile fields from the same Settings surface where the action is advertised.
+- The same wave clarifies the Settings information architecture. Profile editing and sign-in management no longer masquerade as one mixed feature, so the account card and the Credentials row each now own a more honest job.
+
+- `.143` tightens billing honesty without changing catalog structure. Users still see plan names, price, recurring credits, and feature shape, but the UI no longer implies that a specific render resolution is a guaranteed subscription entitlement before the actual provider and upscale contract is finalized.
+- The same wave keeps verification and fixtures aligned. Billing mocks and tests now follow the same no-resolution contract, so frontend preview surfaces and automated regressions stop quietly reintroducing a claim the product has intentionally backed away from.
+
+- `.142` makes the project library feel like a real workflow surface instead of a vague holding area. Project cards now explain themselves better, grid/list presentation is richer, create/edit/continue/export actions are exposed directly, and empty states push users back toward Create instead of leaving the purpose of the page implicit.
+- The same wave cleans up the public reading experience around guidance and policy. Help now stays public-facing and easier to scan, deeper product education moved into route-based manual chapters, and signup legal links open a centered document-like reader whose embedded legal pages intentionally bypass the Studio shell.
+- `.142` also fixes a subtle but user-visible shell interaction bug. The desktop sidebar toggle now sits above the main content stacking context, so the rail-edge control does not look clickable while silently losing pointer events to the page body underneath.
+
+- `.141` removes the last obvious fake control from the Settings security section. `Active Sessions` now helps users review where Studio was recently opened instead of just telling them the shell cannot do anything there.
+- The same wave keeps the backend truth aligned with the UI. Session records are now captured on login/signup/bootstrap/auth refresh, `settings/bootstrap` carries an `active_sessions` payload, and the shell can revoke other recorded Studio sessions while preserving the current device.
 
 - `.140` removes a fake security control from Settings. `Credentials` now opens a real profile-and-sign-in dialog instead of a dead provider-managed pill, so users can actually act on the surface the shell is advertising.
 - That same wave keeps account truth disciplined. Display names now pass through the deterministic moderation layer, `@username` remains stable, `/v1/auth/me` exposes provider context to the shell, and identity refresh no longer reintroduces stale sign-in metadata over a locally saved display name.

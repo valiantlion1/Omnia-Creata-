@@ -27,6 +27,7 @@ vi.mock('@/components/TurnstileWidget', () => ({
 }))
 
 import SignupPage from '@/pages/Signup'
+import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
 describe('SignupPage', () => {
@@ -61,5 +62,23 @@ describe('SignupPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /^google$/i }))
 
     expect(signInWithProviderMock).toHaveBeenCalledWith('google', '/create?welcome=1')
+  })
+
+  it('opens legal documents in a centered dialog without leaving signup', async () => {
+    renderWithProviders(<SignupPage />, { route: '/signup' })
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy policy/i }))
+
+    expect(screen.getByText(/legal documents/i)).toBeInTheDocument()
+    expect(screen.getByText(/the agreement stays readable in one centered document surface/i)).toBeInTheDocument()
+    expect(screen.getByTitle(/privacy policy/i)).toHaveAttribute('src', '/legal/privacy?embed=1')
+  })
+
+  it('shows version info in the signup footer without the cookie preferences shortcut', () => {
+    renderWithProviders(<SignupPage />, { route: '/signup' })
+
+    expect(screen.queryByRole('button', { name: /cookie preferences/i })).not.toBeInTheDocument()
+    expect(screen.getByText(APP_VERSION_LABEL)).toBeInTheDocument()
+    expect(screen.getByText(`build ${APP_BUILD_LABEL}`)).toBeInTheDocument()
   })
 })

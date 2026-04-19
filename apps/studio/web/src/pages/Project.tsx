@@ -10,6 +10,7 @@ import { EmptyState, PageIntro, Panel, StatusPill } from '@/components/StudioPri
 import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
 import {
+  type Generation,
   normalizeJobStatus,
   studioApi,
 } from '@/lib/studioApi'
@@ -59,9 +60,20 @@ export default function ProjectPage() {
   })
 
   const saveStyleMutation = useMutation({
-    mutationFn: async (prompt: string) => studioApi.saveStyleFromPrompt({ prompt }),
-    onSuccess: () => {
-      setShareMessage('Saved to My Styles.')
+    mutationFn: async (generation: Generation) =>
+      studioApi.saveStyleFromPrompt({
+        prompt: generation.prompt_snapshot.prompt,
+        title: generation.display_title || generation.title,
+        negative_prompt: generation.prompt_snapshot.negative_prompt,
+        preferred_model_id: generation.prompt_snapshot.model,
+        preferred_aspect_ratio: generation.prompt_snapshot.aspect_ratio,
+        preferred_steps: generation.prompt_snapshot.steps,
+        preferred_cfg_scale: generation.prompt_snapshot.cfg_scale,
+        preferred_output_count: generation.output_count,
+        preview_image_url: generation.outputs[0]?.thumbnail_url ?? generation.outputs[0]?.url ?? null,
+      }),
+    onSuccess: (style) => {
+      setShareMessage(`Saved "${style.title}" to My Styles.`)
     },
     onError: (error) => {
       setShareMessage(error instanceof Error ? error.message : 'Unable to save this prompt as a style.')
@@ -287,7 +299,7 @@ export default function ProjectPage() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <StatusPill tone="neutral">{generation.prompt_snapshot.width}x{generation.prompt_snapshot.height}</StatusPill>
                     <button
-                      onClick={() => saveStyleMutation.mutate(generation.prompt_snapshot.prompt)}
+                      onClick={() => saveStyleMutation.mutate(generation)}
                       disabled={saveStyleMutation.isPending}
                       className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3.5 py-1.5 text-xs font-medium text-zinc-300 transition-all duration-300 hover:bg-white/[0.08] hover:text-white hover:border-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >

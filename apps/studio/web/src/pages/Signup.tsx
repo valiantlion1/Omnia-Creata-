@@ -9,6 +9,117 @@ import { useStudioAuth } from '@/lib/studioAuth'
 const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
 const NEW_ACCOUNT_REDIRECT_PATH = '/create?welcome=1'
 
+type LegalDocumentId = 'terms' | 'privacy' | 'acceptable-use'
+
+const LEGAL_DOCUMENTS: Array<{
+  id: LegalDocumentId
+  label: string
+  title: string
+  to: string
+}> = [
+  {
+    id: 'terms',
+    label: 'Terms',
+    title: 'Terms of Service',
+    to: '/legal/terms',
+  },
+  {
+    id: 'privacy',
+    label: 'Privacy Policy',
+    title: 'Privacy Policy',
+    to: '/legal/privacy',
+  },
+  {
+    id: 'acceptable-use',
+    label: 'Acceptable Use',
+    title: 'Acceptable Use Policy',
+    to: '/legal/acceptable-use',
+  },
+]
+
+function LegalDocumentDialog({
+  selected,
+  onSelect,
+  onClose,
+}: {
+  selected: LegalDocumentId | null
+  onSelect: (value: LegalDocumentId) => void
+  onClose: () => void
+}) {
+  if (!selected) return null
+
+  const activeDocument =
+    LEGAL_DOCUMENTS.find((document) => document.id === selected) ??
+    LEGAL_DOCUMENTS[0]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+        onClick={onClose}
+        aria-label="Close legal document"
+      />
+      <div className="relative z-10 flex h-[min(88vh,960px)] w-full max-w-6xl flex-col overflow-hidden rounded-[30px] border border-black/[0.08] bg-[#f2ede4] shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
+        <div className="border-b border-black/[0.08] bg-white/70 px-5 py-4 backdrop-blur-md md:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Legal documents
+              </div>
+              <div className="mt-1 text-xl font-semibold tracking-tight text-zinc-950">
+                {activeDocument.title}
+              </div>
+              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-zinc-600">
+                The agreement stays readable in one centered document surface.
+                You can switch between policies without leaving sign-up.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-black/[0.08] bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {LEGAL_DOCUMENTS.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                onClick={() => onSelect(document.id)}
+                className={`rounded-full px-3.5 py-2 text-[12px] font-medium transition ${
+                  document.id === activeDocument.id
+                    ? 'bg-zinc-950 text-white'
+                    : 'border border-black/[0.08] bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
+                }`}
+              >
+                {document.label}
+              </button>
+            ))}
+            <Link
+              to={activeDocument.to}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-black/[0.08] bg-transparent px-3.5 py-2 text-[12px] font-medium text-zinc-600 transition hover:bg-black/[0.04] hover:text-zinc-950"
+            >
+              Open full page
+            </Link>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 p-3 md:p-4">
+          <iframe
+            title={activeDocument.title}
+            src={`${activeDocument.to}?embed=1`}
+            className="h-full w-full rounded-[24px] border border-black/[0.08] bg-white"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SignupPage() {
   const navigate = useNavigate()
   const { isAuthenticated, signInWithProvider, signUp } = useStudioAuth()
@@ -25,6 +136,8 @@ export default function SignupPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [selectedLegalDocument, setSelectedLegalDocument] =
+    useState<LegalDocumentId | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -240,9 +353,31 @@ export default function SignupPage() {
                   className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
                 />
                 <span>
-                  I agree to the <Link to="/legal/terms" className="text-white hover:text-zinc-200">Terms</Link>,{' '}
-                  <Link to="/legal/privacy" className="text-white hover:text-zinc-200">Privacy Policy</Link>, and{' '}
-                  <Link to="/legal/acceptable-use" className="text-white hover:text-zinc-200">Acceptable Use</Link>.
+                  I agree to the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLegalDocument('terms')}
+                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
+                  >
+                    Terms
+                  </button>
+                  ,{' '}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLegalDocument('privacy')}
+                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
+                  >
+                    Privacy Policy
+                  </button>
+                  , and{' '}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLegalDocument('acceptable-use')}
+                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
+                  >
+                    Acceptable Use
+                  </button>
+                  .
                 </span>
               </label>
               <label className="flex items-start gap-3 text-zinc-400">
@@ -297,8 +432,14 @@ export default function SignupPage() {
           </form>
         </div>
 
-        <LegalFooter className="pb-6" />
+        <LegalFooter className="pb-6" showCookiePreferences={false} showBuildInfo />
       </div>
+
+      <LegalDocumentDialog
+        selected={selectedLegalDocument}
+        onSelect={setSelectedLegalDocument}
+        onClose={() => setSelectedLegalDocument(null)}
+      />
     </div>
   )
 }

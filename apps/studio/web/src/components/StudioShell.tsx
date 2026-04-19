@@ -67,7 +67,7 @@ const elementsNav: NavItem[] = [
 const utilityNav: NavItem[] = [
   { to: '/help', label: 'Help', icon: BookOpen, aliases: ['/docs', '/faq', '/terms', '/privacy', '/refunds', '/refund-policy', '/usage-policy', '/cookies', '/learn', '/legal/terms', '/legal/privacy', '/legal/refunds', '/legal/acceptable-use', '/legal/cookies'] },
   { to: '/subscription', label: 'Billing', icon: CreditCard, aliases: ['/billing', '/plan'] },
-  { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'], expandOnMainClick: true },
+  { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'] },
 ]
 
 function isActive(pathname: string, item: NavItem) {
@@ -95,7 +95,6 @@ function Section({
   search?: string
   collapsed?: boolean
   getChildren?: (item: NavItem) => NavChild[]
-  renderExpandedPanel?: (item: NavItem) => ReactNode
   expandedItems?: Record<string, boolean>
   onToggleItem?: (item: NavItem) => void
   onNavigate?: () => void
@@ -115,8 +114,7 @@ function Section({
           const Icon = item.icon
           const active = isActive(pathname, item)
           const childItems = collapsed ? [] : getChildren?.(item) ?? []
-          const expandedPanel = collapsed ? null : renderExpandedPanel?.(item) ?? null
-          const expandable = Boolean(childItems.length || expandedPanel)
+          const expandable = Boolean(childItems.length)
           const isExpanded = Boolean(expandedItems?.[item.to])
           const actionChildren = childItems.filter((child) => child.kind !== 'history')
           const historyChildren = childItems.filter((child) => child.kind === 'history')
@@ -142,7 +140,7 @@ function Section({
                   </button>
                 ) : (
                   <Link
-                    to={item.to}
+                    to={getOpenTarget?.(item) ?? item.to}
                     onClick={onNavigate}
                     title={collapsed ? item.label : undefined}
                     className={`${rowClasses} ${collapsed ? 'justify-center' : 'flex-1 gap-2.5'}`}
@@ -178,8 +176,6 @@ function Section({
 
               {isExpanded && expandable ? (
                 <div className="mt-1.5 space-y-1 pl-[28px] animate-fade-up" style={{ animationDuration: '0.4s' }}>
-                  {expandedPanel}
-
                   {actionChildren.map((child) => {
                     const ChildIcon = child.icon
                     const childActive = currentRoute === child.to
@@ -251,6 +247,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const { auth, isAuthenticated, isAuthSyncing, isLoading, signOut } = useStudioAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
+  const [showDesktopToggle, setShowDesktopToggle] = useState(false)
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isGuestShell = !canLoadPrivate
@@ -265,13 +262,37 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   }, [desktopCollapsed])
 
   useEffect(() => {
+    let lastVisible = false
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const revealBoundary = desktopCollapsed ? 120 : 320
+      const nextVisible = event.clientX <= revealBoundary
+      if (nextVisible !== lastVisible) {
+        lastVisible = nextVisible
+        setShowDesktopToggle(nextVisible)
+      }
+    }
+
+    const handleMouseOut = () => {
+      lastVisible = false
+      setShowDesktopToggle(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseout', handleMouseOut)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseout', handleMouseOut)
+    }
+  }, [desktopCollapsed])
+
+  useEffect(() => {
     const next: Record<string, boolean> = {}
     if (location.pathname.startsWith('/chat')) next['/chat'] = true
-    // Keep Settings flyout opt-in on desktop so it doesn't clip out of the lower rail.
-    if (location.pathname.startsWith('/settings') && mobileOpen) next['/settings'] = true
     if (!Object.keys(next).length) return
     setExpandedItems((current) => ({ ...next, ...current }))
-  }, [location.pathname, mobileOpen])
+  }, [location.pathname])
 
 
 
@@ -327,74 +348,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     return []
   }
 
-  const renderExpandedPanel = (item: NavItem) => {
-    if (item.to !== '/settings' || desktopCollapsed) return null
-
-    if (!canLoadPrivate) {
-      return (
-        <div className="rounded-[16px] border border-white/[0.08] bg-black/40 p-3 ring-1 ring-white/[0.02] backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] animate-glass-reveal">
-          <div className="text-sm font-semibold text-white">Public access</div>
-          <div className="mt-1 text-xs leading-6 text-zinc-500">Explore and Help stay open. Create, Library, and account controls unlock after sign in. Chat stays on paid plans.</div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Link
-              to="/login?next=%2Fexplore"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-xl bg-white/[0.04] px-3 py-2 text-center text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-white border border-white/[0.04]"
-            >
-              Log in
-            </Link>
-            <Link
-              to="/signup"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-xl bg-white px-3 py-2 text-center text-[12px] font-semibold text-black transition hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.15)]"
-            >
-              Create account
-            </Link>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className="rounded-[16px] border border-white/[0.08] bg-black/40 p-3 ring-1 ring-white/[0.02] backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] animate-glass-reveal">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center truncate text-sm font-semibold text-white">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
-            <div className="mt-1 text-xs text-zinc-500">{auth?.guest ? 'Guest mode' : auth?.plan.label ?? 'Free'}</div>
-          </div>
-          <div className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-200 ring-1 ring-white/[0.06]">
-            {hasInternalAccess ? 'Owner access' : `${auth?.credits.remaining ?? 0} credits`}
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link
-            to="/account"
-            onClick={() => setMobileOpen(false)}
-            className="rounded-2xl bg-white/[0.04] px-3 py-2 text-center text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
-          >
-            Account
-          </Link>
-          <Link
-            to="/subscription"
-            onClick={() => setMobileOpen(false)}
-            className="rounded-2xl bg-white/[0.04] px-3 py-2 text-center text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
-          >
-            Billing
-          </Link>
-        </div>
-        <Link
-          to="/help#faq"
-          onClick={() => setMobileOpen(false)}
-          className="mt-2 block rounded-2xl bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-        >
-          FAQ and policy
-        </Link>
-      </div>
-    )
-  }
-
   const handleToggleItem = (item: NavItem) => {
-    const expandable = Boolean(getItemChildren(item).length || renderExpandedPanel(item))
+    const expandable = Boolean(getItemChildren(item).length)
     if (!expandable) return
     setExpandedItems((current) => ({ ...current, [item.to]: !current[item.to] }))
     setMobileOpen(false)
@@ -438,7 +393,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           search={location.search}
           collapsed={collapsed}
           getChildren={getItemChildren}
-          renderExpandedPanel={renderExpandedPanel}
           expandedItems={expandedItems}
           onToggleItem={handleToggleItem}
           onNavigate={() => setMobileOpen(false)}
@@ -451,9 +405,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           pathname={location.pathname}
           search={location.search}
           collapsed={collapsed}
-          renderExpandedPanel={renderExpandedPanel}
-          expandedItems={expandedItems}
-          onToggleItem={handleToggleItem}
           onNavigate={() => setMobileOpen(false)}
           getOpenTarget={getOpenTarget}
         />
@@ -531,18 +482,23 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         <div className="noise-overlay" />
       </div>
       <aside
-        className={`group/sidebar relative z-10 hidden shrink-0 overflow-visible transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] lg:flex lg:flex-col glass-sidebar ${
+        className={`group/sidebar relative z-20 hidden shrink-0 overflow-visible transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] lg:flex lg:flex-col glass-sidebar ${
           desktopCollapsed ? 'w-[76px]' : 'w-[260px]'
         }`}
       >
         {rail(desktopCollapsed)}
+        <div
+          className={`pointer-events-none absolute inset-y-6 right-0 w-px bg-gradient-to-b from-transparent via-white/[0.14] to-transparent transition-opacity duration-300 ${
+            showDesktopToggle ? 'opacity-100' : 'opacity-50'
+          }`}
+        />
         {/* Edge toggle button — floats on sidebar border, visible on hover */}
         <button
           onClick={() => setDesktopCollapsed((value) => !value)}
-          className={`absolute top-[34px] z-30 flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.12] bg-[#1a1b20] text-zinc-400 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/[0.2] hover:bg-[#282a30] hover:text-white hover:scale-110 ${
-            desktopCollapsed
-              ? 'right-[-14px] opacity-0 group-hover/sidebar:opacity-100'
-              : 'right-[-14px] opacity-0 group-hover/sidebar:opacity-100'
+          className={`absolute top-[34px] z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.12] bg-[#1a1b20]/96 text-zinc-300 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/[0.2] hover:bg-[#282a30] hover:text-white hover:scale-110 ${
+            showDesktopToggle
+              ? 'right-[-16px] translate-x-0 opacity-100'
+              : 'right-[-18px] translate-x-1 opacity-45'
           }`}
           title={desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -611,7 +567,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 pathname={location.pathname}
                 search={location.search}
                 getChildren={getItemChildren}
-                renderExpandedPanel={renderExpandedPanel}
                 expandedItems={expandedItems}
                 onToggleItem={handleToggleItem}
                 onNavigate={() => setMobileOpen(false)}
@@ -624,9 +579,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 items={utilityNav}
                 pathname={location.pathname}
                 search={location.search}
-                renderExpandedPanel={renderExpandedPanel}
-                expandedItems={expandedItems}
-                onToggleItem={handleToggleItem}
                 onNavigate={() => setMobileOpen(false)}
                 getOpenTarget={getOpenTarget}
               />

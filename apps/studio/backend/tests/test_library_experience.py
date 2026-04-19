@@ -94,6 +94,12 @@ async def test_styles_and_prompt_memory_round_trip_through_service(tmp_path: Pat
         identity.id,
         prompt="cinematic anime fashion portrait with luminous blue eyes",
         category="illustration",
+        negative_prompt="blurry low quality extra fingers",
+        preferred_model_id="flux-schnell",
+        preferred_aspect_ratio="1:1",
+        preferred_steps=30,
+        preferred_cfg_scale=7,
+        preferred_output_count=2,
     )
     await service._record_prompt_memory_signal(
         identity_id=identity.id,
@@ -108,7 +114,54 @@ async def test_styles_and_prompt_memory_round_trip_through_service(tmp_path: Pat
 
     assert styles_payload["my_styles"][0]["id"] == style.id
     assert styles_payload["my_styles"][0]["prompt_modifier"] == style.prompt_modifier
+    assert styles_payload["my_styles"][0]["text_mode"] == "prompt"
+    assert styles_payload["my_styles"][0]["negative_prompt"] == "blurry low quality extra fingers"
+    assert styles_payload["my_styles"][0]["preferred_model_id"] == "flux-schnell"
+    assert styles_payload["my_styles"][0]["preferred_aspect_ratio"] == "1:1"
+    assert styles_payload["my_styles"][0]["preferred_steps"] == 30
+    assert styles_payload["my_styles"][0]["preferred_cfg_scale"] == 7
+    assert styles_payload["my_styles"][0]["preferred_output_count"] == 2
     assert prompt_memory_payload["generation_count"] == 1
     assert prompt_memory_payload["context_summary"]
     assert "1:1" in prompt_memory_payload["preferred_aspect_ratios"]
     assert any(tag in prompt_memory_payload["aesthetic_tags"] for tag in {"anime", "cinematic", "editorial"})
+
+
+@pytest.mark.asyncio
+async def test_styles_support_mutation_and_delete_flow(tmp_path: Path) -> None:
+    service = await _build_service(tmp_path)
+    identity = await _seed_identity(service)
+
+    style = await service.save_style(
+        identity.id,
+        title="Starter Portrait",
+        prompt_modifier="soft portrait lighting, calm expression",
+        text_mode="prompt",
+        description="Original starter",
+        category="illustration",
+    )
+
+    updated = await service.update_style(
+        identity.id,
+        style.id,
+        updates={
+            "title": "Night Portrait",
+            "description": "A sharper saved preset",
+            "text_mode": "modifier",
+            "negative_prompt": "extra fingers",
+            "preferred_aspect_ratio": "4:5",
+            "preferred_output_count": 3,
+            "favorite": True,
+        },
+    )
+
+    assert updated.title == "Night Portrait"
+    assert updated.text_mode == "modifier"
+    assert updated.negative_prompt == "extra fingers"
+    assert updated.preferred_aspect_ratio == "4:5"
+    assert updated.preferred_output_count == 3
+    assert updated.favorite is True
+
+    await service.delete_style(identity.id, style.id)
+    styles_payload = await service.list_styles(identity.id)
+    assert styles_payload["my_styles"] == []

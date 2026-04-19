@@ -273,9 +273,12 @@ export type Generation = {
   credit_cost: number
   reserved_credit_cost: number
   final_credit_cost?: number | null
+  credit_charge_policy?: string | null
+  credit_status?: string | null
   output_count: number
   outputs: GenerationOutput[]
   error: string | null
+  error_code?: string | null
   attempt_count?: number
   created_at: string
   started_at?: string | null
@@ -370,6 +373,32 @@ export function getCreativeProfileLabel(modelId: string | null | undefined, fall
       if (modelId?.trim()) return cleanCreativeProfileLabel(modelId)
       return 'Studio'
   }
+}
+
+export type AccessSession = {
+  id: string
+  session_id: string
+  auth_provider?: string | null
+  device_label: string
+  browser_label: string
+  os_label: string
+  display_mode: 'browser' | 'standalone' | 'minimal-ui' | 'fullscreen' | 'unknown'
+  surface_label: string
+  network_label?: string | null
+  ip_label?: string | null
+  host_label?: string | null
+  current: boolean
+  first_seen_at: string
+  last_seen_at: string
+  token_expires_at?: string | null
+}
+
+export type ActiveSessionsPayload = {
+  current_session_id?: string | null
+  sessions: AccessSession[]
+  session_count: number
+  other_session_count: number
+  can_sign_out_others: boolean
 }
 
 export function getCreativeProfileDescription(
@@ -546,9 +575,16 @@ export type StudioStyle = {
   identity_id: string
   title: string
   prompt_modifier: string
+  text_mode: 'modifier' | 'prompt'
   description: string
   category: string
   preview_image_url?: string | null
+  negative_prompt: string
+  preferred_model_id?: string | null
+  preferred_aspect_ratio?: string | null
+  preferred_steps?: number | null
+  preferred_cfg_scale?: number | null
+  preferred_output_count?: number | null
   source_kind: string
   source_style_id?: string | null
   favorite: boolean
@@ -561,10 +597,17 @@ export type StyleCatalogEntry = {
   title: string
   description: string
   prompt_modifier: string
+  text_mode: 'modifier' | 'prompt'
   image: string
   category: string
   likes: number
   is_omnia: boolean
+  negative_prompt?: string
+  preferred_model_id?: string | null
+  preferred_aspect_ratio?: string | null
+  preferred_steps?: number | null
+  preferred_cfg_scale?: number | null
+  preferred_output_count?: number | null
   saved_style_id?: string | null
   saved: boolean
   favorite: boolean
@@ -867,9 +910,21 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return apiFetchWithToken<T>(path, getStudioAccessToken(), init)
 }
 
+function getClientDisplayMode() {
+  if (typeof window === 'undefined') return 'unknown'
+  const standaloneNavigator = typeof navigator !== 'undefined' && 'standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  if (standaloneNavigator) return 'standalone'
+  if (typeof window.matchMedia !== 'function') return 'browser'
+  if (window.matchMedia('(display-mode: standalone)').matches) return 'standalone'
+  if (window.matchMedia('(display-mode: minimal-ui)').matches) return 'minimal-ui'
+  if (window.matchMedia('(display-mode: fullscreen)').matches) return 'fullscreen'
+  return 'browser'
+}
+
 async function apiFetchWithToken<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
+  headers.set('X-Omnia-Client-Display-Mode', getClientDisplayMode())
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const url = buildApiUrl(path)
 
@@ -993,6 +1048,8 @@ export const studioApi = {
     output_count: number
   }) => apiFetch<Generation>('/generations', { method: 'POST', body: JSON.stringify(payload) }),
   getGeneration: (generationId: string) => apiFetch<Generation>(`/generations/${generationId}`),
+  deleteGeneration: (generationId: string) =>
+    apiFetch<{ generation_id: string; status: string }>(`/generations/${generationId}`, { method: 'DELETE' }),
   listAssets: (projectId?: string, includeDeleted = false) => {
     const params = new URLSearchParams()
     if (projectId) params.set('project_id', projectId)
@@ -1043,23 +1100,62 @@ export const studioApi = {
       }
       styles: StylesPayload
       prompt_memory: PromptMemoryProfile
+      active_sessions: ActiveSessionsPayload
     }>('/settings/bootstrap'),
+  endOtherSettingsSessions: () =>
+    apiFetch<ActiveSessionsPayload>('/settings/sessions/end-others', {
+      method: 'POST',
+    }),
   exportProject: (projectId: string) =>
     apiFetchBlob(`/projects/${projectId}/export`, { method: 'POST' }),
   listStyles: () => apiFetch<StylesPayload>('/styles'),
   saveStyle: (payload: {
     title: string
     prompt_modifier: string
+    text_mode?: 'modifier' | 'prompt'
     description?: string
     category?: string
     preview_image_url?: string | null
+    negative_prompt?: string
+    preferred_model_id?: string | null
+    preferred_aspect_ratio?: string | null
+    preferred_steps?: number | null
+    preferred_cfg_scale?: number | null
+    preferred_output_count?: number | null
     source_kind?: string
     source_style_id?: string | null
     favorite?: boolean
   }) => apiFetch<StudioStyle>('/styles', { method: 'POST', body: JSON.stringify(payload) }),
-  updateStyle: (styleId: string, payload: { favorite?: boolean }) =>
+  updateStyle: (styleId: string, payload: {
+    favorite?: boolean
+    title?: string
+    prompt_modifier?: string
+    text_mode?: 'modifier' | 'prompt'
+    description?: string
+    category?: string
+    preview_image_url?: string | null
+    negative_prompt?: string
+    preferred_model_id?: string | null
+    preferred_aspect_ratio?: string | null
+    preferred_steps?: number | null
+    preferred_cfg_scale?: number | null
+    preferred_output_count?: number | null
+  }) =>
     apiFetch<StudioStyle>(`/styles/${styleId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  saveStyleFromPrompt: (payload: { prompt: string; title?: string; category?: string }) =>
+  deleteStyle: (styleId: string) =>
+    apiFetch<{ style_id: string; status: string }>(`/styles/${styleId}`, { method: 'DELETE' }),
+  saveStyleFromPrompt: (payload: {
+    prompt: string
+    title?: string
+    category?: string
+    negative_prompt?: string
+    preferred_model_id?: string | null
+    preferred_aspect_ratio?: string | null
+    preferred_steps?: number | null
+    preferred_cfg_scale?: number | null
+    preferred_output_count?: number | null
+    preview_image_url?: string | null
+  }) =>
     apiFetch<StudioStyle>('/styles/from-prompt', { method: 'POST', body: JSON.stringify(payload) }),
   getPromptMemory: () => apiFetch<PromptMemoryProfile>('/prompt-memory'),
   getOwnerLocalLabBootstrap: () => apiFetch<OwnerLocalLabBootstrap>('/owner/local-lab/bootstrap'),
@@ -1078,6 +1174,7 @@ export const studioApi = {
     apiFetch<{ post_id: string; trashed_count: number }>(`/posts/${postId}/trash`, { method: 'POST' }),
   getProfile: (username: string) => apiFetch<ProfilePayload>(`/profiles/${encodeURIComponent(username)}`),
   getMyProfile: () => apiFetch<ProfilePayload>('/profiles/me'),
+  listFavoritePosts: () => apiFetch<{ posts: PublicPost[] }>('/profiles/me/favorites'),
   exportProfile: () => apiFetch<Record<string, unknown>>('/profiles/me/export'),
   deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
   updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>

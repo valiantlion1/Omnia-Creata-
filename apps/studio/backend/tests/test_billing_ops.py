@@ -31,6 +31,7 @@ from studio_platform.models import (
 )
 from studio_platform.providers import (
     ProviderCapabilities,
+    ProviderFatalError,
     ProviderRegistry,
     ProviderTemporaryError,
     StudioImageProvider,
@@ -851,6 +852,99 @@ async def test_billable_temporary_failure_in_development_does_not_auto_retry(
         assert failed.final_credit_cost == 0
     finally:
         settings.environment = original_environment
+
+
+@pytest.mark.asyncio
+async def test_sensitive_provider_failure_releases_credits_and_marks_job_as_safety_block(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(name="runware", rollout_tier="primary", billable=True),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.PRO,
+            monthly_remaining=1200,
+        )
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="premium editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="realvis-xl",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=45,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        async def sensitive_fail(_: GenerationJob) -> ExecutedGenerationBatch:
+            raise ProviderFatalError("Runware flagged the output as potentially sensitive")
+
+        service.generation_runtime.execute_job = sensitive_fail  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        snapshot = await store.snapshot()
+        failed = snapshot.generations[job.id]
+
+        assert failed.status == JobStatus.FAILED
+        assert failed.error_code == "safety_block"
+        assert failed.credit_status == "released"
+        assert failed.final_credit_cost == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_delete_generation_removes_failed_unrendered_job_from_processing(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(name="pollinations", rollout_tier="standard", billable=False),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=46,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        await service._update_job_status(
+            job.id,
+            JobStatus.FAILED,
+            provider="pollinations",
+            provider_billable=False,
+            error="provider request failed",
+            error_code="generation_failed",
+        )
+
+        result = await service.delete_generation(identity.id, job.id)
+        snapshot = await store.snapshot()
+
+        assert result == {"generation_id": job.id, "status": "deleted"}
+        assert job.id not in snapshot.generations
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.asyncio

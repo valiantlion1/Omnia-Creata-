@@ -12,7 +12,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from config.env import Environment, get_settings, reveal_secret
-from security.auth import User, UserRole, create_user_tokens, get_current_user, get_supabase_auth_client
+from security.auth import (
+    User,
+    UserRole,
+    create_user_tokens,
+    extract_unverified_session_context,
+    get_current_user,
+    get_supabase_auth_client,
+    _extract_supabase_auth_provider_context,
+)
 from security.auth import User as AuthUser
 from security.captcha import (
     CaptchaConfigurationError,
@@ -56,9 +64,16 @@ class StyleSaveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=72)
     prompt_modifier: str = Field(min_length=1, max_length=1200)
+    text_mode: Literal["modifier", "prompt"] = "modifier"
     description: str = Field(default="", max_length=240)
     category: str = Field(default="custom", max_length=40)
     preview_image_url: Optional[str] = None
+    negative_prompt: str = Field(default="", max_length=2000)
+    preferred_model_id: Optional[str] = Field(default=None, max_length=120)
+    preferred_aspect_ratio: Optional[str] = Field(default=None, max_length=20)
+    preferred_steps: Optional[int] = Field(default=None, ge=1, le=50)
+    preferred_cfg_scale: Optional[float] = Field(default=None, ge=1, le=20)
+    preferred_output_count: Optional[int] = Field(default=None, ge=1, le=4)
     source_kind: str = Field(default="saved", max_length=24)
     source_style_id: Optional[str] = Field(default=None, max_length=80)
     favorite: bool = False
@@ -67,6 +82,18 @@ class StyleSaveRequest(BaseModel):
 class StyleUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     favorite: Optional[bool] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=72)
+    prompt_modifier: Optional[str] = Field(default=None, min_length=1, max_length=1200)
+    text_mode: Optional[Literal["modifier", "prompt"]] = None
+    description: Optional[str] = Field(default=None, max_length=240)
+    category: Optional[str] = Field(default=None, max_length=40)
+    preview_image_url: Optional[str] = None
+    negative_prompt: Optional[str] = Field(default=None, max_length=2000)
+    preferred_model_id: Optional[str] = Field(default=None, max_length=120)
+    preferred_aspect_ratio: Optional[str] = Field(default=None, max_length=20)
+    preferred_steps: Optional[int] = Field(default=None, ge=1, le=50)
+    preferred_cfg_scale: Optional[float] = Field(default=None, ge=1, le=20)
+    preferred_output_count: Optional[int] = Field(default=None, ge=1, le=4)
 
 
 class StyleFromPromptRequest(BaseModel):
@@ -74,6 +101,13 @@ class StyleFromPromptRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     title: Optional[str] = Field(default=None, max_length=72)
     category: str = Field(default="custom", max_length=40)
+    negative_prompt: str = Field(default="", max_length=2000)
+    preferred_model_id: Optional[str] = Field(default=None, max_length=120)
+    preferred_aspect_ratio: Optional[str] = Field(default=None, max_length=20)
+    preferred_steps: Optional[int] = Field(default=None, ge=1, le=50)
+    preferred_cfg_scale: Optional[float] = Field(default=None, ge=1, le=20)
+    preferred_output_count: Optional[int] = Field(default=None, ge=1, le=4)
+    preview_image_url: Optional[str] = None
 
 
 class SupabaseSignupRequest(BaseModel):
@@ -230,7 +264,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             or fallback.get("marketing_consent_version"),
         }
 
-    async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser]) -> AuthUser:
+    async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser], request: Request | None = None) -> AuthUser:
         current = _require_auth(auth_user)
         metadata = getattr(current, "metadata", {}) or {}
         try:
@@ -243,6 +277,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             )
         except DeletedIdentityError as exc:
             _raise_deleted_identity_session(exc)
+        if request is not None:
+            await _touch_access_session(request, current)
         return current
 
     async def _require_owner(auth_user: Optional[AuthUser]) -> AuthUser:
@@ -331,6 +367,20 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         if normalized_client_host:
             return normalized_client_host
         return client_host
+
+    async def _touch_access_session(request: Request, auth_user: AuthUser) -> None:
+        metadata = getattr(auth_user, "metadata", {}) or {}
+        await service.record_access_session(
+            identity_id=auth_user.id,
+            session_id=str(metadata.get("session_id") or "").strip() or None,
+            auth_provider=str(metadata.get("auth_provider") or "").strip() or None,
+            user_agent=request.headers.get("user-agent"),
+            client_ip=_request_client_ip(request),
+            host_label=request.headers.get("host"),
+            display_mode=request.headers.get("x-omnia-client-display-mode"),
+            token_issued_at=metadata.get("session_issued_at"),
+            token_expires_at=metadata.get("session_expires_at"),
+        )
 
     async def _consume_rate_limit(
         request: Request,
@@ -438,8 +488,21 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             display_name=payload.display_name,
             desired_plan=payload.plan,
         )
+        tokens = create_user_tokens(demo_user)
+        session_context = extract_unverified_session_context(tokens["access_token"])
+        await service.record_access_session(
+            identity_id=identity.id,
+            session_id=session_context.get("session_id"),
+            auth_provider="demo",
+            user_agent=request.headers.get("user-agent"),
+            client_ip=_request_client_ip(request),
+            host_label=request.headers.get("host"),
+            display_mode=request.headers.get("x-omnia-client-display-mode"),
+            token_issued_at=session_context.get("session_issued_at"),
+            token_expires_at=session_context.get("session_expires_at"),
+        )
         return {
-            **create_user_tokens(demo_user),
+            **tokens,
             "identity": service.serialize_identity(identity),
         }
 
@@ -518,6 +581,19 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             desired_plan=IdentityPlan.FREE,
             **_identity_consent_kwargs(user_metadata, defaults=signup_consent_defaults),
         )
+        session_context = extract_unverified_session_context(session.access_token)
+        auth_provider, _ = _extract_supabase_auth_provider_context(user_data)
+        await service.record_access_session(
+            identity_id=identity.id,
+            session_id=session_context.get("session_id"),
+            auth_provider=auth_provider,
+            user_agent=request.headers.get("user-agent"),
+            client_ip=_request_client_ip(request),
+            host_label=request.headers.get("host"),
+            display_mode=request.headers.get("x-omnia-client-display-mode"),
+            token_issued_at=session_context.get("session_issued_at"),
+            token_expires_at=session_context.get("session_expires_at"),
+        )
         return {
             "access_token": session.access_token,
             "refresh_token": session.refresh_token,
@@ -558,6 +634,19 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             desired_plan=IdentityPlan.FREE,
             **_identity_consent_kwargs(user_metadata),
         )
+        session_context = extract_unverified_session_context(session.access_token)
+        auth_provider, _ = _extract_supabase_auth_provider_context(user_data)
+        await service.record_access_session(
+            identity_id=identity.id,
+            session_id=session_context.get("session_id"),
+            auth_provider=auth_provider,
+            user_agent=request.headers.get("user-agent"),
+            client_ip=_request_client_ip(request),
+            host_label=request.headers.get("host"),
+            display_mode=request.headers.get("x-omnia-client-display-mode"),
+            token_issued_at=session_context.get("session_issued_at"),
+            token_expires_at=session_context.get("session_expires_at"),
+        )
         return {
             "access_token": session.access_token,
             "refresh_token": session.refresh_token,
@@ -575,6 +664,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             has_auth_header = bool(request.headers.get("authorization") or request.headers.get("x-api-key"))
             if has_auth_header:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
+        if current_user is not None:
+            await _touch_access_session(request, current_user)
         try:
             return await service.get_public_identity(current_user)
         except DeletedIdentityError as exc:
@@ -824,6 +915,21 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    @router.get("/profiles/me/favorites")
+    async def get_my_favorites(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(
+            request,
+            "profiles:favorites",
+            limit=120,
+            identifier=auth_user.id,
+            window_seconds=3600,
+        )
+        return {"posts": await service.list_liked_posts(auth_user.id)}
 
     @router.get("/profiles/me/export")
     async def export_my_profile(
@@ -1134,6 +1240,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
         return _serialize_generation(job, auth_user.id)
+
+    @router.delete("/generations/{generation_id}")
+    async def delete_generation(generation_id: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        try:
+            return await service.delete_generation(auth_user.id, generation_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/assets")
     async def get_assets(
@@ -1519,9 +1635,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 auth_user.id,
                 title=payload.title,
                 prompt_modifier=payload.prompt_modifier,
+                text_mode=payload.text_mode,
                 description=payload.description,
                 category=payload.category,
                 preview_image_url=payload.preview_image_url,
+                negative_prompt=payload.negative_prompt,
+                preferred_model_id=payload.preferred_model_id,
+                preferred_aspect_ratio=payload.preferred_aspect_ratio,
+                preferred_steps=payload.preferred_steps,
+                preferred_cfg_scale=payload.preferred_cfg_scale,
+                preferred_output_count=payload.preferred_output_count,
                 source_kind=payload.source_kind,
                 source_style_id=payload.source_style_id,
                 favorite=payload.favorite,
@@ -1544,6 +1667,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 prompt=payload.prompt,
                 title=payload.title,
                 category=payload.category,
+                negative_prompt=payload.negative_prompt,
+                preferred_model_id=payload.preferred_model_id,
+                preferred_aspect_ratio=payload.preferred_aspect_ratio,
+                preferred_steps=payload.preferred_steps,
+                preferred_cfg_scale=payload.preferred_cfg_scale,
+                preferred_output_count=payload.preferred_output_count,
+                preview_image_url=payload.preview_image_url,
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -1559,10 +1689,26 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "styles:mutate", limit=40, identifier=auth_user.id, window_seconds=3600)
         try:
-            style = await service.update_style(auth_user.id, style_id, favorite=payload.favorite)
+            style = await service.update_style(auth_user.id, style_id, updates=payload.model_dump(exclude_unset=True))
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Style not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         return service._serialize_style(style)
+
+    @router.delete("/styles/{style_id}")
+    async def delete_style(
+        style_id: str,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "styles:mutate", limit=40, identifier=auth_user.id, window_seconds=3600)
+        try:
+            await service.delete_style(auth_user.id, style_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Style not found")
+        return {"style_id": style_id, "status": "deleted"}
 
     @router.get("/prompt-memory")
     async def get_prompt_memory(current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -1583,9 +1729,29 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
     @router.get("/settings/bootstrap")
-    async def get_settings_bootstrap(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = await _ensure_identity_for_auth_user(current_user)
-        return await service.get_settings_payload(auth_user.id)
+    async def get_settings_bootstrap(request: Request, current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = await _ensure_identity_for_auth_user(current_user, request=request)
+        current_session_id = str((getattr(auth_user, "metadata", {}) or {}).get("session_id") or "").strip() or None
+        return await service.get_settings_payload(auth_user.id, current_session_id=current_session_id)
+
+    @router.post("/settings/sessions/end-others")
+    async def end_other_settings_sessions(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user, request=request)
+        current_session_id = str((getattr(auth_user, "metadata", {}) or {}).get("session_id") or "").strip() or None
+        if not current_session_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Studio could not identify the current session yet. Refresh and try again.",
+            )
+        await _consume_rate_limit(request, "settings:sessions:end-others", limit=6, identifier=auth_user.id, window_seconds=3600)
+        return await service.revoke_other_access_sessions(
+            identity_id=auth_user.id,
+            current_session_id=current_session_id,
+            reason="user_requested_sign_out_others",
+        )
 
     def _parse_paddle_signature(signature_header: str) -> tuple[str | None, list[str]]:
         timestamp: str | None = None

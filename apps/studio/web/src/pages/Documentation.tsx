@@ -1,5 +1,5 @@
-import { useState, type ElementType } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState, type ElementType } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   BookOpen,
   ChevronDown,
@@ -570,7 +570,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Display name, bio, and public profile',
-        body: 'Today you can edit your display name, bio, and default visibility from your Account profile surface, and Settings now exposes the same display-name control inside Credentials. Your public @username stays stable, and avatar upload is not available from the Studio shell yet.',
+        body: 'Today you can edit your display name, bio, and default visibility from your Account profile surface, and Settings now gives those same fields a direct Edit Profile dialog inside General Account. Sign-in provider and password management stay under Privacy & Security > Credentials. Your public @username stays stable, and avatar upload is not available from the Studio shell yet.',
       },
       {
         title: 'Two-factor authentication',
@@ -578,7 +578,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Active sessions',
-        body: 'Device session management is not exposed in the Studio shell yet. If you think an account session is unsafe, change the credential on its sign-in provider and contact support so we can help review the account state.',
+        body: 'Settings now shows the recent Studio devices that accessed your account, including the current device and any other recent browser or installed-app session we can identify. If something looks unfamiliar, open Settings > Privacy & Security > Active Sessions, keep this device, and sign the others out. If the sign-in method is managed by Google or another provider, it is still smart to review that provider security page too.',
       },
       {
         title: 'Notification preferences',
@@ -791,13 +791,39 @@ const sectionIcons: Record<HelpSectionId, ElementType> = {
   'contact': Mail,
 }
 
-const sectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
-  { label: 'Learn Studio', ids: ['getting-started', 'prompt-craft', 'workflows', 'publishing'] },
-  { label: 'Use the app', ids: ['shortcuts', 'troubleshooting', 'faq'] },
+const helpSectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
+  { label: 'Start here', ids: ['getting-started', 'faq'] },
   { label: 'Account & money', ids: ['billing', 'account'] },
   { label: 'Safety & legal', ids: ['safety', 'terms', 'privacy', 'usage-policy'] },
   { label: 'Reach us', ids: ['contact'] },
 ]
+
+const learnSectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
+  { label: 'Learn Studio', ids: ['prompt-craft', 'workflows', 'publishing'] },
+  { label: 'Operate the app', ids: ['shortcuts', 'troubleshooting'] },
+]
+
+const helpSectionIds: HelpSectionId[] = [
+  'getting-started',
+  'faq',
+  'billing',
+  'account',
+  'safety',
+  'terms',
+  'privacy',
+  'usage-policy',
+  'contact',
+]
+
+const learnSectionIds: HelpSectionId[] = [
+  'prompt-craft',
+  'workflows',
+  'publishing',
+  'shortcuts',
+  'troubleshooting',
+]
+
+const learnDefaultSectionId: HelpSectionId = 'prompt-craft'
 
 function ItemBody({
   body,
@@ -885,11 +911,48 @@ function AccordionItem({ item, defaultOpen = false }: { item: HelpItem; defaultO
 }
 
 export default function DocumentationPage() {
+  const location = useLocation()
+  const { sectionId } = useParams<{ sectionId?: string }>()
   usePageMeta('Help — Omnia Creata Studio', 'Getting started, prompt craft, workflows, billing, safety, and legal pages for Omnia Creata Studio.')
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const isLearnSurface =
+    location.pathname.startsWith('/learn') || location.pathname.startsWith('/docs')
 
-  const sectionById = new Map(sections.map((s) => [s.id, s] as const))
+  const sectionById = useMemo(
+    () => new Map(sections.map((section) => [section.id, section] as const)),
+    [],
+  )
+  const visibleHelpSections = helpSectionIds
+    .map((id) => sectionById.get(id))
+    .filter((section): section is HelpSection => Boolean(section))
+  const visibleLearnSections = learnSectionIds
+    .map((id) => sectionById.get(id))
+    .filter((section): section is HelpSection => Boolean(section))
+  const activeLearnSectionId =
+    sectionId && learnSectionIds.includes(sectionId as HelpSectionId)
+      ? (sectionId as HelpSectionId)
+      : learnDefaultSectionId
+  const activeLearnSection =
+    sectionById.get(activeLearnSectionId) ?? visibleLearnSections[0]
+  const activeLearnIndex = visibleLearnSections.findIndex(
+    (section) => section.id === activeLearnSection.id,
+  )
+  const previousLearnSection =
+    activeLearnIndex > 0 ? visibleLearnSections[activeLearnIndex - 1] : null
+  const nextLearnSection =
+    activeLearnIndex >= 0 && activeLearnIndex < visibleLearnSections.length - 1
+      ? visibleLearnSections[activeLearnIndex + 1]
+      : null
+
+  usePageMeta(
+    isLearnSurface
+      ? `${activeLearnSection.title} - Studio manual`
+      : 'Help - Omnia Creata Studio',
+    isLearnSurface
+      ? `${activeLearnSection.title}, workflows, and product guidance for Omnia Creata Studio.`
+      : 'Getting started, billing, account, safety, and legal guidance for Omnia Creata Studio.',
+  )
 
   return (
     <>
@@ -906,7 +969,8 @@ export default function DocumentationPage() {
             <nav className="flex items-center gap-5 text-sm text-zinc-300">
               <Link to="/explore" className="transition hover:text-white">Explore</Link>
               <Link to="/subscription" className="transition hover:text-white">Pricing</Link>
-              <Link to="/help" className="text-white font-medium">Help</Link>
+              <Link to="/help" className={!isLearnSurface ? 'text-white font-medium' : 'transition hover:text-white'}>Help</Link>
+              <Link to="/learn/prompt-craft" className={isLearnSurface ? 'text-white font-medium' : 'transition hover:text-white'}>Manual</Link>
               <Link to="/login" className="transition hover:text-white">Log in</Link>
               <Link to="/signup" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95">Create account</Link>
             </nav>
@@ -919,45 +983,86 @@ export default function DocumentationPage() {
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.035),transparent_55%)]" />
           <div className="relative z-10 max-w-3xl">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Help center
+              {isLearnSurface ? 'Studio manual' : 'Help center'}
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-[44px] text-balance">
-              Everything you need to use Studio confidently.
+              {isLearnSurface
+                ? activeLearnSection.title
+                : 'Everything you need to use Studio confidently.'}
             </h1>
             <p className="mt-5 max-w-2xl text-[15px] leading-[1.75] text-zinc-400">
-              Product basics, prompt craft, real workflows, billing answers, account controls, and the policies we operate under. Every section points to the right inbox if you cannot find what you need.
+              {isLearnSurface
+                ? `${activeLearnSection.intro} This manual is where the deeper product guidance lives; public answers about accounts, billing, and legal policies stay in Help.`
+                : 'Product basics, billing answers, account controls, safety expectations, and policy summaries. Longer workflow and craft guides now live in the dedicated Studio manual so this help center stays easier to scan.'}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              <a href="#getting-started" className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-medium text-black transition hover:bg-zinc-200"><Sparkles className="mr-1.5 inline-block h-3 w-3" />Start here</a>
-              <a href="#prompt-craft" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Prompt craft</a>
-              <a href="#billing" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Billing</a>
-              <a href="#terms" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Terms</a>
-              <a href="#contact" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Contact</a>
+              {isLearnSurface ? (
+                <>
+                  <Link to="/help" className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-medium text-black transition hover:bg-zinc-200">
+                    Back to Help
+                  </Link>
+                  {visibleLearnSections.map((section) => (
+                    <Link
+                      key={section.id}
+                      to={`/learn/${section.id}`}
+                      className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium ring-1 transition ${
+                        section.id === activeLearnSection.id
+                          ? 'bg-white text-black ring-white'
+                          : 'bg-white/[0.05] text-zinc-200 ring-white/10 hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      {section.label}
+                    </Link>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <a href="#getting-started" className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-medium text-black transition hover:bg-zinc-200"><Sparkles className="mr-1.5 inline-block h-3 w-3" />Start here</a>
+                  <Link to="/learn/prompt-craft" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Studio manual</Link>
+                  <a href="#billing" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Billing</a>
+                  <a href="#privacy" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Privacy</a>
+                  <a href="#contact" className="rounded-full bg-white/[0.05] px-3.5 py-1.5 text-[12px] font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]">Contact</a>
+                </>
+              )}
             </div>
           </div>
         </section>
 
         <div className="xl:hidden">
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
-            Quick jumps
+            {isLearnSurface ? 'Manual sections' : 'Quick jumps'}
           </div>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            {sections.map((section) => (
-              <a
-                key={section.id}
-                href={`#${section.id}`}
-                className="shrink-0 rounded-full border border-white/[0.06] bg-[#0c0d12] px-3 py-1.5 text-[11.5px] font-medium text-zinc-300 transition hover:border-white/[0.12] hover:text-white"
-              >
-                {section.label}
-              </a>
-            ))}
+            {(isLearnSurface ? visibleLearnSections : visibleHelpSections).map((section) =>
+              isLearnSurface ? (
+                <Link
+                  key={section.id}
+                  to={`/learn/${section.id}`}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium transition ${
+                    section.id === activeLearnSection.id
+                      ? 'border-white bg-white text-black'
+                      : 'border-white/[0.06] bg-[#0c0d12] text-zinc-300 hover:border-white/[0.12] hover:text-white'
+                  }`}
+                >
+                  {section.label}
+                </Link>
+              ) : (
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className="shrink-0 rounded-full border border-white/[0.06] bg-[#0c0d12] px-3 py-1.5 text-[11.5px] font-medium text-zinc-300 transition hover:border-white/[0.12] hover:text-white"
+                >
+                  {section.label}
+                </a>
+              ),
+            )}
           </div>
         </div>
 
         <div className="grid items-start gap-12 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="hidden lg:block sticky top-24 w-full">
+          <aside className="sticky top-24 hidden max-h-[calc(100vh-7rem)] w-full overflow-y-auto pr-1 lg:block">
             <div className="space-y-4">
-              {sectionGroups.map((group) => (
+              {(isLearnSurface ? learnSectionGroups : helpSectionGroups).map((group) => (
                 <div key={group.label}>
                   <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
                     {group.label}
@@ -968,14 +1073,29 @@ export default function DocumentationPage() {
                       if (!s) return null
                       const Icon = sectionIcons[id]
                       return (
-                        <a
-                          key={id}
-                          href={`#${id}`}
-                          className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
-                        >
-                          <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                          {s.label}
-                        </a>
+                        isLearnSurface ? (
+                          <Link
+                            key={id}
+                            to={`/learn/${id}`}
+                            className={`flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                              id === activeLearnSection.id
+                                ? 'bg-white text-black'
+                                : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
+                            }`}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                            {s.label}
+                          </Link>
+                        ) : (
+                          <a
+                            key={id}
+                            href={`#${id}`}
+                            className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                            {s.label}
+                          </a>
+                        )
                       )
                     })}
                   </div>
@@ -984,63 +1104,159 @@ export default function DocumentationPage() {
             </div>
           </aside>
 
-          <div className="space-y-14">
-            {sections.map((section) => {
-              const Icon = sectionIcons[section.id]
-              const isPolicySection = section.id === 'terms' || section.id === 'privacy' || section.id === 'usage-policy'
-
-              return (
-                <section key={section.id} id={section.id} className="scroll-mt-28">
+          <div className={isLearnSurface ? 'space-y-6' : 'space-y-14'}>
+            {isLearnSurface ? (
+              <>
+                <section className="rounded-[22px] border border-white/[0.05] bg-[#0c0d12] p-6 md:p-8">
                   <div className="flex items-start gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#0c0d12] ring-1 ring-white/[0.06]">
-                      <Icon className="h-4 w-4 text-zinc-300" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.03] ring-1 ring-white/[0.06]">
+                      {(() => {
+                        const Icon = sectionIcons[activeLearnSection.id]
+                        return <Icon className="h-4 w-4 text-zinc-200" />
+                      })()}
                     </div>
                     <div>
                       <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        {section.label}
+                        {activeLearnSection.label}
                       </div>
-                      <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-white md:text-[26px]">
-                        {section.title}
+                      <h2 className="mt-1 text-[24px] font-semibold tracking-tight text-white md:text-[30px]">
+                        {activeLearnSection.title}
                       </h2>
+                      {activeLearnSection.lastUpdated ? (
+                        <div className="mt-2 text-[11.5px] text-zinc-600">
+                          Last updated: {activeLearnSection.lastUpdated}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-
-                  {section.lastUpdated ? (
-                    <div className="mt-3 text-[11.5px] text-zinc-600">
-                      Last updated: {section.lastUpdated}
-                    </div>
-                  ) : null}
-
-                  <p className="mt-3 max-w-3xl text-[14.5px] leading-[1.75] text-zinc-400">
-                    {section.intro}
+                  <p className="mt-4 max-w-3xl text-[14.5px] leading-[1.8] text-zinc-400">
+                    {activeLearnSection.intro}
                   </p>
+                  <div className="mt-5 rounded-[16px] border border-white/[0.05] bg-white/[0.02] p-4 text-[13px] leading-7 text-zinc-400">
+                    Public FAQ, billing, account, and legal summaries stay in{' '}
+                    <Link to="/help" className="text-white underline decoration-white/25 underline-offset-4 transition hover:decoration-white/60">
+                      Help
+                    </Link>
+                    . This manual is the longer-form product guide.
+                  </div>
+                </section>
 
-                  <div className="mt-6">
-                    {isPolicySection ? (
-                      <div className="rounded-[14px] border border-white/[0.05] bg-[#0c0d12] px-5">
-                        {section.items.map((item, index) => (
-                          <AccordionItem key={item.title} item={item} defaultOpen={index === 0 || Boolean(item.links?.length)} />
-                        ))}
-                      </div>
+                {activeLearnSection.items.map((item, index) => (
+                  <section
+                    key={item.title}
+                    className="rounded-[20px] border border-white/[0.05] bg-[#0c0d12] p-6 md:p-7"
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+                      Chapter {index + 1}
+                    </div>
+                    <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-white md:text-[24px]">
+                      {item.title}
+                    </h3>
+                    <div className="mt-4 max-w-4xl">
+                      <ItemBody
+                        body={item.body}
+                        list={item.list}
+                        example={item.example}
+                        links={item.links}
+                      />
+                    </div>
+                  </section>
+                ))}
+
+                <section className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-white/[0.05] bg-[#0c0d12] p-5">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+                      Continue reading
+                    </div>
+                    <div className="mt-1 text-[13px] leading-6 text-zinc-400">
+                      Move through the Studio manual one topic at a time.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {previousLearnSection ? (
+                      <Link
+                        to={`/learn/${previousLearnSection.id}`}
+                        className="rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                      >
+                        Previous: {previousLearnSection.label}
+                      </Link>
+                    ) : null}
+                    {nextLearnSection ? (
+                      <Link
+                        to={`/learn/${nextLearnSection.id}`}
+                        className="rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                      >
+                        Next: {nextLearnSection.label}
+                      </Link>
                     ) : (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {section.items.map((item) => (
-                        <div key={item.title} className="rounded-[14px] border border-white/[0.04] bg-[#0c0d12] p-5 transition-colors hover:border-white/[0.08]">
-                          <div className="flex items-start gap-2 text-[14px] font-semibold text-white">
-                            <BookOpen className="mt-[3px] h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                            <span>{item.title}</span>
-                          </div>
-                          <div className="mt-2">
-                            <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
-                          </div>
-                        </div>
-                      ))}
-                      </div>
+                      <Link
+                        to="/help"
+                        className="rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                      >
+                        Back to Help
+                      </Link>
                     )}
                   </div>
                 </section>
-              )
-            })}
+              </>
+            ) : (
+              visibleHelpSections.map((section) => {
+                const Icon = sectionIcons[section.id]
+                const isPolicySection = section.id === 'terms' || section.id === 'privacy' || section.id === 'usage-policy'
+
+                return (
+                  <section key={section.id} id={section.id} className="scroll-mt-28">
+                    <div className="flex items-start gap-3.5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#0c0d12] ring-1 ring-white/[0.06]">
+                        <Icon className="h-4 w-4 text-zinc-300" />
+                      </div>
+                      <div>
+                        <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          {section.label}
+                        </div>
+                        <h2 className="mt-1 text-[22px] font-semibold tracking-tight text-white md:text-[26px]">
+                          {section.title}
+                        </h2>
+                      </div>
+                    </div>
+
+                    {section.lastUpdated ? (
+                      <div className="mt-3 text-[11.5px] text-zinc-600">
+                        Last updated: {section.lastUpdated}
+                      </div>
+                    ) : null}
+
+                    <p className="mt-3 max-w-3xl text-[14.5px] leading-[1.75] text-zinc-400">
+                      {section.intro}
+                    </p>
+
+                    <div className="mt-6">
+                      {isPolicySection ? (
+                        <div className="rounded-[14px] border border-white/[0.05] bg-[#0c0d12] px-5">
+                          {section.items.map((item, index) => (
+                            <AccordionItem key={item.title} item={item} defaultOpen={index === 0 || Boolean(item.links?.length)} />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {section.items.map((item) => (
+                            <div key={item.title} className="rounded-[14px] border border-white/[0.04] bg-[#0c0d12] p-5 transition-colors hover:border-white/[0.08]">
+                              <div className="flex items-start gap-2 text-[14px] font-semibold text-white">
+                                <BookOpen className="mt-[3px] h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                                <span>{item.title}</span>
+                              </div>
+                              <div className="mt-2">
+                                <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )
+              })
+            )}
           </div>
         </div>
 

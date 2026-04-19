@@ -280,6 +280,54 @@ class PublicService:
             for post in deduped_posts
         ]
 
+    async def list_liked_posts(self, identity_id: str) -> list[Dict[str, Any]]:
+        await self.service.get_identity(identity_id)
+        posts = await self.service.store.list_posts()
+        assets = await self.service.store.list_assets()
+        identities = await self.service.store.list_identities()
+        generations = await self.service.store.list_generations()
+        assets_by_id = {asset.id: asset for asset in assets}
+        identities_by_id = {identity.id: identity for identity in identities}
+        generations_by_id = {generation.id: generation for generation in generations}
+
+        liked_posts: list[PublicPost] = []
+        for post in posts:
+            if identity_id not in post.liked_by:
+                continue
+            if post.visibility != Visibility.PUBLIC:
+                continue
+            if self.should_hide_post_from_public(
+                post,
+                identity=identities_by_id.get(post.identity_id),
+                generations_by_id=generations_by_id,
+            ):
+                continue
+            if not self.is_publicly_showcase_ready_post(post):
+                continue
+            if not self.visible_post_assets(
+                assets_by_id,
+                post,
+                public_preview=True,
+            ):
+                continue
+            liked_posts.append(post)
+
+        liked_posts.sort(
+            key=lambda item: (item.updated_at, item.created_at),
+            reverse=True,
+        )
+
+        return [
+            self.serialize_post(
+                post,
+                assets_by_id=assets_by_id,
+                identities_by_id=identities_by_id,
+                viewer_identity_id=identity_id,
+                public_preview=True,
+            )
+            for post in liked_posts
+        ]
+
     async def get_profile_payload(
         self,
         *,

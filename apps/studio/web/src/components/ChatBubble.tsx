@@ -85,6 +85,37 @@ interface ChatBubbleProps {
   onSuggestionClick?: (action: ChatSuggestedAction, message: ChatMessage) => void
 }
 
+export function ChatTypingIndicator({ label = 'Studio is replying' }: { label?: string }) {
+  return (
+    <div className="flex w-full justify-start animate-in fade-in duration-300">
+      <div className="max-w-[88%] space-y-2.5 md:max-w-[80%]">
+        <div className="relative flex flex-col items-start">
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label={label}
+            className="rounded-[22px] rounded-bl-md bg-[#0c0d12]/80 px-5 py-4 text-zinc-200 ring-1 ring-white/[0.05] shadow-[0_8px_30px_rgba(0,0,0,0.3),inset_2px_0_0_rgba(124,58,237,0.12)] backdrop-blur-md"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1" aria-hidden="true">
+                {[0, 1, 2].map((index) => (
+                  <span
+                    key={index}
+                    data-chat-typing-dot
+                    className="h-2 w-2 rounded-full bg-[rgb(var(--primary-light))] motion-reduce:animate-none animate-[pulse_1.1s_ease-in-out_infinite]"
+                    style={{ animationDelay: `${index * 0.18}s`, opacity: 0.45 + index * 0.15 }}
+                  />
+                ))}
+              </div>
+              <span className="text-[14px] font-medium tracking-[-0.01em] text-zinc-200">{label}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ChatBubble({ message, isLatest, isLatestUser, onEdit, onRegenerate, onFeedback, onSuggestionClick }: ChatBubbleProps) {
   const isUser = message.role === 'user'
   const { openLightbox } = useLightbox()

@@ -173,7 +173,8 @@ function PublicRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/help" element={<DocumentationPage />} />
-      <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
+      <Route path="/docs" element={<Navigate to="/learn/prompt-craft" replace />} />
+      <Route path="/docs/:sectionId" element={<DocumentationPage />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
       <Route path="/legal/terms" element={<LegalTermsPage />} />
       <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
@@ -186,7 +187,8 @@ function PublicRoutes() {
       <Route path="/refund-policy" element={<Navigate to="/legal/refunds" replace />} />
       <Route path="/usage-policy" element={<Navigate to="/legal/acceptable-use" replace />} />
       <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
-      <Route path="/learn" element={<Navigate to="/help" replace />} />
+      <Route path="/learn" element={<Navigate to="/learn/prompt-craft" replace />} />
+      <Route path="/learn/:sectionId" element={<DocumentationPage />} />
       <Route path="/u/:username" element={<AccountPage />} />
       <Route path="/home" element={<Navigate to="/landing" replace />} />
       <Route path="/shared/:token" element={<SharedPage />} />
@@ -218,7 +220,8 @@ function ProtectedRoutes() {
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
       <Route path="/help" element={<ShellFriendlyDocumentationPage />} />
-      <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
+      <Route path="/docs" element={<Navigate to="/learn/prompt-craft" replace />} />
+      <Route path="/docs/:sectionId" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
       <Route path="/legal/terms" element={<ShellFriendlyLegalPage><LegalTermsPage /></ShellFriendlyLegalPage>} />
       <Route path="/legal/privacy" element={<ShellFriendlyLegalPage><LegalPrivacyPage /></ShellFriendlyLegalPage>} />
@@ -231,7 +234,8 @@ function ProtectedRoutes() {
       <Route path="/refund-policy" element={<Navigate to="/legal/refunds" replace />} />
       <Route path="/usage-policy" element={<Navigate to="/legal/acceptable-use" replace />} />
       <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
-      <Route path="/learn" element={<Navigate to="/help" replace />} />
+      <Route path="/learn" element={<Navigate to="/learn/prompt-craft" replace />} />
+      <Route path="/learn/:sectionId" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/subscription" element={<BillingPage />} />
       <Route path="/billing" element={<Navigate to="/subscription" replace />} />
       <Route path="/plan" element={<Navigate to="/subscription" replace />} />
@@ -253,6 +257,9 @@ function AppFrame() {
   const location = useLocation()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const nextPath = `${location.pathname}${location.search}`
+  const isEmbeddedLegalRoute =
+    location.pathname.startsWith('/legal/') &&
+    new URLSearchParams(location.search).get('embed') === '1'
   const isPublicShellRoute =
     location.pathname === '/explore' ||
     location.pathname === '/community' ||
@@ -261,7 +268,7 @@ function AppFrame() {
     location.pathname === '/billing' ||
     location.pathname === '/plan' ||
     location.pathname === '/help' ||
-    location.pathname === '/docs' ||
+    location.pathname.startsWith('/docs') ||
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||
     location.pathname === '/privacy' ||
@@ -269,8 +276,8 @@ function AppFrame() {
     location.pathname === '/refund-policy' ||
     location.pathname === '/usage-policy' ||
     location.pathname === '/cookies' ||
-    location.pathname === '/learn' ||
-    location.pathname.startsWith('/legal/') ||
+    location.pathname.startsWith('/learn') ||
+    (location.pathname.startsWith('/legal/') && !isEmbeddedLegalRoute) ||
     location.pathname.startsWith('/elements/')
   const isAlwaysPublic =
     location.pathname === '/' ||
@@ -280,7 +287,7 @@ function AppFrame() {
     location.pathname.startsWith('/shared/')
   const isPublicCapable =
     location.pathname === '/help' ||
-    location.pathname === '/docs' ||
+    location.pathname.startsWith('/docs') ||
     location.pathname === '/faq' ||
     location.pathname === '/terms' ||
     location.pathname === '/privacy' ||
@@ -288,11 +295,11 @@ function AppFrame() {
     location.pathname === '/refund-policy' ||
     location.pathname === '/usage-policy' ||
     location.pathname === '/cookies' ||
-    location.pathname === '/learn' ||
+    location.pathname.startsWith('/learn') ||
     location.pathname.startsWith('/legal/') ||
     location.pathname.startsWith('/u/')
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
-  const shouldRenderWithShell = isPublicShellRoute || canRenderWithShell
+  const shouldRenderWithShell = !isEmbeddedLegalRoute && (isPublicShellRoute || canRenderWithShell)
 
   useEffect(() => {
     if (isAlwaysPublic || isPublicCapable || isPublicShellRoute) return

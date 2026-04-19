@@ -73,6 +73,7 @@ from .services.library_service import LibraryService
 from .services.project_service import ProjectService
 from .services.public_service import PublicService
 from .services.shell_service import ShellService
+from .services.access_session_service import AccessSessionService
 from .services.asset_protection import GeneratedAssetProtectionPipeline
 from .services.generation_broker import GenerationBroker, build_generation_broker
 from .services.generation_runtime import GenerationRuntime
@@ -260,6 +261,7 @@ class StudioService:
         self.projects = ProjectService(self)
         self.public = PublicService(self)
         self.shell = ShellService(self)
+        self.access_sessions = AccessSessionService(self)
 
     def _can_process_generations(self) -> bool:
         return self.generation._can_process_generations()
@@ -778,6 +780,7 @@ class StudioService:
             "output_count": job.output_count,
             "outputs": outputs,
             "error": job.error,
+            "error_code": job.error_code,
             "attempt_count": job.attempt_count,
             "created_at": job.created_at.isoformat(),
             "started_at": job.started_at.isoformat() if job.started_at else None,
@@ -1072,6 +1075,9 @@ class StudioService:
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
         return await self.generation.get_generation(identity_id=identity_id, generation_id=generation_id)
 
+    async def delete_generation(self, identity_id: str, generation_id: str) -> dict[str, str]:
+        return await self.generation.delete_generation(identity_id=identity_id, generation_id=generation_id)
+
     async def list_assets(self, identity_id: str, project_id: Optional[str] = None, include_deleted: bool = False) -> List[MediaAsset]:
         return await self.library.list_assets(identity_id, project_id=project_id, include_deleted=include_deleted)
 
@@ -1087,9 +1093,16 @@ class StudioService:
         *,
         title: str,
         prompt_modifier: str,
+        text_mode: str = "modifier",
         description: str = "",
         category: str = "custom",
         preview_image_url: str | None = None,
+        negative_prompt: str = "",
+        preferred_model_id: str | None = None,
+        preferred_aspect_ratio: str | None = None,
+        preferred_steps: int | None = None,
+        preferred_cfg_scale: float | None = None,
+        preferred_output_count: int | None = None,
         source_kind: str = "saved",
         source_style_id: str | None = None,
         favorite: bool = False,
@@ -1098,9 +1111,16 @@ class StudioService:
             identity_id,
             title=title,
             prompt_modifier=prompt_modifier,
+            text_mode=text_mode,
             description=description,
             category=category,
             preview_image_url=preview_image_url,
+            negative_prompt=negative_prompt,
+            preferred_model_id=preferred_model_id,
+            preferred_aspect_ratio=preferred_aspect_ratio,
+            preferred_steps=preferred_steps,
+            preferred_cfg_scale=preferred_cfg_scale,
+            preferred_output_count=preferred_output_count,
             source_kind=source_kind,
             source_style_id=source_style_id,
             favorite=favorite,
@@ -1111,9 +1131,12 @@ class StudioService:
         identity_id: str,
         style_id: str,
         *,
-        favorite: bool | None = None,
+        updates: Dict[str, Any],
     ) -> StudioStyle:
-        return await self.library.update_style(identity_id, style_id, favorite=favorite)
+        return await self.library.update_style(identity_id, style_id, updates=updates)
+
+    async def delete_style(self, identity_id: str, style_id: str) -> None:
+        await self.library.delete_style(identity_id, style_id)
 
     async def save_style_from_prompt(
         self,
@@ -1122,12 +1145,26 @@ class StudioService:
         prompt: str,
         title: str | None = None,
         category: str = "custom",
+        negative_prompt: str = "",
+        preferred_model_id: str | None = None,
+        preferred_aspect_ratio: str | None = None,
+        preferred_steps: int | None = None,
+        preferred_cfg_scale: float | None = None,
+        preferred_output_count: int | None = None,
+        preview_image_url: str | None = None,
     ) -> StudioStyle:
         return await self.library.save_style_from_prompt(
             identity_id,
             prompt=prompt,
             title=title,
             category=category,
+            negative_prompt=negative_prompt,
+            preferred_model_id=preferred_model_id,
+            preferred_aspect_ratio=preferred_aspect_ratio,
+            preferred_steps=preferred_steps,
+            preferred_cfg_scale=preferred_cfg_scale,
+            preferred_output_count=preferred_output_count,
+            preview_image_url=preview_image_url,
         )
 
     def _serialize_style(self, style: StudioStyle) -> Dict[str, Any]:
@@ -1211,6 +1248,9 @@ class StudioService:
             sort=sort,
             viewer_identity_id=viewer_identity_id,
         )
+
+    async def list_liked_posts(self, identity_id: str) -> List[Dict[str, Any]]:
+        return await self.public.list_liked_posts(identity_id)
 
     async def get_profile_payload(
         self,
@@ -1397,8 +1437,20 @@ class StudioService:
     ) -> CostTelemetryEvent | None:
         return await self.billing._record_cost_telemetry_event(source_kind=source_kind, surface=surface, provider=provider, amount_usd=amount_usd, identity_id=identity_id, source_id=source_id, provider_model=provider_model, studio_model=studio_model, billable=billable, metadata=metadata)
 
-    async def get_settings_payload(self, identity_id: str) -> Dict[str, Any]:
-        return await self.shell.get_settings_payload(identity_id)
+    async def get_settings_payload(self, identity_id: str, *, current_session_id: str | None = None) -> Dict[str, Any]:
+        return await self.shell.get_settings_payload(identity_id, current_session_id=current_session_id)
+
+    async def record_access_session(self, *, identity_id: str, session_id: str | None, auth_provider: str | None, user_agent: str | None, client_ip: str | None, host_label: str | None, display_mode: str | None, token_issued_at: Any = None, token_expires_at: Any = None) -> None:
+        await self.access_sessions.touch_session(identity_id=identity_id, session_id=session_id, auth_provider=auth_provider, user_agent=user_agent, client_ip=client_ip, host_label=host_label, display_mode=display_mode, token_issued_at=token_issued_at, token_expires_at=token_expires_at)
+
+    async def get_access_sessions_payload(self, *, identity_id: str, current_session_id: str | None) -> Dict[str, Any]:
+        return await self.access_sessions.build_payload(identity_id=identity_id, current_session_id=current_session_id)
+
+    async def revoke_other_access_sessions(self, *, identity_id: str, current_session_id: str | None, reason: str = "signed_out_elsewhere") -> Dict[str, Any]:
+        return await self.access_sessions.revoke_other_sessions(identity_id=identity_id, current_session_id=current_session_id, reason=reason)
+
+    def get_access_session_context_from_token(self, access_token: str | None) -> Dict[str, Any]:
+        return self.access_sessions.session_context_from_token(access_token)
 
     async def list_models_for_identity(
         self,

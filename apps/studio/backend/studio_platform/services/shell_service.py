@@ -22,7 +22,12 @@ class ShellService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
 
-    async def get_settings_payload(self, identity_id: str) -> dict[str, Any]:
+    async def get_settings_payload(
+        self,
+        identity_id: str,
+        *,
+        current_session_id: str | None = None,
+    ) -> dict[str, Any]:
         identity = await self.service.identity.get_identity(identity_id=identity_id)
         billing_state = await self.service.billing._resolve_billing_state_for_identity(identity)
         compose_draft = await self.service.projects.get_or_create_draft_project(identity.id, surface="compose")
@@ -41,6 +46,10 @@ class ShellService:
             chat_draft_id=chat_draft.id,
             styles=await self.service.library.list_styles(identity.id),
             prompt_memory=await self.service.library.get_prompt_memory_profile_payload(identity.id),
+            active_sessions=await self.service.get_access_sessions_payload(
+                identity_id=identity.id,
+                current_session_id=current_session_id,
+            ),
         )
 
     async def list_models_for_identity(

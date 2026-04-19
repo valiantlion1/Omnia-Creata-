@@ -551,6 +551,21 @@ class GenerationService:
         return await self.service.require_owned_model("generations", generation_id, GenerationJob, identity_id)
 
 
+    async def delete_generation(self, identity_id: str, generation_id: str) -> dict[str, str]:
+        job = await self.get_generation(identity_id, generation_id)
+        normalized_status = JobStatus.coerce(job.status)
+        if normalized_status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.SUCCEEDED}:
+            raise ValueError("Only failed or cancelled processing jobs can be removed from here.")
+        if job.outputs:
+            raise ValueError("Generations with saved outputs cannot be removed from Processing.")
+
+        def mutation(state: StudioState) -> None:
+            state.generations.pop(generation_id, None)
+
+        await self.service.store.mutate(mutation)
+        return {"generation_id": generation_id, "status": "deleted"}
+
+
     async def _filter_blocked_fallback_provider_candidates(
         self,
         *,
@@ -1270,6 +1285,19 @@ class GenerationService:
             message = str(exc).lower()
             if is_provider_auth_failure(exc):
                 return "provider_auth"
+            if any(
+                marker in message
+                for marker in (
+                    "potentially sensitive",
+                    "safety",
+                    "unsafe",
+                    "policy",
+                    "moderation",
+                    "nsfw",
+                    "blocked content",
+                )
+            ):
+                return "safety_block"
             if "not configured" in message:
                 return "provider_not_configured"
             if "timed out" in message or "timeout" in message:

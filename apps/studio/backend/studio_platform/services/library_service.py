@@ -43,6 +43,14 @@ class LibraryService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
 
+    def _normalize_style_text_mode(self, value: str | None, *, fallback: str = "modifier") -> str:
+        normalized = (value or "").strip().lower()
+        if normalized == "prompt":
+            return "prompt"
+        if normalized == "modifier":
+            return "modifier"
+        return fallback if fallback in {"modifier", "prompt"} else "modifier"
+
     def serialize_asset(
         self,
         asset: MediaAsset,
@@ -690,9 +698,16 @@ class LibraryService:
         *,
         title: str,
         prompt_modifier: str,
+        text_mode: str = "modifier",
         description: str = "",
         category: str = "custom",
         preview_image_url: str | None = None,
+        negative_prompt: str = "",
+        preferred_model_id: str | None = None,
+        preferred_aspect_ratio: str | None = None,
+        preferred_steps: int | None = None,
+        preferred_cfg_scale: float | None = None,
+        preferred_output_count: int | None = None,
         source_kind: str = "saved",
         source_style_id: str | None = None,
         favorite: bool = False,
@@ -700,6 +715,9 @@ class LibraryService:
         await self.service.get_identity(identity_id)
         normalized_title = title.strip()[:72]
         normalized_modifier = " ".join(prompt_modifier.strip().split())
+        normalized_negative_prompt = negative_prompt.strip()
+        normalized_model_id = (preferred_model_id or "").strip() or None
+        normalized_aspect_ratio = (preferred_aspect_ratio or "").strip() or None
         if not normalized_title:
             raise ValueError("Style title is required")
         if not normalized_modifier:
@@ -718,9 +736,16 @@ class LibraryService:
             identity_id=identity_id,
             title=normalized_title,
             prompt_modifier=normalized_modifier,
+            text_mode=self._normalize_style_text_mode(text_mode, fallback="prompt" if source_kind == "prompt" else "modifier"),
             description=description.strip(),
             category=category.strip() or "custom",
             preview_image_url=preview_image_url,
+            negative_prompt=normalized_negative_prompt,
+            preferred_model_id=normalized_model_id,
+            preferred_aspect_ratio=normalized_aspect_ratio,
+            preferred_steps=preferred_steps,
+            preferred_cfg_scale=preferred_cfg_scale,
+            preferred_output_count=preferred_output_count,
             source_kind=source_kind if source_kind in {"catalog", "saved", "prompt"} else "saved",
             source_style_id=source_style_id,
             favorite=favorite,
@@ -733,16 +758,55 @@ class LibraryService:
         identity_id: str,
         style_id: str,
         *,
-        favorite: bool | None = None,
+        updates: dict[str, Any],
     ) -> StudioStyle:
         style = await self.service.store.get_style(style_id)
         if style is None or style.identity_id != identity_id:
             raise KeyError("Style not found")
-        if favorite is not None:
-            style.favorite = favorite
+        if "title" in updates:
+            next_title = str(updates.get("title") or "").strip()[:72]
+            if not next_title:
+                raise ValueError("Style title is required")
+            style.title = next_title
+        if "prompt_modifier" in updates:
+            next_modifier = " ".join(str(updates.get("prompt_modifier") or "").strip().split())
+            if not next_modifier:
+                raise ValueError("Style modifier is required")
+            style.prompt_modifier = next_modifier
+        if "text_mode" in updates:
+            style.text_mode = self._normalize_style_text_mode(updates.get("text_mode"), fallback=style.text_mode)
+        if "description" in updates:
+            style.description = str(updates.get("description") or "").strip()
+        if "category" in updates:
+            style.category = str(updates.get("category") or "").strip() or "custom"
+        if "preview_image_url" in updates:
+            preview_image_url = updates.get("preview_image_url")
+            style.preview_image_url = None if preview_image_url is None else (str(preview_image_url).strip() or None)
+        if "negative_prompt" in updates:
+            style.negative_prompt = str(updates.get("negative_prompt") or "").strip()
+        if "preferred_model_id" in updates:
+            preferred_model_id = updates.get("preferred_model_id")
+            style.preferred_model_id = None if preferred_model_id is None else (str(preferred_model_id).strip() or None)
+        if "preferred_aspect_ratio" in updates:
+            preferred_aspect_ratio = updates.get("preferred_aspect_ratio")
+            style.preferred_aspect_ratio = None if preferred_aspect_ratio is None else (str(preferred_aspect_ratio).strip() or None)
+        if "preferred_steps" in updates:
+            style.preferred_steps = updates.get("preferred_steps")
+        if "preferred_cfg_scale" in updates:
+            style.preferred_cfg_scale = updates.get("preferred_cfg_scale")
+        if "preferred_output_count" in updates:
+            style.preferred_output_count = updates.get("preferred_output_count")
+        if "favorite" in updates:
+            style.favorite = bool(updates.get("favorite"))
         style.updated_at = utc_now()
         await self.service.store.save_model("styles", style)
         return style
+
+    async def delete_style(self, identity_id: str, style_id: str) -> None:
+        style = await self.service.store.get_style(style_id)
+        if style is None or style.identity_id != identity_id:
+            raise KeyError("Style not found")
+        await self.service.store.delete_model("styles", style_id)
 
     async def save_style_from_prompt(
         self,
@@ -751,13 +815,28 @@ class LibraryService:
         prompt: str,
         title: str | None = None,
         category: str = "custom",
+        negative_prompt: str = "",
+        preferred_model_id: str | None = None,
+        preferred_aspect_ratio: str | None = None,
+        preferred_steps: int | None = None,
+        preferred_cfg_scale: float | None = None,
+        preferred_output_count: int | None = None,
+        preview_image_url: str | None = None,
     ) -> StudioStyle:
         return await self.save_style(
             identity_id,
             title=title or derive_display_title(prompt, fallback="Saved Style"),
             prompt_modifier=prompt,
+            text_mode="prompt",
             description="Saved from Studio prompt",
             category=category,
+            preview_image_url=preview_image_url,
+            negative_prompt=negative_prompt,
+            preferred_model_id=preferred_model_id,
+            preferred_aspect_ratio=preferred_aspect_ratio,
+            preferred_steps=preferred_steps,
+            preferred_cfg_scale=preferred_cfg_scale,
+            preferred_output_count=preferred_output_count,
             source_kind="prompt",
             favorite=False,
         )

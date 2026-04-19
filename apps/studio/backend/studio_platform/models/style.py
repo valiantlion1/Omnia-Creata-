@@ -13,9 +13,16 @@ class StudioStyle(BaseModel):
     identity_id: str
     title: str
     prompt_modifier: str
+    text_mode: Literal["modifier", "prompt"] = "modifier"
     description: str = ""
     category: str = "custom"
     preview_image_url: Optional[str] = None
+    negative_prompt: str = ""
+    preferred_model_id: Optional[str] = None
+    preferred_aspect_ratio: Optional[str] = None
+    preferred_steps: Optional[int] = None
+    preferred_cfg_scale: Optional[float] = None
+    preferred_output_count: Optional[int] = None
     source_kind: Literal["catalog", "saved", "prompt"] = "saved"
     source_style_id: Optional[str] = None
     favorite: bool = False

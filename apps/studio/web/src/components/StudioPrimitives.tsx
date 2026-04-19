@@ -198,7 +198,15 @@ export function StatusPill({
   return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone], className)}>{children}</span>
 }
 
-export function LegalFooter({ className }: { className?: string }) {
+export function LegalFooter({
+  className,
+  showCookiePreferences = true,
+  showBuildInfo = false,
+}: {
+  className?: string
+  showCookiePreferences?: boolean
+  showBuildInfo?: boolean
+}) {
   const { openPreferences } = useStudioCookiePreferences()
 
   return (
@@ -207,12 +215,20 @@ export function LegalFooter({ className }: { className?: string }) {
         <div className="hidden flex-wrap items-center gap-x-3 gap-y-1">
           <span>© OmniaCreata 2026</span>
           <span className="text-zinc-600">·</span>
-          <span className="hidden text-zinc-600">{APP_VERSION_LABEL}</span>
+          <span className="hidden text-zinc-600" />
           <span className="text-zinc-600">·</span>
-          <span className="hidden text-zinc-600">build {APP_BUILD_LABEL}</span>
+          <span className="hidden text-zinc-600" />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>OmniaCreata 2026</span>
+          {showBuildInfo ? (
+            <>
+              <span className="text-zinc-700">·</span>
+              <span className="text-zinc-500">{APP_VERSION_LABEL}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="text-zinc-500">build {APP_BUILD_LABEL}</span>
+            </>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/legal/terms" className="transition hover:text-white">
@@ -227,9 +243,11 @@ export function LegalFooter({ className }: { className?: string }) {
           <Link to="/legal/cookies" className="transition hover:text-white">
             Cookies
           </Link>
-          <button type="button" onClick={openPreferences} className="bg-transparent p-0 text-left transition hover:text-white">
-            Cookie preferences
-          </button>
+          {showCookiePreferences ? (
+            <button type="button" onClick={openPreferences} className="bg-transparent p-0 text-left transition hover:text-white">
+              Cookie preferences
+            </button>
+          ) : null}
           <Link to="/help#faq" className="transition hover:text-white">
             FAQ
           </Link>

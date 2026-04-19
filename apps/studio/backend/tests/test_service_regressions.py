@@ -1311,6 +1311,144 @@ async def test_list_public_posts_hides_blocked_assets_even_when_post_is_public(t
 
 
 @pytest.mark.asyncio
+async def test_list_liked_posts_only_returns_visible_showcase_ready_favorites(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    visible_path = tmp_path / "favorite-visible.png"
+    visible_path.write_bytes(b"favorite-visible")
+    blocked_path = tmp_path / "favorite-blocked.png"
+    blocked_path.write_bytes(b"favorite-blocked")
+
+    creator = OmniaIdentity(
+        id="creator-1",
+        email="creator@example.com",
+        display_name="Creator One",
+        username="creatorone",
+        workspace_id="ws-creator-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    viewer = OmniaIdentity(
+        id="viewer-1",
+        email="viewer@example.com",
+        display_name="Viewer One",
+        username="viewerone",
+        workspace_id="ws-viewer-1",
+        plan=IdentityPlan.CREATOR,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    creator_workspace = StudioWorkspace(id=creator.workspace_id, identity_id=creator.id, name="Creator Studio")
+    viewer_workspace = StudioWorkspace(id=viewer.workspace_id, identity_id=viewer.id, name="Viewer Studio")
+    visible_project = Project(
+        id="project-visible",
+        workspace_id=creator.workspace_id,
+        identity_id=creator.id,
+        title="Visible Project",
+    )
+    blocked_project = Project(
+        id="project-blocked",
+        workspace_id=creator.workspace_id,
+        identity_id=creator.id,
+        title="Blocked Project",
+    )
+    private_project = Project(
+        id="project-private",
+        workspace_id=creator.workspace_id,
+        identity_id=creator.id,
+        title="Private Project",
+    )
+    visible_asset = MediaAsset(
+        id="asset-visible",
+        workspace_id=creator.workspace_id,
+        project_id=visible_project.id,
+        identity_id=creator.id,
+        title="Visible render",
+        prompt="misty mountain lake",
+        url="stored",
+        local_path=str(visible_path),
+        metadata={},
+    )
+    blocked_asset = MediaAsset(
+        id="asset-blocked",
+        workspace_id=creator.workspace_id,
+        project_id=blocked_project.id,
+        identity_id=creator.id,
+        title="Blocked render",
+        prompt="unsafe scene",
+        url="stored",
+        local_path=str(blocked_path),
+        metadata={"protection_state": "blocked", "library_state": "blocked"},
+    )
+    visible_post = PublicPost(
+        id="post-visible",
+        workspace_id=creator.workspace_id,
+        project_id=visible_project.id,
+        identity_id=creator.id,
+        owner_username="creatorone",
+        owner_display_name="Creator One",
+        title="Visible favorite",
+        prompt="misty mountain lake",
+        cover_asset_id=visible_asset.id,
+        asset_ids=[visible_asset.id],
+        visibility=Visibility.PUBLIC,
+        liked_by=[viewer.id],
+    )
+    blocked_post = PublicPost(
+        id="post-blocked",
+        workspace_id=creator.workspace_id,
+        project_id=blocked_project.id,
+        identity_id=creator.id,
+        owner_username="creatorone",
+        owner_display_name="Creator One",
+        title="Blocked favorite",
+        prompt="unsafe scene",
+        cover_asset_id=blocked_asset.id,
+        asset_ids=[blocked_asset.id],
+        visibility=Visibility.PUBLIC,
+        liked_by=[viewer.id],
+    )
+    private_post = PublicPost(
+        id="post-private",
+        workspace_id=creator.workspace_id,
+        project_id=private_project.id,
+        identity_id=creator.id,
+        owner_username="creatorone",
+        owner_display_name="Creator One",
+        title="Private favorite",
+        prompt="private scene",
+        cover_asset_id=visible_asset.id,
+        asset_ids=[visible_asset.id],
+        visibility=Visibility.PRIVATE,
+        liked_by=[viewer.id],
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(creator.id, creator),
+            state.identities.__setitem__(viewer.id, viewer),
+            state.workspaces.__setitem__(creator_workspace.id, creator_workspace),
+            state.workspaces.__setitem__(viewer_workspace.id, viewer_workspace),
+            state.projects.__setitem__(visible_project.id, visible_project),
+            state.projects.__setitem__(blocked_project.id, blocked_project),
+            state.projects.__setitem__(private_project.id, private_project),
+            state.assets.__setitem__(visible_asset.id, visible_asset),
+            state.assets.__setitem__(blocked_asset.id, blocked_asset),
+            state.posts.__setitem__(visible_post.id, visible_post),
+            state.posts.__setitem__(blocked_post.id, blocked_post),
+            state.posts.__setitem__(private_post.id, private_post),
+        )
+    )
+
+    payload = await service.list_liked_posts(viewer.id)
+
+    assert [post["id"] for post in payload] == ["post-visible"]
+    assert payload[0]["viewer_has_liked"] is True
+    assert payload[0]["owner_username"] == "creatorone"
+
+
+@pytest.mark.asyncio
 async def test_update_post_rejects_public_visibility_for_nonshareable_results(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -2097,6 +2235,13 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
 
     assert settings_payload["entitlements"]["allowed_chat_modes"] == []
     assert settings_payload["entitlements"]["premium_chat"] is False
+    assert settings_payload["active_sessions"] == {
+        "current_session_id": None,
+        "sessions": [],
+        "session_count": 0,
+        "other_session_count": 0,
+        "can_sign_out_others": False,
+    }
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
     flux_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_FAST_MODEL_ID)
     assert flux_model["creative_profile"]["id"] == "fast"
@@ -2121,6 +2266,75 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert flux_lane["creative_profile"]["id"] == "fast"
     assert flux_lane["pricing_lane"] == flux_model["route_preview"]["pricing_lane"]
     assert flux_lane["render_experience"]["state"] == flux_model["render_experience"]["state"]
+
+
+@pytest.mark.asyncio
+async def test_access_sessions_payload_tracks_recent_devices_and_revokes_other_sessions(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-sessions",
+        email="sessions@example.com",
+        display_name="Session User",
+        username="session-user",
+        workspace_id="ws-user-sessions",
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Session User Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    await service.record_access_session(
+        identity_id=identity.id,
+        session_id="session-current",
+        auth_provider="email",
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+        client_ip="127.0.0.1",
+        host_label="127.0.0.1:5173",
+        display_mode="browser",
+    )
+    await service.record_access_session(
+        identity_id=identity.id,
+        session_id="session-phone",
+        auth_provider="google",
+        user_agent="Mozilla/5.0 (Linux; Android 14) Chrome/123.0.0.0 Mobile Safari/537.36",
+        client_ip="95.10.11.12",
+        host_label="studio.omniacreata.com",
+        display_mode="standalone",
+    )
+
+    try:
+        payload = await service.get_access_sessions_payload(
+            identity_id=identity.id,
+            current_session_id="session-current",
+        )
+
+        assert payload["session_count"] == 2
+        assert payload["other_session_count"] == 1
+        assert payload["can_sign_out_others"] is True
+        assert payload["sessions"][0]["device_label"] == "Chrome on Windows"
+        assert payload["sessions"][0]["current"] is True
+        assert payload["sessions"][1]["device_label"] == "Android app"
+        assert payload["sessions"][1]["surface_label"] == "Installed app"
+
+        revoked = await service.revoke_other_access_sessions(
+            identity_id=identity.id,
+            current_session_id="session-current",
+            reason="user_requested_sign_out_others",
+        )
+
+        assert revoked["session_count"] == 1
+        assert revoked["other_session_count"] == 0
+        assert revoked["can_sign_out_others"] is False
+        assert [item["session_id"] for item in revoked["sessions"]] == ["session-current"]
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.asyncio

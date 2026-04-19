@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
+import { useToast } from '@/components/Toast'
 import {
   getCreativeProfileKey,
   getCreativeProfileLabel,
@@ -249,6 +250,7 @@ function parseBoundedFloat(value: string | null, fallback: number, min: number, 
 export default function CreatePage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { addToast } = useToast()
   const { projectId: routeProjectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
@@ -619,9 +621,25 @@ export default function CreatePage() {
   }, [prompt])
 
   const saveStyleMutation = useMutation({
-    mutationFn: () => studioApi.saveStyleFromPrompt({ prompt }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] })
+    mutationFn: () =>
+      studioApi.saveStyleFromPrompt({
+        prompt,
+        negative_prompt: negativePrompt,
+        preferred_model_id: selectedModelId,
+        preferred_aspect_ratio: aspectRatio,
+        preferred_steps: steps,
+        preferred_cfg_scale: cfgScale,
+        preferred_output_count: outputCount,
+      }),
+    onSuccess: async (style) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['styles'] }),
+        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+      ])
+      addToast('success', `"${style.title}" saved to My Styles.`)
+    },
+    onError: (error) => {
+      addToast('error', error instanceof Error ? error.message : 'Style could not be saved.')
     },
   })
 

@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.19.140",
+  "build": "2026.04.19.149",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-19",
-  "notes": "Settings credentials are now a real account surface instead of a dead placeholder. Studio now keeps the public `@username` stable, lets users update display names without auth-refresh drift, exposes provider-aware sign-in context from `/v1/auth/me`, filters blocked display names through the moderation layer, and allows logged-in email/password accounts to update their password from Settings while OAuth accounts stay correctly provider-managed."
+  "notes": "The sidebar now renders Settings as a single clean navigation item again, removing the duplicate open-settings gear from the expanded rail while preserving the correct guest login redirect."
 }

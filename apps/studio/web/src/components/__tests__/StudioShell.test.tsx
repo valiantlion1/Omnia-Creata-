@@ -15,7 +15,7 @@ import StudioShell from '@/components/StudioShell'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
 describe('StudioShell', () => {
-  it('routes guest settings open actions through login intent', () => {
+  it('keeps guest settings as a single nav item that routes through login intent', () => {
     renderWithProviders(
       <StudioShell>
         <div>Public shell</div>
@@ -23,10 +23,14 @@ describe('StudioShell', () => {
       { route: '/help' },
     )
 
-    const openSettingsLinks = screen.getAllByTitle('Open Settings')
-    expect(openSettingsLinks.length).toBeGreaterThan(0)
+    expect(screen.queryByTitle('Open Settings')).not.toBeInTheDocument()
 
-    for (const link of openSettingsLinks) {
+    const settingsLabels = screen.getAllByText('Settings')
+    expect(settingsLabels.length).toBeGreaterThan(0)
+
+    for (const label of settingsLabels) {
+      const link = label.closest('a')
+      expect(link).not.toBeNull()
       expect(link).toHaveAttribute('href', '/login?next=%2Fsettings')
     }
   })

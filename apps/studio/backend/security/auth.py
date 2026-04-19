@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Depends, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
+import hashlib
 import logging
 from passlib.context import CryptContext
 from passlib.hash import bcrypt
@@ -411,6 +412,44 @@ def _extract_supabase_auth_provider_context(payload: Dict[str, Any]) -> tuple[st
     return primary_provider, providers
 
 
+def extract_unverified_session_context(token: str | None) -> Dict[str, Any]:
+    candidate = str(token or "").strip()
+    if not candidate:
+        return {
+            "session_id": None,
+            "session_issued_at": None,
+            "session_expires_at": None,
+            "claims": {},
+        }
+
+    try:
+        payload = jwt.decode(
+            candidate,
+            options={
+                "verify_signature": False,
+                "verify_exp": False,
+                "verify_aud": False,
+                "verify_iss": False,
+            },
+        )
+    except Exception:
+        payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    session_id = str(payload.get("session_id") or payload.get("jti") or "").strip()
+    if not session_id:
+        session_id = hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:32]
+
+    return {
+        "session_id": session_id,
+        "session_issued_at": payload.get("iat"),
+        "session_expires_at": payload.get("exp"),
+        "claims": payload,
+    }
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
@@ -435,6 +474,12 @@ async def get_current_user(
     
     try:
         payload = jwt_manager.verify_token(token)
+        metadata = payload.get("metadata", {}) or {}
+        if isinstance(metadata, dict):
+            metadata = dict(metadata)
+        else:
+            metadata = {}
+        metadata.update(extract_unverified_session_context(token))
         
         # Create user from token payload
         user = User(
@@ -444,7 +489,7 @@ async def get_current_user(
             role=UserRole(payload.get("role", "user")),
             is_active=True,
             is_verified=True,
-            metadata=payload.get("metadata", {}) or {},
+            metadata=metadata,
         )
         
         return user
@@ -491,6 +536,7 @@ async def get_current_user(
                 "auth_providers": auth_providers,
                 "supabase": True,
             }
+            metadata.update(extract_unverified_session_context(token))
             return User(
                 id=payload["id"],
                 email=email,

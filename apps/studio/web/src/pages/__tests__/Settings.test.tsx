@@ -4,11 +4,68 @@ import userEvent from '@testing-library/user-event'
 
 const mockState = vi.hoisted(() => ({
   updateMyProfile: vi.fn(),
-  getSettingsBootstrap: vi.fn().mockResolvedValue({}),
+  getSettingsBootstrap: vi.fn().mockResolvedValue({
+    active_sessions: {
+      current_session_id: 'session-current',
+      session_count: 2,
+      other_session_count: 1,
+      can_sign_out_others: true,
+      sessions: [
+        {
+          id: 'session-current',
+          session_id: 'session-current',
+          device_label: 'Chrome on Windows',
+          browser_label: 'Chrome',
+          os_label: 'Windows',
+          display_mode: 'browser',
+          surface_label: 'Browser',
+          network_label: 'Local development',
+          current: true,
+          first_seen_at: '2026-04-19T00:00:00Z',
+          last_seen_at: '2026-04-19T00:05:00Z',
+        },
+        {
+          id: 'session-other',
+          session_id: 'session-other',
+          device_label: 'Android app',
+          browser_label: 'Chrome',
+          os_label: 'Android',
+          display_mode: 'standalone',
+          surface_label: 'Installed app',
+          network_label: '95.10.*.*',
+          current: false,
+          first_seen_at: '2026-04-18T20:00:00Z',
+          last_seen_at: '2026-04-19T00:01:00Z',
+        },
+      ],
+    },
+  }),
   getHealth: vi.fn().mockResolvedValue({ status: 'healthy', providers: [] }),
   getHealthDetail: vi.fn().mockResolvedValue({ status: 'healthy', providers: [] }),
   updateUser: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
+  endOtherSettingsSessions: vi.fn().mockResolvedValue({
+    current_session_id: 'session-current',
+    session_count: 1,
+    other_session_count: 0,
+    can_sign_out_others: false,
+    sessions: [
+      {
+        id: 'session-current',
+        session_id: 'session-current',
+        device_label: 'Chrome on Windows',
+        browser_label: 'Chrome',
+        os_label: 'Windows',
+        display_mode: 'browser',
+        surface_label: 'Browser',
+        network_label: 'Local development',
+        current: true,
+        first_seen_at: '2026-04-19T00:00:00Z',
+        last_seen_at: '2026-04-19T00:05:00Z',
+      },
+    ],
+  }),
   signOut: vi.fn(),
+  signOutScopes: vi.fn().mockResolvedValue({ error: null }),
   openPreferences: vi.fn(),
   setTipsEnabled: vi.fn(),
   setTheme: vi.fn(),
@@ -20,6 +77,7 @@ const mockState = vi.hoisted(() => ({
       email: 'creator@omniacreata.com',
       display_name: 'Creator',
       username: 'creator',
+      bio: '',
       plan: 'free',
       workspace_id: 'ws-user-1',
       owner_mode: false,
@@ -53,6 +111,7 @@ vi.mock('@/lib/studioApi', () => ({
     getHealth: mockState.getHealth,
     getHealthDetail: mockState.getHealthDetail,
     updateMyProfile: mockState.updateMyProfile,
+    endOtherSettingsSessions: mockState.endOtherSettingsSessions,
     exportProfile: vi.fn(),
   },
 }))
@@ -92,6 +151,7 @@ vi.mock('@/lib/supabaseBrowser', () => ({
   supabaseBrowser: {
     auth: {
       updateUser: mockState.updateUser,
+      signOut: mockState.signOutScopes,
     },
   },
 }))
@@ -110,10 +170,15 @@ describe('SettingsPage credentials flow', () => {
     mockState.getHealth.mockClear()
     mockState.getHealthDetail.mockClear()
     mockState.updateUser.mockReset()
+    mockState.endOtherSettingsSessions.mockClear()
     mockState.signOut.mockReset()
+    mockState.signOutScopes.mockClear()
     mockState.openPreferences.mockReset()
+    mockState.signOutScopes.mockResolvedValue({ error: null })
     mockState.auth.identity.display_name = 'Creator'
     mockState.auth.identity.username = 'creator'
+    mockState.auth.identity.bio = ''
+    mockState.auth.identity.default_visibility = 'public'
     mockState.auth.identity.auth_provider = 'email'
     mockState.auth.identity.auth_providers = ['email']
     mockState.auth.identity.credentials_managed_by_provider = false
@@ -127,37 +192,68 @@ describe('SettingsPage credentials flow', () => {
     renderWithProviders(<SettingsPage />)
 
     await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
-    await userEvent.click(screen.getByRole('button', { name: /manage profile/i }))
+    await userEvent.click(screen.getByRole('button', { name: /manage sign-in/i }))
 
-    expect(screen.getByText(/Profile and sign-in/i)).toBeInTheDocument()
-    expect(screen.getAllByText('@creator').length).toBeGreaterThan(0)
+    expect(screen.getByText(/Sign-in & password/i)).toBeInTheDocument()
     expect(screen.getByText(/This account signs in with Google/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Open Google security/i })).toHaveAttribute('href', 'https://myaccount.google.com/security')
   })
 
-  it('saves display name changes and updates email-password credentials', async () => {
+  it('opens the settings profile editor and saves real profile fields', async () => {
     mockState.updateMyProfile.mockResolvedValue({ profile: {}, posts: [], own_profile: true, can_edit: true })
 
     renderWithProviders(<SettingsPage />)
 
-    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
-    await userEvent.click(screen.getByRole('button', { name: /manage profile/i }))
+    await userEvent.click(screen.getByRole('button', { name: /edit profile/i }))
 
-    const displayNameInput = screen.getByLabelText(/Display name/i)
+    expect(screen.getByRole('heading', { name: /edit profile/i })).toBeInTheDocument()
+
+    const displayNameInput = screen.getByLabelText(/display name/i)
     await userEvent.clear(displayNameInput)
     await userEvent.type(displayNameInput, 'Creator Prime')
-    await userEvent.click(screen.getByRole('button', { name: /save display name/i }))
+    await userEvent.type(screen.getByLabelText(/bio/i), ' Makes cinematic portraits. ')
+    await userEvent.click(screen.getByRole('button', { name: /^private$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
 
     await waitFor(() => {
-      expect(mockState.updateMyProfile).toHaveBeenCalledWith({ display_name: 'Creator Prime' })
+      expect(mockState.updateMyProfile).toHaveBeenCalledWith({
+        display_name: 'Creator Prime',
+        bio: 'Makes cinematic portraits.',
+        default_visibility: 'private',
+      })
     })
+  })
 
+  it('updates email-password credentials from the sign-in dialog', async () => {
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    await userEvent.click(screen.getByRole('button', { name: /manage sign-in/i }))
     await userEvent.type(screen.getByLabelText(/New password/i), 'NewPassword1!')
     await userEvent.type(screen.getByLabelText(/Confirm password/i), 'NewPassword1!')
     await userEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     await waitFor(() => {
       expect(mockState.updateUser).toHaveBeenCalledWith({ password: 'NewPassword1!' })
+    })
+  })
+
+  it('shows recent Studio devices and signs out other sessions', async () => {
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    await userEvent.click(screen.getByRole('button', { name: /manage sessions/i }))
+
+    expect(screen.getByRole('heading', { name: /active sessions/i })).toBeInTheDocument()
+    expect(screen.getByText(/Chrome on Windows/i)).toBeInTheDocument()
+    expect(screen.getByText(/Android app/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/This device/i).length).toBeGreaterThan(0)
+
+    await userEvent.click(screen.getByRole('button', { name: /sign out other devices/i }))
+
+    await waitFor(() => {
+      expect(mockState.signOutScopes).toHaveBeenCalledWith({ scope: 'others' })
+      expect(mockState.endOtherSettingsSessions).toHaveBeenCalledTimes(1)
     })
   })
 })

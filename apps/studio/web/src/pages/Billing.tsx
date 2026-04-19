@@ -145,7 +145,6 @@ export default function BillingPage() {
         creator: `${creatorEntitlements.max_incomplete_generations} jobs`,
         pro: `${proEntitlements.max_incomplete_generations} jobs`,
       },
-      { feature: 'Max resolution', free: free.max_resolution, creator: creator.max_resolution, pro: pro.max_resolution },
       { feature: 'Share links', free: free.share_links, creator: creator.share_links, pro: pro.share_links },
       { feature: 'Clean exports', free: freeEntitlements.can_clean_export, creator: creatorEntitlements.can_clean_export, pro: proEntitlements.can_clean_export },
       { feature: 'Premium chat lanes', free: false, creator: false, pro: true },
@@ -382,9 +381,7 @@ export default function BillingPage() {
                   <span className="text-4xl font-extrabold tracking-tight text-white">{price.price}</span>
                   {price.period ? <span className="text-base font-medium text-zinc-600">{price.period}</span> : null}
                 </div>
-                <div className="mt-1 text-[12px] text-zinc-600">
-                  {plan.monthly_credits.toLocaleString()} credits/mo - up to {plan.max_resolution}
-                </div>
+                <div className="mt-1 text-[12px] text-zinc-600">{plan.monthly_credits.toLocaleString()} credits/mo</div>
 
                 {/* CTA */}
                 <div className="mt-6">

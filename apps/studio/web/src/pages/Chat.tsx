@@ -6,7 +6,7 @@ import { ImageOff, Lightbulb, Loader2, MessageCircle, MoreHorizontal, Paintbrush
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
 import { AppPage } from '@/components/StudioPrimitives'
-import { ChatBubble } from '@/components/ChatBubble'
+import { ChatBubble, ChatTypingIndicator } from '@/components/ChatBubble'
 import { InlineError } from '@/components/InlineError'
 import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment, type ChatConversation, type ChatMessage, type ChatSuggestedAction, type GenerationOutput, type JobStatus } from '@/lib/studioApi'
 import {
@@ -879,6 +879,12 @@ export default function ChatPage() {
     return msgItems.length ? msgItems[msgItems.length - 1].message.id : null
   }, [timeline])
 
+  const showAssistantTypingIndicator =
+    sendMessageMutation.isPending &&
+    !conversationDetailQuery.isLoading &&
+    !conversationDetailQuery.isError &&
+    timeline.length > 0
+
   /* ─── Poll visual generation status ───────────── */
 
   useEffect(() => {
@@ -1449,6 +1455,7 @@ export default function ChatPage() {
                   </div>
                 )
               })}
+              {showAssistantTypingIndicator ? <ChatTypingIndicator /> : null}
               <div ref={bottomRef} />
             </div>
           ) : (

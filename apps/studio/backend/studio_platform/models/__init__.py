@@ -34,6 +34,7 @@ from .billing import (
 )
 from .persona import StudioPersona
 from .prompt_memory import PromptMemoryProfile
+from .access_session import StudioAccessSession
 from .state import StudioState
 from .style import StudioStyle
 
@@ -81,6 +82,7 @@ __all__ = [
     "StudioPersona",
     "StudioStyle",
     "PromptMemoryProfile",
+    "StudioAccessSession",
     # State
     "StudioState",
 ]

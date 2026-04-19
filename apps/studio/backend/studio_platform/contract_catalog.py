@@ -34,6 +34,7 @@ BOOTSTRAP_FIELDS: tuple[str, ...] = (
     "draft_projects",
     "styles",
     "prompt_memory",
+    "active_sessions",
 )
 
 

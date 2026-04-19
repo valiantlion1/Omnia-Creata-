@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -32,6 +32,7 @@ import {
   studioApi,
   type Generation,
   type MediaAsset,
+  type PublicPost,
   type Project,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -53,6 +54,11 @@ type PreviewState = {
   index: number
 } | null
 
+type FavoritePreviewState = {
+  post: PublicPost
+  index: number
+} | null
+
 type MoveState = {
   postId: string
   currentProjectId: string
@@ -64,9 +70,21 @@ type NoticeState = {
   body: string
 } | null
 
+type PassiveLibraryNotice = {
+  id: string
+  tone: 'warning' | 'error'
+  message: string
+} | null
+
 type RenameState =
   | { kind: 'post'; id: string; title: string }
-  | { kind: 'project'; id: string; title: string; description?: string }
+  | {
+      kind: 'project'
+      id?: string
+      title: string
+      description?: string
+      mode?: 'create' | 'edit'
+    }
   | null
 
 type AssetGroup = {
@@ -114,9 +132,46 @@ function generationLibraryState(generation: Generation): LibraryState {
   if (generation.library_state) return generation.library_state
   const normalized = normalizeJobStatus(generation.status)
   if (normalized === 'queued' || normalized === 'running') return 'generating'
+  if (
+    ['policy_blocked', 'safety_block', 'policy_review'].includes(
+      generation.error_code?.trim().toLowerCase() ?? '',
+    )
+  ) {
+    return 'blocked'
+  }
   if ((generation.error ?? '').toLowerCase().includes('policy'))
     return 'blocked'
   return 'failed'
+}
+
+function generationCreditsReturned(generation: Generation) {
+  return (
+    generation.credit_status === 'released' ||
+    generation.final_credit_cost === 0
+  )
+}
+
+function buildGenerationPassiveNotice(
+  generation: Generation,
+  state: Extract<LibraryState, 'failed' | 'blocked'>,
+): Exclude<PassiveLibraryNotice, null> {
+  const creditsReturned = generationCreditsReturned(generation)
+  if (state === 'blocked') {
+    return {
+      id: `${generation.job_id}:blocked:${generation.completed_at ?? generation.created_at}`,
+      tone: 'warning',
+      message: creditsReturned
+        ? 'Studio could not finish that image because it tripped a safety review. Reserved credits were returned.'
+        : 'Studio could not finish that image because it tripped a safety review.',
+    }
+  }
+  return {
+    id: `${generation.job_id}:failed:${generation.completed_at ?? generation.created_at}`,
+    tone: 'error',
+    message: creditsReturned
+      ? 'Studio could not finish that image because of a provider or system issue. Reserved credits were returned.'
+      : 'Studio could not finish that image because of a provider or system issue.',
+  }
 }
 
 function assetDisplayTitle(asset: MediaAsset) {
@@ -139,6 +194,27 @@ function assetPreviewSources(asset: MediaAsset) {
   return [asset.preview_url, asset.thumbnail_url, asset.url]
 }
 
+function favoritePostAssets(post: PublicPost) {
+  const seen = new Set<string>()
+  const assets = [post.cover_asset, ...(post.preview_assets ?? [])].filter(
+    (asset): asset is MediaAsset => Boolean(asset),
+  )
+  return assets.filter((asset) => {
+    if (seen.has(asset.id)) return false
+    seen.add(asset.id)
+    return true
+  })
+}
+
+function favoritePostTitle(post: PublicPost) {
+  return (
+    post.title?.trim() ||
+    post.cover_asset?.display_title?.trim() ||
+    post.cover_asset?.title?.trim() ||
+    'Saved favorite'
+  )
+}
+
 function matchesQuery(
   query: string,
   ...parts: Array<string | null | undefined>
@@ -150,6 +226,28 @@ function matchesQuery(
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString()
+}
+
+function formatRelativeDate(value: string) {
+  const target = new Date(value).getTime()
+  const now = Date.now()
+  const diffMinutes = Math.round((target - now) / 60_000)
+
+  if (Math.abs(diffMinutes) < 60) {
+    return `${Math.abs(diffMinutes)} min ${diffMinutes <= 0 ? 'ago' : 'from now'}`
+  }
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (Math.abs(diffHours) < 24) {
+    return `${Math.abs(diffHours)} hr ${diffHours <= 0 ? 'ago' : 'from now'}`
+  }
+
+  const diffDays = Math.round(diffHours / 24)
+  if (Math.abs(diffDays) < 8) {
+    return `${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'} ${diffDays <= 0 ? 'ago' : 'from now'}`
+  }
+
+  return formatDate(value)
 }
 
 async function downloadBlob(blob: Blob, filename: string) {
@@ -309,22 +407,40 @@ function RenameDialog({
   state: RenameState
   busy: boolean
   onCancel: () => void
-  onConfirm: (title: string) => void
+  onConfirm: (payload: { title: string; description?: string }) => void
 }) {
   const [value, setValue] = useState('')
+  const [description, setDescription] = useState('')
 
   useEffect(() => {
     setValue(state?.title ?? '')
+    setDescription(state?.kind === 'project' ? state.description ?? '' : '')
   }, [state])
 
   if (!state) return null
 
-  const heading = state.kind === 'post' ? 'Rename image set' : 'Rename project'
+  const isProject = state.kind === 'project'
+  const isCreate = isProject && state.mode === 'create'
+  const heading = state.kind === 'post'
+    ? 'Rename image set'
+    : isCreate
+      ? 'Create project'
+      : 'Edit project'
+  const descriptionCopy = state.kind === 'post'
+    ? 'Give this image set a cleaner name.'
+    : isCreate
+      ? 'Projects keep related image sets, campaigns, and iteration branches together. Start with a short working title and an optional note.'
+      : 'Tighten the title and description so this project is easier to scan later.'
+  const submitLabel = isProject
+    ? isCreate
+      ? 'Create project'
+      : 'Save project'
+    : 'Save'
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
       <div
-        className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl"
+        className="w-full max-w-lg rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl"
         style={{
           boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)',
         }}
@@ -333,8 +449,7 @@ function RenameDialog({
           <div>
             <div className="text-lg font-semibold text-white">{heading}</div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">
-              Give this {state.kind === 'post' ? 'image set' : 'project'} a
-              cleaner name.
+              {descriptionCopy}
             </p>
           </div>
           <button
@@ -363,6 +478,26 @@ function RenameDialog({
           />
         </div>
 
+        {isProject ? (
+          <div className="mt-4">
+            <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">
+              Description
+            </label>
+            <textarea
+              id="studio-library-project-description"
+              name="description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="input mt-2 min-h-[120px] resize-none py-3"
+              placeholder="What belongs in this project, who it is for, or what phase it is in."
+            />
+            <div className="mt-2 text-[11px] leading-5 text-zinc-500">
+              Keep it short and operational. This is for future-you scanning the
+              library, not for marketing copy.
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
             onClick={onCancel}
@@ -371,11 +506,25 @@ function RenameDialog({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(value)}
-            disabled={busy || !value.trim() || value.trim() === state.title}
+            onClick={() =>
+              onConfirm({
+                title: value,
+                description: isProject
+                  ? description.trim() || undefined
+                  : undefined,
+              })
+            }
+            disabled={
+              busy ||
+              !value.trim() ||
+              (!isCreate &&
+                value.trim() === state.title &&
+                (!isProject ||
+                  (description.trim() || '') === (state.description ?? '')))
+            }
             className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? 'Saving...' : 'Save'}
+            {busy ? 'Working...' : submitLabel}
           </button>
         </div>
       </div>
@@ -663,6 +812,233 @@ function AssetLightbox({
               Delete
             </button>
           </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FavoriteLightbox({
+  state,
+  busy,
+  onClose,
+  onSelect,
+  onReusePrompt,
+  onOpenCreator,
+  onRemoveFavorite,
+}: {
+  state: FavoritePreviewState
+  busy: boolean
+  onClose: () => void
+  onSelect: (index: number) => void
+  onReusePrompt: () => void
+  onOpenCreator: () => void
+  onRemoveFavorite: () => void
+}) {
+  useEffect(() => {
+    if (!state) return
+
+    const assets = favoritePostAssets(state.post)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (assets.length < 2) return
+      if (event.key === 'ArrowLeft') {
+        onSelect((state.index - 1 + assets.length) % assets.length)
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        onSelect((state.index + 1) % assets.length)
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior
+    document.body.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'contain'
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.overscrollBehavior = previousOverscrollBehavior
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose, onSelect, state])
+
+  if (!state) return null
+
+  const assets = favoritePostAssets(state.post)
+  const asset = assets[state.index] ?? assets[0] ?? null
+  if (!asset) return null
+
+  const canStep = assets.length > 1
+  const aspectRatio = metadataString(asset.metadata, 'aspect_ratio')
+  const model = metadataString(asset.metadata, 'display_model_label') ??
+    metadataString(asset.metadata, 'model')
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${favoritePostTitle(state.post)} preview`}
+    >
+      <div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,196,255,0.08),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.52)_48%,rgba(0,0,0,0.78))]"
+        onClick={onClose}
+      />
+      <button
+        onClick={onClose}
+        className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:right-5 sm:top-5"
+        title="Close preview"
+        aria-label="Close preview"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      {canStep ? (
+        <>
+          <button
+            onClick={() =>
+              onSelect((state.index - 1 + assets.length) % assets.length)
+            }
+            className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:left-5"
+            title="Previous image"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onSelect((state.index + 1) % assets.length)}
+            className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:right-5"
+            title="Next image"
+            aria-label="Next image"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </>
+      ) : null}
+
+      <div className="relative z-[1] mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-[1500px] gap-4 sm:min-h-[calc(100svh-2.5rem)] sm:gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch">
+        <div className="group relative flex min-h-[20rem] items-center justify-center overflow-hidden rounded-[30px] border border-white/[0.08] bg-[#07090d]/78 p-4 shadow-[0_32px_120px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-5 xl:min-h-[calc(100svh-2.5rem)] xl:px-8 xl:py-6">
+          <div className="absolute left-4 top-4 z-[1] flex max-w-[calc(100%-5rem)] flex-wrap items-center gap-2 sm:left-5 sm:top-5">
+            <span className="rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+              {state.post.owner_display_name}
+            </span>
+            <span className="rounded-full bg-black/35 px-3 py-1 text-[11px] font-medium text-zinc-200 backdrop-blur-md ring-1 ring-white/[0.1]">
+              {state.post.like_count} {state.post.like_count === 1 ? 'like' : 'likes'}
+            </span>
+          </div>
+          <ProtectedAssetImage
+            sources={assetPreviewSources(asset)}
+            alt={assetDisplayTitle(asset)}
+            className="max-h-[min(76vh,calc(100svh-10rem))] w-auto max-w-full rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+            fallbackClassName="flex min-h-[18rem] max-h-[min(76vh,calc(100svh-10rem))] w-full max-w-full items-center justify-center rounded-[28px] bg-white/[0.04] text-zinc-600 shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+          />
+        </div>
+
+        <div className="flex min-h-0 flex-col rounded-[30px] border border-white/[0.08] bg-[#0c0d12]/72 p-5 ring-1 ring-white/10 backdrop-blur-2xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] sm:p-6 xl:max-h-[calc(100svh-2.5rem)]">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain pr-1">
+            <div>
+              <div className="text-xl font-semibold tracking-[-0.03em] text-white">
+                {favoritePostTitle(state.post)}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-zinc-400">
+                <span>{formatDate(state.post.created_at)}</span>
+                <span className="text-zinc-600">·</span>
+                <span>@{state.post.owner_username}</span>
+                {canStep ? (
+                  <>
+                    <span className="text-zinc-600">·</span>
+                    <span>
+                      Variation {state.index + 1} of {assets.length}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <LightboxMetaTile label="Creator" value={state.post.owner_display_name} />
+              <LightboxMetaTile label="Likes" value={`${state.post.like_count}`} />
+              {model ? <LightboxMetaTile label="Model" value={model} /> : null}
+              {aspectRatio ? (
+                <LightboxMetaTile label="Ratio" value={aspectRatio} />
+              ) : null}
+            </div>
+
+            <div className="space-y-3 rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-4">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                  Prompt
+                </div>
+                <div className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-6 text-zinc-400">
+                  {state.post.prompt || favoritePostTitle(state.post)}
+                </div>
+              </div>
+              {state.post.style_tags.length ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {state.post.style_tags.map((tag) => (
+                    <span
+                      key={`${state.post.id}-${tag}`}
+                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-zinc-400"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {canStep ? (
+              <div className="space-y-3 border-t border-white/10 pt-5">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                  Variations
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {assets.map((item, index) => (
+                    <button
+                      key={item.id}
+                      onClick={() => onSelect(index)}
+                      className={`overflow-hidden rounded-[14px] ring-2 transition-all duration-500 scale-100 active:scale-90 ${state.index === index ? 'ring-[rgb(var(--primary-light))] shadow-[0_0_15px_rgba(var(--primary-light),0.4)]' : 'ring-white/5 hover:ring-white/20'}`}
+                    >
+                      <ProtectedAssetImage
+                        sources={assetPreviewSources(item)}
+                        alt={assetDisplayTitle(item)}
+                        className={`aspect-square h-full w-full object-cover transition-opacity duration-300 ${state.index === index ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 space-y-2.5 border-t border-white/10 pt-5">
+            <button
+              onClick={onReusePrompt}
+              className="w-full rounded-xl bg-white px-4 py-3 text-[14px] font-bold text-black transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] hover:scale-[1.02] active:scale-[0.98]"
+              disabled={busy}
+            >
+              Reuse prompt
+            </button>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <button
+                onClick={onOpenCreator}
+                className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.06] hover:border-white/[0.14] active:scale-95"
+              >
+                View creator
+              </button>
+              <button
+                onClick={onRemoveFavorite}
+                className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-3 py-2.5 text-[13px] font-bold text-rose-200 transition-all duration-300 hover:bg-rose-500/[0.12] hover:border-rose-500/30 active:scale-95 disabled:opacity-50"
+                disabled={busy}
+              >
+                Remove favorite
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -995,25 +1371,59 @@ function EmptyInline({
   )
 }
 
+function ProjectHighlightsStrip({
+  items,
+}: {
+  items: Array<{ label: string; value: string; detail: string }>
+}) {
+  return (
+    <section className="grid gap-2 pb-4 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-[18px] border border-white/[0.05] bg-[#0c0d12] px-4 py-3.5"
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+            {item.label}
+          </div>
+          <div className="mt-2 text-[22px] font-semibold tracking-tight text-white">
+            {item.value}
+          </div>
+          <div className="mt-1 text-[11.5px] leading-5 text-zinc-500">
+            {item.detail}
+          </div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
 function PendingPreview({
   generation,
   view,
   state,
+  onDelete,
+  isDeleting = false,
 }: {
   generation: Generation
   view: ViewMode
   state: LibraryState
+  onDelete?: (generation: Generation) => void
+  isDeleting?: boolean
 }) {
   const navigate = useNavigate()
   const isBlocked = state === 'blocked'
   const isFailed = state === 'failed'
   const title = generation.display_title || generation.title
   const subtitle = isBlocked
-    ? 'Blocked for safety review'
+    ? 'Held for safety review'
     : isFailed
-      ? 'Could not create image'
+      ? 'Render stopped before completion'
       : 'Painting your vision...'
-  const badge = isBlocked ? 'Blocked' : isFailed ? 'Failed' : 'Running'
+  const canRetry = isFailed
+  const canRemove = Boolean(onDelete && (isBlocked || isFailed))
+  const actionButtonClass =
+    'flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.14] bg-black/40 text-zinc-200 backdrop-blur-md transition hover:border-white/30 hover:bg-black/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-40'
 
   const handleRetry = () => {
     const params = new URLSearchParams()
@@ -1032,6 +1442,29 @@ function PendingPreview({
               <div
                 className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.15),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.18),transparent_70%)]'} opacity-50 animate-digitize`}
               />
+              <div className="absolute right-2 top-2 z-20 flex items-center gap-2">
+                {canRetry ? (
+                  <button
+                    onClick={handleRetry}
+                    className={actionButtonClass}
+                    title="Retry in Create"
+                    aria-label={`Retry ${title} in Create`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+                {canRemove ? (
+                  <button
+                    onClick={() => onDelete?.(generation)}
+                    disabled={isDeleting}
+                    className={actionButtonClass}
+                    title="Remove from Processing"
+                    aria-label={`Remove ${title} from Processing`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/60 backdrop-blur-xl">
                 <div
                   className={`flex h-12 w-12 items-center justify-center rounded-full shadow-2xl transition-transform duration-500 group-hover/pending:scale-110 ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}
@@ -1042,12 +1475,7 @@ function PendingPreview({
                     <ImageOff className="h-5 w-5 text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.4)]" />
                   )}
                 </div>
-                <span
-                  className={`text-[11px] font-black tracking-[0.2em] uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}
-                >
-                  {badge}
-                </span>
-                {isFailed && (
+                {false && isFailed && (
                   <button
                     onClick={handleRetry}
                     className="relative mt-1 overflow-hidden rounded-full bg-white/10 px-4 py-2 text-[11px] font-bold text-white ring-1 ring-white/20 transition-all duration-300 hover:bg-white/20 hover:ring-white/40 active:scale-95"
@@ -1151,6 +1579,31 @@ function PendingPreview({
           {subtitle}
         </div>
       </div>
+      {canRetry || canRemove ? (
+        <div className="flex items-center gap-2">
+          {canRetry ? (
+            <button
+              onClick={handleRetry}
+              className={actionButtonClass}
+              title="Retry in Create"
+              aria-label={`Retry ${title} in Create`}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          {canRemove ? (
+            <button
+              onClick={() => onDelete?.(generation)}
+              disabled={isDeleting}
+              className={actionButtonClass}
+              title="Remove from Processing"
+              aria-label={`Remove ${title} from Processing`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1181,10 +1634,15 @@ export default function MediaLibraryPage() {
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [actionMenu, setActionMenu] = useState<string | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>(null)
+  const [favoritePreviewState, setFavoritePreviewState] =
+    useState<FavoritePreviewState>(null)
   const [moveState, setMoveState] = useState<MoveState>(null)
   const [noticeState, setNoticeState] = useState<NoticeState>(null)
+  const [passiveNotice, setPassiveNotice] = useState<PassiveLibraryNotice>(null)
   const [renameState, setRenameState] = useState<RenameState>(null)
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  const seenGenerationNoticeKeys = useRef<Set<string>>(new Set())
+  const deferredSearch = useDeferredValue(search)
 
   const section = useMemo<LibrarySection>(() => {
     if (
@@ -1215,11 +1673,18 @@ export default function MediaLibraryPage() {
     enabled: canLoadPrivate,
   })
 
+  const favoritePostsQuery = useQuery({
+    queryKey: ['favorite-posts'],
+    queryFn: () => studioApi.listFavoritePosts(),
+    enabled: canLoadPrivate && section === 'likes',
+  })
+
   async function invalidateLibrary() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['assets'] }),
       queryClient.invalidateQueries({ queryKey: ['projects'] }),
       queryClient.invalidateQueries({ queryKey: ['generations'] }),
+      queryClient.invalidateQueries({ queryKey: ['favorite-posts'] }),
       queryClient.invalidateQueries({ queryKey: ['public-posts'] }),
       queryClient.invalidateQueries({ queryKey: ['profile'] }),
     ])
@@ -1254,6 +1719,11 @@ export default function MediaLibraryPage() {
     },
   })
 
+  const deleteGenerationMutation = useMutation({
+    mutationFn: (generationId: string) => studioApi.deleteGeneration(generationId),
+    onSuccess: invalidateLibrary,
+  })
+
   const updatePostMutation = useMutation({
     mutationFn: ({
       postId,
@@ -1282,6 +1752,24 @@ export default function MediaLibraryPage() {
   const trashPostMutation = useMutation({
     mutationFn: (postId: string) => studioApi.trashPost(postId),
     onSuccess: invalidateLibrary,
+  })
+
+  const unlikeFavoriteMutation = useMutation({
+    mutationFn: (postId: string) => studioApi.unlikePost(postId),
+    onSuccess: async () => {
+      await invalidateLibrary()
+    },
+  })
+
+  const createProjectMutation = useMutation({
+    mutationFn: (payload: {
+      title: string
+      description?: string
+      surface?: 'compose' | 'chat'
+    }) => studioApi.createProject(payload),
+    onSuccess: async () => {
+      await invalidateLibrary()
+    },
   })
 
   const updateProjectMutation = useMutation({
@@ -1333,6 +1821,8 @@ export default function MediaLibraryPage() {
     updatePostMutation.isPending ||
     movePostMutation.isPending ||
     trashPostMutation.isPending ||
+    unlikeFavoriteMutation.isPending ||
+    createProjectMutation.isPending ||
     updateProjectMutation.isPending ||
     deleteProjectMutation.isPending ||
     exportProjectMutation.isPending
@@ -1340,6 +1830,7 @@ export default function MediaLibraryPage() {
   const assets = assetsQuery.data?.assets ?? []
   const projects = projectsQuery.data?.projects ?? []
   const generations = generationsQuery.data?.generations ?? []
+  const favoritePosts = favoritePostsQuery.data?.posts ?? []
   const activeAssets = assets.filter((asset) => !asset.deleted_at)
   const trashedAssets = assets.filter((asset) => Boolean(asset.deleted_at))
   const projectMap = useMemo(
@@ -1421,19 +1912,22 @@ export default function MediaLibraryPage() {
         )
         .filter((generation) =>
           matchesQuery(
-            search,
+            deferredSearch,
             generation.title,
             generation.prompt_snapshot.prompt,
             generation.model,
           ),
         ),
-    [generations, search],
+    [deferredSearch, generations],
   )
 
-  const failedGenerations = useMemo(
+  const attentionGenerations = useMemo(
     () =>
       generations
-        .filter((generation) => generationLibraryState(generation) === 'failed')
+        .filter((generation) => {
+          const state = generationLibraryState(generation)
+          return state === 'failed' || state === 'blocked'
+        })
         .filter(
           (generation) =>
             Date.now() - new Date(generation.created_at).getTime() <=
@@ -1441,13 +1935,13 @@ export default function MediaLibraryPage() {
         )
         .filter((generation) =>
           matchesQuery(
-            search,
+            deferredSearch,
             generation.display_title,
             generation.prompt_snapshot.prompt,
             generation.model,
           ),
         ),
-    [generations, search],
+    [deferredSearch, generations],
   )
 
   const blockedGroups = useMemo(
@@ -1470,7 +1964,7 @@ export default function MediaLibraryPage() {
       readyGroups.filter((group) => {
         if (
           !matchesQuery(
-            search,
+            deferredSearch,
             group.title,
             group.prompt,
             group.model,
@@ -1487,26 +1981,27 @@ export default function MediaLibraryPage() {
         if (imageFilter === 'processing') return false
         return true
       }),
-    [imageFilter, readyGroups, search],
+    [deferredSearch, imageFilter, readyGroups],
   )
 
   const filteredProjects = useMemo(
     () =>
       composeProjects.filter((project) => {
         const projectAssets = assetsByProject.get(project.id) ?? []
-        if (!matchesQuery(search, project.title, project.description))
+        if (!matchesQuery(deferredSearch, project.title, project.description))
           return false
         if (collectionFilter === 'with-work') return projectAssets.length > 0
         if (collectionFilter === 'empty') return projectAssets.length === 0
         return true
       }),
-    [assetsByProject, collectionFilter, composeProjects, search],
+    [assetsByProject, collectionFilter, composeProjects, deferredSearch],
   )
 
   const filteredTrash = useMemo(
     () =>
       trashedAssets.filter((asset) => {
-        if (!matchesQuery(search, asset.title, asset.prompt)) return false
+        if (!matchesQuery(deferredSearch, asset.title, asset.prompt))
+          return false
         if (trashFilter === 'recent' && asset.deleted_at) {
           return (
             Date.now() - new Date(asset.deleted_at).getTime() <=
@@ -1515,14 +2010,89 @@ export default function MediaLibraryPage() {
         }
         return true
       }),
-    [search, trashFilter, trashedAssets],
+    [deferredSearch, trashFilter, trashedAssets],
   )
+
+  const filteredFavoritePosts = useMemo(
+    () =>
+      favoritePosts.filter((post) => {
+        const assetsForPost = favoritePostAssets(post)
+        if (
+          !matchesQuery(
+            deferredSearch,
+            favoritePostTitle(post),
+            post.prompt,
+            post.owner_display_name,
+            post.owner_username,
+            ...post.style_tags,
+            ...assetsForPost.flatMap((asset) => [
+              asset.display_title,
+              asset.title,
+              ...(asset.derived_tags ?? []),
+            ]),
+          )
+        ) {
+          return false
+        }
+        return true
+      }),
+    [deferredSearch, favoritePosts],
+  )
+
+  const projectGroupCounts = useMemo(() => {
+    const next = new Map<string, number>()
+    for (const group of readyGroups) {
+      next.set(group.projectId, (next.get(group.projectId) ?? 0) + 1)
+    }
+    return next
+  }, [readyGroups])
+
+  const projectHighlights = useMemo(() => {
+    const withWorkCount = composeProjects.filter(
+      (project) => (assetsByProject.get(project.id) ?? []).length > 0,
+    ).length
+    const emptyCount = Math.max(composeProjects.length - withWorkCount, 0)
+    const recentlyUpdated = [...composeProjects].sort(
+      (left, right) =>
+        new Date(right.updated_at).getTime() -
+        new Date(left.updated_at).getTime(),
+    )[0]
+
+    return [
+      {
+        label: 'Projects',
+        value: String(composeProjects.length),
+        detail: 'spaces for campaigns and series',
+      },
+      {
+        label: 'With work',
+        value: String(withWorkCount),
+        detail: 'ready to reopen or extend',
+      },
+      {
+        label: 'Empty',
+        value: String(emptyCount),
+        detail: 'reserved for future directions',
+      },
+      {
+        label: 'Latest activity',
+        value: recentlyUpdated
+          ? formatRelativeDate(recentlyUpdated.updated_at)
+          : 'No activity',
+        detail: recentlyUpdated?.title ?? 'Create a project to start a thread',
+      },
+    ]
+  }, [assetsByProject, composeProjects])
 
   const activeView = views[section]
   const imageViewDescription =
     activeView === 'grid'
       ? 'Dense gallery for scanning image sets. Open any card for prompt, variations, and actions.'
       : 'List view adds more context while keeping prompt details inside the lightbox.'
+  const favoriteViewDescription =
+    activeView === 'grid'
+      ? 'Saved public references you liked across Studio. Open any card for prompt reuse and source details.'
+      : 'List view surfaces creator, prompt context, and quick actions for the references you want to revisit.'
   const isBusy =
     permanentDeleteMutation.isPending || emptyTrashMutation.isPending
 
@@ -1535,6 +2105,33 @@ export default function MediaLibraryPage() {
     document.addEventListener('mousedown', handlePointerDown)
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [])
+
+  useEffect(() => {
+    if (!canLoadPrivate || section !== 'images') return
+    const unseen = [...generations]
+      .sort(
+        (left, right) =>
+          new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+      )
+      .find((generation) => {
+        const state = generationLibraryState(generation)
+        if (state !== 'failed' && state !== 'blocked') return false
+        const key = `${generation.job_id}:${state}:${generation.error_code ?? ''}:${generation.credit_status ?? ''}:${generation.completed_at ?? generation.created_at}`
+        if (seenGenerationNoticeKeys.current.has(key)) return false
+        seenGenerationNoticeKeys.current.add(key)
+        return true
+      })
+
+    if (!unseen) return
+    const state = generationLibraryState(unseen) as 'failed' | 'blocked'
+    setPassiveNotice(buildGenerationPassiveNotice(unseen, state))
+  }, [canLoadPrivate, generations, section])
+
+  useEffect(() => {
+    if (!passiveNotice) return
+    const timeout = window.setTimeout(() => setPassiveNotice(null), 4800)
+    return () => window.clearTimeout(timeout)
+  }, [passiveNotice])
 
   const openComposeWith = (params: Record<string, string>) => {
     const next = new URLSearchParams(params)
@@ -1591,6 +2188,14 @@ export default function MediaLibraryPage() {
     })
   }
 
+  const handleDeleteGeneration = async (generation: Generation) => {
+    try {
+      await deleteGenerationMutation.mutateAsync(generation.job_id)
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
   const handleVisibilityChange = async (
     postId: string,
     visibility: 'public' | 'private',
@@ -1618,6 +2223,46 @@ export default function MediaLibraryPage() {
       setNoticeState({
         title: 'Moved to Trash',
         body: `"${title}" was moved to Trash.`,
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const openFavoritePreview = (post: PublicPost, index = 0) => {
+    setActionMenu(null)
+    setFavoritePreviewState({ post, index })
+  }
+
+  const openCreateFromFavorite = (post: PublicPost) => {
+    const leadAsset = favoritePostAssets(post)[0] ?? null
+    const metadata = (leadAsset?.metadata ?? {}) as Record<string, unknown>
+    const params: Record<string, string> = {
+      prompt: post.prompt || favoritePostTitle(post),
+      source: 'favorites',
+    }
+    const model = String(metadata.model ?? '').trim()
+    if (model) params.model = model
+    if (post.style_tags.length) {
+      params.style_modifier = post.style_tags.slice(0, 4).join(', ')
+    }
+    openComposeWith(params)
+  }
+
+  const openFavoriteCreator = (post: PublicPost) => {
+    navigate(`/u/${post.owner_username}`)
+  }
+
+  const handleRemoveFavorite = async (post: PublicPost) => {
+    try {
+      await unlikeFavoriteMutation.mutateAsync(post.id)
+      setActionMenu(null)
+      setFavoritePreviewState((current) =>
+        current?.post.id === post.id ? null : current,
+      )
+      setNoticeState({
+        title: 'Removed from Favorites',
+        body: `"${favoritePostTitle(post)}" no longer appears in your saved references.`,
       })
     } catch (error) {
       handleMenuError(error)
@@ -1655,6 +2300,95 @@ export default function MediaLibraryPage() {
     } catch (error) {
       handleMenuError(error)
     }
+  }
+
+  const openProjectComposer = (projectId: string) => {
+    navigate(`/projects/${projectId}/create`)
+  }
+
+  const openProjectEditor = (
+    project: Pick<Project, 'id' | 'title' | 'description'>,
+    mode: 'create' | 'edit' = 'edit',
+  ) => {
+    setRenameState({
+      kind: 'project',
+      id: project.id,
+      title: project.title,
+      description: project.description,
+      mode,
+    })
+  }
+
+  const renderProjectMenu = (project: Project, projectAssets: MediaAsset[]) => {
+    if (actionMenu !== `project:${project.id}`) return null
+
+    return (
+      <InlineActionMenu>
+        <MenuAction
+          onClick={() => {
+            navigate(`/projects/${project.id}`)
+            setActionMenu(null)
+          }}
+        >
+          Open project
+        </MenuAction>
+        <MenuAction
+          onClick={() => {
+            openProjectComposer(project.id)
+            setActionMenu(null)
+          }}
+        >
+          Continue in Create
+        </MenuAction>
+        <MenuAction
+          disabled={menuBusy}
+          onClick={() => {
+            openProjectEditor(project)
+            setActionMenu(null)
+          }}
+        >
+          Edit details
+        </MenuAction>
+        <MenuAction
+          disabled={exportProjectMutation.isPending || projectAssets.length === 0}
+          onClick={async () => {
+            try {
+              await exportProjectMutation.mutateAsync({
+                projectId: project.id,
+                title: project.title,
+              })
+              setActionMenu(null)
+            } catch (error) {
+              handleMenuError(error)
+            }
+          }}
+        >
+          Export archive
+        </MenuAction>
+        <MenuDivider />
+        <MenuAction
+          tone="danger"
+          disabled={menuBusy}
+          onClick={() => {
+            setActionMenu(null)
+            if (projectAssets.length > 0) {
+              setNoticeState({
+                title: 'Project still has work inside',
+                body: 'Move or remove every image set before deleting this project.',
+              })
+              return
+            }
+            setConfirmState({
+              kind: 'delete-project',
+              projectId: project.id,
+              title: project.title,
+            })
+          }}
+        >
+          Delete empty project
+        </MenuAction>
+      </InlineActionMenu>
+    )
   }
 
   const openPreview = (group: AssetGroup, index: number) => {
@@ -1741,7 +2475,7 @@ export default function MediaLibraryPage() {
               }
             />
 
-            {pendingGenerations.length ? (
+            {imageFilter === 'processing' && pendingGenerations.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[13px] font-semibold text-white">
@@ -1770,7 +2504,7 @@ export default function MediaLibraryPage() {
               </section>
             ) : null}
 
-            {blockedGroups.length ? (
+            {imageFilter !== 'processing' && blockedGroups.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[13px] font-semibold text-white">
@@ -1825,20 +2559,21 @@ export default function MediaLibraryPage() {
                           </div>
                         </div>
                       </div>
-                    )
+                      )
                   })}
                 </div>
               </section>
             ) : null}
 
-            {failedGenerations.length ? (
+            {imageFilter === 'processing' && attentionGenerations.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[13px] font-semibold text-white">
-                    Failed
+                    Needs attention
                   </div>
-                  <StatusPill tone="danger">
-                    {failedGenerations.length} failed
+                  <StatusPill tone="warning">
+                    {attentionGenerations.length} issue
+                    {attentionGenerations.length === 1 ? '' : 's'}
                   </StatusPill>
                 </div>
                 <div
@@ -1848,12 +2583,17 @@ export default function MediaLibraryPage() {
                       : 'mt-3 divide-y divide-white/[0.06]'
                   }
                 >
-                  {failedGenerations.map((generation) => (
+                  {attentionGenerations.map((generation) => (
                     <PendingPreview
                       key={generation.job_id}
                       generation={generation}
                       view={activeView}
-                      state="failed"
+                      state={generationLibraryState(generation)}
+                      onDelete={handleDeleteGeneration}
+                      isDeleting={
+                        deleteGenerationMutation.isPending &&
+                        deleteGenerationMutation.variables === generation.job_id
+                      }
                     />
                   ))}
                 </div>
@@ -1863,10 +2603,10 @@ export default function MediaLibraryPage() {
             {assetsQuery.isLoading ? (
               <SkeletonImageGrid count={8} />
             ) : imageFilter === 'processing' ? (
-              pendingGenerations.length ? null : (
+              pendingGenerations.length || attentionGenerations.length ? null : (
                 <EmptyInline
                   icon={<Sparkles className="h-4 w-4" />}
-                  title="Nothing is rendering right now."
+                  title="Nothing is in flight right now."
                   description="Head to Create and start generating — your images will appear here while they're in progress."
                 />
               )
@@ -2213,6 +2953,7 @@ export default function MediaLibraryPage() {
                                   current === menuId ? null : menuId,
                                 )
                               }
+                              aria-label={`Open actions for ${group.title}`}
                               className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
                               title="Actions"
                             >
@@ -2392,7 +3133,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Projects"
-              description=""
+              description="Projects are your working containers. Use them to keep one campaign, character, client round, or visual direction together instead of losing context in the full library."
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -2406,43 +3147,97 @@ export default function MediaLibraryPage() {
                   onChange={setCollectionFilter}
                 />
               }
+              actions={
+                <button
+                  onClick={() =>
+                    openProjectEditor(
+                      { id: '', title: '', description: '' },
+                      'create',
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  New project
+                </button>
+              }
             />
+
+            <ProjectHighlightsStrip items={projectHighlights} />
 
             {filteredProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
-                    const cover = projectAssets[0]
+                    const cover = projectAssets[0] ?? null
+                    const setCount = projectGroupCounts.get(project.id) ?? 0
+                    const previewAssets = projectAssets.slice(1, 3)
+                    const hasAssets = projectAssets.length > 0
+                    const latestActivity = cover?.created_at ?? project.updated_at
                     return (
-                      <div key={project.id} className="group space-y-2">
+                      <article
+                        key={project.id}
+                        className="group flex h-full flex-col rounded-[22px] border border-white/[0.05] bg-[#0c0d12] p-3.5 transition-all duration-300 hover:border-white/[0.1] hover:bg-[#101116]"
+                      >
                         <div className="relative" data-library-menu-root="true">
-                          <Link
-                            to={`/projects/${project.id}`}
-                            className="block overflow-hidden rounded-[10px] bg-[#111216] transition-all duration-300 group-hover:ring-1 group-hover:ring-white/10"
-                          >
+                          <div className="rounded-[18px] bg-white/[0.02] p-2 ring-1 ring-white/[0.04]">
                             {cover ? (
-                              <div className="relative overflow-hidden">
-                                <ProtectedAssetImage
-                                  sources={assetPreviewSources(cover)}
-                                  alt={project.title}
-                                  className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                                  fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                                <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                                  <ImageIcon className="h-3 w-3" />
-                                  {projectAssets.length}
+                              <Link
+                                to={`/projects/${project.id}`}
+                                className="grid gap-2 sm:grid-cols-[minmax(0,1.35fr)_104px]"
+                              >
+                                <div className="overflow-hidden rounded-[16px] bg-[#111216]">
+                                  <ProtectedAssetImage
+                                    sources={assetPreviewSources(cover)}
+                                    alt={project.title}
+                                    className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                                    fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                  />
                                 </div>
-                              </div>
+                                <div className="grid grid-rows-2 gap-2">
+                                  {Array.from({ length: 2 }, (_, index) => {
+                                    const asset = previewAssets[index] ?? null
+                                    return asset ? (
+                                      <div
+                                        key={asset.id}
+                                        className="overflow-hidden rounded-[14px] bg-[#111216]"
+                                      >
+                                        <ProtectedAssetImage
+                                          sources={assetPreviewSources(asset)}
+                                          alt={assetDisplayTitle(asset)}
+                                          className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                                          fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div
+                                        key={`${project.id}-placeholder-${index}`}
+                                        className="flex aspect-[4/3] items-center justify-center rounded-[14px] bg-[#111216] text-zinc-700"
+                                      >
+                                        <Folder className="h-4 w-4" />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </Link>
                             ) : (
-                              <div className="relative flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-white/[0.02] to-transparent">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-white/[0.03] ring-1 ring-white/[0.06] transition-transform duration-300 group-hover:scale-105">
-                                  <Folder className="h-5 w-5 text-zinc-600 transition-colors group-hover:text-zinc-400" />
+                              <Link
+                                to={`/projects/${project.id}`}
+                                className="flex aspect-[4/3] flex-col items-center justify-center rounded-[16px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_55%)] text-center"
+                              >
+                                <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.04] ring-1 ring-white/[0.08]">
+                                  <Folder className="h-5 w-5 text-zinc-500" />
                                 </div>
-                              </div>
+                                <div className="mt-4 text-[13px] font-medium text-zinc-300">
+                                  Empty project shell
+                                </div>
+                                <div className="mt-1 max-w-[14rem] text-[11.5px] leading-5 text-zinc-500">
+                                  Hold a destination ready before the first run starts.
+                                </div>
+                              </Link>
                             )}
-                          </Link>
+                          </div>
                           <button
                             onClick={() =>
                               setActionMenu((current) =>
@@ -2451,103 +3246,78 @@ export default function MediaLibraryPage() {
                                   : `project:${project.id}`,
                               )
                             }
-                            className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100"
+                            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/70 hover:text-white opacity-80 hover:opacity-100"
                             title="Project actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
-                          {actionMenu === `project:${project.id}` ? (
-                            <InlineActionMenu>
-                              <MenuAction
-                                onClick={() => {
-                                  navigate(`/projects/${project.id}`)
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Open
-                              </MenuAction>
-                              <MenuAction
-                                disabled={menuBusy}
-                                onClick={() => {
-                                  setRenameState({
-                                    kind: 'project',
-                                    id: project.id,
-                                    title: project.title,
-                                    description: project.description,
-                                  })
-                                  setActionMenu(null)
-                                }}
-                              >
-                                Rename
-                              </MenuAction>
-                              <MenuAction
-                                disabled={exportProjectMutation.isPending}
-                                onClick={async () => {
-                                  try {
-                                    await exportProjectMutation.mutateAsync({
-                                      projectId: project.id,
-                                      title: project.title,
-                                    })
-                                    setActionMenu(null)
-                                  } catch (error) {
-                                    handleMenuError(error)
-                                  }
-                                }}
-                              >
-                                Export all
-                              </MenuAction>
-                              <MenuDivider />
-                              <MenuAction
-                                tone="danger"
-                                disabled={menuBusy}
-                                onClick={() => {
-                                  setActionMenu(null)
-                                  if (projectAssets.length > 0) {
-                                    setNoticeState({
-                                      title: 'Project has images',
-                                      body: 'Move or remove items before deleting this project.',
-                                    })
-                                    return
-                                  }
-                                  setConfirmState({
-                                    kind: 'delete-project',
-                                    projectId: project.id,
-                                    title: project.title,
-                                  })
-                                }}
-                              >
-                                Delete
-                              </MenuAction>
-                            </InlineActionMenu>
-                          ) : null}
+                          {renderProjectMenu(project, projectAssets)}
                         </div>
-                        <div className="min-w-0 px-0.5">
-                          <div className="truncate text-[12.5px] font-semibold text-white/90 transition-colors group-hover:text-white">
+                        <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-zinc-300">
+                            {hasAssets ? 'With work' : 'Empty'}
+                          </span>
+                          <span>
+                            {setCount} set{setCount === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <div className="min-w-0 pt-3">
+                          <div className="truncate text-[15px] font-semibold text-white transition-colors group-hover:text-[rgb(var(--primary-light))]">
                             {project.title}
                           </div>
-                          <div className="mt-0.5 text-[10.5px] text-zinc-600">
-                            {projectAssets.length} image
-                            {projectAssets.length !== 1 ? 's' : ''} ·{' '}
-                            {formatDate(project.updated_at)}
+                          <div className="mt-1 line-clamp-2 text-[12.5px] leading-6 text-zinc-500">
+                            {project.description?.trim() ||
+                              (hasAssets
+                                ? 'A working container for related image sets, prompt branches, and final picks.'
+                                : 'Use this as a ready-made slot for the next concept, client round, or moodboard thread.')}
                           </div>
                         </div>
-                      </div>
+                        <div className="mt-4 flex items-end justify-between gap-3">
+                          <div className="min-w-0 text-[11.5px] leading-5 text-zinc-500">
+                            <div>
+                              {projectAssets.length} image
+                              {projectAssets.length === 1 ? '' : 's'} kept together
+                            </div>
+                            <div className="truncate">
+                              Updated {formatRelativeDate(latestActivity)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              to={`/projects/${project.id}`}
+                              className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                            >
+                              Open
+                            </Link>
+                            <button
+                              onClick={() => openProjectComposer(project.id)}
+                              className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
+                            >
+                              Continue
+                            </button>
+                          </div>
+                        </div>
+                      </article>
                     )
                   })}
                 </section>
               ) : (
-                <section className="space-y-1 pt-2">
+                <section className="space-y-2 pt-2">
                   {filteredProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
-                    const cover = projectAssets[0]
+                    const cover = projectAssets[0] ?? null
+                    const setCount = projectGroupCounts.get(project.id) ?? 0
+                    const hasAssets = projectAssets.length > 0
+                    const latestActivity = cover?.created_at ?? project.updated_at
+
                     return (
-                      <div
+                      <article
                         key={project.id}
-                        className="group flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-all duration-300 hover:bg-white/[0.03]"
+                        className="group flex items-center gap-4 rounded-[22px] border border-white/[0.04] bg-[#0c0d12]/78 px-3.5 py-3.5 transition-all duration-300 hover:border-white/[0.08] hover:bg-white/[0.03]"
                       >
                         <Link
                           to={`/projects/${project.id}`}
-                          className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[14px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md"
+                          className="relative h-20 w-28 shrink-0 overflow-hidden rounded-[16px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md"
                         >
                           {cover ? (
                             <ProtectedAssetImage
@@ -2566,20 +3336,45 @@ export default function MediaLibraryPage() {
                           to={`/projects/${project.id}`}
                           className="min-w-0 flex-1"
                         >
-                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-zinc-300">
+                              {hasAssets ? 'With work' : 'Empty'}
+                            </span>
+                            <span>
+                              {setCount} set{setCount === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                          <div className="mt-2 truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">
                             {project.title}
                           </div>
-                          <div className="mt-1 truncate text-[12px] text-zinc-500">
-                            {project.description || 'No description yet.'}
+                          <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-zinc-500">
+                            {project.description?.trim() ||
+                              (hasAssets
+                                ? 'Grouped image sets, prompt branches, and final picks.'
+                                : 'An empty project shell ready for the next run.')}
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-600">
+                            <span>
+                              {projectAssets.length} image
+                              {projectAssets.length === 1 ? '' : 's'}
+                            </span>
+                            <span>Updated {formatRelativeDate(latestActivity)}</span>
                           </div>
                         </Link>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-white/[0.03] px-2.5 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-white/[0.06]">
-                            <ImageIcon className="h-3 w-3" />
-                            {projectAssets.length}
-                          </div>
-                          <div className="hidden sm:block text-[11px] text-zinc-600">
-                            {formatDate(project.updated_at)}
+                        <div className="flex shrink-0 items-center gap-2">
+                          <div className="hidden xl:flex items-center gap-2">
+                            <Link
+                              to={`/projects/${project.id}`}
+                              className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                            >
+                              Open
+                            </Link>
+                            <button
+                              onClick={() => openProjectComposer(project.id)}
+                              className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
+                            >
+                              Continue
+                            </button>
                           </div>
                           <div
                             className="relative"
@@ -2597,80 +3392,17 @@ export default function MediaLibraryPage() {
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
-                            {actionMenu === `project:${project.id}` ? (
-                              <InlineActionMenu>
-                                <MenuAction
-                                  onClick={() => {
-                                    navigate(`/projects/${project.id}`)
-                                    setActionMenu(null)
-                                  }}
-                                >
-                                  Open
-                                </MenuAction>
-                                <MenuAction
-                                  disabled={menuBusy}
-                                  onClick={() => {
-                                    setRenameState({
-                                      kind: 'project',
-                                      id: project.id,
-                                      title: project.title,
-                                      description: project.description,
-                                    })
-                                    setActionMenu(null)
-                                  }}
-                                >
-                                  Rename
-                                </MenuAction>
-                                <MenuAction
-                                  disabled={exportProjectMutation.isPending}
-                                  onClick={async () => {
-                                    try {
-                                      await exportProjectMutation.mutateAsync({
-                                        projectId: project.id,
-                                        title: project.title,
-                                      })
-                                      setActionMenu(null)
-                                    } catch (error) {
-                                      handleMenuError(error)
-                                    }
-                                  }}
-                                >
-                                  Export all
-                                </MenuAction>
-                                <MenuDivider />
-                                <MenuAction
-                                  tone="danger"
-                                  disabled={menuBusy}
-                                  onClick={() => {
-                                    setActionMenu(null)
-                                    if (projectAssets.length > 0) {
-                                      setNoticeState({
-                                        title: 'Project has images',
-                                        body: 'Move or remove items before deleting this project.',
-                                      })
-                                      return
-                                    }
-                                    setConfirmState({
-                                      kind: 'delete-project',
-                                      projectId: project.id,
-                                      title: project.title,
-                                    })
-                                  }}
-                                >
-                                  Delete
-                                </MenuAction>
-                              </InlineActionMenu>
-                            ) : null}
+                            {renderProjectMenu(project, projectAssets)}
                           </div>
                         </div>
-                      </div>
+                      </article>
                     )
                   })}
                 </section>
               )
             ) : (
               <section className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(124,58,237,0.12)] backdrop-blur-md mb-5">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(124,58,237,0.12)] backdrop-blur-md">
                   <Folder className="h-7 w-7" />
                 </div>
                 <h3 className="text-lg font-bold text-white tracking-tight">
@@ -2680,13 +3412,27 @@ export default function MediaLibraryPage() {
                   Projects keep related image sets together. Create one when you
                   want a dedicated space for a campaign, concept, or series.
                 </p>
-                <Link
-                  to="/create"
-                  className="mt-6 flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Start Creating
-                </Link>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() =>
+                      openProjectEditor(
+                        { id: '', title: '', description: '' },
+                        'create',
+                      )
+                    }
+                    className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
+                  >
+                    <Folder className="h-4 w-4" />
+                    Create project
+                  </button>
+                  <Link
+                    to="/create"
+                    className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-6 py-3 text-[14px] font-semibold text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Start in Create
+                  </Link>
+                </div>
               </section>
             )}
           </>
@@ -2696,7 +3442,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Favorites"
-              description=""
+              description={favoriteViewDescription}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -2704,12 +3450,325 @@ export default function MediaLibraryPage() {
                 setViews((current) => ({ ...current, likes: view }))
               }
             />
-            <EmptyInline
-              compact
-              icon={<Heart className="h-4 w-4" />}
-              title="No favorites yet."
-              description="When you start saving references or favorite generations, they will show up here."
-            />
+
+            {favoritePostsQuery.isLoading ? (
+              <SkeletonImageGrid count={6} />
+            ) : filteredFavoritePosts.length ? (
+              activeView === 'grid' ? (
+                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {filteredFavoritePosts.map((post) => {
+                    const assetsForPost = favoritePostAssets(post)
+                    const leadAsset = assetsForPost[0] ?? null
+                    const menuId = `favorite:${post.id}`
+
+                    return (
+                      <article
+                        key={post.id}
+                        className="group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] shadow-[0_18px_50px_rgba(0,0,0,0.28)] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_24px_60px_rgba(0,0,0,0.36)]"
+                      >
+                        <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+                            <Heart className="h-3 w-3 fill-current text-rose-400" />
+                            Saved
+                          </span>
+                          {assetsForPost.length > 1 ? (
+                            <span className="rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white/85 backdrop-blur-md ring-1 ring-white/[0.12]">
+                              {assetsForPost.length} previews
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div
+                          className="absolute right-3 top-3 z-20"
+                          data-library-menu-root="true"
+                        >
+                          <button
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === menuId ? null : menuId,
+                              )
+                            }
+                            aria-label={`Open actions for ${favoritePostTitle(post)}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur-md ring-1 ring-white/[0.1] transition-colors hover:bg-black/50 hover:text-white"
+                            title="Actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {actionMenu === menuId ? (
+                            <InlineActionMenu>
+                              <MenuAction
+                                onClick={() => {
+                                  openFavoritePreview(post, 0)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Open
+                              </MenuAction>
+                              <MenuAction
+                                onClick={() => {
+                                  openCreateFromFavorite(post)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Reuse prompt
+                              </MenuAction>
+                              <MenuAction
+                                onClick={() => {
+                                  openFavoriteCreator(post)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                View creator
+                              </MenuAction>
+                              <MenuDivider />
+                              <MenuAction
+                                tone="danger"
+                                disabled={menuBusy}
+                                onClick={() => void handleRemoveFavorite(post)}
+                              >
+                                Remove favorite
+                              </MenuAction>
+                            </InlineActionMenu>
+                          ) : null}
+                        </div>
+
+                        <button
+                          onClick={() => openFavoritePreview(post, 0)}
+                          className="block w-full text-left"
+                        >
+                          <div className="relative aspect-[0.96] overflow-hidden bg-[#0c0d12]">
+                            {leadAsset ? (
+                              <ProtectedAssetImage
+                                sources={assetPreviewSources(leadAsset)}
+                                alt={assetDisplayTitle(leadAsset)}
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                                fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600">
+                                <Heart className="h-8 w-8" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(7,9,13,0.96)] via-[rgba(7,9,13,0.08)] to-transparent" />
+
+                            <div className="absolute inset-x-0 bottom-0 p-4">
+                              <div className="flex items-end justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="line-clamp-2 text-[15px] font-semibold tracking-tight text-white">
+                                    {favoritePostTitle(post)}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-300/80">
+                                    <span>{formatDate(post.created_at)}</span>
+                                    <span className="h-1 w-1 rounded-full bg-zinc-600" aria-hidden="true" />
+                                    <span>{post.owner_display_name}</span>
+                                  </div>
+                                </div>
+                                <div className="rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium text-white/85 backdrop-blur-md ring-1 ring-white/[0.12]">
+                                  {post.like_count} {post.like_count === 1 ? 'like' : 'likes'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-3 px-4 py-3.5">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="rounded-full border border-white/[0.12] bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-zinc-200">
+                                  @{post.owner_username}
+                                </span>
+                                {post.style_tags.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={`${post.id}-${tag}`}
+                                    className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-500"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="mt-2 line-clamp-2 text-[12px] leading-6 text-zinc-500">
+                                {post.prompt || favoritePostTitle(post)}
+                              </div>
+                              <OpenDetailsHint className="mt-2" />
+                            </div>
+                          </div>
+                        </button>
+                      </article>
+                    )
+                  })}
+                </section>
+              ) : (
+                <section className="space-y-3">
+                  {filteredFavoritePosts.map((post) => {
+                    const assetsForPost = favoritePostAssets(post)
+                    const leadAsset = assetsForPost[0] ?? null
+                    const menuId = `favorite:${post.id}`
+                    const previewAssets = assetsForPost.slice(0, 3)
+                    const remainingPreviewCount = Math.max(
+                      0,
+                      assetsForPost.length - previewAssets.length,
+                    )
+
+                    return (
+                      <section
+                        key={post.id}
+                        className="border-b border-white/[0.05] py-2"
+                      >
+                        <div className="flex items-center gap-3 rounded-[22px] px-2 py-2.5 ring-1 ring-transparent transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.03] hover:ring-white/[0.08]">
+                          <button
+                            onClick={() => openFavoritePreview(post, 0)}
+                            className="group/list-set flex min-w-0 flex-1 items-center gap-4 rounded-[20px] text-left transition-transform duration-300 active:scale-[0.99]"
+                          >
+                            <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08]">
+                              {leadAsset ? (
+                                <ProtectedAssetImage
+                                  sources={assetPreviewSources(leadAsset)}
+                                  alt={assetDisplayTitle(leadAsset)}
+                                  className="h-full w-full object-cover transition-transform duration-500 group-hover/list-set:scale-[1.04]"
+                                  fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600">
+                                  <Heart className="h-8 w-8" />
+                                </div>
+                              )}
+                              <div className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+                                Saved
+                              </div>
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="truncate text-[15px] font-semibold tracking-tight text-white">
+                                  {favoritePostTitle(post)}
+                                </div>
+                                <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                                  {post.like_count} {post.like_count === 1 ? 'like' : 'likes'}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium text-zinc-500">
+                                <span>{formatDate(post.created_at)}</span>
+                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                <span>{post.owner_display_name}</span>
+                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                <span>@{post.owner_username}</span>
+                              </div>
+                              <div className="mt-2 line-clamp-2 text-[12px] leading-6 text-zinc-500">
+                                {post.prompt || favoritePostTitle(post)}
+                              </div>
+                              {post.style_tags.length ? (
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                  {post.style_tags.slice(0, 4).map((tag) => (
+                                    <span
+                                      key={`${post.id}-${tag}`}
+                                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-500"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              <OpenDetailsHint className="mt-2" />
+                            </div>
+                          </button>
+
+                          {assetsForPost.length > 1 ? (
+                            <div className="hidden xl:flex items-center gap-1.5">
+                              {previewAssets.map((asset, assetIndex) => (
+                                <button
+                                  key={asset.id}
+                                  onClick={() => openFavoritePreview(post, assetIndex)}
+                                  className="overflow-hidden rounded-[12px] bg-[#0c0d12] ring-1 ring-white/[0.06] transition-all duration-300 hover:scale-[1.03] hover:ring-white/[0.14]"
+                                  title={`Open preview ${assetIndex + 1}`}
+                                >
+                                  <ProtectedAssetImage
+                                    sources={assetPreviewSources(asset)}
+                                    alt={assetDisplayTitle(asset)}
+                                    className="h-12 w-12 object-cover"
+                                    fallbackClassName="flex h-12 w-12 items-center justify-center bg-white/[0.04] text-zinc-600"
+                                  />
+                                </button>
+                              ))}
+                              {remainingPreviewCount > 0 ? (
+                                <button
+                                  onClick={() => openFavoritePreview(post, previewAssets.length)}
+                                  className="flex h-12 w-12 items-center justify-center rounded-[12px] border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-zinc-400 transition-colors hover:border-white/[0.14] hover:text-white"
+                                  title="Open more previews"
+                                >
+                                  +{remainingPreviewCount}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <ChevronRight className="hidden h-4 w-4 shrink-0 text-zinc-700 transition-all duration-300 group-hover:translate-x-1 group-hover:text-zinc-400 md:block" />
+
+                          <div
+                            className="relative shrink-0"
+                            data-library-menu-root="true"
+                          >
+                            <button
+                              onClick={() =>
+                                setActionMenu((current) =>
+                                  current === menuId ? null : menuId,
+                                )
+                              }
+                              aria-label={`Open actions for ${favoritePostTitle(post)}`}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                              title="Actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {actionMenu === menuId ? (
+                              <InlineActionMenu>
+                                <MenuAction
+                                  onClick={() => {
+                                    openFavoritePreview(post, 0)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Open
+                                </MenuAction>
+                                <MenuAction
+                                  onClick={() => {
+                                    openCreateFromFavorite(post)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  Reuse prompt
+                                </MenuAction>
+                                <MenuAction
+                                  onClick={() => {
+                                    openFavoriteCreator(post)
+                                    setActionMenu(null)
+                                  }}
+                                >
+                                  View creator
+                                </MenuAction>
+                                <MenuDivider />
+                                <MenuAction
+                                  tone="danger"
+                                  disabled={menuBusy}
+                                  onClick={() => void handleRemoveFavorite(post)}
+                                >
+                                  Remove favorite
+                                </MenuAction>
+                              </InlineActionMenu>
+                            ) : null}
+                          </div>
+                        </div>
+                      </section>
+                    )
+                  })}
+                </section>
+              )
+            ) : (
+              <EmptyInline
+                compact
+                icon={<Heart className="h-4 w-4" />}
+                title="No favorites yet."
+                description="Like public work in Explore or Community and it will show up here as a reusable reference shelf."
+              />
+            )}
           </>
         ) : null}
 
@@ -2904,6 +3963,20 @@ export default function MediaLibraryPage() {
         ) : null}
       </AppPage>
 
+      {section === 'images' && passiveNotice ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[70] flex justify-center px-4">
+          <div
+            className={`max-w-xl rounded-full border px-4 py-2.5 text-center text-[11.5px] leading-5 text-white/90 shadow-[0_16px_48px_rgba(0,0,0,0.35)] backdrop-blur-2xl ${
+              passiveNotice.tone === 'warning'
+                ? 'border-amber-300/20 bg-[#17110a]/70'
+                : 'border-rose-300/20 bg-[#180d11]/72'
+            }`}
+          >
+            {passiveNotice.message}
+          </div>
+        </div>
+      ) : null}
+
       <ConfirmDialog
         state={confirmState}
         busy={isBusy || deleteProjectMutation.isPending}
@@ -2924,15 +3997,49 @@ export default function MediaLibraryPage() {
       <NoticeDialog state={noticeState} onClose={() => setNoticeState(null)} />
       <RenameDialog
         state={renameState}
-        busy={updatePostMutation.isPending || updateProjectMutation.isPending}
+        busy={
+          updatePostMutation.isPending ||
+          updateProjectMutation.isPending ||
+          createProjectMutation.isPending
+        }
         onCancel={() => setRenameState(null)}
-        onConfirm={async (title) => {
+        onConfirm={async ({ title, description }) => {
           if (!renameState) return
           const nextTitle = title.trim()
-          if (!nextTitle || nextTitle === renameState.title) {
+          const nextDescription = description?.trim() || undefined
+
+          if (!nextTitle) {
+            return
+          }
+
+          if (renameState.kind === 'project' && renameState.mode === 'create') {
+            try {
+              const created = await createProjectMutation.mutateAsync({
+                title: nextTitle,
+                description: nextDescription,
+                surface: 'compose',
+              })
+              setRenameState(null)
+              setNoticeState({
+                title: 'Project ready',
+                body: `"${created.title}" was created and is ready for its first run.`,
+              })
+              navigate(`/projects/${created.id}/create`)
+            } catch (error) {
+              handleMenuError(error)
+            }
+            return
+          }
+
+          if (
+            nextTitle === renameState.title &&
+            (renameState.kind !== 'project' ||
+              nextDescription === (renameState.description?.trim() || undefined))
+          ) {
             setRenameState(null)
             return
           }
+
           try {
             if (renameState.kind === 'post') {
               await updatePostMutation.mutateAsync({
@@ -2941,10 +4048,14 @@ export default function MediaLibraryPage() {
               })
               return
             }
+            if (!renameState.id) {
+              setRenameState(null)
+              return
+            }
             await updateProjectMutation.mutateAsync({
               projectId: renameState.id,
               title: nextTitle,
-              description: renameState.description,
+              description: nextDescription,
             })
           } catch (error) {
             handleMenuError(error)
@@ -3000,6 +4111,30 @@ export default function MediaLibraryPage() {
             previewState.group.title,
           )
           setPreviewState(null)
+        }}
+      />
+      <FavoriteLightbox
+        state={favoritePreviewState}
+        busy={unlikeFavoriteMutation.isPending}
+        onClose={() => setFavoritePreviewState(null)}
+        onSelect={(index) =>
+          setFavoritePreviewState((current) =>
+            current ? { ...current, index } : current,
+          )
+        }
+        onReusePrompt={() => {
+          if (!favoritePreviewState) return
+          openCreateFromFavorite(favoritePreviewState.post)
+          setFavoritePreviewState(null)
+        }}
+        onOpenCreator={() => {
+          if (!favoritePreviewState) return
+          openFavoriteCreator(favoritePreviewState.post)
+          setFavoritePreviewState(null)
+        }}
+        onRemoveFavorite={async () => {
+          if (!favoritePreviewState) return
+          await handleRemoveFavorite(favoritePreviewState.post)
         }}
       />
       <MovePostDialog

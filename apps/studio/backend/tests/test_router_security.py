@@ -8,11 +8,13 @@ import json
 import httpx
 import pytest
 from fastapi import FastAPI, Request
+from fastapi.security.http import HTTPAuthorizationCredentials
 from pydantic import SecretStr
+from starlette.requests import Request as StarletteRequest
 
 from config.env import Environment, get_settings
 import studio_platform.router as router_module
-from security.auth import User, UserRole
+from security.auth import User, UserRole, create_user_tokens, get_current_user, setup_auth
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
 from security.supabase_auth import SupabaseAuthUnavailableError
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
@@ -39,6 +41,8 @@ async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMem
         user_id = request.headers.get("X-Test-User", "user-1")
         email = request.headers.get("X-Test-Email", f"{user_id}@example.com")
         username = request.headers.get("X-Test-Username", user_id)
+        session_id = request.headers.get("X-Test-Session-Id", "session-current")
+        auth_provider = request.headers.get("X-Test-Auth-Provider", "email")
         role_raw = request.headers.get("X-Test-Role", "user").strip().lower()
         role = UserRole.ADMIN if role_raw == "admin" else UserRole.USER
         return User(
@@ -56,6 +60,9 @@ async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMem
                 "accepted_privacy": True,
                 "accepted_usage_policy": True,
                 "marketing_opt_in": False,
+                "session_id": session_id,
+                "auth_provider": auth_provider,
+                "auth_providers": [auth_provider],
             },
         )
 
@@ -836,15 +843,73 @@ async def test_settings_bootstrap_route_returns_signed_in_shell_payload(tmp_path
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/v1/settings/bootstrap", headers={"X-Test-User": "bootstrap-user"})
+        response = await client.get(
+            "/v1/settings/bootstrap",
+            headers={
+                "X-Test-User": "bootstrap-user",
+                "X-Test-Session-Id": "session-bootstrap",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+                "X-Omnia-Client-Display-Mode": "browser",
+            },
+        )
 
     try:
         assert response.status_code == 200
         payload = response.json()
-        assert set(payload.keys()) >= {"identity", "entitlements", "plans", "models", "presets", "draft_projects", "styles", "prompt_memory"}
+        assert set(payload.keys()) >= {"identity", "entitlements", "plans", "models", "presets", "draft_projects", "styles", "prompt_memory", "active_sessions"}
         assert set(payload["draft_projects"].keys()) == {"compose", "chat"}
         assert set(payload["styles"].keys()) == {"catalog", "my_styles", "favorites"}
         assert payload["prompt_memory"]["identity_id"] == "bootstrap-user"
+        assert payload["active_sessions"]["current_session_id"] == "session-bootstrap"
+        assert payload["active_sessions"]["session_count"] == 1
+        assert payload["active_sessions"]["sessions"][0]["device_label"] == "Chrome on Windows"
+        assert payload["active_sessions"]["sessions"][0]["current"] is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_end_other_settings_sessions_keeps_current_device_and_revokes_the_rest(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    await service.record_access_session(
+        identity_id="user-1",
+        session_id="session-current",
+        auth_provider="email",
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+        client_ip="127.0.0.1",
+        host_label="127.0.0.1:5173",
+        display_mode="browser",
+    )
+    await service.record_access_session(
+        identity_id="user-1",
+        session_id="session-other",
+        auth_provider="google",
+        user_agent="Mozilla/5.0 (Linux; Android 14) Chrome/123.0.0.0 Mobile Safari/537.36",
+        client_ip="95.10.11.12",
+        host_label="studio.omniacreata.com",
+        display_mode="standalone",
+    )
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/settings/sessions/end-others",
+            headers={
+                "X-Test-User": "user-1",
+                "X-Test-Session-Id": "session-current",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+                "X-Omnia-Client-Display-Mode": "browser",
+            },
+        )
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["current_session_id"] == "session-current"
+        assert payload["session_count"] == 1
+        assert payload["other_session_count"] == 0
+        assert payload["can_sign_out_others"] is False
+        assert [item["session_id"] for item in payload["sessions"]] == ["session-current"]
     finally:
         await service.shutdown()
 
@@ -906,6 +971,42 @@ async def test_auth_me_route_bootstraps_identity_for_authenticated_user(tmp_path
         assert identity.username == "user-1"
     finally:
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_includes_session_context_for_local_jwt_tokens() -> None:
+    setup_auth()
+    token_payload = create_user_tokens(
+        User(
+            id="session-user",
+            email="session-user@example.com",
+            username="Session User",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={"owner_mode": False},
+        )
+    )
+    request = StarletteRequest(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/auth/me",
+            "headers": [],
+            "query_string": b"",
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_payload["access_token"])
+
+    user = await get_current_user(request, credentials)
+
+    assert user is not None
+    assert user.metadata["session_id"]
+    assert user.metadata["session_issued_at"] is not None
+    assert user.metadata["session_expires_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -2423,6 +2524,53 @@ async def test_project_mutation_routes_use_explicit_rate_limits(
 
 
 @pytest.mark.asyncio
+async def test_profile_favorites_route_uses_explicit_rate_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_list_liked_posts(identity_id: str) -> list[dict[str, object]]:
+        return [
+            {
+                "id": "post-1",
+                "title": "Saved post",
+                "prompt": "misty mountains",
+                "owner_display_name": "User",
+                "owner_username": "user",
+                "cover_asset": None,
+                "preview_assets": [],
+                "visibility": "public",
+                "like_count": 4,
+                "viewer_has_liked": True,
+                "created_at": "2026-04-19T10:00:00Z",
+                "project_id": None,
+                "style_tags": ["cinematic"],
+            }
+        ]
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.list_liked_posts = fake_list_liked_posts  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/profiles/me/favorites", headers={"X-Test-User": "user-1"})
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["posts"][0]["viewer_has_liked"] is True
+        assert any("profiles:favorites" in key and limit == 120 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_profile_self_service_routes_use_explicit_rate_limits(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2542,6 +2690,9 @@ async def test_style_mutation_routes_use_explicit_rate_limits(
     async def fake_update_style(*args, **kwargs):
         return object()
 
+    async def fake_delete_style(*args, **kwargs):
+        return None
+
     def fake_serialize_style(style) -> dict:
         return {"id": "style-1"}
 
@@ -2549,6 +2700,7 @@ async def test_style_mutation_routes_use_explicit_rate_limits(
     service.save_style = fake_save_style  # type: ignore[method-assign]
     service.save_style_from_prompt = fake_save_style_from_prompt  # type: ignore[method-assign]
     service.update_style = fake_update_style  # type: ignore[method-assign]
+    service.delete_style = fake_delete_style  # type: ignore[method-assign]
     service._serialize_style = fake_serialize_style  # type: ignore[method-assign]
 
     transport = httpx.ASGITransport(app=app)
@@ -2574,12 +2726,17 @@ async def test_style_mutation_routes_use_explicit_rate_limits(
             headers={"X-Test-User": "user-1"},
             json={"favorite": True},
         )
+        delete_response = await client.delete(
+            "/v1/styles/style-1",
+            headers={"X-Test-User": "user-1"},
+        )
 
     try:
         assert create_response.status_code == 201
         assert prompt_response.status_code == 201
         assert patch_response.status_code == 200
-        assert sum(1 for key, limit, window in calls if "styles:mutate" in key and limit == 40 and window == 3600) == 3
+        assert delete_response.status_code == 200
+        assert sum(1 for key, limit, window in calls if "styles:mutate" in key and limit == 40 and window == 3600) == 4
     finally:
         await service.shutdown()
 
