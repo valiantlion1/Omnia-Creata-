@@ -2588,7 +2588,26 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
     async def fake_delete_identity(identity_id: str) -> None:
         return None
 
-    async def fake_update_profile(identity_id: str, display_name=None, bio=None, default_visibility=None) -> None:
+    captured_updates: list[dict[str, object]] = []
+
+    async def fake_update_profile(
+        identity_id: str,
+        display_name=None,
+        bio=None,
+        default_visibility=None,
+        featured_asset_id=None,
+        featured_asset_id_provided=False,
+    ) -> None:
+        captured_updates.append(
+            {
+                "identity_id": identity_id,
+                "display_name": display_name,
+                "bio": bio,
+                "default_visibility": default_visibility,
+                "featured_asset_id": featured_asset_id,
+                "featured_asset_id_provided": featured_asset_id_provided,
+            }
+        )
         return None
 
     async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None) -> dict:
@@ -2607,7 +2626,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
         patch_response = await client.patch(
             "/v1/profiles/me",
             headers={"X-Test-User": "user-1"},
-            json={"display_name": "User One"},
+            json={"display_name": "User One", "featured_asset_id": "asset-hero-1"},
         )
         delete_response = await client.delete("/v1/profiles/me", headers={"X-Test-User": "user-1"})
 
@@ -2615,6 +2634,16 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
         assert export_response.status_code == 200
         assert patch_response.status_code == 200
         assert delete_response.status_code == 200
+        assert captured_updates == [
+            {
+                "identity_id": "user-1",
+                "display_name": "User One",
+                "bio": None,
+                "default_visibility": None,
+                "featured_asset_id": "asset-hero-1",
+                "featured_asset_id_provided": True,
+            }
+        ]
         assert any("profiles:export" in key and limit == 6 and window == 3600 for key, limit, window in calls)
         assert any("profiles:update" in key and limit == 24 and window == 3600 for key, limit, window in calls)
         assert any("profiles:delete" in key and limit == 3 and window == 3600 for key, limit, window in calls)

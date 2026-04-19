@@ -417,6 +417,7 @@ class StudioService:
         marketing_consent_version: str | None = None,
         bio: str = "",
         avatar_url: str | None = None,
+        featured_asset_id: str | None = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
         return await self.identity.ensure_identity(
@@ -442,6 +443,7 @@ class StudioService:
             marketing_consent_version=marketing_consent_version,
             bio=bio,
             avatar_url=avatar_url,
+            featured_asset_id=featured_asset_id,
             default_visibility=default_visibility,
         )
 
@@ -1272,12 +1274,16 @@ class StudioService:
         display_name: Optional[str] = None,
         bio: Optional[str] = None,
         default_visibility: Optional[Visibility] = None,
+        featured_asset_id: Optional[str] = None,
+        featured_asset_id_provided: bool = False,
     ) -> OmniaIdentity:
         return await self.public.update_profile(
             identity_id,
             display_name=display_name,
             bio=bio,
             default_visibility=default_visibility,
+            featured_asset_id=featured_asset_id,
+            featured_asset_id_provided=featured_asset_id_provided,
         )
 
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:

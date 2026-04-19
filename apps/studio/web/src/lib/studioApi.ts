@@ -670,13 +670,15 @@ export type ProfileSummary = {
   avatar_url: string | null
   bio: string
   plan: IdentityPlan
-  default_visibility: Visibility
+  default_visibility: Visibility | null
+  featured_asset_id: string | null
   usage_summary: UsageSummary | null
   public_post_count: number
 }
 
 export type ProfilePayload = {
   profile: ProfileSummary
+  featured_asset: MediaAsset | null
   posts: PublicPost[]
   own_profile: boolean
   can_edit: boolean
@@ -1177,7 +1179,7 @@ export const studioApi = {
   listFavoritePosts: () => apiFetch<{ posts: PublicPost[] }>('/profiles/me/favorites'),
   exportProfile: () => apiFetch<Record<string, unknown>>('/profiles/me/export'),
   deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
-  updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility }) =>
+  updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility; featured_asset_id?: string | null }) =>
     apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 }
 

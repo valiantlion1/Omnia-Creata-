@@ -63,6 +63,7 @@ class OmniaIdentity(BaseModel):
     marketing_consent_version: Optional[str] = None
     bio: str = ""
     avatar_url: Optional[str] = None
+    profile_featured_asset_id: Optional[str] = None
     default_visibility: Visibility = Visibility.PRIVATE
     workspace_id: str = Field(default_factory=lambda: __import__("uuid").uuid4().__str__())
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE

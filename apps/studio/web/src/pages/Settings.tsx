@@ -378,8 +378,8 @@ function ProfileEditorDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-md sm:py-8">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-[920px] flex-col overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
         <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -409,109 +409,116 @@ function ProfileEditorDialog({
           </div>
         </div>
 
-        <div className="grid gap-4 px-6 py-6 sm:px-7 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
-            <div className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-3xl font-black text-white shadow-[0_0_40px_rgba(var(--primary),0.3)]">
-              {(normalizedDisplayName || identity.username || 'S').slice(0, 1).toUpperCase()}
-            </div>
-            <div className="mt-4 text-xl font-bold tracking-tight text-white">{normalizedDisplayName || 'Studio creator'}</div>
-            <div className="mt-1 text-sm font-medium text-zinc-400">@{identity.username ?? 'creator'}</div>
-            {identity.email ? <div className="mt-3 text-sm text-zinc-500">{identity.email}</div> : null}
+        <div className="overflow-y-auto">
+          <div className="grid gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <section className="rounded-[20px] border border-white/[0.06] bg-white/[0.02] p-4">
+              <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-[20px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-[1.75rem] font-black text-white shadow-[0_0_30px_rgba(var(--primary),0.28)]">
+                {(normalizedDisplayName || identity.username || 'S').slice(0, 1).toUpperCase()}
+              </div>
+              <div className="mt-4 text-lg font-bold tracking-tight text-white">{normalizedDisplayName || 'Studio creator'}</div>
+              <div className="mt-1 text-sm font-medium text-zinc-400">@{identity.username ?? 'creator'}</div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <StatusPill tone={defaultVisibility === 'public' ? 'brand' : 'neutral'}>
-                {defaultVisibility === 'public' ? 'Public by default' : 'Private by default'}
-              </StatusPill>
-              <StatusPill tone="neutral">Handle locked</StatusPill>
-            </div>
-
-            <p className="mt-4 text-sm leading-6 text-zinc-400">
-              Display name and bio change how you appear around Studio. Public links and mentions keep using the same stable @{identity.username ?? 'creator'} handle.
-            </p>
-          </section>
-
-          <div className="space-y-4">
-            <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
-                  <p className="mt-1 text-sm leading-7 text-zinc-400">Choose the visible name and short profile copy people see around Studio.</p>
-                </div>
-                <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <StatusPill tone={defaultVisibility === 'public' ? 'brand' : 'neutral'}>
+                  {defaultVisibility === 'public' ? 'Public by default' : 'Private by default'}
+                </StatusPill>
+                <StatusPill tone="neutral">Handle locked</StatusPill>
               </div>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
-                <label className="block">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Display name</span>
-                  <input
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="How Studio should show your name"
-                    className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
-                  />
-                </label>
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                Change the public-facing details here. Your stable @{identity.username ?? 'creator'} handle keeps profile links and mentions consistent.
+              </p>
 
-                <div className="rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Public handle</div>
-                  <div className="mt-2 text-sm font-semibold text-white">@{identity.username ?? 'creator'}</div>
-                  <p className="mt-2 text-xs leading-6 text-zinc-500">Handles stay stable so links, mentions, and published ownership do not drift.</p>
-                </div>
-              </div>
-
-              <label className="mt-4 block">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Bio</span>
-                <textarea
-                  value={bio}
-                  onChange={(event) => setBio(event.target.value.slice(0, 220))}
-                  rows={4}
-                  placeholder="Tell people what kind of work, style, or creative focus they should expect from you."
-                  className="mt-2 w-full resize-none rounded-[18px] bg-black/30 px-4 py-3 text-sm leading-7 text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
-                />
-              </label>
-              <p className="mt-2 text-xs leading-6 text-zinc-500">{bio.length}/220 characters</p>
+              {identity.email ? <div className="mt-4 text-xs leading-6 text-zinc-500">{identity.email}</div> : null}
             </section>
 
-            <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[15px] font-semibold text-white">Profile defaults</h3>
-                  <p className="mt-1 text-sm leading-7 text-zinc-400">Choose whether new creations should start public or stay private until you share them.</p>
+            <div className="space-y-4">
+              <section className="rounded-[20px] border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
+                    <p className="mt-1 text-sm leading-6 text-zinc-400">Keep the edit surface focused: visible name, short bio, and the default privacy for new work.</p>
+                  </div>
+                  <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
                 </div>
-                <div className="flex items-center gap-2 rounded-full bg-black/20 p-1 ring-1 ring-white/[0.06]">
-                  <button
-                    type="button"
-                    onClick={() => setDefaultVisibility('public')}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                      defaultVisibility === 'public' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    Public
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDefaultVisibility('private')}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                      defaultVisibility === 'private' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    Private
-                  </button>
-                </div>
-              </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className={`rounded-[18px] border px-4 py-3 ${defaultVisibility === 'public' ? 'border-violet-300/20 bg-violet-300/10 text-violet-100' : 'border-white/[0.06] bg-black/20 text-zinc-300'}`}>
-                  <div className="text-sm font-semibold">Public first</div>
-                  <p className="mt-1 text-xs leading-6 text-current/80">New work can appear on your public profile once you publish it.</p>
-                </div>
-                <div className={`rounded-[18px] border px-4 py-3 ${defaultVisibility === 'private' ? 'border-violet-300/20 bg-violet-300/10 text-violet-100' : 'border-white/[0.06] bg-black/20 text-zinc-300'}`}>
-                  <div className="text-sm font-semibold">Private first</div>
-                  <p className="mt-1 text-xs leading-6 text-current/80">New work stays personal until you intentionally share or publish it.</p>
-                </div>
-              </div>
-            </section>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_190px]">
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Display name</span>
+                    <input
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      placeholder="How Studio should show your name"
+                      className="mt-2 w-full rounded-[16px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                    />
+                  </label>
 
-            {profileError ? <p className="text-sm text-rose-200">{profileError}</p> : null}
+                  <div className="rounded-[16px] border border-white/[0.06] bg-black/20 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Public handle</div>
+                    <div className="mt-2 text-sm font-semibold text-white">@{identity.username ?? 'creator'}</div>
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">Locked so links, mentions, and published ownership stay stable.</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Bio</span>
+                    <textarea
+                      value={bio}
+                      onChange={(event) => setBio(event.target.value.slice(0, 220))}
+                      rows={3}
+                      placeholder="Tell people what kind of work, style, or creative focus they should expect from you."
+                      className="mt-2 w-full resize-none rounded-[16px] bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                    />
+                  </label>
+
+                  <div className="rounded-[16px] border border-white/[0.06] bg-black/20 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Profile defaults</div>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">Choose how new creations should start before you publish them.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-2 rounded-full bg-black/30 p-1 ring-1 ring-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => setDefaultVisibility('public')}
+                        className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                          defaultVisibility === 'public' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
+                        }`}
+                      >
+                        Public
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDefaultVisibility('private')}
+                        className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                          defaultVisibility === 'private' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'
+                        }`}
+                      >
+                        Private
+                      </button>
+                    </div>
+
+                    <div className="mt-3 rounded-[14px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-xs leading-5 text-zinc-400">
+                      {defaultVisibility === 'public'
+                        ? 'New work can appear on your public profile after you choose to publish it.'
+                        : 'New work stays personal until you intentionally share or publish it.'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs leading-5 text-zinc-500">{bio.length}/220 characters</p>
+                  <p className="text-xs leading-5 text-zinc-500">
+                    {defaultVisibility === 'public' ? 'New creations start public-ready.' : 'New creations stay private first.'}
+                  </p>
+                </div>
+              </section>
+
+              {profileError ? <p className="text-sm text-rose-200">{profileError}</p> : null}
+            </div>
           </div>
         </div>
       </div>

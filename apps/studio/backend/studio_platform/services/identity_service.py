@@ -220,6 +220,7 @@ class IdentityService:
         marketing_consent_version: str | None = None,
         bio: str = "",
         avatar_url: str | None = None,
+        featured_asset_id: str | None = None,
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
         holder: Dict[str, Any] = {}
@@ -263,6 +264,7 @@ class IdentityService:
                     marketing_opt_in=marketing_opt_in,
                     bio=bio.strip(),
                     avatar_url=avatar_url,
+                    profile_featured_asset_id=featured_asset_id,
                     default_visibility=default_visibility or Visibility.PRIVATE,
                     subscription_status=(
                         SubscriptionStatus.ACTIVE
@@ -359,6 +361,7 @@ class IdentityService:
                 )
                 identity.bio = bio or identity.bio
                 identity.avatar_url = avatar_url or identity.avatar_url
+                identity.profile_featured_asset_id = featured_asset_id or identity.profile_featured_asset_id
                 if default_visibility is not None:
                     identity.default_visibility = default_visibility
 
@@ -920,6 +923,49 @@ class IdentityService:
             visible_posts.append(post)
 
         visible_posts.sort(key=lambda item: item.created_at, reverse=True)
+        visible_asset_ids: list[str] = []
+        for post in visible_posts:
+            if post.cover_asset_id:
+                visible_asset_ids.append(post.cover_asset_id)
+            visible_asset_ids.extend(post.asset_ids)
+
+        featured_asset: MediaAsset | None = None
+        if own_profile and identity.profile_featured_asset_id:
+            candidate = assets_by_id.get(identity.profile_featured_asset_id)
+            if (
+                candidate is not None
+                and candidate.deleted_at is None
+                and self._is_truthful_surface_asset(candidate)
+                and self.service.library.asset_has_renderable_variant(candidate)
+            ):
+                featured_asset = candidate
+        elif identity.profile_featured_asset_id and identity.profile_featured_asset_id in visible_asset_ids:
+            candidate = assets_by_id.get(identity.profile_featured_asset_id)
+            if (
+                candidate is not None
+                and candidate.deleted_at is None
+                and self._is_truthful_surface_asset(candidate)
+                and self.service.library.asset_has_renderable_variant(candidate)
+            ):
+                featured_asset = candidate
+
+        if featured_asset is None:
+            seen_asset_ids: set[str] = set()
+            for asset_id in visible_asset_ids:
+                if asset_id in seen_asset_ids:
+                    continue
+                seen_asset_ids.add(asset_id)
+                candidate = assets_by_id.get(asset_id)
+                if candidate is None or candidate.deleted_at is not None:
+                    continue
+                if not (
+                    self._is_truthful_surface_asset(candidate)
+                    and self.service.library.asset_has_renderable_variant(candidate)
+                ):
+                    continue
+                featured_asset = candidate
+                break
+
         public_post_count = len(
             [
                 post
@@ -951,9 +997,13 @@ class IdentityService:
                 "bio": identity.bio,
                 "plan": identity.plan.value,
                 "default_visibility": identity.default_visibility.value if own_profile else None,
+                "featured_asset_id": identity.profile_featured_asset_id if own_profile else None,
                 "usage_summary": self.serialize_usage_summary(identity, billing_state=billing_state) if own_profile else None,
                 "public_post_count": public_post_count,
             },
+            "featured_asset": self.serialize_asset(featured_asset, identity_id=viewer_identity_id)
+            if featured_asset is not None
+            else None,
             "posts": [
                 self.serialize_post(
                     post,
@@ -976,9 +1026,12 @@ class IdentityService:
         display_name: Optional[str] = None,
         bio: Optional[str] = None,
         default_visibility: Optional[Visibility] = None,
+        featured_asset_id: Optional[str] = None,
+        featured_asset_id_provided: bool = False,
     ) -> OmniaIdentity:
         identity = await self.get_identity(identity_id)
         cleaned_name: str | None = None
+        selected_featured_asset: MediaAsset | None = None
 
         if display_name is not None:
             cleaned_name = re.sub(r"\s+", " ", display_name).strip()[:120]
@@ -989,6 +1042,18 @@ class IdentityService:
             if moderation_result != ModerationResult.SAFE:
                 raise ValueError("That display name is not allowed. Choose a different one.")
 
+        if featured_asset_id_provided and featured_asset_id is not None:
+            selected_featured_asset = await self.service.store.get_model("assets", featured_asset_id, MediaAsset)
+            if selected_featured_asset is None:
+                raise ValueError("Choose one of your Studio images for the profile header.")
+            if selected_featured_asset.identity_id != identity.id or selected_featured_asset.deleted_at is not None:
+                raise ValueError("Choose one of your Studio images for the profile header.")
+            if not (
+                self.service.library.is_truthful_surface_asset(selected_featured_asset)
+                and self.service.library.asset_has_renderable_variant(selected_featured_asset)
+            ):
+                raise ValueError("Choose a finished Studio image for the profile header.")
+
         def mutation(state: StudioState) -> None:
             current = state.identities[identity.id]
             if cleaned_name is not None:
@@ -997,6 +1062,8 @@ class IdentityService:
                 current.bio = bio.strip()[:220]
             if default_visibility is not None:
                 current.default_visibility = default_visibility
+            if featured_asset_id_provided:
+                current.profile_featured_asset_id = selected_featured_asset.id if selected_featured_asset is not None else None
             current.updated_at = utc_now()
             state.identities[current.id] = current
 
@@ -1038,6 +1105,7 @@ class IdentityService:
             marketing_opt_in=identity.marketing_opt_in,
             bio=identity.bio,
             avatar_url=identity.avatar_url,
+            featured_asset_id=identity.profile_featured_asset_id,
             default_visibility=identity.default_visibility,
         )
         refreshed = await self.service.store.get_model("identities", identity_id, OmniaIdentity)

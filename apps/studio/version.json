@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.19.149",
+  "build": "2026.04.19.154",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-19",
-  "notes": "The sidebar now renders Settings as a single clean navigation item again, removing the duplicate open-settings gear from the expanded rail while preserving the correct guest login redirect."
+  "notes": "Explore Showcase now uses a curated aspect-ratio wall instead of a rigid tile grid, with varied hero, landscape, portrait, and detail crops so the public gallery feels more editorial and less like identical squares."
 }

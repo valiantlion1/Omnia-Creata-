@@ -5557,3 +5557,78 @@ async def test_update_profile_rejects_blocked_display_name(tmp_path: Path):
             await service.update_profile(identity.id, display_name="trump")
     finally:
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_update_profile_can_pin_featured_asset_and_serialize_it(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    media_root = tmp_path / "media"
+    service = StudioService(store, ProviderRegistry(), media_root)
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        default_visibility=Visibility.PUBLIC,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Portrait Set",
+    )
+    render_path = media_root / "render.png"
+    render_path.parent.mkdir(parents=True, exist_ok=True)
+    render_path.write_bytes(b"png")
+    asset = MediaAsset(
+        id="asset-hero-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Hero Render",
+        prompt="cinematic profile portrait",
+        url="stored",
+        local_path=str(render_path),
+        metadata={"library_state": "ready"},
+    )
+    post = PublicPost(
+        id="post-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        owner_username="userone",
+        owner_display_name="User One",
+        title="Hero Render",
+        prompt="cinematic profile portrait",
+        cover_asset_id=asset.id,
+        asset_ids=[asset.id],
+        visibility=Visibility.PUBLIC,
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+            state.posts.__setitem__(post.id, post),
+        )
+    )
+
+    try:
+        await service.update_profile(
+            identity.id,
+            featured_asset_id=asset.id,
+            featured_asset_id_provided=True,
+        )
+        payload = await service.get_profile_payload(identity_id=identity.id, viewer_identity_id=identity.id)
+
+        assert payload["profile"]["featured_asset_id"] == asset.id
+        assert payload["featured_asset"] is not None
+        assert payload["featured_asset"]["id"] == asset.id
+    finally:
+        await service.shutdown()

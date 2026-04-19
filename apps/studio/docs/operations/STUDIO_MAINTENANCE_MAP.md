@@ -12,11 +12,26 @@ Last updated: 2026-04-19
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.19.149`. This wave removes a noisy shell regression: the expanded sidebar now renders `Settings` as one clean nav item again instead of pairing the row with a second trailing gear shortcut.
-- Current proof on `.149` is targeted rather than a fresh full-environment pass. The StudioShell regression test passes, Studio web `type-check` passes, and production `build` passes. This shell fix was not browser-smoked through the user's live signed-in IAB session in this wave, so final behavior remains source/test/build-verified rather than session-level browser-verified.
-- The same `.149` wave keeps guest routing honest. Even without the duplicate shortcut, `Settings` still routes through the login intent for guests instead of dropping them onto an awkward dead-end settings path.
+- Current implementation build is `2026.04.19.154`. This wave makes the public Explore `Showcase` shelf feel more curated by replacing the old modulo-based square-wall treatment with an editorial aspect-ratio layout.
+- Current proof on `.154` is targeted rather than a fresh full-environment pass. The Dashboard regression test passes, Studio web `type-check` passes, production `build` passes, and public browser smoke on `/explore` confirms the Showcase tab now renders with varied hero, landscape, portrait, and detail crops instead of a rigid equal-tile wall. This wave was browser-smoked on the public Explore route only, not through the user's live signed-in IAB session.
+- The same `.154` wave also improves crop honesty. Showcase references now carry explicit display modes and crop focus metadata, so the public gallery can feel intentional without pretending the square source assets naturally arrived in those proportions.
 
 ## Recent stabilization wins
+
+- `.154` removes one of the flatter-looking public gallery problems from Explore. Showcase no longer feels like a random square dump with a thin layer of ratio randomness on top.
+- The same wave gives the curated shelf a stronger editorial rhythm. Larger hero frames, calmer landscape breaks, portrait-focused crops, and explicit crop focus points make the wall feel intentional without forcing a perfectly uniform grid.
+
+- `.153` removes one of the more obvious style mismatches from the docs surface. Help and the manual no longer try to package every topic into a card, which makes the product guide read more like documentation and less like a dashboard.
+- The same wave also removes a dead-feeling manual branch. `Shortcuts` no longer appears in the learn navigation, and the lighter `Tips & hints` lane now covers the practical guidance side without pretending keyboard shortcut docs are a first-class learning chapter.
+
+- `.152` removes one of the more obvious oversized-surface problems from Settings. The profile editor no longer stacks multiple giant cards that fight the viewport and make a simple identity edit feel heavier than it is.
+- The same wave also keeps the action model familiar while fixing the scale problem. Display name, bio, and default visibility still live in the same modal with the same save flow, but the composition is tighter, less noisy, and better behaved on shorter screens.
+
+- `.151` removes one of the uglier shell-overflow regressions from the signed-in sidebar. The footer profile area no longer leaks a detached shortcut panel that can appear clipped or off-screen on Account.
+- The same wave keeps the useful affordances without the broken visual. Account, Billing, and FAQ shortcuts now live inline under the signed-in profile block when needed, which is calmer than a floating cluster and easier to contain responsively.
+
+- `.150` removes one of the colder account-surface UX gaps. A creator profile can now lead with a chosen Studio render instead of an empty header band, which makes the page feel intentional and gives the edit action a clear visual purpose.
+- The same wave also fixes a dead interaction path. Gallery pieces on the profile now open in the shared Studio lightbox, so preview behavior matches the rest of the product without layering a second modal system on top.
 
 - `.149` removes a visually noisy utility-rail bug from the signed-in shell. `Settings` no longer appears as both the main row and a second open-settings gear in the expanded sidebar.
 - The same wave keeps the interaction model simpler. Users now get one obvious Settings entry in the open rail, while collapsed mode still preserves the compact icon-only navigation shape.

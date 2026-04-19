@@ -83,7 +83,6 @@ function Section({
   search = '',
   collapsed = false,
   getChildren,
-  renderExpandedPanel,
   expandedItems,
   onToggleItem,
   onNavigate,
@@ -410,7 +409,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         />
       </div>
 
-      <div className="relative border-t border-white/[0.03] p-3">
+      <div className="relative overflow-hidden border-t border-white/[0.03] p-3">
         {/* Usage bar — always visible for logged-in users */}
         {!isGuestShell && !collapsed && usageSummary && !hasInternalAccess ? (
           <div className="mb-3 space-y-1.5 px-1">
@@ -426,29 +425,62 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         {/* User row */}
         {/* User row */}
         <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-2'}`}>
-          <Link
-            to={isGuestShell ? '/signup' : '/account'}
-            className={`group/user min-w-0 flex-1 rounded-xl px-2 py-1.5 transition-all duration-300 hover:bg-white/[0.05] active:scale-[0.98] ${collapsed ? 'flex h-10 w-10 items-center justify-center bg-white/[0.05] rounded-full ring-1 ring-white/[0.02]' : 'flex items-center gap-2.5'}`}
-            title={isGuestShell ? 'Create an account' : 'Open profile'}
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[rgb(var(--primary-light)/0.3)] to-[rgb(var(--accent)/0.3)] text-sm font-bold text-white ring-1 ring-white/[0.15] shadow-[0_0_15px_rgba(124,58,237,0.3)] transition-all duration-500 group-hover/user:shadow-[0_0_20px_rgba(124,58,237,0.6)] group-hover/user:ring-white/[0.3]">
-              {auth?.identity?.avatar_url ? (
-                <img src={auth.identity.avatar_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover/user:scale-110" />
-              ) : (
-                (auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()
-              )}
-            </div>
-            {!collapsed ? (
-              <div className="min-w-0">
-                <div className="flex items-center truncate text-[13px] font-semibold text-white/95">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
-                <div className="mt-0.5 text-[11px] text-zinc-500">
-                  {isGuestShell
-                    ? 'Public explore'
-                    : `${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
+          <div className={`min-w-0 flex-1 ${collapsed ? 'flex items-center justify-center' : ''}`}>
+            <Link
+              to={isGuestShell ? '/signup' : '/account'}
+              className={`group/user min-w-0 rounded-xl px-2 py-1.5 transition-all duration-300 hover:bg-white/[0.05] active:scale-[0.98] ${
+                collapsed ? 'flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.05] ring-1 ring-white/[0.02]' : 'flex items-center gap-2.5'
+              }`}
+              title={isGuestShell ? 'Create an account' : 'Open profile'}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[rgb(var(--primary-light)/0.3)] to-[rgb(var(--accent)/0.3)] text-sm font-bold text-white ring-1 ring-white/[0.15] shadow-[0_0_15px_rgba(124,58,237,0.3)] transition-all duration-500 group-hover/user:shadow-[0_0_20px_rgba(124,58,237,0.6)] group-hover/user:ring-white/[0.3]">
+                {auth?.identity?.avatar_url ? (
+                  <img src={auth.identity.avatar_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover/user:scale-110" />
+                ) : (
+                  (auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()
+                )}
+              </div>
+              {!collapsed ? (
+                <div className="min-w-0">
+                  <div className="flex items-center truncate text-[13px] font-semibold text-white/95">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
+                  <div className="mt-0.5 text-[11px] text-zinc-500">
+                    {isGuestShell
+                      ? 'Public explore'
+                      : `${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
+                  </div>
                 </div>
+              ) : null}
+            </Link>
+
+            {!collapsed && !isGuestShell ? (
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-[42px] text-[10px] leading-4 text-zinc-500">
+                {auth?.identity.owner_mode || auth?.identity.root_admin ? (
+                  <span className="font-medium text-zinc-400">Owner access</span>
+                ) : null}
+                <Link
+                  to="/account"
+                  className="transition hover:text-white"
+                  aria-label="Open account from profile footer"
+                >
+                  Account
+                </Link>
+                <Link
+                  to="/subscription"
+                  className="transition hover:text-white"
+                  aria-label="Open billing from profile footer"
+                >
+                  Billing
+                </Link>
+                <Link
+                  to="/help#faq"
+                  className="transition hover:text-white"
+                  aria-label="Open FAQ from profile footer"
+                >
+                  FAQ
+                </Link>
               </div>
             ) : null}
-          </Link>
+          </div>
 
           {/* Log out — directly visible, no ... menu needed */}
           {!isGuestShell ? (

@@ -148,6 +148,7 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
 
 type ExploreSort = 'trending' | 'newest' | 'top' | 'styles'
 type GalleryTab = 'community' | 'showcase' | 'atmospheres'
+type ShowcaseDisplay = 'hero' | 'landscape' | 'portrait' | 'softPortrait' | 'detail'
 
 const sortOptions: Array<{ id: ExploreSort; label: string }> = [
   { id: 'trending', label: 'Trending' },
@@ -170,6 +171,31 @@ type ShowcaseReference = {
   prompt: string
   likes: number
   createdAt: string
+  display: ShowcaseDisplay
+  focus?: string
+}
+
+const showcaseDisplayClasses: Record<ShowcaseDisplay, { tile: string; frame: string }> = {
+  hero: {
+    tile: 'sm:col-span-2 lg:col-span-4',
+    frame: 'aspect-[16/10]',
+  },
+  landscape: {
+    tile: 'sm:col-span-2 lg:col-span-4',
+    frame: 'aspect-[3/2]',
+  },
+  portrait: {
+    tile: 'sm:col-span-1 lg:col-span-2',
+    frame: 'aspect-[4/5]',
+  },
+  softPortrait: {
+    tile: 'sm:col-span-1 lg:col-span-2',
+    frame: 'aspect-[5/6]',
+  },
+  detail: {
+    tile: 'sm:col-span-1 lg:col-span-2',
+    frame: 'aspect-square',
+  },
 }
 
 const showcaseReferences: ShowcaseReference[] = [
@@ -181,6 +207,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Cinematic illustration of a neon cityscape drenched in rain and reflected light.',
     likes: 248,
     createdAt: '2026-04-11T18:00:00Z',
+    display: 'hero',
+    focus: 'center 58%',
   },
   {
     id: 'showcase-editorial-portrait',
@@ -190,6 +218,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Fashion illustration portrait with polished lighting and editorial framing.',
     likes: 214,
     createdAt: '2026-04-10T14:15:00Z',
+    display: 'softPortrait',
+    focus: 'center 16%',
   },
   {
     id: 'showcase-architecture',
@@ -199,6 +229,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Architectural illustration study with clean material contrast and quiet depth.',
     likes: 162,
     createdAt: '2026-04-09T09:20:00Z',
+    display: 'landscape',
+    focus: 'center 48%',
   },
   {
     id: 'showcase-fantasy-art',
@@ -208,6 +240,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Fantasy illustration of a dragon in a dramatic atmospheric scene.',
     likes: 273,
     createdAt: '2026-04-12T11:30:00Z',
+    display: 'portrait',
+    focus: '52% 52%',
   },
   {
     id: 'showcase-product-photo',
@@ -217,6 +251,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Commercial still life with controlled highlights and tactile surface detail.',
     likes: 131,
     createdAt: '2026-04-08T08:45:00Z',
+    display: 'detail',
+    focus: 'center 54%',
   },
   {
     id: 'showcase-luxury-interior',
@@ -226,6 +262,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Interior design illustration with luxury tones, warm materials, and clean composition.',
     likes: 188,
     createdAt: '2026-04-07T16:10:00Z',
+    display: 'landscape',
+    focus: 'center 48%',
   },
   {
     id: 'showcase-fashion-editorial',
@@ -235,6 +273,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'High fashion editorial illustration with bold styling and dramatic contrast.',
     likes: 196,
     createdAt: '2026-04-11T10:00:00Z',
+    display: 'portrait',
+    focus: 'center 18%',
   },
   {
     id: 'showcase-anime-art',
@@ -244,6 +284,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Anime illustration with bold linework, strong silhouettes, and expressive color.',
     likes: 205,
     createdAt: '2026-04-12T15:40:00Z',
+    display: 'portrait',
+    focus: 'center 44%',
   },
   {
     id: 'showcase-scifi-city',
@@ -253,6 +295,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Sci-fi illustration of a futuristic city with layered depth and luminous accents.',
     likes: 224,
     createdAt: '2026-04-09T20:00:00Z',
+    display: 'hero',
+    focus: 'center 56%',
   },
   {
     id: 'showcase-food-photography',
@@ -262,6 +306,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Editorial food illustration with tactile detail and appetizing composition.',
     likes: 119,
     createdAt: '2026-04-06T13:00:00Z',
+    display: 'landscape',
+    focus: 'center 62%',
   },
   {
     id: 'showcase-nature-macro',
@@ -271,6 +317,8 @@ const showcaseReferences: ShowcaseReference[] = [
     prompt: 'Macro nature illustration with fine detail, glow, and layered atmosphere.',
     likes: 177,
     createdAt: '2026-04-05T10:35:00Z',
+    display: 'detail',
+    focus: 'center 52%',
   },
 ]
 
@@ -776,9 +824,15 @@ export default function DashboardPage() {
           <div className="text-[11px] text-zinc-600 font-medium px-0.5">
             {showcaseReferences.length} hand-picked Studio outputs
           </div>
-          <div className="columns-2 gap-2 sm:columns-3 md:columns-4 xl:columns-5 2xl:columns-6 [column-fill:_balance]">
-            {showcaseReferences.map((item, i) => (
-              <div key={item.id} className="group relative mb-2 break-inside-avoid">
+          <div data-testid="showcase-grid" className="grid auto-flow-dense grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8 xl:gap-4">
+            {showcaseReferences.map((item) => {
+              const display = showcaseDisplayClasses[item.display]
+              return (
+              <article
+                key={item.id}
+                data-showcase-layout={item.display}
+                className={`group relative ${display.tile}`}
+              >
                 <button
                   type="button"
                   onClick={() => openLightbox(item.src, item.label, {
@@ -787,21 +841,30 @@ export default function DashboardPage() {
                     authorUsername: 'studio',
                     prompt: item.prompt,
                   })}
-                  className="relative overflow-hidden rounded-[10px] bg-[#0e1014] w-full text-left block cursor-zoom-in"
+                  aria-label={`Open ${item.label} showcase piece`}
+                  className="relative block w-full overflow-hidden rounded-[18px] bg-[#0e1014] text-left ring-1 ring-white/[0.04] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:ring-white/[0.12] hover:shadow-[0_24px_60px_-24px_rgba(0,0,0,0.85),0_0_24px_rgba(255,255,255,0.05)] cursor-zoom-in"
                 >
-                  <img
-                    src={item.src}
-                    alt={item.label}
-                    loading="lazy"
-                    className={`w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03] ${
-                      i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-square' : 'aspect-[5/6]'
-                    }`}
-                  />
+                  <div className={`w-full overflow-hidden ${display.frame}`}>
+                    <img
+                      src={item.src}
+                      alt={item.label}
+                      loading="lazy"
+                      style={item.focus ? { objectPosition: item.focus } : undefined}
+                      className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
+                    />
+                  </div>
+
+                  <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium tracking-[0.16em] text-white/80 backdrop-blur-md ring-1 ring-white/10">
+                    {item.tag}
+                  </div>
 
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/85 opacity-0 transition duration-300 group-hover:opacity-100" />
 
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col justify-end px-3 pb-3 opacity-0 transition duration-300 group-hover:opacity-100">
                     <div className="text-[12px] font-semibold text-white/95 leading-snug drop-shadow-md">{item.label}</div>
+                    <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-zinc-200/80">
+                      {item.prompt}
+                    </div>
                   </div>
 
                   <div className="pointer-events-none absolute right-2 top-2 opacity-0 transition duration-300 group-hover:opacity-100">
@@ -811,8 +874,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </button>
-              </div>
-            ))}
+              </article>
+            )})}
           </div>
         </section>
       )}

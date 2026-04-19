@@ -1,20 +1,70 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
+
+const mockState = vi.hoisted(() => ({
+  auth: null as null | {
+    guest?: boolean
+    identity: {
+      display_name: string
+      plan: string
+      owner_mode: boolean
+      root_admin: boolean
+      avatar_url: string | null
+    }
+    plan: {
+      label: string
+      monthly_credits: number
+      can_generate: boolean
+    }
+    credits: {
+      remaining: number
+      monthly_remaining: number
+    }
+  },
+  isAuthenticated: false,
+  getMyProfile: vi.fn().mockResolvedValue({
+    profile: {
+      usage_summary: {
+        plan_label: 'Pro',
+        credits_remaining: 240,
+        allowance: 1200,
+        progress_percent: 20,
+      },
+    },
+  }),
+  listConversations: vi.fn().mockResolvedValue({ conversations: [] }),
+  signOut: vi.fn(),
+}))
 
 vi.mock('@/lib/studioAuth', () => ({
   useStudioAuth: () => ({
-    auth: null,
-    isAuthenticated: false,
+    auth: mockState.auth,
+    isAuthenticated: mockState.isAuthenticated,
     isAuthSyncing: false,
     isLoading: false,
-    signOut: vi.fn(),
+    signOut: mockState.signOut,
   }),
+}))
+
+vi.mock('@/lib/studioApi', () => ({
+  studioApi: {
+    getMyProfile: mockState.getMyProfile,
+    listConversations: mockState.listConversations,
+  },
 }))
 
 import StudioShell from '@/components/StudioShell'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
 describe('StudioShell', () => {
+  afterEach(() => {
+    mockState.auth = null
+    mockState.isAuthenticated = false
+    mockState.getMyProfile.mockClear()
+    mockState.listConversations.mockClear()
+    mockState.signOut.mockClear()
+  })
+
   it('keeps guest settings as a single nav item that routes through login intent', () => {
     renderWithProviders(
       <StudioShell>
@@ -33,5 +83,41 @@ describe('StudioShell', () => {
       expect(link).not.toBeNull()
       expect(link).toHaveAttribute('href', '/login?next=%2Fsettings')
     }
+  })
+
+  it('keeps signed-in account shortcuts inline in the footer profile area instead of a floating panel', async () => {
+    mockState.isAuthenticated = true
+    mockState.auth = {
+      guest: false,
+      identity: {
+        display_name: 'valiantlion',
+        plan: 'pro',
+        owner_mode: true,
+        root_admin: false,
+        avatar_url: null,
+      },
+      plan: {
+        label: 'Pro',
+        monthly_credits: 1200,
+        can_generate: true,
+      },
+      credits: {
+        remaining: 240,
+        monthly_remaining: 240,
+      },
+    }
+
+    renderWithProviders(
+      <StudioShell>
+        <div>Signed shell</div>
+      </StudioShell>,
+      { route: '/account' },
+    )
+
+    expect(await screen.findByLabelText('Open account from profile footer')).toHaveAttribute('href', '/account')
+    expect(screen.getByLabelText('Open billing from profile footer')).toHaveAttribute('href', '/subscription')
+    expect(screen.getByLabelText('Open FAQ from profile footer')).toHaveAttribute('href', '/help#faq')
+    expect(screen.getByText('Owner access')).toBeInTheDocument()
+    expect(screen.queryByText(/faq and policy/i)).not.toBeInTheDocument()
   })
 })

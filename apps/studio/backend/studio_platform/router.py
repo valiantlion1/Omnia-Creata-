@@ -215,6 +215,7 @@ class ProfileUpdateRequest(BaseModel):
     display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     bio: Optional[str] = Field(default=None, max_length=220)
     default_visibility: Optional[Visibility] = None
+    featured_asset_id: Optional[str] = Field(default=None, max_length=128)
 
 
 class PersonaCreateRequest(BaseModel):
@@ -971,6 +972,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 display_name=payload.display_name,
                 bio=payload.bio,
                 default_visibility=payload.default_visibility,
+                featured_asset_id=payload.featured_asset_id,
+                featured_asset_id_provided="featured_asset_id" in payload.model_fields_set,
             )
             return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
         except KeyError:

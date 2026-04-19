@@ -18,6 +18,56 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.19.154`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.153` cleaned up Help and the manual, but Explore's `Showcase` shelf still felt too mechanical. The layout was technically using a masonry-style wall already, yet because every square asset was being pushed through a simple modulo-based crop pattern, the result still read like a bland tile dump instead of a curated public gallery.
+- What:
+  `.154` turns `Showcase` into a deliberately curated aspect-ratio wall. Each featured reference now carries an editorial display profile (`hero`, `landscape`, `portrait`, `soft portrait`, or `detail`) plus a crop focus so the gallery can present the same square source set with more natural rhythm. The old column-based modulo layout is gone; `Showcase` now uses a denser responsive editorial grid with larger hero pieces, calmer supporting tiles, and accessible open actions for every image.
+  Verification on `.154` is targeted and explicit. A new Dashboard regression test passes, Studio web `type-check` passes, production `build` passes, and public browser smoke on `/explore` confirms the Showcase tab now renders a varied aspect-ratio wall instead of a rigid equal-tile arrangement. This wave was browser-smoked on the public Explore route only, not through the user's live signed-in IAB session.
+
+### `0.6.0-alpha` / build `2026.04.19.153`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.152` fixed the oversized Settings edit modal, but Help and the long-form Studio manual were still visually over-designed for their job. The manual in particular kept presenting almost every chunk of content as a rounded card, which made a serious documentation surface feel more like a dashboard mosaic than something users could actually sit and read for a while.
+- What:
+  `.153` strips that documentation surface back into something calmer and more honest. The dead `Shortcuts` section is removed from the manual navigation, the old `Operate the app` group is replaced by `Tips & hints`, and both Help plus `/learn/*` now render as flatter article-style sections instead of card piles. The sidebar grouping is simpler, examples read more like editorial callouts than product cards, and the overall page now leans into long-form documentation instead of trying to decorate every paragraph.
+  Verification on `.153` is targeted and explicit. The Documentation regression suite passes, Studio web `type-check` passes, production `build` passes, and public browser smoke on `/help#publishing` plus `/learn/publishing` confirms that `Shortcuts` no longer appears in the manual navigation while `Tips & hints` does. This wave was browser-smoked on public routes only, not through the user's live signed-in IAB session.
+
+### `0.6.0-alpha` / build `2026.04.19.152`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.151` stabilized the signed-in shell footer, but the Settings profile editor still looked inflated and awkward in real use. The dialog relied on multiple oversized cards and a tall split layout, so on shorter laptop-height screens it read less like a focused edit surface and more like a blown-up sheet that barely fit inside the viewport.
+- What:
+  `.152` compacts the Settings profile editor into a denser, cleaner modal. The oversized left summary card is smaller, the editable fields and privacy defaults now live inside one tighter main form card, and the dialog itself respects viewport height with internal scrolling instead of forcing the whole sheet to feel too tall. The action model stays the same: users still edit display name, bio, and default visibility from the same modal, but the surface now fits the job better and reads more like a real account editor than a stack of giant tiles.
+  Verification on `.152` is targeted and explicit. The Settings regression suite passes, Studio web `type-check` passes, and production `build` passes. This auth-gated `/settings` edit modal was not browser-smoked through the user's live signed-in IAB session in this wave, so final signed-session behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.151`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.150` improved the Account surface itself, but the signed-in shell footer could still expose an ugly floating shortcut cluster near the profile row. The content looked clipped, redundant, and visually disconnected from the rest of the sidebar, especially on the Account route where it read more like a broken overflow panel than a deliberate control.
+- What:
+  `.151` removes that awkward floating-footer behavior and keeps the sidebar footer stable. The lower profile area is now treated as a single controlled identity block, with any needed signed-in shortcuts rendered inline under the profile name instead of leaking out as a detached panel. The footer also now clips unexpected overflow, which keeps the sidebar composition cleaner on dense screens while preserving the existing main nav and sign-out affordance.
+  Verification on `.151` is targeted and explicit. StudioShell regression coverage now includes the signed-in footer shortcut layout as well as the guest Settings login-intent rule. Studio web `type-check` passes and production `build` passes. This signed-in shell behavior was not browser-smoked through the user's live IAB session in this wave, so final signed-session behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
+### `0.6.0-alpha` / build `2026.04.19.150`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.149` cleaned up the duplicate Settings button in the shell, but the signed-in `Account` surface still felt unfinished. The hero area could go visually empty, the left profile slab did not communicate a useful editing model, and gallery cards on the page did not open through the shared lightbox even though users reasonably expect account artwork to be previewable there.
+- What:
+  `.150` turns `Account` into a more coherent creator profile surface. Users can now choose one of their own Studio renders as featured profile artwork, which fills the header with a real piece instead of leaving an abstract empty band. The profile column was rebuilt into calmer, more useful setup surfaces, and gallery cards now open through the shared lightbox so image preview behavior matches the rest of Studio without introducing a second modal system. The profile API contract now persists a selected featured asset, and help copy was updated so the shell is honest about what can be edited today.
+  Verification on `.150` is targeted and explicit. Backend regression coverage now includes the featured-asset profile update flow and the self-service profile route contract. Frontend Account tests cover choosing profile artwork and opening gallery work in the shared lightbox. Studio web `type-check` passes and production `build` passes. This auth-gated `/account` surface was not browser-smoked through the user's live signed-in IAB session in this wave, so final signed-session behavior remains source/test/build-verified rather than live signed-session browser-verified.
+
 ### `0.6.0-alpha` / build `2026.04.19.149`
 - Date: `2026-04-19`
 - Codename: `Foundation`

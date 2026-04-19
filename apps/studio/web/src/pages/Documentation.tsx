@@ -1,8 +1,6 @@
-import { useMemo, useState, type ElementType } from 'react'
+import { useMemo, type ElementType } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
-  BookOpen,
-  ChevronDown,
   CreditCard,
   FileText,
   HelpCircle,
@@ -270,7 +268,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Your public profile',
-        body: 'Your profile shows your public @username, current avatar if your identity has one, your bio, and the grid of images you have chosen to publish. Today the shell lets you edit your display name, bio, and default visibility; username and avatar are not self-serve controls in the shell yet.',
+        body: 'Your profile shows your public @username, your bio, a featured header artwork chosen from your own Studio renders when you set one, and the grid of images you have chosen to publish. Today the shell lets you edit your display name, bio, default visibility, and that featured profile artwork; username stays fixed, and standalone avatar upload is not a self-serve control in the shell yet.',
       },
       {
         title: 'Explore and discoverability',
@@ -352,9 +350,9 @@ const sections: HelpSection[] = [
   },
   {
     id: 'troubleshooting',
-    label: 'Troubleshooting',
-    title: 'When something is not behaving',
-    intro: 'The most common issues, what causes them, and the quickest fix. If none of this helps, email support@omniacreata.com with a screenshot and a description of what you expected to see.',
+    label: 'Tips & hints',
+    title: 'Tips, hints, and common fixes',
+    intro: 'A practical catch-all for the things people trip over most often, plus the quick habits that make Studio smoother to use. If none of this helps, email support@omniacreata.com with a screenshot and a description of what you expected to see.',
     items: [
       {
         title: 'My image is taking forever',
@@ -570,7 +568,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Display name, bio, and public profile',
-        body: 'Today you can edit your display name, bio, and default visibility from your Account profile surface, and Settings now gives those same fields a direct Edit Profile dialog inside General Account. Sign-in provider and password management stay under Privacy & Security > Credentials. Your public @username stays stable, and avatar upload is not available from the Studio shell yet.',
+        body: 'Today you can edit your display name, bio, default visibility, and featured profile artwork from your Account profile surface, and Settings now gives those same fields a direct Edit Profile dialog inside General Account. Sign-in provider and password management stay under Privacy & Security > Credentials. Your public @username stays stable, and standalone avatar upload is not available from the Studio shell yet.',
       },
       {
         title: 'Two-factor authentication',
@@ -800,7 +798,7 @@ const helpSectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
 
 const learnSectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
   { label: 'Learn Studio', ids: ['prompt-craft', 'workflows', 'publishing'] },
-  { label: 'Operate the app', ids: ['shortcuts', 'troubleshooting'] },
+  { label: 'Tips & hints', ids: ['troubleshooting'] },
 ]
 
 const helpSectionIds: HelpSectionId[] = [
@@ -819,7 +817,6 @@ const learnSectionIds: HelpSectionId[] = [
   'prompt-craft',
   'workflows',
   'publishing',
-  'shortcuts',
   'troubleshooting',
 ]
 
@@ -838,31 +835,30 @@ function ItemBody({
 }) {
   const paragraphs = body ? (Array.isArray(body) ? body : [body]) : []
   return (
-    <div className="space-y-3 text-[13.5px] leading-[1.75] text-zinc-400">
+    <div className="space-y-4 text-[14px] leading-[1.85] text-zinc-400">
       {paragraphs.map((p, i) => (
         <p key={i}>{p}</p>
       ))}
       {list ? (
-        <ul className="space-y-1.5 pl-1">
+        <ul className="space-y-2 pl-5">
           {list.map((li, i) => (
-            <li key={i} className="flex gap-2.5">
-              <span className="mt-[9px] inline-block h-1 w-1 shrink-0 rounded-full bg-zinc-500" />
-              <span>{li}</span>
+            <li key={i} className="list-disc pl-1 marker:text-zinc-600">
+              {li}
             </li>
           ))}
         </ul>
       ) : null}
       {example ? (
-        <div className="mt-1 rounded-[10px] border border-white/[0.06] bg-black/30 p-3">
+        <div className="mt-1 border-l border-white/[0.1] pl-4">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">Example prompt</div>
-          <div className="text-[13px] leading-[1.7] text-zinc-300">{example.prompt}</div>
+          <div className="text-[13px] leading-[1.8] text-zinc-300">{example.prompt}</div>
           {example.note ? (
-            <div className="mt-2 text-[11.5px] italic text-zinc-500">{example.note}</div>
+            <div className="mt-2 text-[12px] italic text-zinc-500">{example.note}</div>
           ) : null}
         </div>
       ) : null}
       {links?.length ? (
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
           {links.map((link) =>
             link.external ? (
               <a
@@ -870,7 +866,7 @@ function ItemBody({
                 href={link.to}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                className="text-[12px] font-medium text-zinc-200 underline decoration-white/15 underline-offset-4 transition hover:text-white hover:decoration-white/50"
               >
                 {link.label}
               </a>
@@ -878,32 +874,12 @@ function ItemBody({
               <Link
                 key={`${link.label}-${link.to}`}
                 to={link.to}
-                className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                className="text-[12px] font-medium text-zinc-200 underline decoration-white/15 underline-offset-4 transition hover:text-white hover:decoration-white/50"
               >
                 {link.label}
               </Link>
             ),
           )}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function AccordionItem({ item, defaultOpen = false }: { item: HelpItem; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="border-b border-white/[0.04] last:border-b-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="group flex w-full items-center justify-between gap-4 py-4 text-left transition hover:bg-white/[0.02]"
-      >
-        <div className="text-[14px] font-medium text-zinc-200 transition group-hover:text-white">{item.title}</div>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition duration-300 ${open ? 'rotate-180 text-white' : ''}`} />
-      </button>
-      {open ? (
-        <div className="pb-5 pr-4">
-          <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
         </div>
       ) : null}
     </div>
@@ -978,10 +954,9 @@ export default function DocumentationPage() {
         </header>
       )}
 
-      <AppPage className="max-w-[1200px] gap-10 py-10">
-        <section className="relative overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#0e1014] p-8 md:p-12">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.035),transparent_55%)]" />
-          <div className="relative z-10 max-w-3xl">
+      <AppPage className="max-w-[1260px] gap-8 py-8">
+        <section className="border-b border-white/[0.06] pb-8">
+          <div className="max-w-3xl">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
               {isLearnSurface ? 'Studio manual' : 'Help center'}
             </div>
@@ -1059,7 +1034,7 @@ export default function DocumentationPage() {
           </div>
         </div>
 
-        <div className="grid items-start gap-12 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="grid items-start gap-10 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="sticky top-24 hidden max-h-[calc(100vh-7rem)] w-full overflow-y-auto pr-1 lg:block">
             <div className="space-y-4">
               {(isLearnSurface ? learnSectionGroups : helpSectionGroups).map((group) => (
@@ -1067,7 +1042,7 @@ export default function DocumentationPage() {
                   <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
                     {group.label}
                   </div>
-                  <div className="space-y-0.5 rounded-[12px] border border-white/[0.04] bg-[#0c0d12] p-1">
+                  <div className="space-y-0.5 border-l border-white/[0.06] pl-3">
                     {group.ids.map((id) => {
                       const s = sectionById.get(id)
                       if (!s) return null
@@ -1077,10 +1052,10 @@ export default function DocumentationPage() {
                           <Link
                             key={id}
                             to={`/learn/${id}`}
-                            className={`flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                            className={`flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-[12px] font-medium transition-colors ${
                               id === activeLearnSection.id
-                                ? 'bg-white text-black'
-                                : 'text-zinc-400 hover:bg-white/[0.04] hover:text-white'
+                                ? 'bg-white/[0.06] text-white'
+                                : 'text-zinc-400 hover:text-white'
                             }`}
                           >
                             <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
@@ -1090,7 +1065,7 @@ export default function DocumentationPage() {
                           <a
                             key={id}
                             href={`#${id}`}
-                            className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+                            className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:text-white"
                           >
                             <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
                             {s.label}
@@ -1104,12 +1079,12 @@ export default function DocumentationPage() {
             </div>
           </aside>
 
-          <div className={isLearnSurface ? 'space-y-6' : 'space-y-14'}>
+          <div className={isLearnSurface ? 'space-y-8' : 'space-y-14'}>
             {isLearnSurface ? (
               <>
-                <section className="rounded-[22px] border border-white/[0.05] bg-[#0c0d12] p-6 md:p-8">
+                <section className="border-b border-white/[0.06] pb-8">
                   <div className="flex items-start gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.03] ring-1 ring-white/[0.06]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.03]">
                       {(() => {
                         const Icon = sectionIcons[activeLearnSection.id]
                         return <Icon className="h-4 w-4 text-zinc-200" />
@@ -1132,7 +1107,7 @@ export default function DocumentationPage() {
                   <p className="mt-4 max-w-3xl text-[14.5px] leading-[1.8] text-zinc-400">
                     {activeLearnSection.intro}
                   </p>
-                  <div className="mt-5 rounded-[16px] border border-white/[0.05] bg-white/[0.02] p-4 text-[13px] leading-7 text-zinc-400">
+                  <div className="mt-5 border-l border-white/[0.08] pl-4 text-[13px] leading-7 text-zinc-400">
                     Public FAQ, billing, account, and legal summaries stay in{' '}
                     <Link to="/help" className="text-white underline decoration-white/25 underline-offset-4 transition hover:decoration-white/60">
                       Help
@@ -1144,7 +1119,7 @@ export default function DocumentationPage() {
                 {activeLearnSection.items.map((item, index) => (
                   <section
                     key={item.title}
-                    className="rounded-[20px] border border-white/[0.05] bg-[#0c0d12] p-6 md:p-7"
+                    className="border-b border-white/[0.05] pb-8 last:border-b-0"
                   >
                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
                       Chapter {index + 1}
@@ -1163,7 +1138,7 @@ export default function DocumentationPage() {
                   </section>
                 ))}
 
-                <section className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-white/[0.05] bg-[#0c0d12] p-5">
+                <section className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-6">
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
                       Continue reading
@@ -1176,7 +1151,7 @@ export default function DocumentationPage() {
                     {previousLearnSection ? (
                       <Link
                         to={`/learn/${previousLearnSection.id}`}
-                        className="rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                        className="rounded-full border border-white/[0.08] px-4 py-2 text-[12px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:text-white"
                       >
                         Previous: {previousLearnSection.label}
                       </Link>
@@ -1230,28 +1205,20 @@ export default function DocumentationPage() {
                       {section.intro}
                     </p>
 
-                    <div className="mt-6">
-                      {isPolicySection ? (
-                        <div className="rounded-[14px] border border-white/[0.05] bg-[#0c0d12] px-5">
-                          {section.items.map((item, index) => (
-                            <AccordionItem key={item.title} item={item} defaultOpen={index === 0 || Boolean(item.links?.length)} />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {section.items.map((item) => (
-                            <div key={item.title} className="rounded-[14px] border border-white/[0.04] bg-[#0c0d12] p-5 transition-colors hover:border-white/[0.08]">
-                              <div className="flex items-start gap-2 text-[14px] font-semibold text-white">
-                                <BookOpen className="mt-[3px] h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                                <span>{item.title}</span>
-                              </div>
-                              <div className="mt-2">
-                                <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className={`mt-6 ${isPolicySection ? 'space-y-7' : 'space-y-6 border-t border-white/[0.05]'}`}>
+                      {section.items.map((item) => (
+                        <article
+                          key={item.title}
+                          className={isPolicySection ? '' : 'border-b border-white/[0.05] py-6 first:pt-0 last:border-b-0 last:pb-0'}
+                        >
+                          <h3 className="text-[18px] font-semibold tracking-tight text-white">
+                            {item.title}
+                          </h3>
+                          <div className="mt-3 max-w-4xl">
+                            <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
+                          </div>
+                        </article>
+                      ))}
                     </div>
                   </section>
                 )
