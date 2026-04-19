@@ -116,21 +116,40 @@ UI copy should not be:
 - cinematic for no reason
 - over-branded
 - dashboard-theater language
+- developer instructions
+- TODO or placeholder notes
+- "replace later" or "coming soon" filler unless the product intentionally communicates a launch limitation
+- internal implementation details that only make sense to the team
+- examples that ask users to paste secrets, credentials, or private operational data unless the feature truly requires it
 
-### 8. Progressive complexity
+Copy rules:
+
+- Treat every visible string as end-user copy.
+- If a note is for developers, operators, or future implementation, it does not belong in the interface.
+- If information is unfinished, hide the surface or use a product-safe explanation instead of exposing internal planning text.
+- Do not explain backend mechanics, config state, or team intent in normal product copy unless the screen is explicitly operator-facing.
+
+### 8. Preserve surface doctrine before inventing new UI
+
+- If the user asked for a fix or polish pass, preserve the existing product structure before proposing a new layout direction.
+- Do not add new chrome, helper panels, empty-state essays, or extra navigation just because space exists.
+- Do not turn a correction task into a redesign task.
+- Reuse the product's current spacing, composition, and information density unless the task explicitly calls for a new pattern.
+
+### 9. Progressive complexity
 
 - Show the primary action, current context, and next useful action first.
 - Hide advanced controls until relevant.
 - Do not front-load power-user density when the product promise is clarity.
 
-### 9. Accessibility is required
+### 10. Accessibility is required
 
 - Keyboard access and visible focus states are mandatory.
 - Meaning cannot depend on color alone.
 - Motion needs a reduce-motion safe path.
 - Contrast and target sizes must hold up in real use, not only in mockups.
 
-### 10. Responsive means re-composed, not stacked blindly
+### 11. Responsive means re-composed, not stacked blindly
 
 - Mobile should feel intentional, not like the desktop layout collapsed into one long column.
 - Re-prioritize surfaces for smaller screens.
@@ -273,13 +292,33 @@ When Codex is asked to design, refactor, or polish UI in this repo:
 
 1. Read this guardrail file.
 2. Read the nearest product docs before editing.
-3. Identify the screen's job in one sentence.
-4. Define the primary action, current context, and next useful action.
-5. Reuse existing components, tokens, and patterns before inventing new ones.
-6. Design required states, not only the happy path.
-7. Verify desktop and mobile behavior.
-8. Check copy for grounded product language.
-9. Remove decorative noise before adding new chrome.
+3. Capture a real visual reference first: existing live UI, a current screenshot, or a Figma/design source.
+4. Identify the screen's job in one sentence.
+5. Define the primary action, current context, and next useful action.
+6. Reuse existing components, tokens, and patterns before inventing new ones.
+7. Design required states, not only the happy path.
+8. Verify desktop and mobile behavior in a browser, not only by reading code.
+9. Check every visible string as end-user copy.
+10. Remove decorative noise before adding new chrome.
+11. If visual verification was not completed, say so explicitly.
+
+## Tooling Bias For Codex UI Work
+
+When the task justifies extra tooling, prefer this order:
+
+- Figma Dev Mode and Figma MCP for design context, measurements, variables, and source-of-truth handoff.
+- Figma Code Connect when design-system components need direct code mappings for better AI implementation context.
+- Playwright for real browser verification, responsive checks, accessibility-tree inspection, screenshots, and regression capture.
+- Storybook plus visual testing when component-level UI work becomes large enough to justify isolated review and visual baselines.
+- Radix Primitives for accessible composite controls that go beyond native HTML elements.
+- shadcn/ui when the product wants repo-owned open-code components instead of opaque component-library wrappers.
+
+Tooling cautions:
+
+- Do not import a new UI system just to avoid thinking about product design.
+- Do not use shadcn/ui blocks as a shortcut to generic-looking product screens.
+- Do not treat Storybook as a substitute for verifying the real in-app screen.
+- Do not treat Figma or screenshots as permission to ignore accessibility and runtime behavior.
 
 ## Required State Coverage
 

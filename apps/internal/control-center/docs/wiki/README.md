@@ -24,6 +24,8 @@ Use it to answer eight questions fast:
 - [Roadmap And Build Sequence](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/07_ROADMAP_AND_BUILD_SEQUENCE.md)
 - [Codex Capability Stack](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/08_CODEX_CAPABILITY_STACK.md)
 - [Sprint Capability Plan](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/09_SPRINT_CAPABILITY_PLAN.md)
+- [Master Architecture Plan](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/10_MASTER_ARCHITECTURE_PLAN.md)
+- [Automations Design Adaptation](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/wiki/11_AUTOMATIONS_DESIGN_ADAPTATION.md)
 
 ## Canonical Use
 
@@ -32,10 +34,12 @@ This wiki is the planning and orientation layer for OCOS.
 Use it for:
 - product intent
 - architecture boundaries
+- architecture layer ownership
 - dashboard information architecture
 - reporting contracts
 - future capability expansion
 - build sequencing
+- page-specific design adaptations
 
 Do not use it as the only source for live operational truth.
 
@@ -57,7 +61,7 @@ Operational truth still lives in:
 - The dashboard now needs to scale beyond incidents into project-aware command surfaces.
 - Future OCOS layers include automations, skills, agents, and eventually Omnia-owned AI runtime.
 - Capability work is now sprinted instead of being left to ad-hoc prompts.
-- Sprint 10 and the first Sprint 11 capability scaffolds now exist in the repo.
+- Sprint 10 capability memory is present and the first read-only `ocos-api` plugin bridge now exists in the repo.
 
 ## Update Rules
 

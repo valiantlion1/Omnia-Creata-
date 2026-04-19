@@ -29,6 +29,7 @@ import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
+import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
@@ -87,6 +88,292 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+const PASSWORD_REQUIREMENTS = [
+  { label: 'At least 8 characters', test: (value: string) => value.length >= 8 },
+  { label: 'One uppercase letter', test: (value: string) => /[A-Z]/.test(value) },
+  { label: 'One lowercase letter', test: (value: string) => /[a-z]/.test(value) },
+  { label: 'One number', test: (value: string) => /\d/.test(value) },
+  { label: 'One symbol', test: (value: string) => /[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(value) },
+] as const
+
+function normalizeAuthProviders(primaryProvider?: string | null, providers?: string[] | null) {
+  const normalized: string[] = []
+
+  for (const candidate of [primaryProvider, ...(providers ?? [])]) {
+    if (typeof candidate !== 'string') continue
+    const nextValue = candidate.trim().toLowerCase()
+    if (nextValue && !normalized.includes(nextValue)) {
+      normalized.push(nextValue)
+    }
+  }
+
+  return normalized
+}
+
+function getAuthProviderLabel(provider?: string | null) {
+  switch ((provider ?? '').trim().toLowerCase()) {
+    case 'email':
+      return 'Email password'
+    case 'google':
+      return 'Google'
+    case 'apple':
+      return 'Apple'
+    case 'facebook':
+      return 'Facebook'
+    case 'twitter':
+      return 'Twitter'
+    default:
+      return 'Studio account'
+  }
+}
+
+function getAuthProviderManagementUrl(provider?: string | null) {
+  switch ((provider ?? '').trim().toLowerCase()) {
+    case 'google':
+      return 'https://myaccount.google.com/security'
+    case 'apple':
+      return 'https://appleid.apple.com/account/manage'
+    case 'facebook':
+      return 'https://www.facebook.com/settings?tab=security'
+    case 'twitter':
+      return 'https://x.com/settings/password'
+    default:
+      return null
+  }
+}
+
+function CredentialsDialog({
+  open,
+  identity,
+  profileSaving,
+  passwordSaving,
+  onClose,
+  onSaveDisplayName,
+  onSavePassword,
+}: {
+  open: boolean
+  identity: {
+    email?: string
+    username?: string | null
+    display_name?: string
+    auth_provider?: string | null
+    auth_providers?: string[]
+    credentials_managed_by_provider?: boolean
+  } | null | undefined
+  profileSaving: boolean
+  passwordSaving: boolean
+  onClose: () => void
+  onSaveDisplayName: (value: string) => Promise<void>
+  onSavePassword: (value: string) => Promise<void>
+}) {
+  const [displayName, setDisplayName] = useState(identity?.display_name ?? '')
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [nextPassword, setNextPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    setDisplayName(identity?.display_name ?? '')
+    setProfileError(null)
+    setNextPassword('')
+    setConfirmPassword('')
+    setPasswordError(null)
+  }, [identity?.display_name, open])
+
+  if (!open || !identity) return null
+
+  const linkedProviders = normalizeAuthProviders(identity.auth_provider, identity.auth_providers)
+  const primaryProvider = linkedProviders[0] ?? null
+  const providerLabel = getAuthProviderLabel(primaryProvider)
+  const providerManagementUrl = getAuthProviderManagementUrl(primaryProvider)
+  const showManagedProviderCopy = Boolean(identity.credentials_managed_by_provider || (primaryProvider && primaryProvider !== 'email'))
+  const passwordChecks = PASSWORD_REQUIREMENTS.map((rule) => ({ ...rule, passed: rule.test(nextPassword) }))
+  const passwordMismatch = confirmPassword.length > 0 && confirmPassword !== nextPassword
+  const canSaveDisplayName = displayName.trim().length > 0 && displayName.trim() !== (identity.display_name ?? '').trim()
+  const canSavePassword =
+    nextPassword.length > 0 &&
+    confirmPassword.length > 0 &&
+    !passwordMismatch &&
+    passwordChecks.every((rule) => rule.passed)
+
+  const handleDisplayNameSave = async () => {
+    setProfileError(null)
+    try {
+      await onSaveDisplayName(displayName.trim())
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Display name could not be saved right now.')
+    }
+  }
+
+  const handlePasswordSave = async () => {
+    setPasswordError(null)
+    try {
+      await onSavePassword(nextPassword)
+      setNextPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Password could not be updated right now.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
+      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] bg-[#0c0d12]/95 shadow-[0_40px_140px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06]">
+        <div className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Account access</p>
+              <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Profile and sign-in</h2>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-zinc-400">
+                Your public handle stays fixed after account creation. Use display name for the name people see around Studio.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+              aria-label="Close profile and sign-in dialog"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-6 py-6 sm:px-7">
+          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
+                <p className="mt-1 text-sm leading-7 text-zinc-400">Display name is editable. Your public handle stays locked.</p>
+              </div>
+              <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Display name</span>
+                <input
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="How Studio should show your name"
+                  className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                />
+              </label>
+
+              <div className="rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Public handle</div>
+                <div className="mt-2 text-sm font-semibold text-white">@{identity.username ?? 'creator'}</div>
+                <p className="mt-2 text-xs leading-6 text-zinc-500">Handles stay stable so links, mentions, and published ownership do not drift.</p>
+              </div>
+            </div>
+
+            {profileError ? <p className="mt-3 text-sm text-rose-200">{profileError}</p> : null}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleDisplayNameSave}
+                disabled={profileSaving || !canSaveDisplayName}
+                className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {profileSaving ? 'Saving...' : 'Save display name'}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[15px] font-semibold text-white">Sign-in method</h3>
+                <p className="mt-1 text-sm leading-7 text-zinc-400">Studio keeps the login rules tied to the provider that owns your credentials.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={showManagedProviderCopy ? 'neutral' : 'brand'}>{providerLabel}</StatusPill>
+                {linkedProviders.slice(1).map((providerName) => (
+                  <StatusPill key={providerName} tone="neutral">{getAuthProviderLabel(providerName)}</StatusPill>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Account email</div>
+              <div className="mt-2 text-sm text-white">{identity.email ?? 'Not available'}</div>
+            </div>
+
+            {showManagedProviderCopy ? (
+              <div className="mt-4 rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-4">
+                <p className="text-sm leading-7 text-zinc-300">
+                  This account signs in with {providerLabel}. Password and recovery settings stay with that provider instead of living inside Studio.
+                </p>
+                {providerManagementUrl ? (
+                  <a
+                    href={providerManagementUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+                  >
+                    Open {providerLabel} security
+                  </a>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">New password</span>
+                    <input
+                      type="password"
+                      value={nextPassword}
+                      onChange={(event) => setNextPassword(event.target.value)}
+                      placeholder="Set a stronger password"
+                      className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Confirm password</span>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="Repeat the new password"
+                      className="mt-2 w-full rounded-[18px] bg-black/30 px-4 py-3 text-sm text-white outline-none ring-1 ring-white/10 transition focus:ring-white/20"
+                    />
+                  </label>
+                </div>
+
+                <div className="rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Password rules</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {passwordChecks.map((rule) => (
+                      <StatusPill key={rule.label} tone={rule.passed ? 'success' : 'neutral'}>
+                        {rule.label}
+                      </StatusPill>
+                    ))}
+                  </div>
+                  {passwordMismatch ? <p className="mt-3 text-sm text-rose-200">Password confirmation does not match.</p> : null}
+                  {passwordError ? <p className="mt-3 text-sm text-rose-200">{passwordError}</p> : null}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handlePasswordSave}
+                    disabled={passwordSaving || !canSavePassword}
+                    className="rounded-xl border border-white/[0.12] bg-white/[0.05] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {passwordSaving ? 'Updating...' : 'Update password'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   usePageMeta('Settings', 'Customize your Omnia Creata Studio preferences and account.')
   const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
@@ -95,10 +382,19 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
   const [notice, setNotice] = useState<{ tone: 'info' | 'success' | 'warning'; title: string; body: string } | null>(null)
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false)
   const [pendingVisibility, setPendingVisibility] = useState<Visibility | null>(null)
   const activeDefaultVisibility = pendingVisibility ?? auth?.identity.default_visibility ?? 'public'
   const isGMMode = Boolean(auth?.identity.owner_mode)
   const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
+  const settingsTabs: Array<{ id: 'general' | 'appearance' | 'security' | 'gm'; icon: any; label: string; mobileLabel: string }> = [
+    { id: 'general', icon: User, label: 'General Account', mobileLabel: 'General' },
+    { id: 'appearance', icon: Palette, label: 'Appearance & UI', mobileLabel: 'Look' },
+    { id: 'security', icon: Shield, label: 'Privacy & Security', mobileLabel: 'Privacy' },
+  ]
+  if (isGMMode) {
+    settingsTabs.push({ id: 'gm', icon: Crown, label: 'Control Center', mobileLabel: 'Studio' })
+  }
 
   useQuery({
     queryKey: ['settings-bootstrap'],
@@ -138,6 +434,12 @@ export default function SettingsPage() {
       })
     },
   })
+
+  const profileMutation = useMutation({
+    mutationFn: (payload: { display_name?: string }) => studioApi.updateMyProfile(payload),
+  })
+
+  const [passwordSaving, setPasswordSaving] = useState(false)
 
   const health = healthQuery.data as HealthResponse | undefined
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
@@ -206,6 +508,45 @@ export default function SettingsPage() {
         ? 'border-amber-400/20 bg-amber-400/10 text-amber-100'
         : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100'
 
+  const linkedAuthProviders = normalizeAuthProviders(auth?.identity.auth_provider, auth?.identity.auth_providers)
+  const primaryAuthProvider = linkedAuthProviders[0] ?? null
+  const primaryAuthProviderLabel = getAuthProviderLabel(primaryAuthProvider)
+  const credentialsDescription =
+    primaryAuthProvider === 'email'
+      ? 'Update your visible name here. Your public @handle stays fixed, and password changes apply to Studio sign-in.'
+      : primaryAuthProvider
+        ? `Update your visible name here. Your public @handle stays fixed, and password changes stay with ${primaryAuthProviderLabel}.`
+        : 'Update your visible name here. Your public @handle stays fixed, and Studio will show the active sign-in provider when it is available.'
+
+  const handleDisplayNameSave = async (value: string) => {
+    await profileMutation.mutateAsync({ display_name: value })
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['profile'] }),
+      queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
+      queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+    ])
+    setNotice({
+      tone: 'success',
+      title: 'Display name updated',
+      body: 'Your updated visible name now flows through Studio while your public handle stays unchanged.',
+    })
+  }
+
+  const handlePasswordSave = async (value: string) => {
+    setPasswordSaving(true)
+    try {
+      const { error } = await supabaseBrowser.auth.updateUser({ password: value })
+      if (error) throw error
+      setNotice({
+        tone: 'success',
+        title: 'Password updated',
+        body: 'Future email/password sign-ins will use the new password.',
+      })
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
   return (
     <AppPage className="flex flex-col items-center py-10 px-4 md:px-8">
       {/* Header */}
@@ -217,19 +558,14 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-10 md:flex-row md:items-start md:gap-12 w-full max-w-[1080px]">
         
         {/* Sidebar Navigation */}
-        <aside className="w-full md:w-56 shrink-0 flex flex-row overflow-x-auto md:flex-col md:overflow-visible gap-1 pb-4 md:pb-0 scrollbar-hide">
-          {[
-            { id: 'general', icon: User, label: 'General Account' },
-            { id: 'appearance', icon: Palette, label: 'Appearance & UI' },
-            { id: 'security', icon: Shield, label: 'Privacy & Security' },
-            ...(isGM ? [{ id: 'gm', icon: Crown, label: 'Control Center' }] : [])
-          ].map((tab) => {
+        <aside className="scrollbar-hide flex w-full shrink-0 snap-x snap-mandatory flex-row gap-2 overflow-x-auto pb-4 md:w-56 md:flex-col md:overflow-visible md:pb-0">
+          {settingsTabs.map((tab) => {
             const isActive = activeTab === tab.id
             return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                  className={`group relative flex whitespace-nowrap md:whitespace-normal items-center gap-3 rounded-[16px] px-5 py-3.5 text-[14px] font-bold tracking-wide transition-all duration-400 ${
+                  className={`group relative flex shrink-0 snap-start items-center gap-3 whitespace-nowrap rounded-[16px] px-4 py-3 text-[13px] font-bold tracking-wide transition-all duration-400 md:px-5 md:py-3.5 md:text-[14px] md:whitespace-normal ${
                     isActive 
                       ? 'bg-gradient-to-r from-[rgb(var(--primary-light)/0.1)] to-transparent text-white' 
                       : 'text-zinc-500 hover:bg-white/[0.02] hover:text-zinc-300'
@@ -239,7 +575,8 @@ export default function SettingsPage() {
                     <div className="absolute left-0 top-1/2 h-2/3 w-[3px] -translate-y-1/2 rounded-r-full bg-[rgb(var(--primary-light))] shadow-[0_0_12px_rgb(var(--primary-light))]" />
                   )}
                   <tab.icon className={`relative z-10 h-5 w-5 transition-transform duration-400 ${isActive ? 'text-[rgb(var(--primary-light))] drop-shadow-[0_0_8px_rgba(var(--primary-light),0.5)] scale-110' : 'opacity-80 group-hover:scale-105'}`} />
-                  <span className="relative z-10">{tab.label}</span>
+                  <span className="relative z-10 md:hidden">{tab.mobileLabel}</span>
+                  <span className="relative z-10 hidden md:inline">{tab.label}</span>
                 </button>
             )
           })}
@@ -349,7 +686,7 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Sparkles}
                     title="Smart Interface Hints"
-                    description="Remember this browser's guidance preference while Studio's first-run onboarding keeps settling into the controlled launch shell."
+                    description="Remember this browser's guidance preference for tips and walkthrough cues."
                     action={
                       <div className="flex justify-start sm:justify-end w-full">
                         <Switch
@@ -463,8 +800,19 @@ export default function SettingsPage() {
                   <SettingsRow 
                     icon={Key}
                     title="Credentials"
-                    description="Password changes stay with your active sign-in provider."
-                    action={<StatusPill tone="neutral">Managed outside Studio</StatusPill>}
+                    description={credentialsDescription}
+                    action={
+                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <StatusPill tone={primaryAuthProvider === 'email' ? 'brand' : 'neutral'}>{primaryAuthProviderLabel}</StatusPill>
+                        <button
+                          type="button"
+                          onClick={() => setCredentialsDialogOpen(true)}
+                          className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        >
+                          Manage profile
+                        </button>
+                      </div>
+                    }
                   />
                   <SettingsRow 
                     icon={MonitorSmartphone}
@@ -580,6 +928,15 @@ export default function SettingsPage() {
 
         </main>
       </div>
+      <CredentialsDialog
+        open={credentialsDialogOpen}
+        identity={auth?.identity}
+        profileSaving={profileMutation.isPending}
+        passwordSaving={passwordSaving}
+        onClose={() => setCredentialsDialogOpen(false)}
+        onSaveDisplayName={handleDisplayNameSave}
+        onSavePassword={handlePasswordSave}
+      />
     </AppPage>
   )
 }

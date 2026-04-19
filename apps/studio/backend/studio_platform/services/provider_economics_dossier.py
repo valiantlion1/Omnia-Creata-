@@ -13,6 +13,12 @@ from ..generation_credit_forecast_ops import build_generation_credit_forecasts
 from ..model_catalog_ops import list_model_catalog_entries
 from ..models import IdentityPlan
 from ..providers import ProviderRegistry
+from ..studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_SIGNATURE_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+)
 from ..versioning import load_version_info
 
 _OPENAI_PRICING_URL = "https://openai.com/api/pricing/"
@@ -99,13 +105,26 @@ def build_provider_economics_dossier(
         "premium": _sanitize_chat_pricing(lookup_chat_model_pricing(settings.gemini_premium_model)),
     }
     image_lane_cost_basis = {
-        "runware_standard": {
+        "fast": {
             "provider": "runware",
-            "reference_model": "runware:101@1",
-            "pricing_source": "runware_operator_quote_required",
+            "reference_model": "runware:400@2",
+            "pricing_source": "runware_public_model_page",
         },
-        "openai_edit_reference": _build_image_lane_cost_basis(model=settings.openai_image_model),
-        "openai_draft": _build_image_lane_cost_basis(model=settings.openai_image_draft_model),
+        "standard": {
+            "provider": "runware",
+            "reference_model": "runware:400@1",
+            "pricing_source": "runware_public_model_page",
+        },
+        "premium": {
+            "provider": "runware",
+            "reference_model": "bfl:5@1",
+            "pricing_source": "runware_bfl_official",
+        },
+        "signature_internal": {
+            "provider": "runware",
+            "reference_model": "bfl:6@1",
+            "pricing_source": "runware_bfl_official",
+        },
     }
 
     founder_signoff = {
@@ -119,9 +138,9 @@ def build_provider_economics_dossier(
         and chat_lane_cost_basis["free_limited"] is not None
         and chat_lane_cost_basis["standard"] is not None
         and chat_lane_cost_basis["premium"] is not None
-        and image_lane_cost_basis["runware_standard"]["reference_model"]
-        and image_lane_cost_basis["openai_edit_reference"]["reference_model"]
-        and image_lane_cost_basis["openai_draft"]["reference_model"]
+        and image_lane_cost_basis["fast"]["reference_model"]
+        and image_lane_cost_basis["standard"]["reference_model"]
+        and image_lane_cost_basis["premium"]["reference_model"]
         and lane_credit_impact["free_account"]["models"]
         and lane_credit_impact["creator"]["models"]
         and lane_credit_impact["pro"]["models"]
@@ -144,13 +163,13 @@ def build_provider_economics_dossier(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "version": version.version,
         "build": version.build,
-        "provider_direction": "gemini_chat_runware_image_with_selective_openai",
+        "provider_direction": "cheap_chat_plus_runware_image_primary",
         "complete": complete,
         "summary": summary,
         "source_basis": {
             "official_pricing_url": _OPENAI_PRICING_URL,
             "chat_pricing_source": "google_ai_dev_official",
-            "image_pricing_source": "mixed_runware_openai",
+            "image_pricing_source": "runware_primary",
             "package_catalog_source": "studio_public_plan_payload",
             "credit_contract_source": "studio_model_catalog",
         },

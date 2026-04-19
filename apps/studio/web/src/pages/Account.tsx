@@ -43,6 +43,16 @@ function PostGrid({ posts, ownProfile, view }: { posts: PublicPost[]; ownProfile
             ? 'Start in Create, then keep the images you want on your profile here.'
             : 'This creator hasn\'t published any images yet.'
         }
+        action={
+          ownProfile ? (
+            <Link
+              to="/create"
+              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"
+            >
+              Start creating
+            </Link>
+          ) : null
+        }
       />
     )
   }
@@ -251,7 +261,7 @@ export default function AccountPage() {
               {payload.profile.bio ? (
                 <div className="text-sm leading-relaxed text-zinc-300">{payload.profile.bio}</div>
               ) : (
-                payload.own_profile && <div className="text-sm text-zinc-500 italic">No bio written yet.</div>
+                payload.own_profile && <div className="text-sm text-zinc-500 italic">Add a short bio to give your profile a signature voice.</div>
               )}
             </div>
 

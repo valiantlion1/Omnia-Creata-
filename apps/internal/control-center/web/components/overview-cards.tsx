@@ -1,5 +1,3 @@
-import { Activity, BellRing, ShieldAlert, Wrench } from "lucide-react";
-
 export function OverviewCards({
   totals,
   incidentsBySeverity
@@ -14,65 +12,37 @@ export function OverviewCards({
 }) {
   const cards = [
     {
-      label: "Tracked Environments",
+      label: "Environments",
       value: String(totals.total),
-      detail: `${totals.healthy} healthy, ${totals.degraded} degraded, ${totals.failed} failed`,
-      icon: Activity
+      detail: `${totals.healthy} healthy / ${totals.degraded} degraded / ${totals.failed} failed`
     },
     {
-      label: "P1",
+      label: "P1 queue",
       value: String(incidentsBySeverity.P1),
-      detail: "Hard down or shell failure",
-      icon: ShieldAlert
+      detail: "Hard-down incidents"
     },
     {
-      label: "P2",
+      label: "P2 queue",
       value: String(incidentsBySeverity.P2),
-      detail: "Degraded health or verify failure",
-      icon: Wrench
+      detail: "Degraded health or verify failures"
     },
     {
-      label: "P3",
+      label: "P3 queue",
       value: String(incidentsBySeverity.P3),
-      detail: "Digest-only drift or staging noise",
-      icon: BellRing
+      detail: "Lower-priority drift"
     }
   ];
 
   return (
-    <section className="rounded-[30px] border border-white/10 bg-[#091414]/88 px-5 py-4 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-white/42">Signal Strip</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">What matters right now</h2>
-        </div>
-        <p className="max-w-2xl text-sm leading-6 text-white/58">
-          Keep the top layer readable: environment health first, then incident severity. Everything else lives deeper
-          in the workflow.
-        </p>
-      </div>
-
-      <div className="mt-5 grid gap-px overflow-hidden rounded-[24px] border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        return (
-          <article
-            key={card.label}
-            className="bg-[#091212] p-5"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-white/45">{card.label}</p>
-                <div className="mt-4 text-4xl font-semibold tracking-tight text-white">{card.value}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-teal-100">
-                <Icon className="h-5 w-5" />
-              </div>
-            </div>
-            <p className="mt-4 text-sm text-white/65">{card.detail}</p>
+    <section className="ocos-panel rounded-[14px]">
+      <div className="grid gap-px overflow-hidden rounded-[14px] border border-[var(--ocos-line)] bg-[var(--ocos-line)] sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => (
+          <article key={card.label} className="bg-[var(--ocos-surface)] px-4 py-3">
+            <p className="ocos-kicker">{card.label}</p>
+            <div className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--ocos-ink)]">{card.value}</div>
+            <p className="mt-2 text-xs leading-5 text-[var(--ocos-muted)]">{card.detail}</p>
           </article>
-        );
-      })}
+        ))}
       </div>
     </section>
   );

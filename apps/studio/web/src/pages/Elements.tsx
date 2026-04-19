@@ -241,7 +241,7 @@ export default function ElementsPage() {
   const { applyPrompt, applyModifier } = useCreateRoute()
   const { openLightbox } = useLightbox()
 
-  usePageMeta('Styles & Presets', 'Browse and apply curated style presets to your AI generations.')
+  usePageMeta('Styles & Presets', 'Browse and apply curated style presets to your Studio generations.')
 
   const stylesQuery = useQuery({
     queryKey: ['styles'],
@@ -336,7 +336,7 @@ export default function ElementsPage() {
           Styles & Presets
         </h1>
         <p className="max-w-2xl text-lg text-zinc-400">
-          Apply curated visual styles to your generations, save your favorites, and reuse them across Create without rebuilding the same look every time.
+          Apply curated visual directions to your generations, save the looks you reuse, and bring them back into Create without rebuilding them from scratch.
         </p>
       </section>
 
@@ -391,14 +391,14 @@ export default function ElementsPage() {
       {tab === 'explore' ? (
         <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <button
-            onClick={() => applyPrompt('cinematic lighting, refined composition, premium detail')}
+            onClick={() => applyPrompt('soft cinematic lighting, clean composition, tactile detail')}
             className="group flex min-h-[420px] flex-col items-center justify-center rounded-[32px] border border-dashed border-white/[0.15] bg-white/[0.02] p-6 text-center transition-all duration-300 hover:border-[rgba(124,58,237,0.4)] hover:bg-[rgba(124,58,237,0.05)]"
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-full text-zinc-400 ring-1 ring-white/[0.1] transition-transform duration-300 group-hover:scale-110 group-hover:text-white" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(124,58,237,0.2))' }}>
               <Plus className="h-8 w-8" />
             </div>
             <div className="mt-6 text-xl font-semibold text-white">Start from a fresh style</div>
-            <div className="mt-2 text-sm text-zinc-500">Open Create with a clean cinematic baseline and build your own reusable direction from there.</div>
+            <div className="mt-2 text-sm text-zinc-500">Open Create with a clean starting direction, then shape it into your own reusable style.</div>
           </button>
 
           {filteredCatalog.map((entry) => (
@@ -430,7 +430,7 @@ export default function ElementsPage() {
         </section>
       ) : (
         <section className="flex flex-col items-center justify-center py-20">
-          <div className="mb-4 text-6xl text-zinc-600">🎨</div>
+          <Palette className="mb-4 h-14 w-14 text-zinc-600" />
           <div className="text-lg font-semibold text-zinc-400">No saved styles yet.</div>
           <p className="mt-2 max-w-md text-center text-zinc-500">
             Save the looks you want to reuse and they will appear here as your own quick-start library.

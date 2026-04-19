@@ -561,9 +561,8 @@ async def test_raw_legacy_share_scope_in_existing_asset_token_still_resolves_ass
             algorithm="HS256",
         )
 
-        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
-
-        assert delivery.local_path == render_path
+        with pytest.raises(PermissionError, match="missing scope"):
+            await service.resolve_asset_delivery(asset.id, token, "content")
     finally:
         await service.shutdown()
 

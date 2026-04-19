@@ -21,7 +21,7 @@ RUN mkdir -p /runtime/data /runtime/media
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/healthz')" || exit 1
 
 EXPOSE 8000
 

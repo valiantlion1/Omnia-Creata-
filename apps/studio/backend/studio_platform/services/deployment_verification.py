@@ -12,6 +12,7 @@ from ..versioning import load_version_info
 
 _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 _CLOSURE_SPRINT_LABEL = "Protected Beta Hardening"
+_EXPECTED_LOGIN_SHELL_TITLE = "Omnia Creata Studio"
 _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "provider_smoke",
     "provider_health_snapshot",
@@ -205,7 +206,7 @@ def build_deployment_verification_report(
         )
 
     title = _extract_title(login_page_html)
-    if title == "OmniaCreata Studio" and login_page_html and "OmniaCreata Studio" in login_page_html:
+    if _login_shell_matches(title, login_page_html):
         add_check(
             "login_shell",
             "pass",
@@ -702,6 +703,21 @@ def _extract_title(html: str | None) -> str:
     if match is None:
         return ""
     return " ".join(match.group(1).split()).strip()
+
+
+def _normalize_shell_text(value: str | None) -> str:
+    if not value:
+        return ""
+    return re.sub(r"\s+", "", value).strip().lower()
+
+
+def _login_shell_matches(title: str | None, html: str | None) -> bool:
+    expected = _normalize_shell_text(_EXPECTED_LOGIN_SHELL_TITLE)
+    if not expected:
+        return False
+    if _normalize_shell_text(title) != expected:
+        return False
+    return expected in _normalize_shell_text(html)
 
 
 def _normalize_label(label: str) -> str:

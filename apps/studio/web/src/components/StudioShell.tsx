@@ -27,7 +27,6 @@ import {
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { APP_VERSION_LABEL } from '@/lib/appVersion'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -88,6 +87,7 @@ function Section({
   expandedItems,
   onToggleItem,
   onNavigate,
+  getOpenTarget,
 }: {
   title?: string
   items: NavItem[]
@@ -99,6 +99,7 @@ function Section({
   expandedItems?: Record<string, boolean>
   onToggleItem?: (item: NavItem) => void
   onNavigate?: () => void
+  getOpenTarget?: (item: NavItem) => string
 }) {
   const currentRoute = `${pathname}${search}`
 
@@ -155,7 +156,7 @@ function Section({
                 {!collapsed && expandable ? (
                   item.expandOnMainClick ? (
                     <Link
-                      to={item.to}
+                      to={getOpenTarget?.(item) ?? item.to}
                       onClick={onNavigate}
                       title={`Open ${item.label}`}
                       className="flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-white/[0.04] hover:text-white"
@@ -266,10 +267,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const next: Record<string, boolean> = {}
     if (location.pathname.startsWith('/chat')) next['/chat'] = true
-    if (location.pathname.startsWith('/settings')) next['/settings'] = true
+    // Keep Settings flyout opt-in on desktop so it doesn't clip out of the lower rail.
+    if (location.pathname.startsWith('/settings') && mobileOpen) next['/settings'] = true
     if (!Object.keys(next).length) return
     setExpandedItems((current) => ({ ...next, ...current }))
-  }, [location.pathname])
+  }, [location.pathname, mobileOpen])
 
 
 
@@ -398,6 +400,14 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     setMobileOpen(false)
   }
 
+  const getOpenTarget = (item: NavItem) => {
+    if (item.to === '/settings' && isGuestShell) {
+      return '/login?next=%2Fsettings'
+    }
+
+    return item.to
+  }
+
   const handleSignOut = async () => {
     await signOut()
     setMobileOpen(false)
@@ -432,10 +442,21 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           expandedItems={expandedItems}
           onToggleItem={handleToggleItem}
           onNavigate={() => setMobileOpen(false)}
+          getOpenTarget={getOpenTarget}
         />
         <Section title="Library" items={libraryNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         <Section title="Elements" items={elementsNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <Section items={utilityNav} pathname={location.pathname} search={location.search} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <Section
+          items={utilityNav}
+          pathname={location.pathname}
+          search={location.search}
+          collapsed={collapsed}
+          renderExpandedPanel={renderExpandedPanel}
+          expandedItems={expandedItems}
+          onToggleItem={handleToggleItem}
+          onNavigate={() => setMobileOpen(false)}
+          getOpenTarget={getOpenTarget}
+        />
       </div>
 
       <div className="relative border-t border-white/[0.03] p-3">
@@ -497,13 +518,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             </Link>
           )}
         </div>
-        
-        {/* Version */}
-        {!collapsed && (
-          <div className="mt-4 px-1 text-[10px] text-center font-medium text-zinc-600/50">
-            {APP_VERSION_LABEL}
-          </div>
-        )}
       </div>
     </>
   )
@@ -601,10 +615,21 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 expandedItems={expandedItems}
                 onToggleItem={handleToggleItem}
                 onNavigate={() => setMobileOpen(false)}
+                getOpenTarget={getOpenTarget}
               />
               <Section title="Library" items={libraryNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
               <Section title="Elements" items={elementsNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
-              <Section title="Utility" items={utilityNav} pathname={location.pathname} search={location.search} onNavigate={() => setMobileOpen(false)} />
+              <Section
+                title="Utility"
+                items={utilityNav}
+                pathname={location.pathname}
+                search={location.search}
+                renderExpandedPanel={renderExpandedPanel}
+                expandedItems={expandedItems}
+                onToggleItem={handleToggleItem}
+                onNavigate={() => setMobileOpen(false)}
+                getOpenTarget={getOpenTarget}
+              />
             </div>
             <div className="border-t border-white/[0.02] px-4 py-3">
               {/* Usage bar — mobile */}

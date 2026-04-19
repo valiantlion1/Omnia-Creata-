@@ -111,6 +111,27 @@ And with owner truth:
 powershell -ExecutionPolicy Bypass -File .\verify-studio-platform.ps1 -PromptForOwnerToken -RequireClosureReady
 ```
 
+## Recommended secret storage on Windows
+
+Keep repo env files as topology checklists and placeholder maps. Store long-lived secrets once at the Windows `User` environment level, then let Studio hydrate them into runtime-only effective env files under `%LOCALAPPDATA%\OmniaCreata\Studio\staging\config`.
+
+Current launch-critical secret families:
+- Core platform: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`
+- Active provider lanes: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `RUNWARE_API_KEY`
+- Optional extra providers: `GEMINI_API_KEY`, `FAL_API_KEY`, `HUGGINGFACE_TOKEN`
+- Billing when Paddle is ready: `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CHECKOUT_BASE_URL`
+- Owner/admin truth: `STUDIO_OWNER_EMAIL`, `STUDIO_OWNER_EMAILS`, `STUDIO_ROOT_ADMIN_EMAILS`
+
+Example one-time setup:
+
+```powershell
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "<value>", "User")
+[Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "<value>", "User")
+[Environment]::SetEnvironmentVariable("RUNWARE_API_KEY", "<value>", "User")
+```
+
+`start-studio-local.ps1`, `start-studio-staging.ps1`, and `verify-studio-staging.ps1` now read those user-level variables automatically, so you do not have to keep retyping provider, billing, or owner secrets into repo-local env files.
+
 ## Important expectations
 
 - Use `STATE_STORE_BACKEND=postgres`

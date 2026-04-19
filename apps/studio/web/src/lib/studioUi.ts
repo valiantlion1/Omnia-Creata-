@@ -3,7 +3,7 @@ import * as React from 'react'
 export type StudioTheme = 'default' | 'cyberpunk' | 'sunset' | 'ocean' | 'emerald' | 'royal' | 'aurora' | 'dusk'
 
 export const THEME_OPTIONS: Array<{ id: StudioTheme; label: string; colors: [string, string] }> = [
-  { id: 'default', label: 'Midnight', colors: ['#7c3aed', '#6366f1'] },
+  { id: 'default', label: 'Slate', colors: ['#5e72e4', '#76c3ff'] },
   { id: 'ocean', label: 'Ocean', colors: ['#06b6d4', '#3b82f6'] },
   { id: 'aurora', label: 'Aurora', colors: ['#22d3ee', '#34d399'] },
   { id: 'cyberpunk', label: 'Cyberpunk', colors: ['#00ffff', '#ff0080'] },

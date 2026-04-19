@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Folder, Grid2X2, Heart, Image as ImageIcon, ImageOff, List, Lock, MoreHorizontal, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Folder,
+  Grid2X2,
+  Heart,
+  Image as ImageIcon,
+  ImageOff,
+  List,
+  Lock,
+  MoreHorizontal,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 
 import { ProtectedAssetImage } from '@/components/ProtectedAssetImage'
-import { AppPage, SkeletonImageGrid, StatusPill } from '@/components/StudioPrimitives'
+import {
+  AppPage,
+  SkeletonImageGrid,
+  StatusPill,
+} from '@/components/StudioPrimitives'
 import { usePageMeta } from '@/lib/usePageMeta'
-import { LightboxTrigger } from '@/components/ImageLightbox'
-import { useLightbox } from '@/components/Lightbox'
 import {
   getCreativeProfileLabel,
   normalizeJobStatus,
@@ -86,14 +104,18 @@ const trashFilters: Array<{ id: TrashFilter; label: string }> = [
 ]
 
 function assetLibraryState(asset: MediaAsset): LibraryState {
-  return asset.library_state ?? (asset.protection_state === 'blocked' ? 'blocked' : 'ready')
+  return (
+    asset.library_state ??
+    (asset.protection_state === 'blocked' ? 'blocked' : 'ready')
+  )
 }
 
 function generationLibraryState(generation: Generation): LibraryState {
   if (generation.library_state) return generation.library_state
   const normalized = normalizeJobStatus(generation.status)
   if (normalized === 'queued' || normalized === 'running') return 'generating'
-  if ((generation.error ?? '').toLowerCase().includes('policy')) return 'blocked'
+  if ((generation.error ?? '').toLowerCase().includes('policy'))
+    return 'blocked'
   return 'failed'
 }
 
@@ -107,12 +129,20 @@ function assetPreviewUrl(asset: MediaAsset) {
 
 function assetPreviewSources(asset: MediaAsset) {
   if (assetLibraryState(asset) === 'blocked') {
-    return [asset.blocked_preview_url, asset.preview_url, asset.thumbnail_url, asset.url]
+    return [
+      asset.blocked_preview_url,
+      asset.preview_url,
+      asset.thumbnail_url,
+      asset.url,
+    ]
   }
   return [asset.preview_url, asset.thumbnail_url, asset.url]
 }
 
-function matchesQuery(query: string, ...parts: Array<string | null | undefined>) {
+function matchesQuery(
+  query: string,
+  ...parts: Array<string | null | undefined>
+) {
   if (!query.trim()) return true
   const normalized = query.trim().toLowerCase()
   return parts.some((value) => value?.toLowerCase().includes(normalized))
@@ -138,13 +168,10 @@ function metadataString(metadata: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined
 }
 
-function metadataNumber(metadata: Record<string, unknown>, key: string) {
-  const value = metadata[key]
-  return typeof value === 'number' ? value : undefined
-}
-
 function variantOrder(asset: MediaAsset) {
-  const raw = Number((asset.metadata as Record<string, unknown>).variation_index ?? 0)
+  const raw = Number(
+    (asset.metadata as Record<string, unknown>).variation_index ?? 0,
+  )
   return Number.isFinite(raw) ? raw : 0
 }
 
@@ -152,7 +179,11 @@ function isChatProject(project: Project | null | undefined) {
   if (!project) return false
   const normalizedTitle = project.title.trim().toLowerCase()
   const normalizedDescription = project.description.trim().toLowerCase()
-  return project.surface === 'chat' || normalizedTitle.startsWith('chat -') || normalizedDescription === 'created from studio chat'
+  return (
+    project.surface === 'chat' ||
+    normalizedTitle.startsWith('chat -') ||
+    normalizedDescription === 'created from studio chat'
+  )
 }
 
 function ConfirmDialog({
@@ -174,14 +205,26 @@ function ConfirmDialog({
       : state.kind === 'delete-project'
         ? `Delete "${state.title}" permanently? Empty projects can be removed and this cannot be undone.`
         : `"${state.asset.title}" will be removed permanently. This cannot be undone.`
-  const resolvedTitle = state.kind === 'empty-trash' ? 'Empty trash?' : state.kind === 'delete-project' ? 'Delete project?' : 'Delete forever?'
+  const resolvedTitle =
+    state.kind === 'empty-trash'
+      ? 'Empty trash?'
+      : state.kind === 'delete-project'
+        ? 'Delete project?'
+        : 'Delete forever?'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
+      <div
+        className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl"
+        style={{
+          boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)',
+        }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold text-white">{resolvedTitle}</div>
+            <div className="text-lg font-semibold text-white">
+              {resolvedTitle}
+            </div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">{body}</p>
           </div>
           <button
@@ -193,7 +236,10 @@ function ConfirmDialog({
           </button>
         </div>
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button onClick={onCancel} className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white">
+          <button
+            onClick={onCancel}
+            className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white"
+          >
             Cancel
           </button>
           <button
@@ -220,10 +266,17 @@ function NoticeDialog({
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
+      <div
+        className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl"
+        style={{
+          boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)',
+        }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold text-white">{state.title}</div>
+            <div className="text-lg font-semibold text-white">
+              {state.title}
+            </div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">{state.body}</p>
           </div>
           <button
@@ -235,7 +288,10 @@ function NoticeDialog({
           </button>
         </div>
         <div className="mt-8 flex justify-end">
-          <button onClick={onClose} className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200">
+          <button
+            onClick={onClose}
+            className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"
+          >
             Got it
           </button>
         </div>
@@ -267,11 +323,19 @@ function RenameDialog({
 
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl" style={{ boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)' }}>
+      <div
+        className="w-full max-w-md rounded-[24px] bg-[#0c0d12]/90 p-6 shadow-[0_36px_120px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.05] backdrop-blur-3xl"
+        style={{
+          boxShadow: 'var(--border-glow), 0 36px 120px rgba(0,0,0,0.6)',
+        }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">{heading}</div>
-            <p className="mt-2 text-sm leading-7 text-zinc-400">Give this {state.kind === 'post' ? 'image set' : 'project'} a cleaner name.</p>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">
+              Give this {state.kind === 'post' ? 'image set' : 'project'} a
+              cleaner name.
+            </p>
           </div>
           <button
             onClick={onCancel}
@@ -283,7 +347,9 @@ function RenameDialog({
         </div>
 
         <div className="mt-5">
-          <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">Title</label>
+          <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-600">
+            Title
+          </label>
           <input
             id="studio-library-rename-title"
             name="title"
@@ -291,12 +357,17 @@ function RenameDialog({
             value={value}
             onChange={(event) => setValue(event.target.value)}
             className="input mt-2"
-            placeholder={state.kind === 'post' ? 'Image set name' : 'Project name'}
+            placeholder={
+              state.kind === 'post' ? 'Image set name' : 'Project name'
+            }
           />
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button onClick={onCancel} className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white">
+          <button
+            onClick={onCancel}
+            className="rounded-full px-4 py-2 text-sm text-zinc-300 transition hover:text-white"
+          >
             Cancel
           </button>
           <button
@@ -337,8 +408,6 @@ function AssetLightbox({
   onSetVisibility: (visibility: 'public' | 'private') => void
   onTrash: () => void
 }) {
-  const { openLightbox } = useLightbox()
-
   useEffect(() => {
     if (!state) return
 
@@ -348,7 +417,10 @@ function AssetLightbox({
         return
       }
       if (event.key === 'ArrowLeft') {
-        onSelect((state.index - 1 + state.group.items.length) % state.group.items.length)
+        onSelect(
+          (state.index - 1 + state.group.items.length) %
+            state.group.items.length,
+        )
         return
       }
       if (event.key === 'ArrowRight') {
@@ -356,10 +428,14 @@ function AssetLightbox({
       }
     }
 
+    const previousOverflow = document.body.style.overflow
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior
     document.body.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'contain'
     window.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.body.style.overflow = ''
+      document.body.style.overflow = previousOverflow
+      document.body.style.overscrollBehavior = previousOverscrollBehavior
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [onClose, onSelect, state])
@@ -368,16 +444,25 @@ function AssetLightbox({
 
   const asset = state.group.items[state.index]
   const canStep = state.group.items.length > 1
-  const previewSrc = assetPreviewUrl(asset) ?? ''
-  const canOpenPreview = Boolean(previewSrc) && asset.can_open !== false && state.group.libraryState !== 'blocked'
+  const aspectRatio = metadataString(asset.metadata, 'aspect_ratio')
+  const detailTags = state.group.derivedTags.slice(0, 4)
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(4,6,10,0.82)] px-4 py-6 backdrop-blur-[10px]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,196,255,0.08),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.52)_48%,rgba(0,0,0,0.78))]" />
+    <div
+      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${state.group.title} preview`}
+    >
+      <div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,196,255,0.08),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.52)_48%,rgba(0,0,0,0.78))]"
+        onClick={onClose}
+      />
       <button
         onClick={onClose}
-        className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+        className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:right-5 sm:top-5"
         title="Close preview"
+        aria-label="Close preview"
       >
         <X className="h-4 w-4" />
       </button>
@@ -385,68 +470,138 @@ function AssetLightbox({
       {canStep ? (
         <>
           <button
-            onClick={() => onSelect((state.index - 1 + state.group.items.length) % state.group.items.length)}
-            className="absolute left-5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+            onClick={() =>
+              onSelect(
+                (state.index - 1 + state.group.items.length) %
+                  state.group.items.length,
+              )
+            }
+            className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:left-5"
             title="Previous image"
+            aria-label="Previous image"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
-            onClick={() => onSelect((state.index + 1) % state.group.items.length)}
-            className="absolute right-5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white"
+            onClick={() =>
+              onSelect((state.index + 1) % state.group.items.length)
+            }
+            className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.06] text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/[0.1] hover:text-white sm:right-5"
             title="Next image"
+            aria-label="Next image"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </>
       ) : null}
 
-      <div className="relative z-[1] grid w-full max-w-[1380px] gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-end">
-        <div className="group relative flex min-h-0 items-center justify-center">
+      <div className="relative z-[1] mx-auto grid min-h-[calc(100svh-1.5rem)] w-full max-w-[1500px] gap-4 sm:min-h-[calc(100svh-2.5rem)] sm:gap-5 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-stretch">
+        <div
+          className="group relative flex min-h-[20rem] items-center justify-center overflow-hidden rounded-[30px] border border-white/[0.08] bg-[#07090d]/78 p-4 shadow-[0_32px_120px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-5 xl:min-h-[calc(100svh-2.5rem)] xl:px-8 xl:py-6"
+          style={{
+            boxShadow: '0 32px 120px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div className="absolute left-4 top-4 z-[1] flex max-w-[calc(100%-5rem)] flex-wrap items-center gap-2 sm:left-5 sm:top-5">
+            <span className="rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+              {state.group.projectTitle}
+            </span>
+            {canStep ? (
+              <span className="rounded-full bg-black/35 px-3 py-1 text-[11px] font-medium text-zinc-200 backdrop-blur-md ring-1 ring-white/[0.1]">
+                Variation {state.index + 1} of {state.group.items.length}
+              </span>
+            ) : null}
+          </div>
           <ProtectedAssetImage
             sources={assetPreviewSources(asset)}
             alt={assetDisplayTitle(asset)}
-            className="max-h-[78vh] w-auto max-w-full cursor-zoom-in rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
-            fallbackClassName="flex max-h-[78vh] min-h-[22rem] w-full max-w-full items-center justify-center rounded-[28px] bg-white/[0.04] text-zinc-600 shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
-            onClick={() => {
-              if (!canOpenPreview) return
-              openLightbox(previewSrc, assetDisplayTitle(asset), {
-                title: state.group.title,
-                prompt: state.group.prompt,
-                authorName: 'You',
-                authorUsername: 'creator',
-                aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
-                likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
-              })
-            }}
+            className="max-h-[min(76vh,calc(100svh-10rem))] w-auto max-w-full rounded-[28px] object-contain shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
+            fallbackClassName="flex min-h-[18rem] max-h-[min(76vh,calc(100svh-10rem))] w-full max-w-full items-center justify-center rounded-[28px] bg-white/[0.04] text-zinc-600 shadow-[0_32px_120px_rgba(0,0,0,0.45)]"
           />
-          {canOpenPreview ? (
-            <LightboxTrigger onClick={() => openLightbox(previewSrc, assetDisplayTitle(asset), {
-                title: state.group.title,
-                prompt: state.group.prompt,
-                authorName: 'You',
-                authorUsername: 'creator',
-                aspectRatio: metadataString(asset.metadata, 'aspect_ratio'),
-                likes: metadataNumber(asset.metadata, 'like_count') ?? 0,
-            })} />
-          ) : null}
         </div>
 
-        <div className="space-y-6 rounded-[32px] bg-[#0c0d12]/60 p-6 ring-1 ring-white/10 backdrop-blur-2xl shadow-[0_40px_100px_rgba(0,0,0,0.8)]" style={{ boxShadow: 'var(--border-glow), 0 40px 100px rgba(0,0,0,0.8)' }}>
+        <div
+          className="flex min-h-0 flex-col rounded-[30px] border border-white/[0.08] bg-[#0c0d12]/72 p-5 ring-1 ring-white/10 backdrop-blur-2xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] sm:p-6 xl:max-h-[calc(100svh-2.5rem)]"
+          style={{
+            boxShadow: 'var(--border-glow), 0 40px 100px rgba(0,0,0,0.8)',
+          }}
+        >
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain pr-1">
           <div>
-            <div className="text-xl font-semibold tracking-[-0.03em] text-white">{state.group.title}</div>
+            <div className="text-xl font-semibold tracking-[-0.03em] text-white">
+              {state.group.title}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-zinc-400">
               <span>{formatDate(asset.created_at)}</span>
               {state.group.items.length > 1 && (
                 <>
                   <span className="text-zinc-600">·</span>
-                  <span>Variation {state.index + 1} of {state.group.items.length}</span>
+                  <span>
+                    Variation {state.index + 1} of {state.group.items.length}
+                  </span>
                 </>
               )}
             </div>
           </div>
-          <div className="max-h-[10rem] overflow-auto pr-1 text-[13px] leading-6 text-zinc-400">{state.group.prompt}</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <LightboxMetaTile label="Project" value={state.group.projectTitle} />
+            <LightboxMetaTile label="Model" value={state.group.modelLabel} />
+            {aspectRatio ? (
+              <LightboxMetaTile label="Ratio" value={aspectRatio} />
+            ) : null}
+            <LightboxMetaTile
+              label="Visibility"
+              value={asset.visibility === 'public' ? 'Public' : 'Private'}
+            />
+          </div>
+          <div className="space-y-3 rounded-[24px] border border-white/[0.06] bg-white/[0.02] p-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                Prompt
+              </div>
+              <div className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-6 text-zinc-400">
+                {state.group.prompt}
+              </div>
+            </div>
+            {detailTags.length ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {detailTags.map((tag) => (
+                  <span
+                    key={`${state.group.id}-${tag}`}
+                    className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-zinc-400"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
+          {canStep ? (
+            <div className="space-y-3 border-t border-white/10 pt-5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+                Variations
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {state.group.items.map((item, index) => (
+                  <button
+                    key={item.id}
+                    onClick={() => onSelect(index)}
+                    className={`overflow-hidden rounded-[14px] ring-2 transition-all duration-500 scale-100 active:scale-90 ${state.index === index ? 'ring-[rgb(var(--primary-light))] shadow-[0_0_15px_rgba(var(--primary-light),0.4)]' : 'ring-white/5 hover:ring-white/20'}`}
+                  >
+                    <ProtectedAssetImage
+                      sources={assetPreviewSources(item)}
+                      alt={assetDisplayTitle(item)}
+                      className={`aspect-square h-full w-full object-cover transition-opacity duration-300 ${state.index === index ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          </div>
+
+          <div className="mt-5 space-y-4 border-t border-white/10 pt-5">
           {/* Primary actions */}
           <div className="space-y-2.5">
             {!isChatOrigin ? (
@@ -458,11 +613,11 @@ function AssetLightbox({
                 Reuse prompt
               </button>
             ) : null}
-            <div className="flex gap-2.5">
+            <div className="grid gap-2.5 sm:grid-cols-3">
               {!isChatOrigin ? (
                 <button
                   onClick={onReuseStyle}
-                  className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
+                  className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
                   disabled={busy}
                 >
                   Reuse style
@@ -470,7 +625,7 @@ function AssetLightbox({
               ) : null}
               <button
                 onClick={onMove}
-                className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
+                className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95 disabled:opacity-50"
                 disabled={busy}
               >
                 Move
@@ -478,7 +633,7 @@ function AssetLightbox({
               {!isChatOrigin ? (
                 <button
                   onClick={onOpenProject}
-                  className="flex-1 rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95"
+                  className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/10 active:scale-95"
                 >
                   Project
                 </button>
@@ -487,9 +642,13 @@ function AssetLightbox({
           </div>
 
           {/* Visibility & danger */}
-          <div className="flex items-center gap-2 border-t border-white/10 pt-4">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => onSetVisibility(asset.visibility === 'public' ? 'private' : 'public')}
+              onClick={() =>
+                onSetVisibility(
+                  asset.visibility === 'public' ? 'private' : 'public',
+                )
+              }
               className="rounded-full bg-white/5 px-4 py-2 text-[11px] font-bold text-zinc-400 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95 disabled:opacity-50"
               disabled={busy}
             >
@@ -504,24 +663,7 @@ function AssetLightbox({
               Delete
             </button>
           </div>
-
-          {canStep ? (
-            <div className="grid grid-cols-5 gap-2 border-t border-white/10 pt-5">
-              {state.group.items.map((item, index) => (
-                <button
-                  key={item.id}
-                  onClick={() => onSelect(index)}
-                  className={`overflow-hidden rounded-[14px] ring-2 transition-all duration-500 scale-100 active:scale-90 ${state.index === index ? 'ring-[rgb(var(--primary-light))] shadow-[0_0_15px_rgba(var(--primary-light),0.4)]' : 'ring-white/5 hover:ring-white/20'}`}
-                >
-                  <ProtectedAssetImage
-                    sources={assetPreviewSources(item)}
-                    alt={assetDisplayTitle(item)}
-                    className={`aspect-square h-full w-full object-cover transition-opacity duration-300 ${state.index === index ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}
-                  />
-                </button>
-              ))}
-            </div>
-          ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -543,16 +685,25 @@ function MovePostDialog({
 }) {
   if (!state) return null
 
-  const destinations = projects.filter((project) => project.id !== state.currentProjectId && !isChatProject(project))
+  const destinations = projects.filter(
+    (project) =>
+      project.id !== state.currentProjectId && !isChatProject(project),
+  )
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[24px] bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/[0.05]" style={{ boxShadow: 'var(--border-glow), 0 24px 90px rgba(0,0,0,0.5)' }}>
+      <div
+        className="w-full max-w-lg rounded-[24px] bg-[#101115] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/[0.05]"
+        style={{ boxShadow: 'var(--border-glow), 0 24px 90px rgba(0,0,0,0.5)' }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-semibold text-white">Move image set</div>
+            <div className="text-lg font-semibold text-white">
+              Move image set
+            </div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">
-              Choose where <span className="text-white">{state.title}</span> should live.
+              Choose where <span className="text-white">{state.title}</span>{' '}
+              should live.
             </p>
           </div>
           <button
@@ -574,14 +725,20 @@ function MovePostDialog({
                 className="flex w-full items-center justify-between gap-4 py-3 text-left transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white">{project.title}</div>
-                  <div className="mt-1 truncate text-xs text-zinc-500">{project.description || 'Project'}</div>
+                  <div className="truncate text-sm font-medium text-white">
+                    {project.title}
+                  </div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">
+                    {project.description || 'Project'}
+                  </div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
               </button>
             ))
           ) : (
-            <div className="py-4 text-sm text-zinc-500">No other projects available.</div>
+            <div className="py-4 text-sm text-zinc-500">
+              No other projects available.
+            </div>
           )}
         </div>
       </div>
@@ -591,7 +748,10 @@ function MovePostDialog({
 
 function InlineActionMenu({ children }: { children: ReactNode }) {
   return (
-    <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl" style={{ boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.48)' }}>
+    <div
+      className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl"
+      style={{ boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.48)' }}
+    >
       <div className="space-y-1">{children}</div>
     </div>
   )
@@ -605,22 +765,89 @@ function MenuAction({
   children,
   tone = 'default',
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'danger' }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: 'default' | 'danger'
+}) {
   return (
     <button
       {...props}
-      className={`flex w-full items-center justify-between gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] transition ${
-        tone === 'danger'
-          ? 'text-rose-300 hover:bg-rose-500/[0.08] hover:text-rose-200'
-          : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
-      } ${props.className ?? ''}`}
+      className={`flex w-full items-center justify-between gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] transition ${tone === 'danger' ? 'text-rose-300 hover:bg-rose-500/[0.08] hover:text-rose-200' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'} ${props.className ?? ''}`}
     >
       {children}
     </button>
   )
 }
 
-function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (view: ViewMode) => void }) {
+function buildBrowseBadges(group: AssetGroup, limit = 4) {
+  return Array.from(
+    new Set(
+      [group.modelLabel, group.isChatOrigin ? 'Chat' : null, ...group.derivedTags]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).slice(0, limit)
+}
+
+function BrowseBadgeRow({
+  group,
+  limit = 3,
+}: {
+  group: AssetGroup
+  limit?: number
+}) {
+  const badges = buildBrowseBadges(group, limit)
+  if (!badges.length) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {badges.map((badge, index) => (
+        <span
+          key={`${group.id}-${badge}`}
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+            index === 0
+              ? 'border-white/[0.12] bg-white/[0.06] text-zinc-200'
+              : 'border-white/[0.08] bg-white/[0.03] text-zinc-500'
+          }`}
+        >
+          {badge}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function OpenDetailsHint({ className = '' }: { className?: string }) {
+  return (
+    <div className={`text-[11px] font-medium text-zinc-500 ${className}`}>
+      Open for prompt, variations, and actions.
+    </div>
+  )
+}
+
+function LightboxMetaTile({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+        {label}
+      </div>
+      <div className="mt-1 text-[13px] font-medium text-zinc-300">{value}</div>
+    </div>
+  )
+}
+
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: ViewMode
+  onChange: (view: ViewMode) => void
+}) {
   return (
     <div className="flex items-center gap-0.5 rounded-full bg-white/[0.03] p-0.5 ring-1 ring-white/[0.06]">
       <button
@@ -703,8 +930,12 @@ function Toolbar({
     <section className="pb-3 pt-1">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-white md:text-[22px]">{title}</h1>
-          {description ? <p className="mt-0.5 text-[12px] text-zinc-500">{description}</p> : null}
+          <h1 className="text-xl font-bold tracking-tight text-white md:text-[22px]">
+            {title}
+          </h1>
+          {description ? (
+            <p className="mt-0.5 text-[12px] text-zinc-500">{description}</p>
+          ) : null}
           {filters ? <div className="mt-3">{filters}</div> : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -744,17 +975,21 @@ function EmptyInline({
 }) {
   return (
     <section
-      className={`flex flex-col gap-4 py-8 ${
-        compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'
-      }`}
+      className={`flex flex-col gap-4 py-8 ${compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'}`}
     >
       <div className="relative flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-[#1c1d24]/80 to-[#0c0d12]/60 text-zinc-300 ring-1 ring-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-xl">
         <div className="absolute inset-0 rounded-[20px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.1),transparent_50%)]" />
         <div className="relative z-10 drop-shadow-md">{icon}</div>
       </div>
       <div>
-        <div className="text-[15px] font-semibold tracking-tight text-white">{title}</div>
-        <div className={`mt-1.5 text-[13px] leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}>{description}</div>
+        <div className="text-[15px] font-semibold tracking-tight text-white">
+          {title}
+        </div>
+        <div
+          className={`mt-1.5 text-[13px] leading-6 text-zinc-500 ${compact ? 'max-w-[34rem]' : 'max-w-lg'}`}
+        >
+          {description}
+        </div>
       </div>
     </section>
   )
@@ -773,12 +1008,17 @@ function PendingPreview({
   const isBlocked = state === 'blocked'
   const isFailed = state === 'failed'
   const title = generation.display_title || generation.title
-  const subtitle = isBlocked ? 'Blocked for safety review' : isFailed ? 'Could not create image' : 'Painting your vision...'
+  const subtitle = isBlocked
+    ? 'Blocked for safety review'
+    : isFailed
+      ? 'Could not create image'
+      : 'Painting your vision...'
   const badge = isBlocked ? 'Blocked' : isFailed ? 'Failed' : 'Running'
 
   const handleRetry = () => {
     const params = new URLSearchParams()
-    if (generation.prompt_snapshot?.prompt) params.set('prompt', generation.prompt_snapshot.prompt)
+    if (generation.prompt_snapshot?.prompt)
+      params.set('prompt', generation.prompt_snapshot.prompt)
     if (generation.model) params.set('model', generation.model)
     navigate(`/create?${params.toString()}`)
   }
@@ -789,44 +1029,68 @@ function PendingPreview({
         <div className="relative group/pending overflow-hidden rounded-[10px] bg-[#0c0d12] transition-all duration-300 hover:ring-1 hover:ring-white/10">
           {isBlocked || isFailed ? (
             <>
-              <div className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.15),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.18),transparent_70%)]'} opacity-50 animate-digitize`} />
+              <div
+                className={`aspect-square w-full ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.15),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.18),transparent_70%)]'} opacity-50 animate-digitize`}
+              />
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#0c0d12]/60 backdrop-blur-xl">
-                 <div className={`flex h-12 w-12 items-center justify-center rounded-full shadow-2xl transition-transform duration-500 group-hover/pending:scale-110 ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}>
-                   {isBlocked ? <Lock className="h-5 w-5 text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.4)]" /> : <ImageOff className="h-5 w-5 text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.4)]" />}
-                 </div>
-                 <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}>{badge}</span>
-                 {isFailed && (
-                   <button
-                     onClick={handleRetry}
-                     className="relative mt-1 overflow-hidden rounded-full bg-white/10 px-4 py-2 text-[11px] font-bold text-white ring-1 ring-white/20 transition-all duration-300 hover:bg-white/20 hover:ring-white/40 active:scale-95"
-                   >
-                     <span className="relative z-10">Retry in Create →</span>
-                   </button>
-                 )}
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-full shadow-2xl transition-transform duration-500 group-hover/pending:scale-110 ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}
+                >
+                  {isBlocked ? (
+                    <Lock className="h-5 w-5 text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.4)]" />
+                  ) : (
+                    <ImageOff className="h-5 w-5 text-rose-400 drop-shadow-[0_0_8px_rgba(251,113,133,0.4)]" />
+                  )}
+                </div>
+                <span
+                  className={`text-[11px] font-black tracking-[0.2em] uppercase ${isBlocked ? 'text-amber-300/90' : 'text-rose-400/80'}`}
+                >
+                  {badge}
+                </span>
+                {isFailed && (
+                  <button
+                    onClick={handleRetry}
+                    className="relative mt-1 overflow-hidden rounded-full bg-white/10 px-4 py-2 text-[11px] font-bold text-white ring-1 ring-white/20 transition-all duration-300 hover:bg-white/20 hover:ring-white/40 active:scale-95"
+                  >
+                    <span className="relative z-10">Retry in Create →</span>
+                  </button>
+                )}
               </div>
             </>
           ) : (
             <>
               <div className="aspect-square w-full animate-pulse bg-gradient-to-b from-white/[0.05] to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-b from-[rgb(var(--primary-light)/0.12)] via-transparent to-transparent animate-[oc-gen-glow_3s_ease-in-out_infinite]" />
-              
+
               {/* Premium Scanning Laser */}
               <div className="absolute inset-x-0 top-0 z-10 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_20px_rgba(var(--primary-light),0.8),0_0_8px_rgba(255,255,255,0.4)] animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
               <div className="absolute inset-x-0 h-24 bg-gradient-to-b from-[rgb(var(--primary-light)/0.2)] to-transparent opacity-50 animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
-              
+
               <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[4px]">
                 <div className="relative flex h-12 w-12 items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping" style={{ animationDuration: '1.5s' }} />
-                  <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 20px rgb(var(--primary-light))' }} />
+                  <div
+                    className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping"
+                    style={{ animationDuration: '1.5s' }}
+                  />
+                  <div
+                    className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]"
+                    style={{ boxShadow: '0 0 20px rgb(var(--primary-light))' }}
+                  />
                 </div>
               </div>
             </>
           )}
         </div>
         <div className="min-w-0 px-1">
-          <div className="truncate text-[13px] font-bold text-white tracking-tight">{title}</div>
-          <div className={`mt-0.5 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
-            {!isBlocked && !isFailed && <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />}
+          <div className="truncate text-[13px] font-bold text-white tracking-tight">
+            {title}
+          </div>
+          <div
+            className={`mt-0.5 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}
+          >
+            {!isBlocked && !isFailed && (
+              <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />
+            )}
             {subtitle}
           </div>
         </div>
@@ -839,10 +1103,18 @@ function PendingPreview({
       <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-[12px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
         {isBlocked || isFailed ? (
           <>
-            <div className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.2),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.22),transparent_70%)]'} animate-digitize`} />
+            <div
+              className={`absolute inset-0 ${isBlocked ? 'bg-[radial-gradient(ellipse_at_center,rgba(250,204,21,0.2),transparent_70%)]' : 'bg-[radial-gradient(ellipse_at_center,rgba(244,63,94,0.22),transparent_70%)]'} animate-digitize`}
+            />
             <div className="absolute inset-0 flex items-center justify-center bg-[#0c0d12]/50 backdrop-blur-md">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}>
-                {isBlocked ? <Lock className="h-3.5 w-3.5 text-amber-300" /> : <ImageOff className="h-3.5 w-3.5 text-rose-400" />}
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg ${isBlocked ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : 'bg-rose-500/10 ring-1 ring-rose-500/30'}`}
+              >
+                {isBlocked ? (
+                  <Lock className="h-3.5 w-3.5 text-amber-300" />
+                ) : (
+                  <ImageOff className="h-3.5 w-3.5 text-rose-400" />
+                )}
               </div>
             </div>
           </>
@@ -853,17 +1125,29 @@ function PendingPreview({
             <div className="absolute inset-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[rgb(var(--primary-light))] to-transparent opacity-80 shadow-[0_0_20px_rgba(var(--primary-light),0.8)] animate-[oc-gen-scan_2.5s_ease-in-out_infinite]" />
             <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
               <div className="relative flex h-8 w-8 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping" style={{ animationDuration: '1.5s' }} />
-                <div className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 15px rgb(var(--primary-light))' }} />
+                <div
+                  className="absolute inset-0 rounded-full bg-[rgb(var(--primary-light)/0.3)] animate-ping"
+                  style={{ animationDuration: '1.5s' }}
+                />
+                <div
+                  className="relative h-2 w-2 rounded-full bg-[rgb(var(--primary-light))]"
+                  style={{ boxShadow: '0 0 15px rgb(var(--primary-light))' }}
+                />
               </div>
             </div>
           </>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] font-bold text-white tracking-tight">{title}</div>
-        <div className={`mt-1 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}>
-          {!isBlocked && !isFailed && <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />}
+        <div className="truncate text-[14px] font-bold text-white tracking-tight">
+          {title}
+        </div>
+        <div
+          className={`mt-1 text-[11px] font-semibold flex items-center gap-1.5 ${isBlocked ? 'text-amber-300/90' : isFailed ? 'text-rose-400/80' : 'text-zinc-500'}`}
+        >
+          {!isBlocked && !isFailed && (
+            <span className="h-1 w-1 rounded-full bg-[rgb(var(--primary-light))] animate-pulse" />
+          )}
           {subtitle}
         </div>
       </div>
@@ -872,12 +1156,16 @@ function PendingPreview({
 }
 
 export default function MediaLibraryPage() {
-  usePageMeta('Library', 'Your images, projects, favorites, and deleted items in Omnia Creata Studio.')
+  usePageMeta(
+    'Library',
+    'Your images, projects, favorites, and deleted items in Omnia Creata Studio.',
+  )
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
-  const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
+  const canLoadPrivate =
+    !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
   const [search, setSearch] = useState('')
   const [views, setViews] = useState<Record<LibrarySection, ViewMode>>({
@@ -887,7 +1175,8 @@ export default function MediaLibraryPage() {
     trash: 'grid',
   })
   const [imageFilter, setImageFilter] = useState<ImageFilter>('all')
-  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>('all')
+  const [collectionFilter, setCollectionFilter] =
+    useState<CollectionFilter>('all')
   const [trashFilter, setTrashFilter] = useState<TrashFilter>('all')
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [actionMenu, setActionMenu] = useState<string | null>(null)
@@ -898,7 +1187,11 @@ export default function MediaLibraryPage() {
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
 
   const section = useMemo<LibrarySection>(() => {
-    if (location.pathname.startsWith('/library/projects') || location.pathname.startsWith('/library/collections')) return 'collections'
+    if (
+      location.pathname.startsWith('/library/projects') ||
+      location.pathname.startsWith('/library/collections')
+    )
+      return 'collections'
     if (location.pathname.startsWith('/library/likes')) return 'likes'
     if (location.pathname.startsWith('/library/trash')) return 'trash'
     return 'images'
@@ -962,8 +1255,13 @@ export default function MediaLibraryPage() {
   })
 
   const updatePostMutation = useMutation({
-    mutationFn: ({ postId, payload }: { postId: string; payload: { title?: string; visibility?: 'public' | 'private' } }) =>
-      studioApi.updatePost(postId, payload),
+    mutationFn: ({
+      postId,
+      payload,
+    }: {
+      postId: string
+      payload: { title?: string; visibility?: 'public' | 'private' }
+    }) => studioApi.updatePost(postId, payload),
     onSuccess: async () => {
       setRenameState(null)
       await invalidateLibrary()
@@ -971,7 +1269,13 @@ export default function MediaLibraryPage() {
   })
 
   const movePostMutation = useMutation({
-    mutationFn: ({ postId, projectId }: { postId: string; projectId: string }) => studioApi.movePost(postId, { project_id: projectId }),
+    mutationFn: ({
+      postId,
+      projectId,
+    }: {
+      postId: string
+      projectId: string
+    }) => studioApi.movePost(postId, { project_id: projectId }),
     onSuccess: invalidateLibrary,
   })
 
@@ -981,8 +1285,15 @@ export default function MediaLibraryPage() {
   })
 
   const updateProjectMutation = useMutation({
-    mutationFn: ({ projectId, title, description }: { projectId: string; title: string; description?: string }) =>
-      studioApi.updateProject(projectId, { title, description }),
+    mutationFn: ({
+      projectId,
+      title,
+      description,
+    }: {
+      projectId: string
+      title: string
+      description?: string
+    }) => studioApi.updateProject(projectId, { title, description }),
     onSuccess: async () => {
       setRenameState(null)
       await invalidateLibrary()
@@ -1001,9 +1312,18 @@ export default function MediaLibraryPage() {
     },
   })
   const exportProjectMutation = useMutation({
-    mutationFn: async ({ projectId, title }: { projectId: string; title: string }) => {
+    mutationFn: async ({
+      projectId,
+      title,
+    }: {
+      projectId: string
+      title: string
+    }) => {
       const blob = await studioApi.exportProject(projectId)
-      await downloadBlob(blob, `${title.replace(/[^a-z0-9._-]+/gi, '-').toLowerCase() || 'project'}.zip`)
+      await downloadBlob(
+        blob,
+        `${title.replace(/[^a-z0-9._-]+/gi, '-').toLowerCase() || 'project'}.zip`,
+      )
     },
   })
 
@@ -1022,7 +1342,10 @@ export default function MediaLibraryPage() {
   const generations = generationsQuery.data?.generations ?? []
   const activeAssets = assets.filter((asset) => !asset.deleted_at)
   const trashedAssets = assets.filter((asset) => Boolean(asset.deleted_at))
-  const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
+  const projectMap = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  )
   const assetsByProject = useMemo(() => {
     const next = new Map<string, MediaAsset[]>()
     for (const asset of activeAssets) {
@@ -1036,19 +1359,28 @@ export default function MediaLibraryPage() {
   const groupedAssets = useMemo<AssetGroup[]>(() => {
     const groups = new Map<string, AssetGroup>()
 
-    for (const asset of [...activeAssets].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) {
+    for (const asset of [...activeAssets].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )) {
       const metadata = asset.metadata as Record<string, unknown>
       const groupId = String(metadata.generation_id ?? asset.id)
       const project = projectMap.get(asset.project_id)
       const isChatOrigin = isChatProject(project)
-      if (isChatOrigin && metadataString(metadata, 'source') === 'upload' && !asset.prompt.trim()) {
+      if (
+        isChatOrigin &&
+        metadataString(metadata, 'source') === 'upload' &&
+        !asset.prompt.trim()
+      ) {
         continue
       }
       const existing = groups.get(groupId)
 
       if (existing) {
         existing.items.push(asset)
-        existing.derivedTags = Array.from(new Set([...existing.derivedTags, ...(asset.derived_tags ?? [])]))
+        existing.derivedTags = Array.from(
+          new Set([...existing.derivedTags, ...(asset.derived_tags ?? [])]),
+        )
         continue
       }
 
@@ -1059,12 +1391,16 @@ export default function MediaLibraryPage() {
         model: String(metadata.model ?? 'Image'),
         modelLabel: getCreativeProfileLabel(
           String(metadata.model ?? ''),
-          String(metadata.display_model_label ?? metadata.model ?? 'Studio profile'),
+          String(
+            metadata.display_model_label ?? metadata.model ?? 'Studio profile',
+          ),
         ),
         derivedTags: asset.derived_tags ?? [],
         createdAt: asset.created_at,
         projectId: asset.project_id,
-        projectTitle: isChatOrigin ? 'Chat session' : project?.title ?? 'Project',
+        projectTitle: isChatOrigin
+          ? 'Chat session'
+          : (project?.title ?? 'Project'),
         isChatOrigin,
         libraryState: assetLibraryState(asset),
         items: [asset],
@@ -1080,8 +1416,17 @@ export default function MediaLibraryPage() {
   const pendingGenerations = useMemo(
     () =>
       generations
-        .filter((generation) => generationLibraryState(generation) === 'generating')
-        .filter((generation) => matchesQuery(search, generation.title, generation.prompt_snapshot.prompt, generation.model)),
+        .filter(
+          (generation) => generationLibraryState(generation) === 'generating',
+        )
+        .filter((generation) =>
+          matchesQuery(
+            search,
+            generation.title,
+            generation.prompt_snapshot.prompt,
+            generation.model,
+          ),
+        ),
     [generations, search],
   )
 
@@ -1089,8 +1434,19 @@ export default function MediaLibraryPage() {
     () =>
       generations
         .filter((generation) => generationLibraryState(generation) === 'failed')
-        .filter((generation) => Date.now() - new Date(generation.created_at).getTime() <= 1000 * 60 * 60 * 24 * 7)
-        .filter((generation) => matchesQuery(search, generation.display_title, generation.prompt_snapshot.prompt, generation.model)),
+        .filter(
+          (generation) =>
+            Date.now() - new Date(generation.created_at).getTime() <=
+            1000 * 60 * 60 * 24 * 7,
+        )
+        .filter((generation) =>
+          matchesQuery(
+            search,
+            generation.display_title,
+            generation.prompt_snapshot.prompt,
+            generation.model,
+          ),
+        ),
     [generations, search],
   )
 
@@ -1112,8 +1468,22 @@ export default function MediaLibraryPage() {
   const filteredImageGroups = useMemo(
     () =>
       readyGroups.filter((group) => {
-        if (!matchesQuery(search, group.title, group.prompt, group.model, group.projectTitle, ...group.derivedTags)) return false
-        if (imageFilter === 'recent') return Date.now() - new Date(group.createdAt).getTime() <= 1000 * 60 * 60 * 24 * 3
+        if (
+          !matchesQuery(
+            search,
+            group.title,
+            group.prompt,
+            group.model,
+            group.projectTitle,
+            ...group.derivedTags,
+          )
+        )
+          return false
+        if (imageFilter === 'recent')
+          return (
+            Date.now() - new Date(group.createdAt).getTime() <=
+            1000 * 60 * 60 * 24 * 3
+          )
         if (imageFilter === 'processing') return false
         return true
       }),
@@ -1124,7 +1494,8 @@ export default function MediaLibraryPage() {
     () =>
       composeProjects.filter((project) => {
         const projectAssets = assetsByProject.get(project.id) ?? []
-        if (!matchesQuery(search, project.title, project.description)) return false
+        if (!matchesQuery(search, project.title, project.description))
+          return false
         if (collectionFilter === 'with-work') return projectAssets.length > 0
         if (collectionFilter === 'empty') return projectAssets.length === 0
         return true
@@ -1137,7 +1508,10 @@ export default function MediaLibraryPage() {
       trashedAssets.filter((asset) => {
         if (!matchesQuery(search, asset.title, asset.prompt)) return false
         if (trashFilter === 'recent' && asset.deleted_at) {
-          return Date.now() - new Date(asset.deleted_at).getTime() <= 1000 * 60 * 60 * 24 * 3
+          return (
+            Date.now() - new Date(asset.deleted_at).getTime() <=
+            1000 * 60 * 60 * 24 * 3
+          )
         }
         return true
       }),
@@ -1145,7 +1519,12 @@ export default function MediaLibraryPage() {
   )
 
   const activeView = views[section]
-  const isBusy = permanentDeleteMutation.isPending || emptyTrashMutation.isPending
+  const imageViewDescription =
+    activeView === 'grid'
+      ? 'Dense gallery for scanning image sets. Open any card for prompt, variations, and actions.'
+      : 'List view adds more context while keeping prompt details inside the lightbox.'
+  const isBusy =
+    permanentDeleteMutation.isPending || emptyTrashMutation.isPending
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -1183,7 +1562,10 @@ export default function MediaLibraryPage() {
     openComposeWith(params)
   }
 
-  const openChatWithAsset = (group: AssetGroup, asset: MediaAsset = group.items[0]) => {
+  const openChatWithAsset = (
+    group: AssetGroup,
+    asset: MediaAsset = group.items[0],
+  ) => {
     const next = new URLSearchParams({
       new: '1',
       mode: 'Edit',
@@ -1202,15 +1584,24 @@ export default function MediaLibraryPage() {
   const handleMenuError = (error: unknown) => {
     setNoticeState({
       title: 'Action unavailable',
-      body: error instanceof Error ? error.message : 'That action could not be completed.',
+      body:
+        error instanceof Error
+          ? error.message
+          : 'That action could not be completed.',
     })
   }
 
-  const handleVisibilityChange = async (postId: string, visibility: 'public' | 'private') => {
+  const handleVisibilityChange = async (
+    postId: string,
+    visibility: 'public' | 'private',
+  ) => {
     try {
       await updatePostMutation.mutateAsync({ postId, payload: { visibility } })
       setNoticeState({
-        title: visibility === 'public' ? 'Image set is public' : 'Image set is private',
+        title:
+          visibility === 'public'
+            ? 'Image set is public'
+            : 'Image set is private',
         body:
           visibility === 'public'
             ? 'This image set can now appear on public Studio surfaces.'
@@ -1245,10 +1636,16 @@ export default function MediaLibraryPage() {
     }
   }
 
-  const handleMoveGroup = async (postId: string, projectId: string, title: string) => {
+  const handleMoveGroup = async (
+    postId: string,
+    projectId: string,
+    title: string,
+  ) => {
     try {
       await movePostMutation.mutateAsync({ postId, projectId })
-      const targetProject = composeProjects.find((project) => project.id === projectId)
+      const targetProject = composeProjects.find(
+        (project) => project.id === projectId,
+      )
       setNoticeState({
         title: 'Moved to project',
         body: targetProject
@@ -1277,7 +1674,11 @@ export default function MediaLibraryPage() {
   const handleBulkTrash = async () => {
     const ids = Array.from(selectedGroups)
     for (const id of ids) {
-      try { await trashPostMutation.mutateAsync(id) } catch { /* continue */ }
+      try {
+        await trashPostMutation.mutateAsync(id)
+      } catch {
+        /* continue */
+      }
     }
     if (ids.length) {
       setNoticeState({
@@ -1294,7 +1695,10 @@ export default function MediaLibraryPage() {
         <div className="flex flex-col items-center gap-4">
           <div className="relative flex h-10 w-10 items-center justify-center">
             <div className="absolute inset-0 animate-ping rounded-full bg-[rgb(var(--primary-light)/0.2)]" />
-            <div className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]" style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }} />
+            <div
+              className="relative h-3 w-3 rounded-full bg-[rgb(var(--primary-light))]"
+              style={{ boxShadow: '0 0 12px rgb(var(--primary-light)/0.6)' }}
+            />
           </div>
           <p className="text-sm text-zinc-500">Loading your library…</p>
         </div>
@@ -1321,23 +1725,46 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="My images"
-              description=""
+              description={imageViewDescription}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
-              onViewChange={(view) => setViews((current) => ({ ...current, images: view }))}
-              filters={<FilterBar options={imageFilters} value={imageFilter} onChange={setImageFilter} />}
+              onViewChange={(view) =>
+                setViews((current) => ({ ...current, images: view }))
+              }
+              filters={
+                <FilterBar
+                  options={imageFilters}
+                  value={imageFilter}
+                  onChange={setImageFilter}
+                />
+              }
             />
 
             {pendingGenerations.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-[13px] font-semibold text-white">In progress</div>
-                  <StatusPill tone="brand">{pendingGenerations.length} running</StatusPill>
+                  <div className="text-[13px] font-semibold text-white">
+                    In progress
+                  </div>
+                  <StatusPill tone="brand">
+                    {pendingGenerations.length} running
+                  </StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
+                <div
+                  className={
+                    activeView === 'grid'
+                      ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7'
+                      : 'mt-3 divide-y divide-white/[0.06]'
+                  }
+                >
                   {pendingGenerations.map((generation) => (
-                    <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="generating" />
+                    <PendingPreview
+                      key={generation.job_id}
+                      generation={generation}
+                      view={activeView}
+                      state="generating"
+                    />
                   ))}
                 </div>
               </section>
@@ -1346,15 +1773,34 @@ export default function MediaLibraryPage() {
             {blockedGroups.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-[13px] font-semibold text-white">Blocked</div>
-                  <StatusPill tone="warning">{blockedGroups.length} locked</StatusPill>
+                  <div className="text-[13px] font-semibold text-white">
+                    Blocked
+                  </div>
+                  <StatusPill tone="warning">
+                    {blockedGroups.length} locked
+                  </StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
+                <div
+                  className={
+                    activeView === 'grid'
+                      ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7'
+                      : 'mt-3 divide-y divide-white/[0.06]'
+                  }
+                >
                   {blockedGroups.map((group) => {
                     const asset = group.items[0]
                     return (
-                      <div key={group.id} className={activeView === 'grid' ? 'space-y-1.5' : 'group flex items-center gap-4 py-3'}>
-                        <div className={`relative overflow-hidden rounded-[10px] bg-[#111216] ${activeView === 'grid' ? '' : 'h-14 w-14 shrink-0'}`}>
+                      <div
+                        key={group.id}
+                        className={
+                          activeView === 'grid'
+                            ? 'space-y-1.5'
+                            : 'group flex items-center gap-4 py-3'
+                        }
+                      >
+                        <div
+                          className={`relative overflow-hidden rounded-[10px] bg-[#111216] ${activeView === 'grid' ? '' : 'h-14 w-14 shrink-0'}`}
+                        >
                           <ProtectedAssetImage
                             sources={assetPreviewSources(asset)}
                             alt={group.title}
@@ -1365,12 +1811,18 @@ export default function MediaLibraryPage() {
                             <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-500/20">
                               <Lock className="h-4 w-4 text-amber-300/90" />
                             </div>
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/90">Blocked</span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/90">
+                              Blocked
+                            </span>
                           </div>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-semibold text-white">{group.title}</div>
-                          <div className="mt-0.5 text-[11px] text-amber-300/80">Content blocked</div>
+                          <div className="truncate text-[13px] font-semibold text-white">
+                            {group.title}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-amber-300/80">
+                            Content blocked
+                          </div>
                         </div>
                       </div>
                     )
@@ -1382,12 +1834,27 @@ export default function MediaLibraryPage() {
             {failedGenerations.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-[13px] font-semibold text-white">Failed</div>
-                  <StatusPill tone="danger">{failedGenerations.length} failed</StatusPill>
+                  <div className="text-[13px] font-semibold text-white">
+                    Failed
+                  </div>
+                  <StatusPill tone="danger">
+                    {failedGenerations.length} failed
+                  </StatusPill>
                 </div>
-                <div className={activeView === 'grid' ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7' : 'mt-3 divide-y divide-white/[0.06]'}>
+                <div
+                  className={
+                    activeView === 'grid'
+                      ? 'mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7'
+                      : 'mt-3 divide-y divide-white/[0.06]'
+                  }
+                >
                   {failedGenerations.map((generation) => (
-                    <PendingPreview key={generation.job_id} generation={generation} view={activeView} state="failed" />
+                    <PendingPreview
+                      key={generation.job_id}
+                      generation={generation}
+                      view={activeView}
+                      state="failed"
+                    />
                   ))}
                 </div>
               </section>
@@ -1404,247 +1871,495 @@ export default function MediaLibraryPage() {
                 />
               )
             ) : filteredImageGroups.length ? (
-              <section className="space-y-3">
-                {filteredImageGroups.map((group) => (
-                  <section key={group.id} className="group border-b border-white/[0.05] pb-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <button
-                          onClick={() => toggleGroupSelect(group.id)}
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
-                            selectedGroups.has(group.id)
-                              ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white'
-                              : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30'
-                          }`}
-                          title={selectedGroups.has(group.id) ? 'Deselect' : 'Select'}
-                        >
-                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
-                          </svg>
-                        </button>
-                        <div className="min-w-0">
-                          <div className="truncate text-[13px] font-semibold text-white/90">{group.title}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-zinc-600">
-                            <span>{formatDate(group.createdAt)}</span>
-                            {group.items.length > 1 && (
-                              <>
-                                <span className="text-zinc-700">·</span>
-                                <span>{group.items.length} variations</span>
-                              </>
-                            )}
-                          </div>
+              activeView === 'grid' ? (
+                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {filteredImageGroups.map((group) => {
+                    const leadAsset = group.items[0]
+                    const isSelected = selectedGroups.has(group.id)
+                    const menuId = `post:${group.id}`
+
+                    return (
+                      <article
+                        key={group.id}
+                        className={`group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:420px] ${
+                          isSelected
+                            ? 'ring-white/[0.16] shadow-[0_24px_60px_rgba(0,0,0,0.38)]'
+                            : 'ring-white/[0.06] shadow-[0_18px_50px_rgba(0,0,0,0.28)] hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_24px_60px_rgba(0,0,0,0.36)]'
+                        }`}
+                        style={{
+                          boxShadow: isSelected
+                            ? 'var(--border-glow), 0 24px 60px rgba(0,0,0,0.38)'
+                            : '0 18px 50px rgba(0,0,0,0.28)',
+                        }}
+                      >
+                        <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+                          <button
+                            onClick={() => toggleGroupSelect(group.id)}
+                            aria-label={
+                              isSelected
+                                ? `Deselect ${group.title}`
+                                : `Select ${group.title}`
+                            }
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                              isSelected
+                                ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white'
+                                : 'border-white/[0.14] bg-black/40 text-transparent hover:border-white/30'
+                            }`}
+                            title={isSelected ? 'Deselect' : 'Select'}
+                          >
+                            <svg
+                              className="h-3 w-3"
+                              fill="none"
+                              viewBox="0 0 12 12"
+                              stroke="currentColor"
+                              strokeWidth={2.5}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M2 6l3 3 5-5"
+                              />
+                            </svg>
+                          </button>
+                          {group.items.length > 1 ? (
+                            <span className="rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+                              {group.items.length} variations
+                            </span>
+                          ) : null}
                         </div>
-                      </div>
-                      <div className="relative" data-library-menu-root="true">
-                        <button
-                          onClick={() => setActionMenu((current) => (current === `post:${group.id}` ? null : `post:${group.id}`))}
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
-                          title="Actions"
+
+                        <div
+                          className="absolute right-3 top-3 z-20"
+                          data-library-menu-root="true"
                         >
-                          <MoreHorizontal className="h-4 w-4" />
+                          <button
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === menuId ? null : menuId,
+                              )
+                            }
+                            aria-label={`Open actions for ${group.title}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-zinc-300 backdrop-blur-md ring-1 ring-white/[0.1] transition-colors hover:bg-black/50 hover:text-white"
+                            title="Actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {actionMenu === menuId ? (
+                            <InlineActionMenu>
+                              <MenuAction
+                                onClick={() => {
+                                  openPreview(group, 0)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Open
+                              </MenuAction>
+                              <MenuAction
+                                disabled={menuBusy}
+                                onClick={() => {
+                                  setRenameState({
+                                    kind: 'post',
+                                    id: group.id,
+                                    title: group.title,
+                                  })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Rename
+                              </MenuAction>
+                              {!group.isChatOrigin ? (
+                                <>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({
+                                        prompt: group.prompt,
+                                        model: group.model,
+                                        projectId: group.projectId,
+                                      })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Reuse prompt
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openStyleWith(group)
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Reuse style
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openComposeWith({
+                                        prompt: group.prompt,
+                                        model: group.model,
+                                        projectId: group.projectId,
+                                        reference_asset_id: leadAsset.id,
+                                        reference_mode: 'optional',
+                                        source: 'library',
+                                      })
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Create variations
+                                  </MenuAction>
+                                  <MenuAction
+                                    onClick={() => {
+                                      openChatWithAsset(group)
+                                      setActionMenu(null)
+                                    }}
+                                  >
+                                    Edit in Chat
+                                  </MenuAction>
+                                  <MenuDivider />
+                                </>
+                              ) : null}
+                              <MenuAction
+                                onClick={() => {
+                                  setMoveState({
+                                    postId: group.id,
+                                    currentProjectId: group.projectId,
+                                    title: group.title,
+                                  })
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Move to project
+                              </MenuAction>
+                              <MenuDivider />
+                              <MenuAction
+                                tone="danger"
+                                disabled={menuBusy}
+                                onClick={async () => {
+                                  await handleTrashGroup(group.id, group.title)
+                                  setActionMenu(null)
+                                }}
+                              >
+                                Move to trash
+                              </MenuAction>
+                            </InlineActionMenu>
+                          ) : null}
+                        </div>
+
+                        <button
+                          onClick={() => openPreview(group, 0)}
+                          className="block w-full text-left"
+                        >
+                          <div className="relative aspect-[0.96] overflow-hidden bg-[#0c0d12]">
+                            <ProtectedAssetImage
+                              sources={assetPreviewSources(leadAsset)}
+                              alt={assetDisplayTitle(leadAsset)}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                              fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(7,9,13,0.96)] via-[rgba(7,9,13,0.08)] to-transparent" />
+
+                            <div className="absolute inset-x-0 bottom-0 p-4">
+                              <div className="flex items-end justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="line-clamp-2 text-[15px] font-semibold tracking-tight text-white">
+                                    {group.title}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-300/80">
+                                    <span>{formatDate(group.createdAt)}</span>
+                                    <span
+                                      className="h-1 w-1 rounded-full bg-zinc-600"
+                                      aria-hidden="true"
+                                    />
+                                    <span>{group.projectTitle}</span>
+                                  </div>
+                                </div>
+                                {group.items.length > 1 ? (
+                                  <div className="rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium text-white/85 backdrop-blur-md ring-1 ring-white/[0.12]">
+                                    Set of {group.items.length}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-3 px-4 py-3.5">
+                            <div className="min-w-0 flex-1">
+                              <BrowseBadgeRow group={group} />
+                              <OpenDetailsHint className="mt-2" />
+                            </div>
+                          </div>
                         </button>
-                        {actionMenu === `post:${group.id}` ? (
-                          <InlineActionMenu>
-                            <MenuAction
-                              onClick={() => {
-                                openPreview(group, 0)
-                                setActionMenu(null)
-                              }}
+                      </article>
+                    )
+                  })}
+                </section>
+              ) : (
+                <section className="space-y-3">
+                  {filteredImageGroups.map((group) => {
+                    const leadAsset = group.items[0]
+                    const isSelected = selectedGroups.has(group.id)
+                    const menuId = `post:${group.id}`
+                    const listPreviewAssets = group.items.slice(0, 3)
+                    const remainingPreviewCount = Math.max(
+                      0,
+                      group.items.length - listPreviewAssets.length,
+                    )
+
+                    return (
+                      <section
+                        key={group.id}
+                        className="border-b border-white/[0.05] py-2"
+                      >
+                        <div
+                          className={`flex items-center gap-3 rounded-[22px] px-2 py-2.5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${isSelected ? 'bg-white/[0.04] ring-1 ring-white/[0.12]' : 'ring-1 ring-transparent hover:bg-white/[0.03] hover:ring-white/[0.08]'}`}
+                        >
+                          <button
+                            onClick={() => toggleGroupSelect(group.id)}
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${isSelected ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-white' : 'border-white/[0.15] bg-white/[0.03] text-transparent hover:border-white/30'}`}
+                            title={isSelected ? 'Deselect' : 'Select'}
+                          >
+                            <svg
+                              className="h-2.5 w-2.5"
+                              fill="none"
+                              viewBox="0 0 12 12"
+                              stroke="currentColor"
+                              strokeWidth={2.5}
                             >
-                              Open
-                            </MenuAction>
-                            <MenuAction
-                              disabled={menuBusy}
-                              onClick={() => {
-                                setRenameState({ kind: 'post', id: group.id, title: group.title })
-                                setActionMenu(null)
-                              }}
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M2 6l3 3 5-5"
+                              />
+                            </svg>
+                          </button>
+
+                          <button
+                            onClick={() => openPreview(group, 0)}
+                            className="group/list-set flex min-w-0 flex-1 items-center gap-4 rounded-[20px] text-left transition-transform duration-300 active:scale-[0.99]"
+                          >
+                            <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08]">
+                              <ProtectedAssetImage
+                                sources={assetPreviewSources(leadAsset)}
+                                alt={assetDisplayTitle(leadAsset)}
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover/list-set:scale-[1.04]"
+                                fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                              />
+                              {group.items.length > 1 ? (
+                                <div className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">
+                                  {group.items.length} variations
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="truncate text-[15px] font-semibold tracking-tight text-white">
+                                  {group.title}
+                                </div>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium text-zinc-500">
+                                <span>{formatDate(group.createdAt)}</span>
+                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                <span>{group.projectTitle}</span>
+                                {group.items.length > 1 ? (
+                                  <>
+                                    <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                    <span>Variation set</span>
+                                  </>
+                                ) : null}
+                              </div>
+                              <BrowseBadgeRow group={group} limit={4} />
+                              <OpenDetailsHint className="mt-2" />
+                            </div>
+                          </button>
+
+                          {group.items.length > 1 ? (
+                            <div className="hidden xl:flex items-center gap-1.5">
+                              {listPreviewAssets.map((asset, assetIndex) => (
+                                <button
+                                  key={asset.id}
+                                  onClick={() => openPreview(group, assetIndex)}
+                                  className="overflow-hidden rounded-[12px] bg-[#0c0d12] ring-1 ring-white/[0.06] transition-all duration-300 hover:scale-[1.03] hover:ring-white/[0.14]"
+                                  title={`Open variation ${variantOrder(asset) + 1}`}
+                                >
+                                  <ProtectedAssetImage
+                                    sources={assetPreviewSources(asset)}
+                                    alt={assetDisplayTitle(asset)}
+                                    className="h-12 w-12 object-cover"
+                                    fallbackClassName="flex h-12 w-12 items-center justify-center bg-white/[0.04] text-zinc-600"
+                                  />
+                                </button>
+                              ))}
+                              {remainingPreviewCount > 0 ? (
+                                <button
+                                  onClick={() =>
+                                    openPreview(group, listPreviewAssets.length)
+                                  }
+                                  className="flex h-12 w-12 items-center justify-center rounded-[12px] border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-zinc-400 transition-colors hover:border-white/[0.14] hover:text-white"
+                                  title="Open more variations"
+                                >
+                                  +{remainingPreviewCount}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <ChevronRight className="hidden h-4 w-4 shrink-0 text-zinc-700 transition-all duration-300 group-hover:translate-x-1 group-hover:text-zinc-400 md:block" />
+
+                          <div
+                            className="relative shrink-0"
+                            data-library-menu-root="true"
+                          >
+                            <button
+                              onClick={() =>
+                                setActionMenu((current) =>
+                                  current === menuId ? null : menuId,
+                                )
+                              }
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+                              title="Actions"
                             >
-                              Rename
-                            </MenuAction>
-                            {!group.isChatOrigin ? (
-                              <>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {actionMenu === menuId ? (
+                              <InlineActionMenu>
                                 <MenuAction
                                   onClick={() => {
-                                    openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
+                                    openPreview(group, 0)
                                     setActionMenu(null)
                                   }}
                                 >
-                                  Reuse prompt
+                                  Open
                                 </MenuAction>
                                 <MenuAction
+                                  disabled={menuBusy}
                                   onClick={() => {
-                                    openStyleWith(group)
-                                    setActionMenu(null)
-                                  }}
-                                >
-                                  Reuse style
-                                </MenuAction>
-                                <MenuAction
-                                  onClick={() => {
-                                    const leadAsset = group.items[0]
-                                    openComposeWith({
-                                      prompt: group.prompt,
-                                      model: group.model,
-                                      projectId: group.projectId,
-                                      reference_asset_id: leadAsset.id,
-                                      reference_mode: 'optional',
-                                      source: 'library',
+                                    setRenameState({
+                                      kind: 'post',
+                                      id: group.id,
+                                      title: group.title,
                                     })
                                     setActionMenu(null)
                                   }}
                                 >
-                                  Create variations
+                                  Rename
                                 </MenuAction>
+                                {!group.isChatOrigin ? (
+                                  <>
+                                    <MenuAction
+                                      onClick={() => {
+                                        openComposeWith({
+                                          prompt: group.prompt,
+                                          model: group.model,
+                                          projectId: group.projectId,
+                                        })
+                                        setActionMenu(null)
+                                      }}
+                                    >
+                                      Reuse prompt
+                                    </MenuAction>
+                                    <MenuAction
+                                      onClick={() => {
+                                        openStyleWith(group)
+                                        setActionMenu(null)
+                                      }}
+                                    >
+                                      Reuse style
+                                    </MenuAction>
+                                    <MenuAction
+                                      onClick={() => {
+                                        openComposeWith({
+                                          prompt: group.prompt,
+                                          model: group.model,
+                                          projectId: group.projectId,
+                                          reference_asset_id: leadAsset.id,
+                                          reference_mode: 'optional',
+                                          source: 'library',
+                                        })
+                                        setActionMenu(null)
+                                      }}
+                                    >
+                                      Create variations
+                                    </MenuAction>
+                                    <MenuAction
+                                      onClick={() => {
+                                        openChatWithAsset(group)
+                                        setActionMenu(null)
+                                      }}
+                                    >
+                                      Edit in Chat
+                                    </MenuAction>
+                                    <MenuDivider />
+                                  </>
+                                ) : null}
                                 <MenuAction
                                   onClick={() => {
-                                    openChatWithAsset(group)
+                                    setMoveState({
+                                      postId: group.id,
+                                      currentProjectId: group.projectId,
+                                      title: group.title,
+                                    })
                                     setActionMenu(null)
                                   }}
                                 >
-                                  Edit in Chat
+                                  Move to project
                                 </MenuAction>
                                 <MenuDivider />
-                              </>
-                            ) : null}
-                            <MenuAction
-                              onClick={() => {
-                                setMoveState({ postId: group.id, currentProjectId: group.projectId, title: group.title })
-                                setActionMenu(null)
-                              }}
-                            >
-                              Move to project
-                            </MenuAction>
-                            <MenuDivider />
-                            <MenuAction
-                              tone="danger"
-                              disabled={menuBusy}
-                              onClick={async () => {
-                                await handleTrashGroup(group.id, group.title)
-                                setActionMenu(null)
-                              }}
-                            >
-                              Move to trash
-                            </MenuAction>
-                          </InlineActionMenu>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {activeView === 'grid' ? (
-                      <div className="mt-3 grid gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7">
-                        {group.items.map((asset, assetIndex) => {
-                          const isLiked = metadataNumber(asset.metadata, 'like_count') ?? 0 > 0
-                          return (
-                            <div key={asset.id} className="group/card relative">
-                              <button
-                                onClick={() => openPreview(group, assetIndex)}
-                                className="relative block w-full aspect-square overflow-hidden rounded-[10px] bg-[#0c0d12] transition-all duration-300 hover:ring-1 hover:ring-white/10 active:scale-[0.98]"
-                                style={{ transform: 'translate3d(0,0,0)' }}
-                              >
-                                <ProtectedAssetImage
-                                  sources={assetPreviewSources(asset)}
-                                  alt={assetDisplayTitle(asset)}
-                                  className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03] group-hover/card:brightness-[0.9]"
-                                  fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/card:opacity-100" />
-
-                                {group.items.length > 1 && (
-                                  <div className="absolute top-2 left-2 rounded-md bg-black/45 px-1.5 py-0.5 text-[9px] font-bold text-white/90 backdrop-blur-md">
-                                    V{variantOrder(asset) + 1}
-                                  </div>
-                                )}
-                              </button>
-
-                              {/* Hover Action Bar */}
-                              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 translate-y-3 items-center gap-1 rounded-full bg-black/40 p-1.5 opacity-0 backdrop-blur-xl ring-1 ring-white/[0.15] shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/card:pointer-events-auto group-hover/card:translate-y-0 group-hover/card:opacity-100">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); /* Heart logic if exists */ }}
-                                  className={`flex h-[26px] w-[26px] items-center justify-center rounded-full transition-all duration-300 hover:bg-white/[0.1] active:scale-90 ${isLiked ? 'text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.3)]' : 'text-white/70 hover:text-white'}`}
-                                  title="Like"
-                                >
-                                  <Heart className={`h-[14px] w-[14px] ${isLiked ? 'fill-current' : ''}`} />
-                                </button>
-                                {!group.isChatOrigin && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      openComposeWith({ prompt: group.prompt, model: group.model, projectId: group.projectId })
-                                    }}
-                                    className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-white/70 transition-all duration-300 hover:bg-white/[0.1] hover:text-white active:scale-90"
-                                    title="Reuse prompt"
-                                  >
-                                    <Sparkles className="h-[14px] w-[14px]" />
-                                  </button>
-                                )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleTrashGroup(group.id, group.title)
+                                <MenuAction
+                                  tone="danger"
+                                  disabled={menuBusy}
+                                  onClick={async () => {
+                                    await handleTrashGroup(
+                                      group.id,
+                                      group.title,
+                                    )
+                                    setActionMenu(null)
                                   }}
-                                  className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-white/50 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-300 active:scale-90"
-                                  title="Trash"
                                 >
-                                  <Trash2 className="h-[14px] w-[14px]" />
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="mt-4 space-y-2">
-                        {group.items.map((asset, assetIndex) => (
-                          <button
-                            key={asset.id}
-                            onClick={() => openPreview(group, assetIndex)}
-                            className="group/list-item flex w-full items-center gap-5 rounded-[18px] px-3 py-3 text-left transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.04] active:scale-[0.99] ring-1 ring-transparent hover:ring-white/[0.08]"
-                          >
-                            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[14px] bg-[#0c0d12] shadow-lg transition-transform duration-500 group-hover/list-item:scale-105 group-hover/list-item:shadow-[0_8px_24px_rgba(0,0,0,0.6)]">
-                              <ProtectedAssetImage
-                                sources={assetPreviewSources(asset)}
-                                alt={assetDisplayTitle(asset)}
-                                className="h-full w-full object-cover"
-                                fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-[14px] font-bold text-white tracking-tight">{assetDisplayTitle(asset)}</div>
-                              <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-zinc-500">
-                                <span>Variation {variantOrder(asset) + 1}</span>
-                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
-                                <span>{formatDate(asset.created_at)}</span>
-                              </div>
-                            </div>
-                            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700 transition-all duration-300 group-hover/list-item:translate-x-1 group-hover/list-item:text-zinc-400" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ))}
-              </section>
+                                  Move to trash
+                                </MenuAction>
+                              </InlineActionMenu>
+                            ) : null}
+                          </div>
+                        </div>
+                      </section>
+                    )
+                  })}
+                </section>
+              )
             ) : (
-              <EmptyInline icon={<ImageIcon className="h-4 w-4" />} title="No images yet." description="Generate something in Create and it will land here automatically." />
+              <EmptyInline
+                icon={<ImageIcon className="h-4 w-4" />}
+                title="No images yet."
+                description="Generate something in Create and it will land here automatically."
+              />
             )}
 
             {/* Bulk action bar - Summoning Animation */}
             {selectedGroups.size > 0 && (
               <div className="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center px-4">
-                <div className="pointer-events-auto flex items-center gap-4 rounded-full bg-[#16181f]/80 px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/20 backdrop-blur-2xl animate-tray-summon" style={{ boxShadow: 'var(--border-glow), 0 20px 50px rgba(0,0,0,0.6)' }}>
+                <div
+                  className="pointer-events-auto flex items-center gap-4 rounded-full bg-[#16181f]/80 px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/20 backdrop-blur-2xl animate-tray-summon"
+                  style={{
+                    boxShadow:
+                      'var(--border-glow), 0 20px 50px rgba(0,0,0,0.6)',
+                  }}
+                >
                   <div className="flex items-center gap-2">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgb(var(--primary-light))] text-[12px] font-black text-white shadow-[0_0_12px_rgba(var(--primary-light),0.5)]">
                       {selectedGroups.size}
                     </div>
-                    <span className="text-sm font-bold text-white tracking-tight">Selected</span>
+                    <span className="text-sm font-bold text-white tracking-tight">
+                      Selected
+                    </span>
                   </div>
-                  
+
                   <div className="h-4 w-px bg-white/10" />
-                  
+
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setSelectedGroups(new Set(filteredImageGroups.map((g) => g.id)))}
+                      onClick={() =>
+                        setSelectedGroups(
+                          new Set(filteredImageGroups.map((g) => g.id)),
+                        )
+                      }
                       className="rounded-full px-3 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/5 hover:text-white active:scale-95"
                     >
                       Select all
@@ -1681,8 +2396,16 @@ export default function MediaLibraryPage() {
               search={search}
               onSearchChange={setSearch}
               view={activeView}
-              onViewChange={(view) => setViews((current) => ({ ...current, collections: view }))}
-              filters={<FilterBar options={collectionFilters} value={collectionFilter} onChange={setCollectionFilter} />}
+              onViewChange={(view) =>
+                setViews((current) => ({ ...current, collections: view }))
+              }
+              filters={
+                <FilterBar
+                  options={collectionFilters}
+                  value={collectionFilter}
+                  onChange={setCollectionFilter}
+                />
+              }
             />
 
             {filteredProjects.length ? (
@@ -1694,7 +2417,10 @@ export default function MediaLibraryPage() {
                     return (
                       <div key={project.id} className="group space-y-2">
                         <div className="relative" data-library-menu-root="true">
-                          <Link to={`/projects/${project.id}`} className="block overflow-hidden rounded-[10px] bg-[#111216] transition-all duration-300 group-hover:ring-1 group-hover:ring-white/10">
+                          <Link
+                            to={`/projects/${project.id}`}
+                            className="block overflow-hidden rounded-[10px] bg-[#111216] transition-all duration-300 group-hover:ring-1 group-hover:ring-white/10"
+                          >
                             {cover ? (
                               <div className="relative overflow-hidden">
                                 <ProtectedAssetImage
@@ -1718,7 +2444,13 @@ export default function MediaLibraryPage() {
                             )}
                           </Link>
                           <button
-                            onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === `project:${project.id}`
+                                  ? null
+                                  : `project:${project.id}`,
+                              )
+                            }
                             className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100"
                             title="Project actions"
                           >
@@ -1737,7 +2469,12 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 disabled={menuBusy}
                                 onClick={() => {
-                                  setRenameState({ kind: 'project', id: project.id, title: project.title, description: project.description })
+                                  setRenameState({
+                                    kind: 'project',
+                                    id: project.id,
+                                    title: project.title,
+                                    description: project.description,
+                                  })
                                   setActionMenu(null)
                                 }}
                               >
@@ -1747,7 +2484,10 @@ export default function MediaLibraryPage() {
                                 disabled={exportProjectMutation.isPending}
                                 onClick={async () => {
                                   try {
-                                    await exportProjectMutation.mutateAsync({ projectId: project.id, title: project.title })
+                                    await exportProjectMutation.mutateAsync({
+                                      projectId: project.id,
+                                      title: project.title,
+                                    })
                                     setActionMenu(null)
                                   } catch (error) {
                                     handleMenuError(error)
@@ -1769,7 +2509,11 @@ export default function MediaLibraryPage() {
                                     })
                                     return
                                   }
-                                  setConfirmState({ kind: 'delete-project', projectId: project.id, title: project.title })
+                                  setConfirmState({
+                                    kind: 'delete-project',
+                                    projectId: project.id,
+                                    title: project.title,
+                                  })
                                 }}
                               >
                                 Delete
@@ -1778,9 +2522,13 @@ export default function MediaLibraryPage() {
                           ) : null}
                         </div>
                         <div className="min-w-0 px-0.5">
-                          <div className="truncate text-[12.5px] font-semibold text-white/90 transition-colors group-hover:text-white">{project.title}</div>
+                          <div className="truncate text-[12.5px] font-semibold text-white/90 transition-colors group-hover:text-white">
+                            {project.title}
+                          </div>
                           <div className="mt-0.5 text-[10.5px] text-zinc-600">
-                            {projectAssets.length} image{projectAssets.length !== 1 ? 's' : ''} · {formatDate(project.updated_at)}
+                            {projectAssets.length} image
+                            {projectAssets.length !== 1 ? 's' : ''} ·{' '}
+                            {formatDate(project.updated_at)}
                           </div>
                         </div>
                       </div>
@@ -1793,8 +2541,14 @@ export default function MediaLibraryPage() {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0]
                     return (
-                      <div key={project.id} className="group flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-all duration-300 hover:bg-white/[0.03]">
-                        <Link to={`/projects/${project.id}`} className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[14px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md">
+                      <div
+                        key={project.id}
+                        className="group flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-all duration-300 hover:bg-white/[0.03]"
+                      >
+                        <Link
+                          to={`/projects/${project.id}`}
+                          className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[14px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md"
+                        >
                           {cover ? (
                             <ProtectedAssetImage
                               sources={assetPreviewSources(cover)}
@@ -1808,9 +2562,16 @@ export default function MediaLibraryPage() {
                             </div>
                           )}
                         </Link>
-                        <Link to={`/projects/${project.id}`} className="min-w-0 flex-1">
-                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">{project.title}</div>
-                          <div className="mt-1 truncate text-[12px] text-zinc-500">{project.description || 'No description yet.'}</div>
+                        <Link
+                          to={`/projects/${project.id}`}
+                          className="min-w-0 flex-1"
+                        >
+                          <div className="truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">
+                            {project.title}
+                          </div>
+                          <div className="mt-1 truncate text-[12px] text-zinc-500">
+                            {project.description || 'No description yet.'}
+                          </div>
                         </Link>
                         <div className="flex items-center gap-3 shrink-0">
                           <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-white/[0.03] px-2.5 py-1 text-[11px] font-semibold text-zinc-400 ring-1 ring-white/[0.06]">
@@ -1820,9 +2581,18 @@ export default function MediaLibraryPage() {
                           <div className="hidden sm:block text-[11px] text-zinc-600">
                             {formatDate(project.updated_at)}
                           </div>
-                          <div className="relative" data-library-menu-root="true">
+                          <div
+                            className="relative"
+                            data-library-menu-root="true"
+                          >
                             <button
-                              onClick={() => setActionMenu((current) => (current === `project:${project.id}` ? null : `project:${project.id}`))}
+                              onClick={() =>
+                                setActionMenu((current) =>
+                                  current === `project:${project.id}`
+                                    ? null
+                                    : `project:${project.id}`,
+                                )
+                              }
                               className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition-all duration-300 hover:bg-white/[0.06] hover:text-white"
                             >
                               <MoreHorizontal className="h-4 w-4" />
@@ -1840,7 +2610,12 @@ export default function MediaLibraryPage() {
                                 <MenuAction
                                   disabled={menuBusy}
                                   onClick={() => {
-                                    setRenameState({ kind: 'project', id: project.id, title: project.title, description: project.description })
+                                    setRenameState({
+                                      kind: 'project',
+                                      id: project.id,
+                                      title: project.title,
+                                      description: project.description,
+                                    })
                                     setActionMenu(null)
                                   }}
                                 >
@@ -1850,7 +2625,10 @@ export default function MediaLibraryPage() {
                                   disabled={exportProjectMutation.isPending}
                                   onClick={async () => {
                                     try {
-                                      await exportProjectMutation.mutateAsync({ projectId: project.id, title: project.title })
+                                      await exportProjectMutation.mutateAsync({
+                                        projectId: project.id,
+                                        title: project.title,
+                                      })
                                       setActionMenu(null)
                                     } catch (error) {
                                       handleMenuError(error)
@@ -1872,7 +2650,11 @@ export default function MediaLibraryPage() {
                                       })
                                       return
                                     }
-                                    setConfirmState({ kind: 'delete-project', projectId: project.id, title: project.title })
+                                    setConfirmState({
+                                      kind: 'delete-project',
+                                      projectId: project.id,
+                                      title: project.title,
+                                    })
                                   }}
                                 >
                                   Delete
@@ -1891,9 +2673,12 @@ export default function MediaLibraryPage() {
                 <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#111216]/60 text-zinc-400 ring-1 ring-white/[0.08] shadow-[0_0_30px_rgba(124,58,237,0.12)] backdrop-blur-md mb-5">
                   <Folder className="h-7 w-7" />
                 </div>
-                <h3 className="text-lg font-bold text-white tracking-tight">No projects yet</h3>
+                <h3 className="text-lg font-bold text-white tracking-tight">
+                  No projects yet
+                </h3>
                 <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-zinc-500">
-                  Projects keep related image sets together. Create one when you want a dedicated space for a campaign, concept, or series.
+                  Projects keep related image sets together. Create one when you
+                  want a dedicated space for a campaign, concept, or series.
                 </p>
                 <Link
                   to="/create"
@@ -1915,7 +2700,9 @@ export default function MediaLibraryPage() {
               search={search}
               onSearchChange={setSearch}
               view={activeView}
-              onViewChange={(view) => setViews((current) => ({ ...current, likes: view }))}
+              onViewChange={(view) =>
+                setViews((current) => ({ ...current, likes: view }))
+              }
             />
             <EmptyInline
               compact
@@ -1934,12 +2721,25 @@ export default function MediaLibraryPage() {
               search={search}
               onSearchChange={setSearch}
               view={activeView}
-              onViewChange={(view) => setViews((current) => ({ ...current, trash: view }))}
-              filters={<FilterBar options={trashFilters} value={trashFilter} onChange={setTrashFilter} />}
+              onViewChange={(view) =>
+                setViews((current) => ({ ...current, trash: view }))
+              }
+              filters={
+                <FilterBar
+                  options={trashFilters}
+                  value={trashFilter}
+                  onChange={setTrashFilter}
+                />
+              }
               actions={
                 filteredTrash.length ? (
                   <button
-                    onClick={() => setConfirmState({ kind: 'empty-trash', count: filteredTrash.length })}
+                    onClick={() =>
+                      setConfirmState({
+                        kind: 'empty-trash',
+                        count: filteredTrash.length,
+                      })
+                    }
                     className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.08]"
                   >
                     Empty trash
@@ -1955,11 +2755,24 @@ export default function MediaLibraryPage() {
                     <div key={asset.id} className="space-y-1.5">
                       <div key={asset.id} className="relative rounded-[10px]">
                         <div className="overflow-hidden rounded-[10px] bg-white/[0.03]">
-                          <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="aspect-square w-full object-cover opacity-75" />
+                          <img
+                            src={asset.thumbnail_url ?? asset.url}
+                            alt={asset.title}
+                            className="aspect-square w-full object-cover opacity-75"
+                          />
                         </div>
-                        <div className="absolute right-1.5 top-1.5" data-library-menu-root="true">
+                        <div
+                          className="absolute right-1.5 top-1.5"
+                          data-library-menu-root="true"
+                        >
                           <button
-                            onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === `trash:${asset.id}`
+                                  ? null
+                                  : `trash:${asset.id}`,
+                              )
+                            }
                             className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-zinc-300 backdrop-blur transition hover:bg-black/60 hover:text-white"
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />
@@ -1978,7 +2791,10 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 tone="danger"
                                 onClick={() => {
-                                  setConfirmState({ kind: 'permanent-delete', asset })
+                                  setConfirmState({
+                                    kind: 'permanent-delete',
+                                    asset,
+                                  })
                                   setActionMenu(null)
                                 }}
                               >
@@ -1989,8 +2805,15 @@ export default function MediaLibraryPage() {
                         </div>
                       </div>
                       <div className="space-y-0.5 px-0.5">
-                        <div className="truncate text-[12px] font-medium text-white/80">{asset.title}</div>
-                        <div className="text-[10.5px] text-zinc-600">Deleted {asset.deleted_at ? formatDate(asset.deleted_at) : 'recently'}</div>
+                        <div className="truncate text-[12px] font-medium text-white/80">
+                          {asset.title}
+                        </div>
+                        <div className="text-[10.5px] text-zinc-600">
+                          Deleted{' '}
+                          {asset.deleted_at
+                            ? formatDate(asset.deleted_at)
+                            : 'recently'}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1998,17 +2821,37 @@ export default function MediaLibraryPage() {
               ) : (
                 <section className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
                   {filteredTrash.map((asset) => (
-                    <div key={asset.id} className="flex flex-wrap items-center gap-4 py-3">
+                    <div
+                      key={asset.id}
+                      className="flex flex-wrap items-center gap-4 py-3"
+                    >
                       <div className="h-20 w-16 shrink-0 overflow-hidden rounded-[18px] bg-white/[0.03]">
-                        <img src={asset.thumbnail_url ?? asset.url} alt={asset.title} className="h-full w-full object-cover opacity-80" />
+                        <img
+                          src={asset.thumbnail_url ?? asset.url}
+                          alt={asset.title}
+                          className="h-full w-full object-cover opacity-80"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white">{asset.title}</div>
-                        <div className="mt-1 text-xs text-zinc-500">Deleted {asset.deleted_at ? formatDate(asset.deleted_at) : 'recently'}</div>
+                        <div className="truncate text-sm font-medium text-white">
+                          {asset.title}
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-500">
+                          Deleted{' '}
+                          {asset.deleted_at
+                            ? formatDate(asset.deleted_at)
+                            : 'recently'}
+                        </div>
                       </div>
                       <div className="relative" data-library-menu-root="true">
                         <button
-                          onClick={() => setActionMenu((current) => (current === `trash:${asset.id}` ? null : `trash:${asset.id}`))}
+                          onClick={() =>
+                            setActionMenu((current) =>
+                              current === `trash:${asset.id}`
+                                ? null
+                                : `trash:${asset.id}`,
+                            )
+                          }
                           className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -2030,7 +2873,10 @@ export default function MediaLibraryPage() {
                             <MenuAction
                               tone="danger"
                               onClick={() => {
-                                setConfirmState({ kind: 'permanent-delete', asset })
+                                setConfirmState({
+                                  kind: 'permanent-delete',
+                                  asset,
+                                })
                                 setActionMenu(null)
                               }}
                             >
@@ -2047,7 +2893,12 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <EmptyInline compact icon={<Trash2 className="h-4 w-4" />} title="Trash is empty." description="Restore or permanently delete work here when you need to clean up." />
+              <EmptyInline
+                compact
+                icon={<Trash2 className="h-4 w-4" />}
+                title="Trash is empty."
+                description="Restore or permanently delete work here when you need to clean up."
+              />
             )}
           </>
         ) : null}
@@ -2084,7 +2935,10 @@ export default function MediaLibraryPage() {
           }
           try {
             if (renameState.kind === 'post') {
-              await updatePostMutation.mutateAsync({ postId: renameState.id, payload: { title: nextTitle } })
+              await updatePostMutation.mutateAsync({
+                postId: renameState.id,
+                payload: { title: nextTitle },
+              })
               return
             }
             await updateProjectMutation.mutateAsync({
@@ -2102,7 +2956,11 @@ export default function MediaLibraryPage() {
         isChatOrigin={previewState?.group.isChatOrigin ?? false}
         busy={menuBusy || movePostMutation.isPending}
         onClose={() => setPreviewState(null)}
-        onSelect={(index) => setPreviewState((current) => (current ? { ...current, index } : current))}
+        onSelect={(index) =>
+          setPreviewState((current) =>
+            current ? { ...current, index } : current,
+          )
+        }
         onOpenProject={() => {
           if (!previewState) return
           navigate(`/projects/${previewState.group.projectId}`)
@@ -2137,7 +2995,10 @@ export default function MediaLibraryPage() {
         }}
         onTrash={async () => {
           if (!previewState) return
-          await handleTrashGroup(previewState.group.id, previewState.group.title)
+          await handleTrashGroup(
+            previewState.group.id,
+            previewState.group.title,
+          )
           setPreviewState(null)
         }}
       />

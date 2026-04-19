@@ -1,22 +1,211 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  --ocos-bg: #eef3f8;
+  --ocos-bg-deep: #e4eaf1;
+  --ocos-surface: #ffffff;
+  --ocos-surface-strong: #ffffff;
+  --ocos-surface-muted: #f7f9fc;
+  --ocos-line: #d8e0ea;
+  --ocos-line-strong: #c4cfdb;
+  --ocos-ink: #15202b;
+  --ocos-muted: #5e6b78;
+  --ocos-soft: #8391a0;
+  --ocos-accent: #135fb3;
+  --ocos-accent-strong: #0e4f96;
+  --ocos-accent-soft: #dce9f8;
+  --ocos-success: #1f7a5b;
+  --ocos-warn: #9b6b16;
+  --ocos-danger: #a04444;
+  --ocos-shadow: 0 8px 24px rgba(22, 34, 51, 0.06);
 }
 
 html {
-  background: #081313;
+  background: linear-gradient(180deg, var(--ocos-bg) 0%, var(--ocos-bg-deep) 100%);
+  background-color: var(--ocos-bg);
 }
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(88, 201, 175, 0.16), transparent 32%),
-    linear-gradient(180deg, #06110f 0%, #091918 36%, #0d1717 100%);
-  color: #f4f7f5;
-  font-family: var(--font-space-grotesk, "Segoe UI", sans-serif);
+  color: var(--ocos-ink);
+  background: linear-gradient(180deg, var(--ocos-bg) 0%, var(--ocos-bg-deep) 100%);
+  font-family: var(--font-sora, "Segoe UI", sans-serif);
+}
+
+body {
+  -webkit-tap-highlight-color: rgba(19, 95, 179, 0.12);
 }
 
 ::selection {
-  background: rgba(100, 218, 193, 0.28);
+  background: rgba(19, 95, 179, 0.16);
+}
+
+.ocos-panel {
+  border: 1px solid var(--ocos-line);
+  background: var(--ocos-surface);
+  box-shadow: var(--ocos-shadow);
+}
+
+.ocos-panel-strong {
+  border: 1px solid var(--ocos-line-strong);
+  background: var(--ocos-surface-strong);
+  box-shadow: 0 10px 28px rgba(22, 34, 51, 0.08);
+}
+
+.ocos-panel-muted {
+  border: 1px solid var(--ocos-line);
+  background: var(--ocos-surface-muted);
+  box-shadow: none;
+}
+
+.ocos-kicker {
+  color: var(--ocos-soft);
+  font-family: var(--font-ibm-plex-mono, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.ocos-copy {
+  color: var(--ocos-muted);
+  line-height: 1.6;
+}
+
+.ocos-empty-state {
+  border: 1px dashed var(--ocos-line-strong);
+  background: var(--ocos-surface-muted);
+  color: var(--ocos-muted);
+}
+
+.ocos-nav-link {
+  border: 1px solid transparent;
+  background: var(--ocos-surface-muted);
+  color: var(--ocos-muted);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.ocos-nav-link:hover {
+  border-color: var(--ocos-line-strong);
+  background: #ffffff;
+  color: var(--ocos-ink);
+}
+
+.ocos-nav-link:focus-visible,
+.ocos-button:focus-visible,
+.ocos-focus-ring:focus-visible,
+.ocos-skip-link:focus-visible,
+.ocos-row-button:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.92),
+    0 0 0 4px rgba(19, 95, 179, 0.28);
+}
+
+.ocos-button {
+  border: 1px solid var(--ocos-line-strong);
+  background: var(--ocos-surface);
+  color: var(--ocos-ink);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.ocos-button:hover:not(:disabled) {
+  border-color: var(--ocos-accent);
+  background: var(--ocos-surface-muted);
+}
+
+.ocos-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.ocos-field {
+  border: 1px solid var(--ocos-line);
+  background: var(--ocos-surface);
+  color: var(--ocos-ink);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.ocos-field:focus-visible {
+  outline: 2px solid transparent;
+  border-color: rgba(19, 95, 179, 0.28);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.92),
+    0 0 0 4px rgba(19, 95, 179, 0.18);
+  background: #ffffff;
+}
+
+.ocos-row-button {
+  touch-action: manipulation;
+}
+
+.ocos-skip-link {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 50;
+  transform: translateY(-160%);
+  border: 1px solid var(--ocos-line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--ocos-ink);
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.ocos-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.ocos-definition-grid dt {
+  color: var(--ocos-soft);
+  font-family: var(--font-ibm-plex-mono, monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ocos-definition-grid dd {
+  color: var(--ocos-ink);
+  margin-top: 0.35rem;
+}
+
+.ocos-appear {
+  animation: ocos-rise 240ms ease both;
+}
+
+@keyframes ocos-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocos-appear,
+  .ocos-button,
+  .ocos-nav-link {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

@@ -44,6 +44,50 @@ function Get-EnvMap {
   return $values
 }
 
+function Get-UrlHost {
+  param([string]$UrlValue)
+
+  if ([string]::IsNullOrWhiteSpace($UrlValue)) {
+    return $null
+  }
+
+  try {
+    return ([System.Uri]$UrlValue.Trim()).Host
+  } catch {
+    return $null
+  }
+}
+
+function Merge-AllowedHosts {
+  param(
+    [string]$CurrentValue,
+    [string[]]$AdditionalHosts
+  )
+
+  $merged = @()
+  $candidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($CurrentValue)) {
+    $candidates += ($CurrentValue -split ",")
+  }
+  if ($AdditionalHosts) {
+    $candidates += $AdditionalHosts
+  }
+
+  foreach ($candidate in $candidates) {
+    $normalized = [string]$candidate
+    $normalized = $normalized.Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+      continue
+    }
+    if ($merged -contains $normalized) {
+      continue
+    }
+    $merged += $normalized
+  }
+
+  return ($merged -join ",")
+}
+
 function Get-EnvValueFromSources {
   param(
     [string]$Key,
@@ -229,7 +273,13 @@ function New-StagingEffectiveEnvFile {
     "GEMINI_API_KEY",
     "FAL_API_KEY",
     "RUNWARE_API_KEY",
-    "HUGGINGFACE_TOKEN"
+    "HUGGINGFACE_TOKEN",
+    "PADDLE_API_KEY",
+    "PADDLE_WEBHOOK_SECRET",
+    "PADDLE_CHECKOUT_BASE_URL",
+    "STUDIO_OWNER_EMAIL",
+    "STUDIO_OWNER_EMAILS",
+    "STUDIO_ROOT_ADMIN_EMAILS"
   )
 
   foreach ($key in $hydratedKeys) {
@@ -272,6 +322,21 @@ function New-StagingEffectiveEnvFile {
   if (-not $effective.Contains("STUDIO_RUNTIME_ROOT")) {
     $effective["STUDIO_RUNTIME_ROOT"] = $RuntimeRoot
   }
+
+  $allowedHostCandidates = @(
+    "localhost",
+    "127.0.0.1",
+    "backend",
+    "studio_backend",
+    (Get-UrlHost $effective["PUBLIC_WEB_BASE_URL"]),
+    (Get-UrlHost $effective["PUBLIC_API_BASE_URL"]),
+    (Get-UrlHost $effective["STAGING_VERIFY_BASE_URL"])
+  )
+  $existingAllowedHosts = ""
+  if ($effective.Contains("ALLOWED_HOSTS")) {
+    $existingAllowedHosts = [string]$effective["ALLOWED_HOSTS"]
+  }
+  $effective["ALLOWED_HOSTS"] = Merge-AllowedHosts -CurrentValue $existingAllowedHosts -AdditionalHosts $allowedHostCandidates
 
   $configDir = Join-Path $RuntimeRoot "config"
   New-Item -ItemType Directory -Force -Path $configDir | Out-Null

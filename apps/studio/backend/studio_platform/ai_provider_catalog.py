@@ -9,12 +9,23 @@ from .contract_catalog import (
     PRODUCT_GENERATION_STATUSES,
     build_contract_freeze_summary,
 )
+from .studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_SIGNATURE_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+    resolve_studio_model_openai_quality,
+)
 
 CANONICAL_GENERATION_STATUSES = PRODUCT_GENERATION_STATUSES
 CANONICAL_ASSET_TRUTH_FIELDS = ASSET_TRUTH_FIELDS
 CANONICAL_BOOTSTRAP_FIELDS = BOOTSTRAP_FIELDS
 
 STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID: dict[str, str] = {
+    STUDIO_FAST_MODEL_ID: "low",
+    STUDIO_STANDARD_MODEL_ID: "medium",
+    STUDIO_PREMIUM_MODEL_ID: "high",
+    STUDIO_SIGNATURE_MODEL_ID: "high",
     "flux-schnell": "low",
     "sdxl-base": "medium",
     "realvis-xl": "high",
@@ -321,7 +332,7 @@ def build_ai_control_plane_summary(
             "default_strategy": generation_routing.get("default_strategy"),
             "protected_beta_provider": settings.protected_beta_image_provider,
             "standard_provider_preference": "runware",
-            "edit_reference_provider_preference": "openai",
+            "edit_reference_provider_preference": "runware",
             "openai": image_providers[0],
         },
         "surface_matrix": [dict(item) for item in (surface_matrix or ())],
@@ -336,7 +347,7 @@ def resolve_openai_image_request_model(
     image_model: str,
     premium_qa_enabled: bool,
 ) -> str:
-    quality = STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID.get(_normalize_model_name(model_id), "medium")
+    quality = resolve_studio_model_openai_quality(model_id)
     normalized_model = _normalize_model_name(model_id)
     normalized_draft = _normalize_model_name(draft_image_model)
     normalized_final = _normalize_model_name(image_model)

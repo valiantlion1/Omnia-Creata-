@@ -23,7 +23,14 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { AppPage, LegalFooter } from '@/components/StudioPrimitives'
 import { usePageMeta } from '@/lib/usePageMeta'
 
-type HelpItem = { title: string; body?: string | string[]; list?: string[]; example?: { prompt: string; note?: string } }
+type HelpLink = { label: string; to: string; external?: boolean }
+type HelpItem = {
+  title: string
+  body?: string | string[]
+  list?: string[]
+  example?: { prompt: string; note?: string }
+  links?: HelpLink[]
+}
 type HelpSectionId =
   | 'getting-started'
   | 'prompt-craft'
@@ -106,7 +113,7 @@ const sections: HelpSection[] = [
           'Library → Trash — deletions, held for 30 days',
           'Explore — the public community gallery',
           'Billing — your plan, credit balance, invoices',
-          'Account — profile, email, password, data exports',
+          'Account — display name, bio, visibility defaults, exports, and privacy controls',
         ],
       },
     ],
@@ -263,7 +270,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Your public profile',
-        body: 'Your profile page shows your handle, avatar, bio, and the grid of images you have chosen to publish. Edit it from Account → Profile. The handle is the part after @ in your public URL and cannot clash with someone else\'s.',
+        body: 'Your profile shows your public @username, current avatar if your identity has one, your bio, and the grid of images you have chosen to publish. Today the shell lets you edit your display name, bio, and default visibility; username and avatar are not self-serve controls in the shell yet.',
       },
       {
         title: 'Explore and discoverability',
@@ -411,12 +418,12 @@ const sections: HelpSection[] = [
         body: 'No. Explore, pricing, and Help are open. An account is needed to generate, save, chat, or publish.',
       },
       {
-        title: 'Is there a free tier?',
-        body: 'There is a starter allowance so you can try Studio before paying. It is limited — enough to see whether the product fits. Paid plans unlock the full monthly credit allowance and the features that depend on it.',
+        title: 'Is there a free account?',
+        body: 'Yes. You can create a free account to explore the workspace, keep a profile, and buy wallet credits. Creator and Pro add the bundled monthly credit allowance and the paid features tied to those plans.',
       },
       {
         title: 'How do credits work?',
-        body: 'Each plan includes a monthly credit allowance. One image run spends one or more credits depending on the aspect ratio and quality you pick. Balance is visible in Billing.',
+        body: 'Creator and Pro include monthly credits, and wallet credit packs can be bought separately from Billing. Studio spends your included monthly allowance first, then wallet balance. One run spends one or more credits depending on the aspect ratio and quality you pick.',
       },
       {
         title: 'Do unused credits roll over?',
@@ -496,7 +503,7 @@ const sections: HelpSection[] = [
     items: [
       {
         title: 'How plans work',
-        body: 'Studio plans are monthly subscriptions. Each plan has a monthly credit allowance, a set of features, and a price. You can switch plans at any time; downgrades take effect at the end of your current billing cycle.',
+        body: 'Studio has a free account entry point plus monthly paid plans. Creator and Pro include bundled monthly credits and their paid features, and any eligible account can buy one-time wallet credit packs from Billing. You can switch subscription plans at any time; downgrades take effect at the end of your current billing cycle.',
       },
       {
         title: 'How you are charged',
@@ -539,7 +546,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Failed payments',
-        body: 'If a renewal charge fails, we retry over several days and notify you by email. Your account goes into grace mode — you keep access. If the payment cannot be collected, the subscription is canceled and the account reverts to the free tier.',
+        body: 'If a renewal charge fails, we retry over several days and notify you by email. Your account goes into grace mode - you keep access. If the payment cannot be collected, the subscription is canceled and the account reverts to the free tier.',
       },
       {
         title: 'VAT IDs and business accounts',
@@ -555,31 +562,31 @@ const sections: HelpSection[] = [
     items: [
       {
         title: 'Signing in',
-        body: 'Studio supports email and password sign-in, plus social sign-in where you have connected one. Change your password from Account → Security.',
+        body: 'Studio supports email/password plus Google sign-in. Email/password accounts can update the password from Settings > Privacy & Security > Credentials or use the "Forgot password?" link on the login screen. If you signed in with Google, password and recovery changes stay with Google.',
       },
       {
         title: 'Changing your email',
-        body: 'Email changes are handled from Account → Profile. You will need to confirm the new address before the change takes effect.',
+        body: 'The current shell shows your account email in Settings, but it does not expose a self-serve email-change form yet. If the account email needs to change, contact support from the current address so ownership can be verified first.',
       },
       {
-        title: 'Display name, handle, and avatar',
-        body: 'Your display name is what appears next to your work. Your handle is the part after @ in your public URL and must be unique. Both can be edited from Account → Profile. Avatars are uploaded from the same screen.',
+        title: 'Display name, bio, and public profile',
+        body: 'Today you can edit your display name, bio, and default visibility from your Account profile surface, and Settings now exposes the same display-name control inside Credentials. Your public @username stays stable, and avatar upload is not available from the Studio shell yet.',
       },
       {
         title: 'Two-factor authentication',
-        body: 'Not available at launch. It is on the roadmap and will ship as an optional layer before becoming a recommended default.',
+        body: 'Two-factor authentication is not available yet. When it ships, it will be added as an optional security layer.',
       },
       {
         title: 'Active sessions',
-        body: 'View which devices are currently signed in from Account → Security, and sign out of any session you do not recognize.',
+        body: 'Device session management is not exposed in the Studio shell yet. If you think an account session is unsafe, change the credential on its sign-in provider and contact support so we can help review the account state.',
       },
       {
         title: 'Notification preferences',
-        body: 'Transactional emails (billing, security, safety actions) are always sent. Product updates and newsletter-style emails are opt-in and can be turned off from Account → Notifications.',
+        body: 'Transactional emails (billing, security, and safety actions) are always sent. Product-update and marketing emails are optional, but there is not a dedicated Notifications screen in the Studio shell yet; use the unsubscribe link in those emails if you want to opt out.',
       },
       {
         title: 'Exporting your work',
-        body: 'Individual images are downloadable from the Library. Bulk export of a full project is available from the project menu. For a complete account-level export (images, metadata, prompts), email support@omniacreata.com and we will prepare one.',
+        body: 'Individual images are downloadable from the Library. Full project export is available from the project menu, and Settings > Privacy & Security includes an archive export for your account-level data.',
       },
       {
         title: 'Deleting your account',
@@ -642,84 +649,27 @@ const sections: HelpSection[] = [
     label: 'Terms of Service',
     title: 'Terms of Service',
     lastUpdated: 'April 2026',
-    intro: 'The agreement between you and Omnia Creata for using Studio. Plain language where possible, precise where it needs to be.',
+    intro: 'The authoritative Terms live on the dedicated legal route. Use this section as the quick orientation layer inside Help, then open the full legal page when you need the exact governing text.',
     items: [
       {
-        title: '1. Who this agreement is with',
-        body: 'By creating an account or using Studio you agree to these terms with Omnia Creata ("we", "us"). If you are using Studio on behalf of a company, you confirm that you are authorized to bind that company to these terms.',
+        title: 'What the Terms cover',
+        body: 'The Terms set the contract for using Studio: who can use it, what belongs to you, what belongs to us, how billing works, what happens if an account breaks the rules, and the legal limits around liability and disputes.',
       },
       {
-        title: '2. Who can use Studio',
-        body: [
-          'Studio is intended for users aged 16 and above. Paid plans require you to be of legal age to enter into a contract in your country of residence (18 in most jurisdictions).',
-          'You are responsible for providing accurate account information and for any activity that happens through your account.',
+        title: 'What to notice first',
+        list: [
+          'You keep ownership of your prompts, uploads, and outputs.',
+          'Paid plans renew automatically until canceled.',
+          'Using Studio still requires you to respect the Usage Policy and other people\'s rights.',
         ],
       },
       {
-        title: '3. Your content and the license you give us',
-        body: [
-          'You retain ownership of the prompts you write, the references you upload, and the images you generate.',
-          'To operate the service, you grant us a worldwide, non-exclusive, royalty-free license to host, store, transmit, display, and back up your content, solely for the purpose of running Studio for you. If you publish a piece to Explore or your public profile, that license extends to displaying it publicly while it remains published.',
-          'We do not use your prompts, uploads, or generated images to train third-party generative models. If that ever changes, it will be opt-in and clearly disclosed.',
+        title: 'Read the full Terms',
+        body: 'When you need the exact contractual language, go to the dedicated legal page. That route is the canonical source, not this help summary.',
+        links: [
+          { label: 'Open full Terms of Service', to: '/legal/terms' },
+          { label: 'Open Refund Policy', to: '/legal/refunds' },
         ],
-      },
-      {
-        title: '4. Our content and platform',
-        body: 'The Studio application, the brand, the underlying software, and all materials we create for Studio remain our property. These terms do not grant you any license to the platform itself beyond using it as a customer.',
-      },
-      {
-        title: '5. Acceptable use',
-        body: 'You agree to follow the Usage Policy below. Violations can result in content removal, account suspension, or termination.',
-      },
-      {
-        title: '6. Subscriptions, payments, and refunds',
-        body: [
-          'Paid plans renew automatically each billing cycle until canceled. Prices, tax, and credit allowances are shown at checkout and in Billing.',
-          'Payments are processed by Paddle, acting as merchant of record. Billing disputes are handled by us directly at billing@omniacreata.com, and by Paddle where required by law.',
-          'Our standard refund policy is described in the Billing section above. These terms do not override refund rights you have under mandatory consumer law in your country.',
-        ],
-      },
-      {
-        title: '7. Generated output disclaimer',
-        body: [
-          'Images produced by Studio are generated using machine learning. They may sometimes resemble existing works, contain factual inaccuracies, or reproduce stylistic elements from training data. You are responsible for reviewing each output before you publish or commercially use it.',
-          'Studio does not provide legal, medical, financial, or professional advice, and images should not be relied on as such.',
-        ],
-      },
-      {
-        title: '8. Availability and service changes',
-        body: 'We aim to keep Studio available and stable, but we do not guarantee uninterrupted service. Features, models, plan structure, and pricing can change. When changes materially affect what you are paying for, we will give reasonable notice before they take effect.',
-      },
-      {
-        title: '9. Termination',
-        body: [
-          'You can close your account at any time by contacting support or using the in-product flow when available.',
-          'We can suspend or terminate accounts that violate these terms, the Usage Policy, or applicable law, or that create outsized risk to other users, our partners, or the platform itself. For serious violations we may act without prior notice.',
-        ],
-      },
-      {
-        title: '10. Disclaimers',
-        body: 'Studio is provided on an "as is" and "as available" basis. To the maximum extent permitted by law, we disclaim all warranties, including merchantability, fitness for a particular purpose, and non-infringement. This does not limit warranties that cannot be excluded under mandatory consumer law.',
-      },
-      {
-        title: '11. Limitation of liability',
-        body: 'To the maximum extent permitted by law, our aggregate liability for any claim arising out of or related to these terms or Studio is limited to the amount you paid to us in the twelve months preceding the event giving rise to the claim. We are not liable for indirect, incidental, special, or consequential damages.',
-      },
-      {
-        title: '12. Indemnity',
-        body: 'You agree to indemnify us against third-party claims that arise from your content, your use of Studio in violation of these terms, or your violation of someone else\'s rights.',
-      },
-      {
-        title: '13. Changes to these terms',
-        body: 'We may update these terms from time to time. Material changes will be announced by email or in-product notice at least 14 days before they take effect. Continued use of Studio after the effective date means you accept the updated terms.',
-      },
-      {
-        title: '14. Governing law and disputes',
-        body: 'These terms are governed by the laws of the country of our registered operating entity, without regard to its conflict of laws rules. Disputes will be handled by the competent courts of that jurisdiction, except where mandatory consumer law in your country of residence gives you the right to bring a claim locally.',
-      },
-      {
-        title: '15. Contact',
-        body: 'Legal questions about these terms: legal@omniacreata.com. Billing or account issues: support@omniacreata.com.',
       },
     ],
   },
@@ -728,87 +678,27 @@ const sections: HelpSection[] = [
     label: 'Privacy',
     title: 'Privacy Policy',
     lastUpdated: 'April 2026',
-    intro: 'What we collect, why we collect it, how long we keep it, and the rights you have over it. If anything here is unclear, write to privacy@omniacreata.com.',
+    intro: 'The dedicated Privacy page is the authoritative policy. This help section only summarizes the practical ideas users usually ask about first.',
     items: [
       {
-        title: '1. Who is responsible for your data',
-        body: 'Omnia Creata is the data controller for your account and the content you create with Studio. To reach the person responsible for data questions, write to privacy@omniacreata.com.',
+        title: 'What we collect in practice',
+        body: 'Studio keeps the account, billing, and usage data it needs to run your workspace: your sign-in identity, prompts, generated images, billing records, and the technical logs needed for reliability and abuse prevention.',
       },
       {
-        title: '2. What we collect',
+        title: 'What rights you have',
         list: [
-          'Account data — email, display name, handle, avatar, and authentication identifiers from social providers you use.',
-          'Content you create — prompts, references you upload, generated images, Chat conversations, and the metadata you attach (tags, projects, likes).',
-          'Billing data — plan, billing cycle, invoice history. Full card data is handled by Paddle; we do not store your card number.',
-          'Technical data — IP address, browser, device type, and basic logs needed to run the service and detect abuse.',
-          'Usage data — which surfaces you use, which features you open, aggregate performance and reliability signals.',
+          'Ask for access, correction, deletion, or a portable export of your data.',
+          'Revisit cookie preferences from Settings or the footer control.',
+          'Contact privacy@omniacreata.com when you need a formal privacy request handled.',
         ],
       },
       {
-        title: '3. Why we use it',
-        list: [
-          'To run the product — authenticating you, running generations, storing your Library, answering support requests.',
-          'To bill you — processing subscriptions, sending invoices, handling refunds.',
-          'To keep the service safe — detecting abuse, enforcing the Usage Policy, protecting other users.',
-          'To improve Studio — understanding which features work, debugging issues, measuring reliability.',
-          'To communicate with you — transactional emails (billing, account, safety), plus optional product updates if you opt in.',
+        title: 'Read the full Privacy Policy',
+        body: 'For the exact retention, legal-basis, transfer, and regional-rights language, open the dedicated legal page. That page stays canonical as the product evolves.',
+        links: [
+          { label: 'Open full Privacy Policy', to: '/legal/privacy' },
+          { label: 'Open Cookie Policy', to: '/legal/cookies' },
         ],
-      },
-      {
-        title: '4. Legal bases (for EU/UK residents)',
-        list: [
-          'Contract — the data needed to run Studio for you and to bill you.',
-          'Legitimate interest — keeping the service secure, preventing fraud, improving reliability, and analyzing aggregate usage.',
-          'Consent — where we ask specifically (optional emails, non-essential cookies).',
-          'Legal obligation — retaining billing records and responding to lawful requests.',
-        ],
-      },
-      {
-        title: '5. Who we share data with',
-        list: [
-          'Hosting and infrastructure providers that run our database, storage, and servers.',
-          'Paddle, our payment processor and merchant of record, for charges and tax.',
-          'Email provider for transactional messages.',
-          'Analytics and error monitoring tools used to keep Studio running reliably.',
-          'Authorities, when we have a valid legal request and cannot lawfully refuse it.',
-        ],
-        body: 'We do not sell your personal data. We do not use your content to train third-party generative models.',
-      },
-      {
-        title: '6. How long we keep it',
-        list: [
-          'Account data — for as long as your account is active, and a reasonable period after closure for disputes, tax obligations, and repeat-abuse detection.',
-          'Content — until you delete it or close your account. Deleted items are purged within 30 days of leaving Trash.',
-          'Billing records — at least as long as applicable tax law requires (typically 5–10 years).',
-          'Logs and security data — short-term retention measured in weeks to a few months unless tied to an ongoing investigation.',
-        ],
-      },
-      {
-        title: '7. Your rights',
-        body: [
-          'You can access your data, request a correction, request deletion, request a portable export, or object to specific processing. Write to privacy@omniacreata.com and we will respond within 30 days.',
-          'If you are in the EU or UK, you can also lodge a complaint with your local data protection authority.',
-        ],
-      },
-      {
-        title: '8. Cookies and similar technologies',
-        body: 'Studio uses a small set of cookies: the ones strictly necessary to keep you signed in, and anonymized analytics to understand aggregate usage. Non-essential cookies respect the choice you make in the consent banner.',
-      },
-      {
-        title: '9. International transfers',
-        body: 'Your data may be processed in countries other than your own, including by our hosting providers. Where required, we rely on standard contractual clauses or equivalent safeguards to protect it.',
-      },
-      {
-        title: '10. Children',
-        body: 'Studio is not intended for children under 16. If we learn we have collected personal data from a child under 16 without appropriate consent, we will delete it.',
-      },
-      {
-        title: '11. Security',
-        body: 'We use industry-standard measures to protect data in transit and at rest. No service is completely risk-free — if you become aware of a vulnerability, email security@omniacreata.com.',
-      },
-      {
-        title: '12. Changes to this policy',
-        body: 'We will update this policy as the product evolves. Material changes are announced by email or in-product notice at least 14 days before they take effect.',
       },
     ],
   },
@@ -817,10 +707,10 @@ const sections: HelpSection[] = [
     label: 'Usage Policy',
     title: 'Usage Policy',
     lastUpdated: 'April 2026',
-    intro: 'The rules for what you can generate and publish with Studio. If you are unsure whether something is allowed, ask before you publish.',
+    intro: 'The full Usage Policy lives on its own legal route. This help summary is here to make the moderation model understandable before you open the full policy text.',
     items: [
       {
-        title: '1. Absolutely prohibited',
+        title: 'Never allowed',
         list: [
           'Sexual content involving minors, in any form.',
           'Non-consensual intimate imagery of real people, including clothed images explicitly framed as degrading.',
@@ -830,41 +720,15 @@ const sections: HelpSection[] = [
         ],
       },
       {
-        title: '2. Not permitted',
-        list: [
-          'Hate speech and content targeting people on the basis of race, ethnicity, religion, nationality, gender, sexual orientation, disability, or similar.',
-          'Harassment of specific individuals.',
-          'Misinformation designed to deceive, including fabricated statements attributed to real public figures.',
-          'Encouraging, promoting, or instructing self-harm, suicide, or eating disorders.',
-          'Deepfakes of real people placed in intimate, criminal, or compromising scenes without their clear consent.',
-        ],
+        title: 'How enforcement usually works',
+        body: 'Borderline or mistaken blocks can be appealed through safety@omniacreata.com, but repeated or severe violations can hide content, rate-limit the account, suspend access, or terminate it entirely.',
       },
       {
-        title: '3. Respect other people\'s rights',
-        body: [
-          'Do not use Studio to systematically reproduce protected works, brand assets, trademarked characters, or a living artist\'s signature style to pass off as their work.',
-          'A single stylistic reference for personal work is different from commercial impersonation. We judge intent and scale.',
+        title: 'Read the full Usage Policy',
+        body: 'Use the dedicated legal page when you need the exact prohibited-content categories, enforcement language, or reporting process.',
+        links: [
+          { label: 'Open full Usage Policy', to: '/legal/acceptable-use' },
         ],
-      },
-      {
-        title: '4. Platform integrity',
-        list: [
-          'No automated or scripted abuse of the generation endpoints.',
-          'No attempts to bypass safety filters, rate limits, or billing controls.',
-          'No reselling access to Studio as if it were your own service.',
-        ],
-      },
-      {
-        title: '5. Enforcement ladder',
-        list: [
-          'Minor violations (first-time edge cases, unclear intent) — content hidden, account warned.',
-          'Clear violations — content removed, account rate-limited or temporarily suspended, incident logged.',
-          'Severe violations (minor safety, deepfake abuse, coordinated fraud) — account permanently terminated, reported to authorities where required.',
-        ],
-      },
-      {
-        title: '6. Appeals',
-        body: 'If you believe an enforcement action was wrong, email safety@omniacreata.com with the account email and a description of what happened. A human reviewer handles appeals.',
       },
     ],
   },
@@ -931,11 +795,21 @@ const sectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
   { label: 'Learn Studio', ids: ['getting-started', 'prompt-craft', 'workflows', 'publishing'] },
   { label: 'Use the app', ids: ['shortcuts', 'troubleshooting', 'faq'] },
   { label: 'Account & money', ids: ['billing', 'account'] },
-  { label: 'Policies', ids: ['safety', 'terms', 'privacy', 'usage-policy'] },
+  { label: 'Safety & legal', ids: ['safety', 'terms', 'privacy', 'usage-policy'] },
   { label: 'Reach us', ids: ['contact'] },
 ]
 
-function ItemBody({ body, list, example }: { body?: string | string[]; list?: string[]; example?: HelpItem['example'] }) {
+function ItemBody({
+  body,
+  list,
+  example,
+  links,
+}: {
+  body?: string | string[]
+  list?: string[]
+  example?: HelpItem['example']
+  links?: HelpItem['links']
+}) {
   const paragraphs = body ? (Array.isArray(body) ? body : [body]) : []
   return (
     <div className="space-y-3 text-[13.5px] leading-[1.75] text-zinc-400">
@@ -961,6 +835,31 @@ function ItemBody({ body, list, example }: { body?: string | string[]; list?: st
           ) : null}
         </div>
       ) : null}
+      {links?.length ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {links.map((link) =>
+            link.external ? (
+              <a
+                key={`${link.label}-${link.to}`}
+                href={link.to}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={`${link.label}-${link.to}`}
+                to={link.to}
+                className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ),
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -978,7 +877,7 @@ function AccordionItem({ item, defaultOpen = false }: { item: HelpItem; defaultO
       </button>
       {open ? (
         <div className="pb-5 pr-4">
-          <ItemBody body={item.body} list={item.list} example={item.example} />
+          <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
         </div>
       ) : null}
     </div>
@@ -1038,8 +937,25 @@ export default function DocumentationPage() {
           </div>
         </section>
 
-        <div className="grid items-start gap-12 xl:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="hidden xl:block sticky top-24 w-full">
+        <div className="xl:hidden">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+            Quick jumps
+          </div>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {sections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="shrink-0 rounded-full border border-white/[0.06] bg-[#0c0d12] px-3 py-1.5 text-[11.5px] font-medium text-zinc-300 transition hover:border-white/[0.12] hover:text-white"
+              >
+                {section.label}
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid items-start gap-12 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="hidden lg:block sticky top-24 w-full">
             <div className="space-y-4">
               {sectionGroups.map((group) => (
                 <div key={group.label}>
@@ -1103,22 +1019,22 @@ export default function DocumentationPage() {
                     {isPolicySection ? (
                       <div className="rounded-[14px] border border-white/[0.05] bg-[#0c0d12] px-5">
                         {section.items.map((item, index) => (
-                          <AccordionItem key={item.title} item={item} defaultOpen={index === 0} />
+                          <AccordionItem key={item.title} item={item} defaultOpen={index === 0 || Boolean(item.links?.length)} />
                         ))}
                       </div>
                     ) : (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {section.items.map((item) => (
-                          <div key={item.title} className="rounded-[14px] border border-white/[0.04] bg-[#0c0d12] p-5 transition-colors hover:border-white/[0.08]">
-                            <div className="flex items-start gap-2 text-[14px] font-semibold text-white">
-                              <BookOpen className="mt-[3px] h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                              <span>{item.title}</span>
-                            </div>
-                            <div className="mt-2">
-                              <ItemBody body={item.body} list={item.list} example={item.example} />
-                            </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {section.items.map((item) => (
+                        <div key={item.title} className="rounded-[14px] border border-white/[0.04] bg-[#0c0d12] p-5 transition-colors hover:border-white/[0.08]">
+                          <div className="flex items-start gap-2 text-[14px] font-semibold text-white">
+                            <BookOpen className="mt-[3px] h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                            <span>{item.title}</span>
                           </div>
-                        ))}
+                          <div className="mt-2">
+                            <ItemBody body={item.body} list={item.list} example={item.example} links={item.links} />
+                          </div>
+                        </div>
+                      ))}
                       </div>
                     )}
                   </div>

@@ -10,6 +10,7 @@ from .prompt_engineering import (
     compact_visual_prompt,
     compile_generation_request,
 )
+from .studio_model_contract import STUDIO_FAST_MODEL_ID, STUDIO_PREMIUM_MODEL_ID
 
 
 @dataclass(slots=True)
@@ -842,10 +843,8 @@ def _resolve_blueprint_model(
     if context is not None and context.follow_up_refinement and isinstance(prior_blueprint.get("model"), str):
         return str(prior_blueprint["model"])
     if not premium_chat:
-        return "flux-schnell"
-    if intent.prompt_profile in {"stylized_illustration", "fantasy_concept"}:
-        return "juggernaut-xl"
-    return "realvis-xl"
+        return STUDIO_FAST_MODEL_ID
+    return STUDIO_PREMIUM_MODEL_ID
 
 
 def _resolve_blueprint_aspect_ratio(

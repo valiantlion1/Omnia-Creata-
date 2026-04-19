@@ -15,7 +15,7 @@ import {
   YAxis
 } from "recharts";
 
-const palette = ["#67e8f9", "#2dd4bf", "#f59e0b", "#38bdf8", "#f472b6"];
+const palette = ["#2b6d6a", "#9b5d3b", "#7f6a2d", "#7a4f8c", "#c06452"];
 
 function toChartData(chart: OcosReport["charts"][number]) {
   const rows = new Map<string, Record<string, number | string>>();
@@ -35,21 +35,22 @@ function ChartRenderer({ chart }: { chart: OcosReport["charts"][number] }) {
   const data = toChartData(chart);
   const seriesNames = chart.series.map((series) => series.name);
 
+  const tooltipStyle = {
+    background: "#fffaf3",
+    border: "1px solid rgba(125, 94, 65, 0.16)",
+    borderRadius: 16,
+    color: "#2b2118",
+    boxShadow: "0 18px 32px rgba(73, 58, 44, 0.12)"
+  };
+
   if (chart.type === "bar" || chart.type === "timeline") {
     return (
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data}>
-          <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-          <XAxis dataKey="x" stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} />
-          <YAxis stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} width={32} />
-          <Tooltip
-            contentStyle={{
-              background: "#081111",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 16,
-              color: "white"
-            }}
-          />
+          <CartesianGrid stroke="rgba(125, 94, 65, 0.14)" vertical={false} />
+          <XAxis dataKey="x" stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} />
+          <YAxis stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} width={32} />
+          <Tooltip contentStyle={tooltipStyle} />
           {seriesNames.map((seriesName, index) => (
             <Bar key={seriesName} dataKey={seriesName} fill={palette[index % palette.length]} radius={[8, 8, 0, 0]} />
           ))}
@@ -62,17 +63,10 @@ function ChartRenderer({ chart }: { chart: OcosReport["charts"][number] }) {
     return (
       <ResponsiveContainer width="100%" height={220}>
         <AreaChart data={data}>
-          <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-          <XAxis dataKey="x" stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} />
-          <YAxis stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} width={32} />
-          <Tooltip
-            contentStyle={{
-              background: "#081111",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 16,
-              color: "white"
-            }}
-          />
+          <CartesianGrid stroke="rgba(125, 94, 65, 0.14)" vertical={false} />
+          <XAxis dataKey="x" stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} />
+          <YAxis stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} width={32} />
+          <Tooltip contentStyle={tooltipStyle} />
           {seriesNames.map((seriesName, index) => (
             <Area
               key={seriesName}
@@ -80,7 +74,7 @@ function ChartRenderer({ chart }: { chart: OcosReport["charts"][number] }) {
               dataKey={seriesName}
               stroke={palette[index % palette.length]}
               fill={palette[index % palette.length]}
-              fillOpacity={0.2}
+              fillOpacity={0.16}
               strokeWidth={2.2}
             />
           ))}
@@ -92,17 +86,10 @@ function ChartRenderer({ chart }: { chart: OcosReport["charts"][number] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data}>
-        <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-        <XAxis dataKey="x" stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} />
-        <YAxis stroke="rgba(255,255,255,0.35)" tickLine={false} axisLine={false} width={32} />
-        <Tooltip
-          contentStyle={{
-            background: "#081111",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 16,
-            color: "white"
-          }}
-        />
+        <CartesianGrid stroke="rgba(125, 94, 65, 0.14)" vertical={false} />
+        <XAxis dataKey="x" stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} />
+        <YAxis stroke="rgba(78, 60, 44, 0.5)" tickLine={false} axisLine={false} width={32} />
+        <Tooltip contentStyle={tooltipStyle} />
         {seriesNames.map((seriesName, index) => (
           <Line
             key={seriesName}
@@ -127,10 +114,13 @@ export function ReportCharts({ report }: { report: OcosReport }) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       {report.charts.map((chart) => (
-        <section key={chart.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+        <section
+          key={chart.id}
+          className="rounded-[24px] border border-[var(--ocos-border-strong)] bg-white/82 p-4 shadow-[0_18px_40px_rgba(73,58,44,0.08)]"
+        >
           <div className="mb-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-white/38">{chart.type}</p>
-            <h3 className="mt-1 text-lg font-semibold text-white">{chart.label}</h3>
+            <p className="text-xs uppercase tracking-[0.24em] text-[var(--ocos-muted)]">{chart.type}</p>
+            <h3 className="mt-1 text-lg font-semibold text-[var(--ocos-ink)]">{chart.label}</h3>
           </div>
           <ChartRenderer chart={chart} />
         </section>

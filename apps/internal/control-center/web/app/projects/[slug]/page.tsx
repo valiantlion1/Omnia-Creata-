@@ -27,40 +27,51 @@ export default async function ProjectOverviewPage({
   return (
     <NavShell eyebrow={`${project.project.name} Overview`}>
       <PwaClient summary={project} />
-      <div className="space-y-6">
+      <div className="space-y-5">
         <ProjectHeader summary={project} active="overview" />
         <OverviewCards totals={project.serviceTotals} incidentsBySeverity={project.incidentsBySeverity} />
 
         {overviewReport ? (
-          <section className="rounded-[30px] border border-white/10 bg-[#091414]/88 p-6 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <section className="ocos-panel-strong">
             <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/42">Project Report</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">{overviewReport.headline}</h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-white/68">
+                  <p className="ocos-kicker">Project Report</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--ocos-ink)]">
+                    {overviewReport.headline}
+                  </h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--ocos-muted)]">
                     {overviewReport.summary.keyFindings.join(" ")}
                   </p>
                 </div>
 
-                <div className="grid gap-3 rounded-[24px] border border-white/10 bg-black/20 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {overviewReport.metrics.map((metric) => (
-                    <article key={metric.key} className="rounded-[18px] border border-white/10 bg-white/[0.03] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-white/38">{metric.label}</p>
-                      <div className="mt-3 text-2xl font-semibold text-white">
+                    <article
+                      key={metric.key}
+                      className="rounded-[22px] border border-[var(--ocos-border-strong)] bg-white/78 p-4"
+                    >
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--ocos-muted)]">
+                        {metric.label}
+                      </p>
+                      <div className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--ocos-ink)]">
                         {metric.value}
                         {metric.unit ? metric.unit : ""}
                       </div>
-                      <p className="mt-2 text-sm text-white/58">{metric.detail ?? "Structured signal block."}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ocos-muted)]">
+                        {metric.detail ?? "Structured signal block."}
+                      </p>
                     </article>
                   ))}
                 </div>
               </div>
 
-              <section className="rounded-[24px] border border-white/10 bg-black/20 p-5">
-                <p className="text-xs uppercase tracking-[0.28em] text-white/42">AI Ops Surface</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">Readable for operators, structured for machines</h3>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-white/68">
+              <section className="ocos-panel-muted">
+                <p className="ocos-kicker">AI Ops Surface</p>
+                <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[var(--ocos-ink)]">
+                  Readable for operators, structured for machines
+                </h3>
+                <ul className="mt-4 space-y-3 text-sm leading-7 text-[var(--ocos-ink)]">
                   {overviewReport.summary.recommendedActions.map((action) => (
                     <li key={action}>{action}</li>
                   ))}
@@ -74,7 +85,7 @@ export default async function ProjectOverviewPage({
           </section>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <IncidentList incidents={project.activeIncidents} title="Project Incident Queue" />
           <ReportFeed reports={project.latestReports} title="Project Reports" />
         </div>

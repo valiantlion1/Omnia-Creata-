@@ -159,7 +159,7 @@ export function LegalPage({
           ) : null}
           <div className="mt-3 rounded-[12px] border border-amber-400/15 bg-amber-400/[0.08] p-4 print:border-zinc-400">
             <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              Prelaunch disclosure
+              Business status
             </div>
             <div className="text-[13.5px] leading-[1.75] text-amber-50/90">
               {normalizeLegalText(LEGAL_PRELAUNCH_DISCLOSURE)}
@@ -244,13 +244,13 @@ export function LegalPlaceholder({ children }: { children: ReactNode }) {
   const isInternalPath = typeof content === 'string' && content.startsWith('/')
 
   return (
-    <span className="rounded-[4px] bg-amber-500/10 px-1.5 py-0.5 font-mono text-[12.5px] text-amber-300 ring-1 ring-amber-500/20">
+    <span className="font-medium text-amber-100 underline decoration-amber-200/25 underline-offset-[3px]">
       {isEmail ? (
-        <a href={`mailto:${content}`} className="underline decoration-amber-300/40 underline-offset-[3px]">
+        <a href={`mailto:${content}`} className="transition hover:text-white">
           {content}
         </a>
       ) : isInternalPath ? (
-        <Link to={content} className="underline decoration-amber-300/40 underline-offset-[3px]">
+        <Link to={content} className="transition hover:text-white">
           {content}
         </Link>
       ) : (

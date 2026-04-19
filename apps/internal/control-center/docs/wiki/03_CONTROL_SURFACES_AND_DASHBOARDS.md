@@ -1,5 +1,19 @@
 # OCOS Control Surfaces And Dashboards
 
+## Navigation Principle
+
+OCOS should prefer more focused pages over fewer overloaded dashboards.
+
+The rule is:
+
+- home pages route
+- queue pages triage
+- detail pages explain
+- action pages execute
+- report pages summarize
+
+If a surface starts cramming too many tables, charts, cards, and buttons into one view, split it into additional pages instead of compressing more UI into boxes.
+
 ## Dashboard Hierarchy
 
 OCOS should grow through a clear dashboard hierarchy:
@@ -28,6 +42,17 @@ Primary sections:
 - escalation queue
 - notification digest
 
+Dedicated organization pages should include:
+- `Incidents`
+- `Projects`
+- `Action Runs`
+- `Automations`
+- `Escalations`
+- `Notifications`
+- `Reports`
+- `Search`
+- `Settings`
+
 ## 2. Project Dashboard
 
 Every Omnia project should eventually have its own dashboard.
@@ -45,13 +70,23 @@ Each project dashboard should answer:
 - what incidents or drifts matter here?
 - what trends or anomalies are forming?
 
-Primary tabs:
+The project overview page should stay concise and route outward.
+
+Primary project pages:
 - `Overview`
+- `Incidents`
 - `Services`
-- `Analytics`
+- `Environments`
+- `Checks`
 - `Operations`
+- `Action Runs`
+- `Automations`
+- `Deploys and Versions`
+- `Provider and Dependency Drift`
 - `Reports`
-- `AI Ops`
+- `Runbooks`
+- `Escalations`
+- `Settings`
 
 ## 3. Service Dashboard
 
@@ -66,6 +101,16 @@ It should show:
 - action history
 - provider/auth drift
 - relevant artifacts and logs
+
+Dedicated service pages should include:
+- `Summary`
+- `Checks`
+- `Incidents`
+- `Actions`
+- `Deploy and Version`
+- `Dependencies`
+- `Artifacts`
+- `Runbook`
 
 ## Surface Model
 
@@ -94,6 +139,11 @@ It should never degrade into:
 - a card mosaic
 - a chart museum
 - a generic executive dashboard
+- a giant everything-page that tries to hold the whole system at once
+
+The homepage is for orientation, not compression.
+
+If an operator needs to scroll through stacked boxes just to find one incident, one action run, or one service detail, the information architecture is wrong.
 
 ## Chart and Timeline Policy
 
@@ -125,3 +175,16 @@ Every new dashboard block must have one job:
 - or act
 
 If a block does not serve one of those jobs, it should not appear in the primary dashboard.
+
+## Page Growth Rule
+
+When a workflow becomes dense, grow the page tree instead of densifying the same screen forever.
+
+Preferred move:
+
+1. keep the overview page small
+2. break operational lists into their own queue pages
+3. break deep evidence into dedicated detail pages
+4. use links, tabs, and drilldowns instead of more stacked cards
+
+OCOS should feel closer to an internal ERP workbench than a startup analytics dashboard.

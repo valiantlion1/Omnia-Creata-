@@ -9,6 +9,7 @@ $backendDir = Join-Path $studioRoot "backend"
 $webDir = Join-Path $studioRoot "web"
 $versionFile = Join-Path $studioRoot "version.json"
 $expectedBuild = $null
+$expectedShellText = "Omnia Creata Studio"
 
 if (Test-Path $versionFile) {
   try {
@@ -58,6 +59,12 @@ function Import-UserEnvironmentVariable {
 }
 
 foreach ($secretName in @(
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "DATABASE_URL",
+  "REDIS_URL",
+  "JWT_SECRET",
   "OPENAI_API_KEY",
   "OPENAI_IMAGE_DRAFT_MODEL",
   "OPENAI_IMAGE_MODEL",
@@ -66,7 +73,13 @@ foreach ($secretName in @(
   "HUGGINGFACE_TOKEN",
   "FAL_API_KEY",
   "RUNWARE_API_KEY",
-  "GEMINI_API_KEY"
+  "GEMINI_API_KEY",
+  "PADDLE_API_KEY",
+  "PADDLE_WEBHOOK_SECRET",
+  "PADDLE_CHECKOUT_BASE_URL",
+  "STUDIO_OWNER_EMAIL",
+  "STUDIO_OWNER_EMAILS",
+  "STUDIO_ROOT_ADMIN_EMAILS"
 )) {
   Import-UserEnvironmentVariable -Name $secretName
 }
@@ -142,6 +155,27 @@ function Invoke-LoggedProcess {
   }
 }
 
+function Normalize-StudioShellText {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ""
+  }
+
+  return (($Value -replace "\s+", "").Trim().ToLowerInvariant())
+}
+
+function Test-StudioShellContent {
+  param([string]$Html)
+
+  $expected = Normalize-StudioShellText $expectedShellText
+  if ([string]::IsNullOrWhiteSpace($expected) -or [string]::IsNullOrWhiteSpace($Html)) {
+    return $false
+  }
+
+  return (Normalize-StudioShellText $Html).Contains($expected)
+}
+
 function Start-BackendProcess {
   param([switch]$UseHotReload)
 
@@ -213,7 +247,7 @@ function Wait-FrontendReady {
   while ((Get-Date) -lt $deadline) {
     try {
       $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:5173/login" -TimeoutSec 3
-      if ($response.StatusCode -eq 200 -and $response.Content -match "OmniaCreata Studio") {
+      if ($response.StatusCode -eq 200 -and (Test-StudioShellContent -Html $response.Content)) {
         return $true
       }
     } catch {
@@ -228,7 +262,7 @@ function Wait-FrontendReady {
 }
 
 Write-Host ""
-Write-Host "OmniaCreata Studio local stack" -ForegroundColor Cyan
+Write-Host "Omnia Creata Studio local stack" -ForegroundColor Cyan
 Write-Host "Studio root: $studioRoot"
 Write-Host "Runtime root: $runtimeRoot"
 Write-Host "Logs: $logDir"

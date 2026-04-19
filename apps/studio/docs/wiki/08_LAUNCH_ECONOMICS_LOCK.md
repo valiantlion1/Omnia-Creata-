@@ -2,7 +2,7 @@
 
 ## Status
 
-- Effective date: `2026-04-15`
+- Effective date: `2026-04-18`
 - Scope: `Controlled Public Paid Launch`
 - This is an internal operations lock, not public marketing copy.
 - This lock does not close `provider_economics` by itself. That blocker stays open until exact current-build Runware lane pricing is signed off together with founder/operator approval.
@@ -18,7 +18,7 @@
   - `Fast`
   - `Standard`
   - `Premium`
-- `juggernaut-xl` remains an internal or account-gated advanced lane. It is not a public default card for launch messaging.
+- `flux-2-flex` remains an internal or account-gated advanced lane. It is not a public default card for launch messaging.
 - `Free Account` keeps `0` bundled image credits, may use Create with wallet credits, and does not unlock Studio chat.
 - Free accounts may buy wallet credits.
 - No public launch promise should use a simplified `1 USD = X credits` slogan; that ratio changes materially across subscriptions versus packs.
@@ -46,10 +46,10 @@ These values are current backend truth from the Studio model catalog and pricing
 
 | Lane | Catalog Model | Min Plan | Quoted Credit Cost | Managed Hold / Settlement | Fallback Hold / Settlement | Worst-Case Revenue Floor (`Pro`) |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| `Fast` | `flux-schnell` | `FREE` | `6` | `6` | `3` | `$0.12` |
-| `Standard` | `sdxl-base` | `FREE` | `8` | `8` | `4` | `$0.16` |
-| `Premium` | `realvis-xl` | `CREATOR` | `12` | `12` | `6` | `$0.24` |
-| `Advanced (internal)` | `juggernaut-xl` | `PRO` | `14` | `14` | `7` | `$0.28` |
+| `Fast` | `flux-2-klein` | `FREE` | `6` | `6` | `3` | `$0.12` |
+| `Standard` | `flux-2-dev` | `FREE` | `8` | `8` | `4` | `$0.16` |
+| `Premium` | `flux-2-pro` | `CREATOR` | `12` | `12` | `6` | `$0.24` |
+| `Signature (internal)` | `flux-2-flex` | `PRO` | `16` | `16` | `8` | `$0.32` |
 
 Rules behind the table:
 - If any managed billable provider candidate exists, reservation and final settlement use the full quoted credit cost.
@@ -64,15 +64,11 @@ Rules behind the table:
 - `Gemini 2.5 Flash`: `$0.30 / 1M input`, `$2.50 / 1M output` on Google's official pricing page.
 - `Gemini 2.5 Pro`: `$1.25 / 1M input`, `$10.00 / 1M output` on Google's official pricing page.
 - `OpenRouter` fallback currently mirrors the same Google model family pricing on the official OpenRouter Google provider page for the selected Gemini lanes.
-- `Runware` public pricing confirms `FLUX.1 [schnell]` at `$0.0006 / image` for the listed `512x512 / 4 steps` configuration.
-- `OpenAI GPT-image-1.5` official API pricing is `$32.00 / 1M image output tokens`; OpenAI's current price page exposes the model-level output rate and Studio's internal lookup table currently maps that to:
-  - square `medium`: about `$0.034 / image`
-  - square `high`: about `$0.133 / image`
-  - portrait or landscape `high`: about `$0.200 / image`
-- `OpenAI GPT-image-1 mini` rescue/draft pricing currently maps to:
-  - square `low`: about `$0.005 / image`
-  - square `medium`: about `$0.011 / image`
-  - square `high`: about `$0.036 / image`
+- `Runware` public pricing confirms `FLUX.2 [klein] 9B` at about `$0.00078 / 1024x1024 image`.
+- `Runware` public pricing confirms `FLUX.2 [dev]` at about `$0.0096 / 1MP image`.
+- `Runware` public pricing confirms `FLUX.2 [pro]` at `$0.03` for the first megapixel plus `$0.015` per extra megapixel.
+- `Runware` public pricing confirms `FLUX.2 [flex]` at about `$0.06 / 1024x1024 image`.
+- `OpenAI GPT-image` remains a targeted QA/reference lane only; it is not part of the normal public routing doctrine in the current launch lock.
 
 ### Current internal lane anchors
 
@@ -80,13 +76,11 @@ These are the economics anchors Studio should use right now:
 
 | Lane | Current Cost Basis | Status | Margin Reading Against `Pro` Revenue Floor |
 | --- | --- | --- | --- |
-| `Fast` | Runware `FLUX.1 [schnell]` official public quote: `$0.0006 / image` | verified | green |
-| `Standard` | current catalog estimate: `$0.008 / image` | internal fallback estimate; exact current public Runware quote for `sdxl-base` is not pinned | green, but still signoff-gated |
-| `Premium` | current catalog estimate: `$0.015 / image` for normal Runware-first traffic | internal fallback estimate; safe only while OpenAI is selective | green on Runware-first assumption |
-| `Premium` via OpenAI medium | `$0.034 / image` | verified | green |
-| `Premium` via OpenAI high square | `$0.133 / image` | verified | risk |
-| `Premium` via OpenAI high portrait / landscape | `$0.200 / image` | verified | blocked as a default public lane |
-| `Advanced (internal)` | current catalog estimate: `$0.020 / image` | internal fallback estimate | caution if OpenAI high becomes normal |
+| `Fast` | Runware `FLUX.2 [klein] 9B`: about `$0.00078 / image` | verified | green |
+| `Standard` | Runware `FLUX.2 [dev]`: about `$0.0096 / image` | verified | green |
+| `Premium` | Runware `FLUX.2 [pro]`: about `$0.03 / image` at 1MP | verified | green |
+| `Signature (internal)` | Runware `FLUX.2 [flex]`: about `$0.06 / image` | verified | green |
+| `OpenAI image QA lane` | variable by size/quality; keep out of normal public routing | targeted QA only | not part of launch margin math |
 
 Margin band policy:
 - `green`: provider cost is `<= 25%` of the `Pro` revenue floor for that lane
@@ -129,23 +123,22 @@ Until one real paid billing cycle proves healthy margin, Studio should use these
 
 | Guardrail | Locked Value | Action |
 | --- | ---: | --- |
-| Soft monthly variable AI spend cap | `$25` | keep monitoring; no scale-up |
-| Hard monthly variable AI spend cap | `$60` | block new paid image admissions until manual reset/signoff |
-| Monthly OpenAI image sub-cap | `$15` | disable new OpenAI-backed public image routes; keep Runware-first only |
-| OpenAI share of monthly image spend | `25%` caution / `40%` block | if above `40%`, public premium OpenAI usage must stop until re-signed |
+| Monthly billable image spend soft cap | `$25` | keep monitoring; no scale-up until a paid cycle proves stable |
+| Monthly billable image spend hard cap | `$60` | block new paid image admissions until manual reset/signoff |
+| Monthly managed-backup lane cap | `$15` | if backup-lane image spend crosses this, keep public traffic on Runware primary only until re-signed |
 
 Operational reading:
-- Chat cost is not the main burn driver under the current Gemini doctrine.
-- Image spend, especially selective OpenAI image use, is the real stop-loss surface.
+- Chat cost is not the main burn driver under the current cheap-chat doctrine.
+- Image spend is the real stop-loss surface; normal traffic should stay on Runware and backup lanes should stay deliberate.
 - These caps are intentionally conservative because launch is still low-burn and pre-scale.
 
 ## Where Risk Starts
 
 Risk begins under any of these conditions:
-- `OpenAI high` becomes the default implementation behind the public `Premium` lane.
-- portrait or landscape `high` OpenAI output is admitted broadly under the current `12-credit` public premium contract.
-- `Standard` or `Premium` are promoted as fully economics-closed without an exact current-build Runware quote or founder signoff.
-- monthly OpenAI image spend breaches its sub-cap or dominates too much of total image spend.
+- any non-Runware image lane quietly becomes the default implementation behind the public `Premium` lane.
+- backup-lane image traffic starts carrying normal public demand instead of selective overflow or QA usage.
+- `Standard` or `Premium` are promoted as fully economics-closed without the current FLUX.2 Runware quote set staying current-build true.
+- backup-lane image spend breaches its cap or begins dominating too much of total image spend.
 - a package or lane is marketed as generous before the underlying cost path is proven on the current build.
 
 ## Locked Conclusions
@@ -153,9 +146,9 @@ Risk begins under any of these conditions:
 - Keep `Free Account`, `Creator`, `Pro`, and `Credit Packs`.
 - Keep `Fast`, `Standard`, and `Premium` as the only public-facing image quality lanes.
 - Keep `Runware-first` as the default normal traffic image doctrine.
-- Keep `OpenAI` selective for draft rescue, edit/reference-critical work, and narrow premium paths only.
-- Do not let `OpenAI high` become the default public `Premium` lane under the current credit contract.
-- Keep `provider_economics` open until exact Runware normal-lane pricing and founder signoff are both current-build true.
+- Keep the public image ladder on the modern FLUX.2 family: `flux-2-klein`, `flux-2-dev`, `flux-2-pro`.
+- Keep `OpenAI image` out of the normal public routing path; use it only for targeted QA or deliberate operator-only cases.
+- Keep `provider_economics` open until the current-build Runware proof, backup-lane doctrine, and founder signoff are all aligned.
 
 ## Sources
 
@@ -165,7 +158,7 @@ Risk begins under any of these conditions:
   - [generation_pricing_ops.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/generation_pricing_ops.py)
   - [billing_ops.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/billing_ops.py)
   - [ai_provider_catalog.py](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/backend/studio_platform/ai_provider_catalog.py)
-- External pricing references checked on `2026-04-15`:
+- External pricing references checked on `2026-04-18`:
   - [Google Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)
   - [OpenRouter Google provider pricing](https://openrouter.ai/google)
   - [Runware pricing](https://runware.ai/pricing)

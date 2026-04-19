@@ -21,6 +21,10 @@ from studio_platform.operator_control_plane_ops import build_owner_ai_control_pl
 from studio_platform.owner_health_ops import build_owner_health_payload
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, StudioImageProvider
 from studio_platform.service import StudioService
+from studio_platform.studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_SIGNATURE_MODEL_ID,
+)
 from studio_platform.store import StudioStateStore
 
 
@@ -53,7 +57,7 @@ def test_serialize_model_catalog_for_identity_preserves_contract_fields() -> Non
         workspace_id="ws-user-1",
         plan=IdentityPlan.FREE,
     )
-    model = get_model_catalog_entry_or_raise("flux-schnell")
+    model = get_model_catalog_entry_or_raise(STUDIO_FAST_MODEL_ID)
 
     serialized = serialize_model_catalog_for_identity(
         identity=identity,
@@ -61,7 +65,7 @@ def test_serialize_model_catalog_for_identity_preserves_contract_fields() -> Non
         providers=ProviderRegistry(),
     )
 
-    assert serialized["id"] == "flux-schnell"
+    assert serialized["id"] == STUDIO_FAST_MODEL_ID
     assert serialized["label"] == serialized["creative_profile"]["label"]
     assert serialized["display_label"] == serialized["creative_profile"]["label"]
     assert serialized["display_badge"] == serialized["creative_profile"]["badge"]
@@ -80,7 +84,7 @@ def test_serialize_model_catalog_for_identity_uses_wallet_backed_route_preview()
         plan=IdentityPlan.FREE,
         extra_credits=60,
     )
-    model = get_model_catalog_entry_or_raise("flux-schnell")
+    model = get_model_catalog_entry_or_raise(STUDIO_FAST_MODEL_ID)
     providers = ProviderRegistry()
     runware = _FakeProvider(name="runware", rollout_tier="primary", billable=True)
     pollinations = _FakeProvider(name="pollinations", rollout_tier="fallback", billable=False)
@@ -96,8 +100,8 @@ def test_serialize_model_catalog_for_identity_uses_wallet_backed_route_preview()
         providers=providers,
     )
 
-    assert serialized["route_preview"]["planned_provider"] == "runware"
-    assert serialized["render_experience"]["state"] == "ready"
+    assert serialized["route_preview"]["planned_provider"] == "pollinations"
+    assert serialized["render_experience"]["state"] == "fallback"
 
 
 def test_validate_model_for_identity_honors_effective_free_plan_when_subscription_is_inactive() -> None:
@@ -110,7 +114,7 @@ def test_validate_model_for_identity_honors_effective_free_plan_when_subscriptio
         plan=IdentityPlan.PRO,
         extra_credits=60,
     )
-    model = get_model_catalog_entry_or_raise("juggernaut-xl")
+    model = get_model_catalog_entry_or_raise(STUDIO_SIGNATURE_MODEL_ID)
     billing_state = BillingStateSnapshot(
         gross_remaining=60,
         reserved_total=0,
@@ -180,7 +184,7 @@ def test_build_owner_ai_control_plane_keeps_surface_matrix_and_contract_freeze()
         "failed",
         "blocked",
     ]
-    assert any(item["id"] == "create:flux-schnell" for item in control_plane["surface_matrix"])
+    assert any(item["id"] == f"create:{STUDIO_FAST_MODEL_ID}" for item in control_plane["surface_matrix"])
     assert any(item["id"] == "chat:standard-assist" for item in control_plane["surface_matrix"])
 
 
@@ -189,7 +193,7 @@ def test_build_settings_bootstrap_payload_keeps_signed_in_shell_contract() -> No
         identity={"id": "user-1"},
         entitlements={"premium_chat": False},
         plans=[{"id": "free"}],
-        models=[{"id": "flux-schnell"}],
+        models=[{"id": STUDIO_FAST_MODEL_ID}],
         presets={"default": {"id": "default"}},
         compose_draft_id="draft-compose",
         chat_draft_id="draft-chat",

@@ -15,9 +15,9 @@ const surfaces = [
   },
   {
     name: "Automations",
-    state: "reserved",
-    tone: "muted" as const,
-    description: "Recurring audits, wake-up routines, and bounded background jobs."
+    state: "preview",
+    tone: "open" as const,
+    description: "Playbooks, recurring audits, and bounded background jobs now have a first-class workbench lane."
   },
   {
     name: "Skills",
@@ -41,30 +41,35 @@ const surfaces = [
 
 export function CapabilityMap() {
   return (
-    <section className="rounded-[32px] border border-white/10 bg-[#091414]/88 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-      <div className="flex items-end justify-between gap-4">
+    <section className="ocos-panel-strong">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.32em] text-white/42">Control Surfaces</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">What OCOS grows into</h2>
+          <p className="ocos-kicker">Control Surfaces</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--ocos-ink)]">
+            What OCOS grows into
+          </h2>
         </div>
-        <div className="text-sm text-white/54">One system, multiple operator surfaces</div>
+        <div className="text-sm text-[var(--ocos-muted)]">One system, multiple operator surfaces</div>
       </div>
 
-      <div className="mt-5 divide-y divide-white/10">
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {surfaces.map((surface) => (
-          <article key={surface.name} className="grid gap-3 py-4 sm:grid-cols-[auto_1fr] sm:items-start">
-            <div className="flex items-center gap-3">
+          <article
+            key={surface.name}
+            className="rounded-[24px] border border-[var(--ocos-border-strong)] bg-white/78 p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-[var(--ocos-ink)]">{surface.name}</h3>
               <StatusPill tone={surface.tone}>{surface.state}</StatusPill>
-              <h3 className="text-base font-medium text-white">{surface.name}</h3>
             </div>
-            <p className="text-sm leading-6 text-white/66">{surface.description}</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ocos-muted)]">{surface.description}</p>
           </article>
         ))}
       </div>
 
-      <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4 text-sm leading-6 text-white/64">
-        Every new surface plugs into the same incident record, access rules, and bounded-action policy. That
-        keeps the dashboard readable even as OCOS grows into a wider operating system.
+      <div className="mt-5 rounded-[24px] border border-[var(--ocos-border)] bg-[var(--ocos-surface-muted)] p-4 text-sm leading-7 text-[var(--ocos-ink)]">
+        Every new surface plugs into the same incident record, access rules, and bounded-action policy. That keeps the
+        shell calm even while the system grows wider behind it.
       </div>
     </section>
   );

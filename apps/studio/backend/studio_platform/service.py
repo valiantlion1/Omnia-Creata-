@@ -81,7 +81,6 @@ from security.moderation import ModerationResult
 
 logger = logging.getLogger(__name__)
 _GENERATION_TEXT_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_FOUNDER_EMAILS = frozenset({"founder@omniacreata.com", "valiantlion@omniacreata.com", "ghostsofter12@gmail.com", "alierdincyigitaslan@gmail.com"})
 _MODERATION_RESET_WINDOW = timedelta(hours=24)
 _TEMP_BLOCK_AFTER_THREE_STRIKES = timedelta(minutes=15)
 _TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)

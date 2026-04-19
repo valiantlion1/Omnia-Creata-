@@ -6,16 +6,15 @@ from typing import Sequence
 
 from .models import ModelCatalogEntry
 from .providers import GenerationRoutingDecision, normalize_generation_workflow
+from .studio_model_contract import (
+    STUDIO_MODEL_PRICING_LANES,
+    normalize_studio_model_id,
+    resolve_studio_model_pricing_lane,
+)
 
-_LEGACY_MODEL_PRICING_LANES = {
-    "flux-schnell": "draft",
-    "sdxl-base": "standard",
-    "realvis-xl": "final",
-    "juggernaut-xl": "final",
-}
 _FALLBACK_ONLY_PROVIDERS = frozenset({"pollinations", "huggingface"})
 _DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
-_MANAGED_BILLABLE_PROVIDERS = frozenset({"openai", "fal", "runware"})
+_MANAGED_BILLABLE_PROVIDERS = frozenset({"fal", "runware"})
 _OPENAI_DRAFT_MODEL_IDS = frozenset({"gpt-image-1-mini"})
 _OPENAI_FINAL_MODEL_IDS = frozenset({"gpt-image-1.5", "gpt-image-1"})
 
@@ -37,7 +36,7 @@ def resolve_generation_pricing_lane(
     degraded: bool = False,
 ) -> str:
     normalized_provider = (provider_name or "").strip().lower()
-    normalized_model = (requested_model_id or "").strip().lower()
+    normalized_model = normalize_studio_model_id(requested_model_id)
     normalized_workflow = normalize_generation_workflow(workflow)
 
     if normalized_provider in _DEGRADED_ONLY_PROVIDERS:
@@ -53,10 +52,10 @@ def resolve_generation_pricing_lane(
             return "final"
         if normalized_workflow in {"image_to_image", "edit"}:
             return "final"
-        if normalized_model == "flux-schnell":
+        if resolve_studio_model_pricing_lane(normalized_model) == "draft":
             return "draft"
         return "final"
-    return _LEGACY_MODEL_PRICING_LANES.get(normalized_model, "standard")
+    return STUDIO_MODEL_PRICING_LANES.get(normalized_model, "standard")
 
 
 def calculate_generation_reservation_cost(

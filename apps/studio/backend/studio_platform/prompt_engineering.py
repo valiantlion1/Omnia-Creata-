@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .studio_model_contract import is_fast_model_id, is_high_fidelity_model_id, is_standard_model_id
+
 
 _CONTROL_REPLACEMENTS = {
     "\n": " ",
@@ -155,7 +157,7 @@ def analyze_generation_prompt_profile(
     detail_score = _detail_score(lowered_prompt)
     premium_intent = (
         normalized_workflow in {"image_to_image", "edit"}
-        or model in {"realvis-xl", "juggernaut-xl"}
+        or is_high_fidelity_model_id(model)
         or profile in {"realistic_editorial", "product_commercial", "interior_archviz"}
     )
     return PromptProfileAnalysis(
@@ -261,7 +263,7 @@ def _coerce_prompt_profile_analysis(
             detail_score=_detail_score(prompt.lower()),
             premium_intent=(
                 normalized_workflow in {"image_to_image", "edit"}
-                or model_id in {"realvis-xl", "juggernaut-xl"}
+                or is_high_fidelity_model_id(model_id)
                 or prompt_profile.strip().lower() in {"realistic_editorial", "product_commercial", "interior_archviz"}
             ),
         )
@@ -295,7 +297,7 @@ def _detail_score(content: str) -> int:
 def _looks_photographic(content: str, *, model: str) -> bool:
     if _contains_any(content, _ILLUSTRATION_KEYWORDS):
         return False
-    if model in {"realvis-xl", "juggernaut-xl", "sdxl-base"}:
+    if is_standard_model_id(model) or is_high_fidelity_model_id(model):
         return True
     return _contains_any(content, _HUMAN_KEYWORDS + _PRODUCT_KEYWORDS + _INTERIOR_KEYWORDS)
 
@@ -388,7 +390,7 @@ def _infer_style_clause(content: str, *, model: str) -> str:
         return "premium editorial fashion photography, refined campaign look"
     if _contains_any(content, _INTERIOR_KEYWORDS):
         return "high-end architectural visualization, premium editorial interior photography"
-    if model in {"realvis-xl", "juggernaut-xl"}:
+    if is_high_fidelity_model_id(model):
         return "premium cinematic realism, luxury campaign finish"
     return "cinematic high-end image, polished visual storytelling"
 
@@ -466,7 +468,7 @@ def _merge_negative_prompt(
         defaults.extend(["photographic artifacts", "muddy linework"])
     if provider_name in {"pollinations", "demo"}:
         defaults.extend(["collage layout", "double face", "extra limbs"])
-    if model_id == "flux-schnell":
+    if is_fast_model_id(model_id):
         defaults.append("oversmoothed details")
 
     merged = [item.strip() for item in base_negative.split(",") if item.strip()]

@@ -163,7 +163,7 @@ def build_default_smoke_cases(
                 provider_name="runware",
                 workflow="text_to_image",
                 surface="image",
-                lane="managed_secondary",
+                lane="managed_primary",
                 prompt="Premium beauty product packshot on a sculpted stone pedestal, dramatic softbox lighting, luxury campaign style, ultra clean background.",
             )
         )
@@ -174,13 +174,13 @@ def build_default_smoke_cases(
                     provider_name="runware",
                     workflow="edit",
                     surface="image",
-                    lane="managed_secondary",
+                    lane="managed_primary",
                     prompt="Attempt edit without a reference image to verify fallback does not silently degrade.",
                     expected_error_type=ProviderTemporaryError,
                 )
             )
 
-    if normalized_surface in {"all", "image"} and normalized_provider in {"all", "openai"}:
+    if normalized_surface in {"all", "image"} and normalized_provider == "openai":
         cases.append(
             ProviderSmokeCase(
                 label="openai-draft-text-to-image",

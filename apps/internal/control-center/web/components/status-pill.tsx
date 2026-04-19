@@ -10,13 +10,13 @@ export function StatusPill({
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em]",
-        tone === "healthy" && "border-teal-300/30 bg-teal-300/12 text-teal-100",
-        tone === "degraded" && "border-amber-300/30 bg-amber-300/12 text-amber-100",
-        tone === "failed" && "border-rose-300/30 bg-rose-300/12 text-rose-100",
-        tone === "open" && "border-orange-300/30 bg-orange-300/12 text-orange-100",
-        tone === "resolved" && "border-emerald-300/30 bg-emerald-300/12 text-emerald-100",
-        tone === "muted" && "border-white/20 bg-white/8 text-white/70"
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
+        tone === "healthy" && "border-[rgba(31,122,91,0.18)] bg-[rgba(31,122,91,0.08)] text-[var(--ocos-success)]",
+        tone === "degraded" && "border-[rgba(155,107,22,0.18)] bg-[rgba(155,107,22,0.08)] text-[var(--ocos-warn)]",
+        tone === "failed" && "border-[rgba(160,68,68,0.18)] bg-[rgba(160,68,68,0.08)] text-[var(--ocos-danger)]",
+        tone === "open" && "border-[rgba(23,107,102,0.18)] bg-[rgba(23,107,102,0.08)] text-[var(--ocos-accent)]",
+        tone === "resolved" && "border-[rgba(31,122,91,0.18)] bg-[rgba(31,122,91,0.06)] text-[var(--ocos-success)]",
+        tone === "muted" && "border-[var(--ocos-line)] bg-white/62 text-[var(--ocos-muted)]"
       )}
     >
       {children}

@@ -9,6 +9,7 @@ $studioRoot = Split-Path -Parent $PSScriptRoot
 $versionFile = Join-Path $studioRoot "version.json"
 $expectedBuild = $null
 $versionManifest = $null
+$expectedShellText = "Omnia Creata Studio"
 
 function Resolve-AbsolutePath {
   param([string]$PathValue)
@@ -110,6 +111,45 @@ function Get-Page {
   return Invoke-WebRequest -UseBasicParsing -Uri $Uri -TimeoutSec $TimeoutSeconds
 }
 
+function Normalize-StudioShellText {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ""
+  }
+
+  return (($Value -replace "\s+", "").Trim().ToLowerInvariant())
+}
+
+function Test-StudioShellDocument {
+  param([string]$Html)
+
+  if ([string]::IsNullOrWhiteSpace($Html)) {
+    return $false
+  }
+
+  $expected = Normalize-StudioShellText $expectedShellText
+  if ([string]::IsNullOrWhiteSpace($expected)) {
+    return $false
+  }
+
+  $titleMatch = [System.Text.RegularExpressions.Regex]::Match(
+    $Html,
+    "<title>(.*?)</title>",
+    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $titleMatch.Success) {
+    return $false
+  }
+
+  $normalizedTitle = Normalize-StudioShellText $titleMatch.Groups[1].Value
+  if ($normalizedTitle -ne $expected) {
+    return $false
+  }
+
+  return (Normalize-StudioShellText $Html).Contains($expected)
+}
+
 try {
   $version = Get-Json -Uri "http://127.0.0.1:8000/v1/version"
 } catch {
@@ -147,14 +187,10 @@ try {
   Fail-Verification "Studio frontend login page is unreachable."
 }
 
-if ($loginPage.StatusCode -ne 200 -or $loginPage.Content -notmatch "OmniaCreata Studio") {
+if ($loginPage.StatusCode -ne 200 -or -not (Test-StudioShellDocument -Html $loginPage.Content)) {
   Fail-Verification "Studio frontend login page did not return the expected Studio shell."
 }
 $report.checks.frontend_login_ok = $true
-
-if ($loginPage.Content -notmatch "<title>OmniaCreata Studio</title>") {
-  Fail-Verification "Studio frontend shell did not return the expected Studio document title."
-}
 $report.checks.frontend_shell_ok = $true
 $report.status = "pass"
 $report.summary = "Studio local verification passed."

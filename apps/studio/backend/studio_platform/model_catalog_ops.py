@@ -6,6 +6,13 @@ from .billing_ops import BillingStateSnapshot
 from .creative_profile_ops import attach_creative_profile, resolve_creative_profile
 from .experience_contract_ops import build_model_route_preview
 from .models import IdentityPlan, ModelCatalogEntry, OmniaIdentity
+from .studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_SIGNATURE_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+    normalize_studio_model_id,
+)
 
 SUPPORTED_ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "1:1": (1, 1),
@@ -14,77 +21,71 @@ SUPPORTED_ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "4:5": (4, 5),
     "3:4": (3, 4),
     "2:3": (2, 3),
+    "3:2": (3, 2),
 }
 _DIMENSION_MULTIPLE = 64
 
-# ── Model catalog ──
-# estimated_cost reflects Runware-first pricing (primary provider).
-# Values are set slightly above observed Runware API costs to stay conservative
-# for stop-loss guardrail evaluation. Runware returns actual cost per call;
-# these estimates are fallbacks for forecasting and credit guides.
+# Model catalog
+# estimated_cost is the conservative fallback when the provider does not return
+# a live cost quote for the exact request. The active doctrine is modern
+# Runware-first lanes rather than older SDXL/RealVis/Juggernaut era defaults.
 #
-# Runware observed costs (2026-04):
-#   flux-schnell  ~$0.002-0.003/image
-#   sdxl-base     ~$0.003-0.005/image
-#   realvis-xl    ~$0.005-0.008/image
-#   juggernaut-xl ~$0.008-0.012/image
-#
-# Credit cost rationale (Pro floor $0.02/credit):
-#   Fast 6cr      -> $0.12 revenue, $0.003 cost -> 97% margin
-#   Standard 8cr  -> $0.16 revenue, $0.005 cost -> 97% margin
-#   Premium 12cr  -> $0.24 revenue, $0.010 cost -> 96% margin
-#   Signature 14cr-> $0.28 revenue, $0.012 cost -> 96% margin
+# Official/public anchors checked on 2026-04-18:
+#   FLUX.2 [klein] 9B   1024x1024 ~ $0.00078 / image
+#   FLUX.2 [dev]        featured 1 MP example ~ $0.0096 / image
+#   FLUX.2 [pro]        first MP $0.03, then $0.015 per extra MP
+#   FLUX.2 [flex]       1024x1024 $0.06 / image
 
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
-    "flux-schnell": ModelCatalogEntry(
-        id="flux-schnell",
+    STUDIO_FAST_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_FAST_MODEL_ID,
         label="Fast",
-        description="Quick starts for ideas, layout checks, and fast variations.",
+        description="Fast interactive previews on FLUX.2 Klein for rapid ideation, composition checks, and low-latency variations.",
         min_plan=IdentityPlan.FREE,
         credit_cost=6,
-        estimated_cost=0.003,
+        estimated_cost=0.001,
         max_width=1024,
         max_height=1024,
         featured=True,
         runtime="cloud",
-        provider_hint="managed",
+        provider_hint="runware",
     ),
-    "sdxl-base": ModelCatalogEntry(
-        id="sdxl-base",
+    STUDIO_STANDARD_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_STANDARD_MODEL_ID,
         label="Standard",
-        description="Balanced quality for everyday creative work and dependable detail.",
+        description="Balanced FLUX.2 Dev quality for dependable detail, stronger prompt control, and modern everyday output.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
-        estimated_cost=0.005,
-        max_width=1024,
-        max_height=1024,
-        runtime="cloud",
-        provider_hint="managed",
-    ),
-    "realvis-xl": ModelCatalogEntry(
-        id="realvis-xl",
-        label="Premium",
-        description="Richer detail and cleaner finish when the result needs to look polished.",
-        min_plan=IdentityPlan.CREATOR,
-        credit_cost=12,
         estimated_cost=0.010,
         max_width=1536,
         max_height=1536,
+        runtime="cloud",
+        provider_hint="runware",
+    ),
+    STUDIO_PREMIUM_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_PREMIUM_MODEL_ID,
+        label="Premium",
+        description="Production-ready FLUX.2 Pro output for polished hero images, premium product visuals, and presentation-grade final picks.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=12,
+        estimated_cost=0.030,
+        max_width=2048,
+        max_height=2048,
         featured=True,
         runtime="cloud",
-        provider_hint="managed",
+        provider_hint="runware",
     ),
-    "juggernaut-xl": ModelCatalogEntry(
-        id="juggernaut-xl",
+    STUDIO_SIGNATURE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_SIGNATURE_MODEL_ID,
         label="Signature",
-        description="Internal advanced finish for special high-detail runs.",
+        description="Internal FLUX.2 Flex lane for typography, layout-critical compositions, and advanced brand-system visuals.",
         min_plan=IdentityPlan.PRO,
-        credit_cost=14,
-        estimated_cost=0.012,
-        max_width=1536,
-        max_height=1536,
+        credit_cost=16,
+        estimated_cost=0.060,
+        max_width=2048,
+        max_height=2048,
         runtime="cloud",
-        provider_hint="managed",
+        provider_hint="runware",
     ),
 }
 
@@ -94,7 +95,7 @@ def list_model_catalog_entries() -> list[ModelCatalogEntry]:
 
 
 def get_model_catalog_entry(model_id: str) -> ModelCatalogEntry | None:
-    model = MODEL_CATALOG.get(model_id)
+    model = MODEL_CATALOG.get(normalize_studio_model_id(model_id))
     if model is None:
         return None
     return attach_creative_profile(model)

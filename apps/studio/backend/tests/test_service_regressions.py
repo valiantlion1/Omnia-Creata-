@@ -1,6 +1,7 @@
 import asyncio
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -41,6 +42,10 @@ from studio_platform.models.identity import (
     USAGE_POLICY_VERSION,
 )
 from studio_platform.service import DeletedIdentityError, StudioService
+from studio_platform.studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+)
 from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
 from studio_platform.services.generation_runtime import ExecutedGenerationBatch
@@ -2093,7 +2098,7 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert settings_payload["entitlements"]["allowed_chat_modes"] == []
     assert settings_payload["entitlements"]["premium_chat"] is False
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
-    flux_model = next(model for model in settings_payload["models"] if model["id"] == "flux-schnell")
+    flux_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_FAST_MODEL_ID)
     assert flux_model["creative_profile"]["id"] == "fast"
     assert flux_model["creative_profile"]["label"] == "Fast"
     assert flux_model["label"] == "Fast"
@@ -2110,7 +2115,7 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     flux_lane = next(
         entry
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
-        if entry["model_id"] == "flux-schnell"
+        if entry["model_id"] == STUDIO_FAST_MODEL_ID
     )
     assert flux_lane["label"] == "Fast"
     assert flux_lane["creative_profile"]["id"] == "fast"
@@ -2187,11 +2192,11 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
     assert assistant_message.metadata["routing_strategy"] == "premium-studio"
     assert assistant_message.metadata["generation_bridge"]["workflow"] == "text_to_image"
     assert assistant_message.metadata["generation_bridge"]["prompt"]
-    assert assistant_message.metadata["generation_bridge"]["blueprint"]["model"] == "realvis-xl"
+    assert assistant_message.metadata["generation_bridge"]["blueprint"]["model"] == STUDIO_PREMIUM_MODEL_ID
     assert assistant_message.metadata["generation_bridge"]["blueprint"]["output_count"] == 1
     first_action = assistant_message.suggested_actions[0]
     assert first_action.payload["generation_bridge"]["workflow"] == "text_to_image"
-    assert first_action.payload["generation_bridge"]["blueprint"]["model"] == "realvis-xl"
+    assert first_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_PREMIUM_MODEL_ID
 
     feedback_message = await service.set_chat_message_feedback(
         identity.id,
@@ -2628,7 +2633,7 @@ async def test_create_generation_rejects_when_plan_active_limit_is_reached(tmp_p
         title="Pending A",
         model="flux-schnell",
         queue_priority="standard",
-        status=JobStatus.PENDING,
+        status=JobStatus.QUEUED,
         estimated_cost=0.0,
         credit_cost=6,
         output_count=1,
@@ -2652,7 +2657,7 @@ async def test_create_generation_rejects_when_plan_active_limit_is_reached(tmp_p
         title="Pending B",
         model="flux-schnell",
         queue_priority="standard",
-        status=JobStatus.PENDING,
+        status=JobStatus.QUEUED,
         estimated_cost=0.0,
         credit_cost=6,
         output_count=1,
@@ -2730,7 +2735,7 @@ async def test_create_generation_rejects_duplicate_incomplete_request(tmp_path: 
         title="Pending Prompt",
         model="flux-schnell",
         queue_priority="priority",
-        status=JobStatus.PENDING,
+        status=JobStatus.QUEUED,
         estimated_cost=0.0,
         credit_cost=6,
         output_count=1,
@@ -2870,11 +2875,12 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
         assert job.selected_quality_tier == "standard"
         assert job.degraded is False
         assert job.routing_strategy == "wallet-managed"
-        assert job.routing_reason == "wallet_fallback_route"
+        assert job.routing_reason == "development_zero_cost_fast_route"
         assert job.prompt_profile == "stylized_illustration"
         assert job.provider_candidates[:2] == ["huggingface", "pollinations"]
         assert health["generation_routing"]["plan_defaults"]["free"] == "wallet_managed"
         assert health["generation_routing"]["plan_defaults"]["pro"] == "runware_first_premium_caps"
+        assert health["generation_routing"]["development_fast_policy"] == "zero_cost_standard_fallbacks_only"
         assert health["generation_routing"]["demo_policy"] == "degraded_only_last_resort"
         assert health["chat_routing"]["plan_defaults"]["free"] == "limited"
         assert health["chat_routing"]["plan_defaults"]["pro"] == "premium"
@@ -2884,7 +2890,7 @@ async def test_create_generation_persists_routing_metadata_and_health_summary(tm
 
 
 @pytest.mark.asyncio
-async def test_create_generation_promotes_openai_for_wallet_backed_free_accounts_when_runware_is_unavailable(tmp_path: Path):
+async def test_create_generation_uses_free_fallback_lane_for_wallet_backed_free_accounts_when_runware_is_unavailable(tmp_path: Path):
     class _RoutingProvider:
         def __init__(self, *, name: str, rollout_tier: str, billable: bool = False) -> None:
             self.name = name
@@ -2981,16 +2987,134 @@ async def test_create_generation_promotes_openai_for_wallet_backed_free_accounts
             output_count=1,
         )
 
-        assert job.provider == "openai"
+        assert job.provider == "huggingface"
         assert job.requested_quality_tier == "standard"
-        assert job.selected_quality_tier == "premium"
+        assert job.selected_quality_tier == "standard"
         assert job.degraded is False
         assert job.routing_strategy == "wallet-managed"
-        assert job.routing_reason == "wallet_managed_launch_lane"
+        assert job.routing_reason == "development_zero_cost_fast_route"
         assert job.prompt_profile == "stylized_illustration"
-        assert job.provider_candidates[:3] == ["openai", "huggingface", "pollinations"]
+        assert job.provider_candidates[:3] == ["huggingface", "pollinations", "demo"]
     finally:
         settings.environment = original_environment
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_generation_prefers_zero_cost_fast_lane_in_development_even_when_runware_is_configured(tmp_path: Path):
+    class _RoutingProvider:
+        def __init__(self, *, name: str, rollout_tier: str, billable: bool = False) -> None:
+            self.name = name
+            self.rollout_tier = rollout_tier
+            self.billable = billable
+            self.capabilities = ProviderCapabilities(
+                workflows=("text_to_image", "image_to_image", "edit"),
+                supports_reference_image=True,
+            )
+
+        async def is_available(self) -> bool:
+            return True
+
+        def is_configured(self) -> bool:
+            return True
+
+        async def health(self, probe: bool = True) -> dict[str, object]:
+            return {"name": self.name, "status": "healthy", "detail": "routing-test"}
+
+        async def health_snapshot(self, probe: bool = True, *, priority: int) -> dict[str, object]:
+            payload = await self.health(probe=probe)
+            payload["priority"] = priority
+            payload["billable"] = self.billable
+            payload["rollout_tier"] = self.rollout_tier
+            payload["capabilities"] = {"workflows": ["text_to_image", "image_to_image", "edit"]}
+            return payload
+
+        def supports_generation(self, workflow: str, *, has_reference_image: bool) -> bool:
+            if workflow == "text_to_image":
+                return not has_reference_image
+            return True
+
+    settings = get_settings()
+    original_environment = settings.environment
+    original_zero_cost_fast_mode = settings.development_fast_zero_cost_mode_enabled
+    settings.environment = provider_module.Environment.DEVELOPMENT
+    settings.development_fast_zero_cost_mode_enabled = True
+
+    runware = _RoutingProvider(name="runware", rollout_tier="secondary", billable=True)
+    pollinations = _RoutingProvider(name="pollinations", rollout_tier="standard")
+    huggingface = _RoutingProvider(name="huggingface", rollout_tier="standard")
+    demo = _RoutingProvider(name="demo", rollout_tier="degraded")
+
+    providers = ProviderRegistry()
+    providers.providers = [runware, pollinations, huggingface, demo]
+    providers._providers_by_name = {provider.name: provider for provider in providers.providers}
+    providers._provider_circuits = {
+        provider.name: provider_module.ProviderCircuitState() for provider in providers.providers
+    }
+
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, providers, tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+        extra_credits=0,
+    )
+    workspace = StudioWorkspace(id="ws-user-1", identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+        )
+    )
+
+    try:
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="simple blue gradient background with a centered white circle",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-2-klein",
+            width=1024,
+            height=1024,
+            steps=24,
+            cfg_scale=6.0,
+            seed=42,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        assert job.provider == "pollinations"
+        assert job.requested_quality_tier == "standard"
+        assert job.selected_quality_tier == "standard"
+        assert job.degraded is False
+        assert job.routing_strategy == "premium-managed"
+        assert job.routing_reason == "development_zero_cost_fast_route"
+        assert job.prompt_profile == "generic"
+        assert job.provider_candidates[:3] == ["pollinations", "huggingface", "demo"]
+        assert "runware" not in job.provider_candidates
+        assert job.pricing_lane == "fallback"
+        assert job.reserved_credit_cost == 3
+    finally:
+        settings.environment = original_environment
+        settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
         await service.shutdown()
 
 
@@ -3294,10 +3418,12 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
         assert openai_chat["premium_model"]["pricing"]["reference_model"] == "gpt-5.4"
         assert control_plane["image"]["openai"]["draft_model"]["per_image_usd"]["1024x1024"]["low"] == 0.005
         assert control_plane["operator_policy"]["current_operator_source"] == "ai_control_plane.surface_matrix"
-        fast_model = next(item for item in control_plane["studio_models"] if item["id"] == "flux-schnell")
+        fast_model = next(item for item in control_plane["studio_models"] if item["id"] == STUDIO_FAST_MODEL_ID)
         assert fast_model["default_openai_request_model"] == get_settings().openai_image_draft_model
         assert fast_model["default_openai_estimated_cost_usd"] == 0.005
-        create_fast = next(item for item in control_plane["surface_matrix"] if item["id"] == "create:flux-schnell")
+        create_fast = next(
+            item for item in control_plane["surface_matrix"] if item["id"] == f"create:{STUDIO_FAST_MODEL_ID}"
+        )
         assert create_fast["request_model"] == get_settings().openai_image_draft_model
         chat_standard = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:standard-assist")
         assert chat_standard["provider_chain"][0]["provider"] in {"gemini", "openrouter", "openai"}
@@ -4973,8 +5099,8 @@ async def test_ensure_identity_applies_privileged_overrides_for_configured_owner
     settings = get_settings()
     original_owner_emails = settings.studio_owner_emails
     original_root_admin_emails = settings.studio_root_admin_emails
-    settings.studio_owner_emails = "alierdincyigitaslan@gmail.com,ghostsofter12@gmail.com"
-    settings.studio_root_admin_emails = "alierdincyigitaslan@gmail.com,ghostsofter12@gmail.com"
+    settings.studio_owner_emails = "owner@example.com,owner-secondary@example.com"
+    settings.studio_root_admin_emails = "owner@example.com,owner-secondary@example.com"
     service = None
 
     try:
@@ -4984,7 +5110,7 @@ async def test_ensure_identity_applies_privileged_overrides_for_configured_owner
 
         identity = await service.ensure_identity(
             user_id="owner-1",
-            email="ghostsofter12@gmail.com",
+            email="owner-secondary@example.com",
             display_name="Owner",
             username="owner",
         )
@@ -5134,5 +5260,86 @@ async def test_privileged_identity_bypasses_credit_and_capacity_limits(tmp_path:
 
         assert created.id
         assert created.identity_id == identity.id
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_ensure_identity_preserves_existing_display_name_and_username(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-locked",
+        email="locked@example.com",
+        display_name="Locked Studio Name",
+        username="lockedhandle",
+        workspace_id="ws-user-locked",
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="Locked Studio Name's Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    try:
+        refreshed = await service.ensure_identity(
+            user_id=identity.id,
+            email=identity.email,
+            display_name="Fresh Google Name",
+            username="newhandle",
+        )
+        payload = await service.get_public_identity(
+            SimpleNamespace(
+                id=identity.id,
+                email=identity.email,
+                username="Fresh Google Name",
+                metadata={
+                    "username": "newhandle",
+                    "auth_provider": "google",
+                    "auth_providers": ["google"],
+                },
+            )
+        )
+
+        assert refreshed.display_name == "Locked Studio Name"
+        assert refreshed.username == "lockedhandle"
+        assert payload["identity"]["display_name"] == "Locked Studio Name"
+        assert payload["identity"]["username"] == "lockedhandle"
+        assert payload["identity"]["auth_provider"] == "google"
+        assert payload["identity"]["credentials_managed_by_provider"] is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_update_profile_rejects_blocked_display_name(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    try:
+        with pytest.raises(ValueError, match="not allowed"):
+            await service.update_profile(identity.id, display_name="trump")
     finally:
         await service.shutdown()

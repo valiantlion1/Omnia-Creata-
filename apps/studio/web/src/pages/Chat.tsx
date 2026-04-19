@@ -262,7 +262,7 @@ function resolveVisualExecutionPlan(
     negativePrompt: asString(blueprint?.negative_prompt) || asString(bridge.negative_prompt) || '',
     referenceAssetId: asString(blueprint?.reference_asset_id) || asString(bridge.reference_asset_id),
     referenceMode: asString(blueprint?.reference_mode) || 'none',
-    model: asString(blueprint?.model) || 'flux-schnell',
+    model: asString(blueprint?.model) || 'flux-2-klein',
     width: asNumber(blueprint?.width) || 1024,
     height: asNumber(blueprint?.height) || 1024,
     steps: asNumber(blueprint?.steps) || 24,
@@ -343,8 +343,8 @@ function shouldStartAssistantVisualGeneration(
 function buildChatVisualPrompt(mode: ComposeMode, content: string, attachments: Array<Pick<ChatAttachment, 'kind' | 'label'>>) {
   const cleaned = content.trim()
   const imageHint = attachments.find((a) => a.kind === 'image')?.label
-  if (mode === 'Edit') return cleaned || (imageHint ? `Refine the uploaded reference based on ${imageHint}` : 'Refine this visual with a premium direction')
-  if (mode === 'Vision') return cleaned || (imageHint ? `Create a visual inspired by ${imageHint}` : 'Create a strong visual with premium composition')
+  if (mode === 'Edit') return cleaned || (imageHint ? `Refine the uploaded reference based on ${imageHint}` : 'Refine this visual while keeping the core subject intact')
+  if (mode === 'Vision') return cleaned || (imageHint ? `Create a visual inspired by ${imageHint}` : 'Create a polished visual from this idea')
   return cleaned
 }
 
@@ -512,7 +512,7 @@ function GenerationPending({ title }: { title: string }) {
           </div>
           <div className="min-w-0">
             <div className="text-[12px] font-medium text-zinc-400 truncate">{title}</div>
-            <div className="text-[10px] text-zinc-600 mt-0.5">Generating…</div>
+            <div className="text-[10px] text-zinc-600 mt-0.5">Generating...</div>
           </div>
         </div>
       </div>
@@ -558,10 +558,10 @@ function GenerationBlocked({
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
-    { Icon: Wand2, label: 'Create an image', value: 'Create a cinematic portrait with dramatic lighting, dark background, high detail' },
-    { Icon: Paintbrush, label: 'Edit a photo', value: 'I want to edit a photo - let me upload it first' },
-    { Icon: Lightbulb, label: 'Help me with a prompt', value: 'Help me write a prompt for a futuristic city skyline at night' },
-    { Icon: Search, label: 'Analyze an image', value: 'Analyze this image and tell me what you see' },
+    { Icon: Wand2, label: 'Create an image', value: 'Design a restrained studio portrait with soft side light and a dark background' },
+    { Icon: Paintbrush, label: 'Edit a photo', value: 'I want to revise an image - I will upload the reference first' },
+    { Icon: Lightbulb, label: 'Help with a prompt', value: 'Help me write a prompt for a rain-soaked city street at blue hour' },
+    { Icon: Search, label: 'Review an image', value: 'Review this image and tell me what is working' },
   ]
 
   return (
@@ -579,7 +579,7 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
         What would you like to create?
       </h2>
       <p className="relative z-10 mt-4 max-w-md text-center text-[15px] leading-relaxed text-zinc-400">
-        Describe what you imagine, upload a photo to transform, or just ask for ideas.
+        Describe what you want to make, upload a reference to revise, or ask for prompt help.
       </p>
 
       <div className="relative z-10 mt-10 flex flex-wrap justify-center gap-2.5 max-w-lg">
@@ -1085,7 +1085,7 @@ export default function ChatPage() {
         negativePrompt: '',
         referenceAssetId: null,
         referenceMode: 'none',
-        model: 'flux-schnell',
+        model: 'flux-2-klein',
         width: 1024,
         height: 1024,
         steps: 24,
@@ -1373,7 +1373,7 @@ export default function ChatPage() {
                   : 'Studio could not reach your conversation just now. Please try again.'}
                 onRetry={() => { void conversationDetailQuery.refetch() }}
                 retryDisabled={conversationDetailQuery.isFetching}
-                retryLabel={conversationDetailQuery.isFetching ? 'Retrying…' : 'Try again'}
+                retryLabel={conversationDetailQuery.isFetching ? 'Retrying...' : 'Try again'}
                 className="w-full"
               />
             </div>
@@ -1386,7 +1386,7 @@ export default function ChatPage() {
                   : 'Studio could not load your recent conversations. Please try again.'}
                 onRetry={() => { void conversationsQuery.refetch() }}
                 retryDisabled={conversationsQuery.isFetching}
-                retryLabel={conversationsQuery.isFetching ? 'Retrying…' : 'Try again'}
+                retryLabel={conversationsQuery.isFetching ? 'Retrying...' : 'Try again'}
                 className="w-full"
               />
             </div>

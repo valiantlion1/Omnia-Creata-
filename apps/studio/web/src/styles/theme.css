@@ -74,25 +74,25 @@
   --border-strong: rgba(255,255,255, 0.12);
   --border-focus: rgba(255,255,255, 0.20);
 
-  /* Default: Midnight (deep purple-blue) */
-  --primary: 124 58 237;
-  /* violet-600 */
-  --primary-light: 167 139 250;
-  /* violet-400 */
-  --primary-dark: 76 29 149;
-  /* violet-900 */
-  --accent: 99 102 241;
-  /* indigo-500 */
-  --accent-light: 165 180 252;
-  /* indigo-300 */
+  /* Default: Slate (graphite + mist blue) */
+  --primary: 94 114 228;
+  /* slate indigo */
+  --primary-light: 174 192 255;
+  /* mist blue */
+  --primary-dark: 53 68 142;
+  /* deep slate indigo */
+  --accent: 118 195 255;
+  /* cool azure */
+  --accent-light: 196 231 255;
+  /* pale sky */
 
   /* Gradient stops */
-  --gradient-from: 124 58 237;
-  /* violet */
-  --gradient-via: 99 102 241;
-  /* indigo */
-  --gradient-to: 59 130 246;
-  /* blue */
+  --gradient-from: 94 114 228;
+  /* slate indigo */
+  --gradient-via: 118 195 255;
+  /* azure */
+  --gradient-to: 136 230 215;
+  /* soft aqua */
 
   /* Success/Error */
   --success: 34 197 94;
@@ -100,8 +100,8 @@
   --warning: 250 204 21;
 
   /* Legacy support */
-  --goldA: 167 139 250;
-  --goldB: 99 102 241;
+  --goldA: 174 192 255;
+  --goldB: 118 195 255;
 }
 
 /* ── Theme: Cyberpunk ────────────────────── */
@@ -251,6 +251,11 @@ body,
   height: 100%;
 }
 
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: rgb(var(--bg));
@@ -265,28 +270,31 @@ body {
   color-scheme: dark;
 }
 
-/* Theme transition for all elements */
-*,
-*::before,
-*::after {
-  transition-property: background-color, border-color, box-shadow;
-  transition-duration: .4s;
-  transition-timing-function: ease;
+:where(h1, h2, h3, .heading-display) {
+  text-wrap: balance;
 }
 
-/* Exclude elements where transition causes issues */
-input,
-textarea,
-select,
-button,
-a,
-[class*="animate"],
-[class*="transition"] {
-  transition-property: none;
+:where(
+  a,
+  button,
+  input,
+  textarea,
+  select,
+  summary,
+  [role="button"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2px solid rgba(var(--accent-light), 0.65);
+  outline-offset: 3px;
+}
+
+:where(a, button, summary, [role="button"]) {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.08);
 }
 
 /* ── Selection Color ─────────────────────── */
 ::selection {
-  background: rgba(124,58,237,0.18);
+  background: rgba(118,195,255,0.2);
   color: white;
 }

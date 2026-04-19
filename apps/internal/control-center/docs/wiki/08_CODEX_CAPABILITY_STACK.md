@@ -154,7 +154,7 @@ These let Codex act on real Omnia systems instead of only editing code.
 Required internal tools over time:
 
 - `ocos-api`
-  Read org summary, projects, incidents, reports, and actions directly.
+  Read org summary, projects, incidents, reports, and project cockpits directly.
 - `telegram-notify`
   Send and verify operator alerts.
 - `github-actions-bridge`
@@ -201,7 +201,7 @@ Use the sprint plan to stage these capabilities:
 
 - `Sprint 10`
   - `ocos-operator-core`
-  - `ocos-api` plugin scaffold
+  - `ocos-api` read-only plugin bridge
 - `Sprint 11`
   - `studio-incident-ops`
   - `ocos-report-contracts`
@@ -211,9 +211,9 @@ Use the sprint plan to stage these capabilities:
 
 Current repo state:
 
-- `Sprint 10` capability kernel is scaffolded
+- `Sprint 10` capability kernel is live enough to include a read-only `ocos-api` bridge
 - `Sprint 11` service-aware skill scaffolds are present
-- future work should connect these skills to live OCOS automation and escalation flows
+- future work should add write-safe action surfaces and connect these skills to live OCOS automation and escalation flows
 
 ## Anti-patterns
 

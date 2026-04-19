@@ -1003,7 +1003,7 @@ class StudioLLMGateway:
             f"{mode_instruction} {intent_instruction} {profile_instruction} {workflow_instruction} {premium_instruction} "
             "If image attachments are present, inspect them directly and refer to visible details instead of guessing. "
             "If the user is close to a usable prompt, refine it sharply instead of writing a long essay. "
-            "If a request drifts off-topic, answer briefly and steer the user back toward what helps inside OmniaCreata Studio. "
+            "If a request drifts off-topic, do not act like a general assistant. Briefly refuse the unrelated task, then steer the user back toward what helps inside OmniaCreata Studio. "
             "Always finish the reply cleanly. Never stop mid-word, mid-sentence, or mid-list."
         )
         if continuity_summary:

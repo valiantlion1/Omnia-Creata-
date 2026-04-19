@@ -46,27 +46,26 @@ Still open:
 Those remain real launch gates.
 They should be solved honestly, not narrated away.
 
-## Current Phase 1 Hardening Truth
+## Current Provider And Proof Truth
 
-The current Phase 1 hardening slice tightened three launch-facing seams without opening a new feature surface:
-- prompt history isolation on `Create`
-- consent-gated optional analytics
-- server-authoritative policy acceptance audit trail
+The current narrow launch slice is a provider-doctrine correction, not a broad new surface:
+- public image lanes now map onto the Runware FLUX.2 family
+- OpenAI image is no longer in the normal public routing path
+- chat defaults and env examples now point at cheap `OpenRouter primary + OpenAI fallback`
+- duplicate-generation admission now normalizes legacy and canonical model ids before comparing queued work
 
-Current proof on build `2026.04.17.127`:
-Current proof on build `2026.04.18.128`:
-- focused web legal/auth tests: pass (`7 passed`)
+Current proof on build `2026.04.18.138`:
+- targeted backend regression suites for pricing, chat ops, backend spine, prompt engineering, provider routing, router generation, generation runtime, and touched service-regression slices: pass
 - web type-check: pass
 - web build: pass
-- local verify: pass
-- provider smoke: pass (`ok=5`, `skipped=2`, `error=0`)
-- protected staging: current-build rerun blocked because Docker engine is not running; latest artefact is still build `.125` warning with `closure_ready=true`
+- live local verify: not rerun on `.138`
+- live provider smoke: not rerun on `.138`
+- protected staging: not rerun on `.138`
 
 Interpretation:
-- the legal and onboarding surface changes are current-build true on `.128`
-- protected-beta closure remains historically preserved
-- local and provider proof are current-build true on `.128`
-- full proof sync is still blocked on protected staging bring-up, so `.128` is not narrated as fully synced
+- code/build truth is current-build true on `.138`
+- the last live local/provider/staging artefacts still belong to `.137`
+- `.138` should not be narrated as smoke-refreshed or closure-synced until those runtime loops are rerun
 
 ## Current Launch Doctrine
 

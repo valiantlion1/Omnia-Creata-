@@ -29,6 +29,7 @@ from .experience_contract_ops import attach_chat_experience
 from .models import ChatAttachment, ChatConversation, ChatFeedback, ChatMessage, CheckoutKind, GenerationJob, IdentityPlan, PublicPost, Visibility, StudioPersona
 from .models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
+from .studio_model_contract import STUDIO_FAST_MODEL_ID
 
 
 class DemoLoginRequest(BaseModel):
@@ -106,7 +107,7 @@ class GenerationCreateRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     negative_prompt: str = Field(default="", max_length=500)
     reference_asset_id: Optional[str] = None
-    model: str = "flux-schnell"
+    model: str = STUDIO_FAST_MODEL_ID
     width: Optional[int] = Field(default=None, ge=512, le=4096)
     height: Optional[int] = Field(default=None, ge=512, le=4096)
     steps: int = Field(default=28, ge=1, le=50)

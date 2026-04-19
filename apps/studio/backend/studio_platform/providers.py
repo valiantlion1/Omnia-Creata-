@@ -26,6 +26,18 @@ from .ai_provider_catalog import (
 )
 from .models import IdentityPlan
 from .prompt_engineering import PromptProfileAnalysis, analyze_generation_prompt_profile
+from .studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+    is_fast_model_id,
+    is_high_fidelity_model_id,
+    is_signature_model_id,
+    is_standard_model_id,
+    normalize_studio_model_id,
+    resolve_runware_model_air_id,
+    runware_model_defaults,
+)
 
 ProviderOpT = TypeVar("ProviderOpT")
 
@@ -403,10 +415,10 @@ class FalProvider(StudioImageProvider):
         workflow: str,
         has_reference_image: bool,
     ) -> str:
-        normalized_model = (model_id or "").strip().lower()
+        normalized_model = normalize_studio_model_id(model_id)
         if workflow in {"image_to_image", "edit"} or has_reference_image:
             return "fal-ai/flux-pro/kontext"
-        if normalized_model in {"realvis-xl", "juggernaut-xl"}:
+        if is_high_fidelity_model_id(normalized_model):
             return "fal-ai/flux-pro/kontext/text-to-image"
         return "fal-ai/flux/schnell"
 
@@ -627,7 +639,6 @@ class RunwareProvider(StudioImageProvider):
     )
 
     _API_URL = "https://api.runware.ai/v1"
-    _DEFAULT_MODEL = "runware:101@1"
 
     def __init__(self, api_key: Optional[str], *, transport: httpx.AsyncBaseTransport | None = None):
         self.api_key = api_key
@@ -643,7 +654,7 @@ class RunwareProvider(StudioImageProvider):
         return {
             "name": self.name,
             "status": "healthy" if self.api_key else "not_configured",
-            "detail": "secondary managed provider configured" if self.api_key else "RUNWARE_API_KEY missing",
+            "detail": "primary managed provider configured" if self.api_key else "RUNWARE_API_KEY missing",
         }
 
     async def generate(
@@ -733,6 +744,33 @@ class RunwareProvider(StudioImageProvider):
             billable=self.billable,
         )
 
+    def estimate_generation_cost(
+        self,
+        *,
+        width: int,
+        height: int,
+        model_id: Optional[str] = None,
+        workflow: str = "text_to_image",
+        has_reference_image: bool = False,
+    ) -> float | None:
+        normalized_model = normalize_studio_model_id(model_id)
+        megapixels = max(1, int(((width * height) + (1024 * 1024) - 1) / (1024 * 1024)))
+        reference_megapixels = 1 if has_reference_image or workflow in {"image_to_image", "edit"} else 0
+
+        if normalized_model == STUDIO_FAST_MODEL_ID:
+            return round(0.00078 * megapixels + (0.00078 * reference_megapixels), 6)
+        if normalized_model == STUDIO_STANDARD_MODEL_ID:
+            return round(0.0096 * megapixels + (0.0096 * reference_megapixels), 6)
+        if normalized_model == STUDIO_PREMIUM_MODEL_ID:
+            output_cost = 0.03 + max(0, megapixels - 1) * 0.015
+            input_cost = 0.015 * reference_megapixels
+            return round(output_cost + input_cost, 6)
+        if is_signature_model_id(normalized_model):
+            output_cost = 0.06 * megapixels
+            input_cost = 0.06 * reference_megapixels
+            return round(output_cost + input_cost, 6)
+        return None
+
     def _build_payload(
         self,
         *,
@@ -749,37 +787,72 @@ class RunwareProvider(StudioImageProvider):
     ) -> dict[str, object]:
         task_uuid = str(__import__("uuid").uuid4())
         cleaned_negative_prompt = negative_prompt.strip()
+        normalized_model = normalize_studio_model_id(model_id)
+        model_defaults = runware_model_defaults(normalized_model)
+        resolved_steps = model_defaults.get("steps")
+        resolved_cfg_scale = model_defaults.get("cfg_scale")
+        resolved_acceleration = model_defaults.get("acceleration")
+        resolved_true_cfg_scale = model_defaults.get("true_cfg_scale")
+        prompt_upsampling = bool(model_defaults.get("prompt_upsampling"))
+        normalized_workflow = normalize_generation_workflow(
+            workflow,
+            has_reference_image=reference_image is not None,
+        )
         payload: dict[str, object] = {
             "taskType": "imageInference",
             "taskUUID": task_uuid,
             "outputType": "base64Data",
             "outputFormat": "PNG",
             "includeCost": True,
-            "checkNSFW": True,
+            "safety": {
+                "checkContent": True,
+                "mode": "fast",
+            },
             "positivePrompt": prompt,
             "width": width,
             "height": height,
-            "steps": min(max(steps, 1), 50),
-            "CFGScale": cfg_scale,
             "seed": seed,
             "numberResults": 1,
-            "model": self._resolve_model_id(model_id),
+            "model": self._resolve_model_id(model_id, workflow=normalized_workflow),
         }
         # Runware rejects empty or too-short negative prompts; omit them unless they are valid.
         if len(cleaned_negative_prompt) >= 2:
             payload["negativePrompt"] = cleaned_negative_prompt
-        if workflow in {"image_to_image", "edit"}:
+        if resolved_steps is not None:
+            payload["steps"] = min(max(int(resolved_steps), 1), 50)
+        elif normalized_workflow not in {"image_to_image", "edit"}:
+            payload["steps"] = min(max(steps, 1), 50)
+
+        if resolved_cfg_scale is not None:
+            payload["CFGScale"] = float(resolved_cfg_scale)
+        elif normalized_workflow not in {"image_to_image", "edit"}:
+            payload["CFGScale"] = cfg_scale
+
+        if resolved_acceleration:
+            payload["acceleration"] = str(resolved_acceleration)
+
+        if resolved_true_cfg_scale is not None:
+            payload["settings"] = {
+                "trueCFGScale": float(resolved_true_cfg_scale),
+            }
+
+        if prompt_upsampling and str(payload["model"]).startswith("bfl:"):
+            payload["providerSettings"] = {
+                "bfl": {
+                    "promptUpsampling": True,
+                }
+            }
+
+        if normalized_workflow in {"image_to_image", "edit"}:
             if reference_image is None:
                 raise ProviderTemporaryError("Runware image-to-image workflow requires a reference image")
-            payload["seedImage"] = self._build_data_uri(reference_image)
-            payload["strength"] = 0.45 if workflow == "edit" else 0.7
+            payload["inputs"] = {
+                "referenceImages": [self._build_data_uri(reference_image)],
+            }
         return payload
 
-    def _resolve_model_id(self, model_id: Optional[str]) -> str:
-        normalized_model = (model_id or "").strip().lower()
-        if normalized_model in {"realvis-xl", "juggernaut-xl", "sdxl-base", "flux-schnell"}:
-            return self._DEFAULT_MODEL
-        return self._DEFAULT_MODEL
+    def _resolve_model_id(self, model_id: Optional[str], *, workflow: str) -> str:
+        return resolve_runware_model_air_id(model_id, workflow=workflow)
 
     def _extract_runware_image(self, result: dict[str, object]) -> tuple[bytes, str]:
         image_data_uri = result.get("imageDataURI")
@@ -1272,13 +1345,13 @@ class PollinationsProvider(StudioImageProvider):
         )
 
     def _select_model(self, *, model_id: Optional[str], prompt: str) -> str:
-        normalized_model = (model_id or "").strip().lower()
+        normalized_model = normalize_studio_model_id(model_id)
         lowered_prompt = prompt.lower()
-        if normalized_model in {"realvis-xl", "juggernaut-xl"}:
+        if is_high_fidelity_model_id(normalized_model):
             return "gptimage"
-        if normalized_model == "sdxl-base":
+        if is_standard_model_id(normalized_model):
             return "qwen-image"
-        if normalized_model == "flux-schnell":
+        if is_fast_model_id(normalized_model):
             return "flux"
         if any(keyword in lowered_prompt for keyword in _REALISM_HINTS):
             return "gptimage"
@@ -1440,16 +1513,16 @@ class HuggingFaceImageProvider(StudioImageProvider):
             )
 
     def _candidate_models_for_request(self, *, model_id: Optional[str], prompt: str) -> list[str]:
-        normalized_model = (model_id or "").strip().lower()
+        normalized_model = normalize_studio_model_id(model_id)
         lowered_prompt = prompt.lower()
-        if normalized_model in {"realvis-xl", "juggernaut-xl"}:
+        if is_high_fidelity_model_id(normalized_model):
             return [
                 "black-forest-labs/FLUX.1-Krea-dev",
                 "playgroundai/playground-v2.5-1024px-aesthetic",
                 "black-forest-labs/FLUX.1-schnell",
                 "stabilityai/stable-diffusion-xl-base-1.0",
             ]
-        if normalized_model == "sdxl-base":
+        if is_standard_model_id(normalized_model):
             return [
                 "playgroundai/playground-v2.5-1024px-aesthetic",
                 "stabilityai/stable-diffusion-xl-base-1.0",
@@ -1604,10 +1677,10 @@ class ProviderRegistry:
     def _provider_order(self, strategy: str) -> tuple[str, ...]:
         normalized = (strategy or "managed-first").strip().lower()
         if normalized == "free-first":
-            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "demo")
         if normalized == "balanced":
-            return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
-        return ("runware", "openai", "fal", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "huggingface", "pollinations", "demo")
+        return ("runware", "fal", "huggingface", "pollinations", "demo")
 
     def get_provider(self, provider_name: str | None) -> StudioImageProvider | None:
         normalized = (provider_name or "").strip().lower()
@@ -1649,6 +1722,7 @@ class ProviderRegistry:
 
     def routing_summary(self) -> dict[str, object]:
         demo_provider_enabled = self.get_provider("demo") is not None
+        settings = get_settings()
         return {
             "default_strategy": self._configured_strategy,
             "plan_defaults": {
@@ -1656,6 +1730,12 @@ class ProviderRegistry:
                 "creator": "runware_first",
                 "pro": "runware_first_premium_caps",
             },
+            "development_fast_policy": (
+                "zero_cost_standard_fallbacks_only"
+                if settings.environment == Environment.DEVELOPMENT
+                and bool(settings.development_fast_zero_cost_mode_enabled)
+                else "launch_doctrine"
+            ),
             "demo_policy": (
                 "degraded_only_last_resort"
                 if demo_provider_enabled
@@ -1684,6 +1764,10 @@ class ProviderRegistry:
             has_reference_image=has_reference_image,
         )
         normalized_plan = self._normalize_plan(plan)
+        zero_cost_fast_mode = self._development_zero_cost_fast_mode_enabled(
+            workflow=normalized_workflow,
+            model_id=model_id,
+        )
         if normalized_plan == IdentityPlan.PRO.value:
             routing_strategy = "premium-managed"
         elif normalized_plan == IdentityPlan.CREATOR.value:
@@ -1691,12 +1775,15 @@ class ProviderRegistry:
         else:
             routing_strategy = "wallet-managed"
         requested_quality_tier = "premium" if analysis.premium_intent else "standard"
-        ordered_provider_names = self._routing_lane_order(
-            plan=normalized_plan,
-            workflow=normalized_workflow,
-            analysis=analysis,
-            wallet_backed=wallet_backed,
-        )
+        if zero_cost_fast_mode:
+            ordered_provider_names = self._zero_cost_fast_lane_order(analysis=analysis)
+        else:
+            ordered_provider_names = self._routing_lane_order(
+                plan=normalized_plan,
+                workflow=normalized_workflow,
+                analysis=analysis,
+                wallet_backed=wallet_backed,
+            )
         provider_candidates = tuple(
             provider_name
             for provider_name in ordered_provider_names
@@ -1721,6 +1808,7 @@ class ProviderRegistry:
             requested_quality_tier=requested_quality_tier,
             routing_strategy=routing_strategy,
             selected_provider=selected_provider,
+            development_zero_cost_fast_mode=zero_cost_fast_mode,
         )
         return GenerationRoutingDecision(
             workflow=normalized_workflow,
@@ -1752,6 +1840,7 @@ class ProviderRegistry:
             requested_quality_tier=decision.requested_quality_tier,
             routing_strategy=decision.routing_strategy,
             selected_provider=selected_provider,
+            previous_reason=decision.routing_reason,
         )
         return replace(
             decision,
@@ -1788,24 +1877,60 @@ class ProviderRegistry:
         wallet_backed: bool = False,
     ) -> tuple[str, ...]:
         if workflow in {"image_to_image", "edit"}:
-            return ("openai", "runware", "fal", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "huggingface", "pollinations", "demo")
         if plan == IdentityPlan.PRO.value:
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
-            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
+                return ("runware", "fal", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "demo")
         if plan == IdentityPlan.CREATOR.value or (
             plan == IdentityPlan.FREE.value and wallet_backed
         ):
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
-            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
+                return ("runware", "fal", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "demo")
         if self._should_prefer_managed_free_lanes(workflow=workflow):
             if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
-                return ("runware", "fal", "openai", "huggingface", "pollinations", "demo")
-            return ("runware", "fal", "openai", "pollinations", "huggingface", "demo")
+                return ("runware", "fal", "huggingface", "pollinations", "demo")
+            return ("runware", "fal", "pollinations", "huggingface", "demo")
         if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
             return ("huggingface", "pollinations", "demo")
         return ("pollinations", "huggingface", "demo")
+
+    def _zero_cost_fast_lane_order(
+        self,
+        *,
+        analysis: PromptProfileAnalysis,
+    ) -> tuple[str, ...]:
+        if analysis.profile in {"stylized_illustration", "fantasy_concept"}:
+            return ("huggingface", "pollinations", "demo")
+        return ("pollinations", "huggingface", "demo")
+
+    def _development_zero_cost_fast_mode_enabled(
+        self,
+        *,
+        workflow: str,
+        model_id: str | None,
+    ) -> bool:
+        settings = get_settings()
+        if settings.environment != Environment.DEVELOPMENT:
+            return False
+        if not bool(settings.development_fast_zero_cost_mode_enabled):
+            return False
+        normalized_workflow = normalize_generation_workflow(workflow)
+        if normalized_workflow != "text_to_image":
+            return False
+        if not is_fast_model_id(model_id):
+            return False
+        return any(
+            provider is not None
+            and provider.is_configured()
+            and not self._provider_circuit_blocks_routing(provider.name)
+            and provider.supports_generation("text_to_image", has_reference_image=False)
+            for provider in (
+                self.get_provider("huggingface"),
+                self.get_provider("pollinations"),
+            )
+        )
 
     def _should_prefer_managed_free_lanes(self, *, workflow: str) -> bool:
         settings = get_settings()
@@ -1818,7 +1943,6 @@ class ProviderRegistry:
             and not self._provider_circuit_blocks_routing(provider.name)
             and provider.supports_generation(normalized_workflow, has_reference_image=False)
             for provider in (
-                self.get_provider("openai"),
                 self.get_provider("fal"),
                 self.get_provider("runware"),
             )
@@ -1831,14 +1955,23 @@ class ProviderRegistry:
         requested_quality_tier: str,
         routing_strategy: str,
         selected_provider: str | None,
+        development_zero_cost_fast_mode: bool = False,
+        previous_reason: str | None = None,
     ) -> str:
         normalized_provider = (selected_provider or "").strip().lower()
+        if (
+            previous_reason == "development_zero_cost_fast_route"
+            and normalized_provider not in _PREMIUM_CAPABLE_PROVIDERS
+        ):
+            return "development_zero_cost_fast_route"
         if workflow in {"image_to_image", "edit"}:
             if normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:
                 return "workflow_requires_capable_provider"
             if normalized_provider in _STANDARD_CAPABLE_PROVIDERS:
                 return "provider_capability_escalation"
             return "workflow_requires_capable_provider"
+        if development_zero_cost_fast_mode and normalized_provider not in _PREMIUM_CAPABLE_PROVIDERS:
+            return "development_zero_cost_fast_route"
         if normalized_provider == "demo":
             return "all_standard_lanes_unavailable_degraded"
         if requested_quality_tier == "premium" and normalized_provider in _PREMIUM_CAPABLE_PROVIDERS:

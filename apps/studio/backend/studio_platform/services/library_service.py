@@ -241,7 +241,6 @@ class LibraryService:
             and not payload.get("share_id")
             and not payload.get("share_token_hash")
             and not payload.get("legacy_share_token_hash")
-            and not payload.get("share_token")
             and not payload.get("public_preview")
         ):
             raise PermissionError("Asset token missing scope")
@@ -424,8 +423,6 @@ class LibraryService:
                     if not legacy_share_token_hash:
                         raise
                     await self.assert_share_access_by_public_token_hash(asset, str(legacy_share_token_hash))
-            elif claims.get("share_token"):
-                await self.assert_share_access_by_public_token(asset, str(claims["share_token"]))
             elif claims.get("public_preview"):
                 await self.assert_public_asset_preview_access(asset.id)
             elif claims.get("identity_id") != asset.identity_id:
@@ -436,8 +433,6 @@ class LibraryService:
                 scope = "share"
             elif claims.get("share_token_hash"):
                 scope = "share_legacy_hashed"
-            elif claims.get("share_token"):
-                scope = "share_legacy"
             elif claims.get("public_preview"):
                 scope = "public_preview"
             self.service._log_security_event(

@@ -16,6 +16,10 @@ from studio_platform.chat_ops import (
     title_from_message,
 )
 from studio_platform.models import ChatAttachment, ChatMessage, ChatRole
+from studio_platform.studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+)
 
 
 def test_detect_chat_intent_prefers_image_analysis_when_reference_is_uploaded():
@@ -219,7 +223,7 @@ def test_follow_up_refinement_uses_previous_generation_bridge_context():
                 "negative_prompt": "low quality",
                 "blueprint": {
                     "workflow": "text_to_image",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                 },
             }
         },
@@ -264,7 +268,7 @@ def test_build_chat_reply_uses_follow_up_continuity_when_provider_is_down():
                 "negative_prompt": "distortion",
                 "blueprint": {
                     "workflow": "edit",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                 },
             }
         },
@@ -343,7 +347,7 @@ def test_suggested_actions_use_compiled_prompt_candidate():
     assert draft_action.value == candidate.prompt
     assert draft_action.payload["target_surface"] == "chat_composer"
     assert draft_action.payload["generation_bridge"]["prompt"] == candidate.prompt
-    assert draft_action.payload["generation_bridge"]["blueprint"]["model"] == "flux-schnell"
+    assert draft_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_FAST_MODEL_ID
 
 
 def test_generation_blueprint_prefers_premium_model_for_product_chat():
@@ -362,7 +366,7 @@ def test_generation_blueprint_prefers_premium_model_for_product_chat():
     )
 
     assert blueprint.workflow == "text_to_image"
-    assert blueprint.model == "realvis-xl"
+    assert blueprint.model == STUDIO_PREMIUM_MODEL_ID
     assert blueprint.aspect_ratio == "4:5"
     assert blueprint.width == 1280
     assert blueprint.height == 1600
@@ -394,7 +398,7 @@ def test_generation_blueprint_marks_reference_edit_flow():
     assert blueprint.workflow == "edit"
     assert blueprint.reference_mode == "required"
     assert blueprint.reference_asset_id == "asset-portrait"
-    assert blueprint.model == "realvis-xl"
+    assert blueprint.model == STUDIO_PREMIUM_MODEL_ID
 
 
 def test_follow_up_generation_blueprint_preserves_prior_edit_reference_settings():
@@ -412,7 +416,7 @@ def test_follow_up_generation_blueprint_preserves_prior_edit_reference_settings(
                 "blueprint": {
                     "workflow": "edit",
                     "reference_asset_id": "asset-portrait",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                     "width": 1400,
                     "height": 1800,
                     "steps": 33,
@@ -450,7 +454,7 @@ def test_follow_up_generation_blueprint_preserves_prior_edit_reference_settings(
     assert blueprint.workflow == "edit"
     assert blueprint.reference_mode == "required"
     assert blueprint.reference_asset_id == "asset-portrait"
-    assert blueprint.model == "realvis-xl"
+    assert blueprint.model == STUDIO_PREMIUM_MODEL_ID
     assert blueprint.width == 1400
     assert blueprint.height == 1800
     assert blueprint.steps == 33
@@ -491,7 +495,7 @@ def test_chat_generation_bridge_recovers_reference_asset_id_from_prior_visual_tu
                 "blueprint": {
                     "workflow": "edit",
                     "reference_asset_id": "asset-portrait",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                     "width": 1400,
                     "height": 1800,
                     "steps": 33,
@@ -542,7 +546,7 @@ def test_chat_generation_bridge_preserves_prior_negative_prompt_during_follow_up
                 "blueprint": {
                     "workflow": "edit",
                     "reference_asset_id": "asset-portrait",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                     "reference_mode": "required",
                 },
             }
@@ -588,7 +592,7 @@ def test_chat_continuity_summary_carries_prior_visual_plan_constraints():
                 "blueprint": {
                     "workflow": "edit",
                     "reference_asset_id": "asset-portrait",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                     "aspect_ratio": "3:4",
                     "reference_mode": "required",
                 },
@@ -624,7 +628,7 @@ def test_chat_continuity_summary_carries_prior_visual_plan_constraints():
     assert summary is not None
     assert "follow-up refinement" in summary
     assert "edit" in summary
-    assert "realvis-xl" in summary
+    assert STUDIO_PREMIUM_MODEL_ID in summary
     assert "3:4" in summary
     assert "reference-locked" in summary
     assert "Keep the established creative direction anchored around" in summary
@@ -645,7 +649,7 @@ def test_chat_metadata_exposes_creative_direction_summary_for_follow_up_context(
                 "negative_prompt": "distortion, extra fingers",
                 "blueprint": {
                     "workflow": "edit",
-                    "model": "realvis-xl",
+                    "model": STUDIO_PREMIUM_MODEL_ID,
                     "aspect_ratio": "3:4",
                     "reference_mode": "required",
                 },

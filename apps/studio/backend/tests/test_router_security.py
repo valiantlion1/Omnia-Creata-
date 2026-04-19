@@ -763,26 +763,40 @@ async def test_assets_route_bootstraps_identity_and_returns_empty_payload(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_health_detail_allows_owner_email_after_identity_bootstrap(tmp_path: Path) -> None:
-    app, service, _ = await _build_test_app(tmp_path)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(
-            "/v1/healthz/detail",
-            headers={
-                "X-Test-User": "founder@omniacreata.com",
-                "X-Test-Email": "founder@omniacreata.com",
-                "X-Test-Username": "founder",
-            },
-        )
+async def test_health_detail_allows_configured_owner_email_after_identity_bootstrap(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+    settings.studio_owner_email = ""
+    settings.studio_owner_emails = "owner@example.com"
+    settings.studio_root_admin_emails = "owner@example.com"
+    app = None
+    service = None
 
     try:
+        app, service, _ = await _build_test_app(tmp_path)
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get(
+                "/v1/healthz/detail",
+                headers={
+                    "X-Test-User": "owner-1",
+                    "X-Test-Email": "owner@example.com",
+                    "X-Test-Username": "owner",
+                },
+            )
+
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] in {"healthy", "degraded", "blocked"}
     finally:
-        await service.shutdown()
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        if service is not None:
+            await service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -2566,5 +2580,44 @@ async def test_style_mutation_routes_use_explicit_rate_limits(
         assert prompt_response.status_code == 201
         assert patch_response.status_code == 200
         assert sum(1 for key, limit, window in calls if "styles:mutate" in key and limit == 40 and window == 3600) == 3
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_exposes_provider_context_from_current_user_metadata(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def _provider_user(_request: Request) -> User | None:
+        return User(
+            id="user-1",
+            email="user-1@example.com",
+            username="Google Display Name",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={
+                "username": "user-1",
+                "accepted_terms": True,
+                "accepted_privacy": True,
+                "accepted_usage_policy": True,
+                "marketing_opt_in": False,
+                "auth_provider": "google",
+                "auth_providers": ["google"],
+            },
+        )
+
+    app.dependency_overrides[router_module.get_current_user] = _provider_user
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/auth/me")
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["identity"]["auth_provider"] == "google"
+        assert payload["identity"]["auth_providers"] == ["google"]
+        assert payload["identity"]["credentials_managed_by_provider"] is True
     finally:
         await service.shutdown()

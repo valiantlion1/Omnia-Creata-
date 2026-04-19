@@ -13,6 +13,7 @@ from .ai_provider_catalog import (
 from .experience_contract_ops import build_model_route_preview
 from .model_catalog_ops import list_model_catalog_entries
 from .models import IdentityPlan, ModelCatalogEntry
+from .studio_model_contract import STUDIO_FAST_MODEL_ID, resolve_studio_model_openai_quality
 
 
 def build_operator_studio_model_catalog(
@@ -23,7 +24,7 @@ def build_operator_studio_model_catalog(
 ) -> list[dict[str, Any]]:
     catalog: list[dict[str, Any]] = []
     for model in studio_models:
-        default_quality = STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID.get(model.id, "medium")
+        default_quality = resolve_studio_model_openai_quality(model.id)
         request_model = resolve_openai_image_request_model(
             model_id=model.id,
             draft_image_model=settings.openai_image_draft_model,
@@ -86,7 +87,7 @@ def build_operator_surface_matrix(
                 "user_label": model["label"],
                 "internal_tier": model["id"],
                 "selected_provider": pro_route["planned_provider"],
-                "protected_beta_default": model["id"] == "flux-schnell",
+                "protected_beta_default": model["id"] == STUDIO_FAST_MODEL_ID,
                 "request_model": model["default_openai_request_model"],
                 "request_quality": model["default_openai_quality"],
                 "estimated_cost_usd": model["default_openai_estimated_cost_usd"],

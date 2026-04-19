@@ -60,6 +60,24 @@ SOFT_BLOCK_TERMS = {
     "biden", "trump", "putin", "politician",
 }
 
+
+def check_display_name_safety(display_name: str) -> Tuple[ModerationResult, Optional[str]]:
+    """Run the deterministic moderation layer for profile display names."""
+    if not display_name:
+        return (ModerationResult.SAFE, None)
+
+    normalized = _normalize_for_moderation(display_name)
+
+    for term in HARD_BLOCK_TERMS:
+        if _term_matches(term, normalized):
+            return (ModerationResult.HARD_BLOCK, term)
+
+    for term in SOFT_BLOCK_TERMS:
+        if _term_matches(term, normalized):
+            return (ModerationResult.SOFT_BLOCK, term)
+
+    return (ModerationResult.SAFE, None)
+
 async def check_prompt_safety(prompt: str) -> Tuple[ModerationResult, Optional[str]]:
     """
     Evaluates the generation prompt against pre-defined safety boundaries.

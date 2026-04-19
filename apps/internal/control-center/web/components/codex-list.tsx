@@ -15,44 +15,50 @@ export function CodexList({
   }>;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-black/20 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-      <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-white/45">Escalation</p>
-        <h2 className="mt-2 text-2xl font-semibold text-white">Codex Escalations</h2>
+    <section className="ocos-panel rounded-[16px] p-4">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="ocos-kicker">Escalation Queue</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-[var(--ocos-ink)]">Codex Escalations</h2>
+        </div>
+        <div className="text-sm text-[var(--ocos-muted)]">{items.length} rows</div>
       </div>
-      <div className="mt-5 space-y-3">
+
+      <div className="mt-4 overflow-hidden rounded-[12px] border border-[var(--ocos-line)]">
+        <div className="hidden border-b border-[var(--ocos-line)] bg-[var(--ocos-surface-muted)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--ocos-soft)] lg:grid lg:grid-cols-[100px_120px_130px_minmax(0,1fr)_120px] lg:gap-3">
+          <div>Status</div>
+          <div>Project</div>
+          <div>Environment</div>
+          <div>Recommendation</div>
+          <div>Action</div>
+        </div>
+
         {items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
-            No Codex bundles have been created yet.
-          </div>
-        ) : null}
-        {items.map((item) => (
-          <article
-            key={item.id}
-            className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4"
-          >
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-teal-300/25 bg-teal-300/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-teal-100">
+          <div className="ocos-empty-state px-4 py-5 text-sm">No Codex bundles have been created yet.</div>
+        ) : (
+          <div className="divide-y divide-[var(--ocos-line)]">
+            {items.map((item) => (
+              <article key={item.id} className="bg-[var(--ocos-surface)] px-3 py-3">
+                <div className="grid gap-3 lg:grid-cols-[100px_120px_130px_minmax(0,1fr)_120px] lg:items-start">
+                  <div className="text-sm font-medium uppercase tracking-[0.16em] text-[var(--ocos-accent-strong)]">
                     {item.status}
-                  </span>
-                  {item.projectSlug ? (
-                    <span className="text-xs uppercase tracking-[0.24em] text-teal-100/70">{item.projectSlug}</span>
-                  ) : null}
-                  <span className="text-xs uppercase tracking-[0.24em] text-white/45">{item.environmentSlug}</span>
+                  </div>
+                  <div className="text-sm text-[var(--ocos-ink)]">{item.projectSlug ?? "studio"}</div>
+                  <div className="text-sm text-[var(--ocos-ink)]">{item.environmentSlug}</div>
+                  <div className="text-sm leading-6 text-[var(--ocos-muted)]">{item.recommendedNextPath}</div>
+                  <div>
+                    <Link
+                      href={`/projects/${item.projectSlug ?? "studio"}/operations?incident=${item.incidentId}`}
+                      className="ocos-button inline-flex rounded-[10px] px-3 py-2 text-sm"
+                    >
+                      Open
+                    </Link>
+                  </div>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-white/68">{item.recommendedNextPath}</p>
-              </div>
-              <Link
-                href={`/projects/${item.projectSlug ?? "studio"}/operations?incident=${item.incidentId}`}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:border-teal-300/35 hover:bg-teal-300/10"
-              >
-                Open Incident
-              </Link>
-            </div>
-          </article>
-        ))}
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

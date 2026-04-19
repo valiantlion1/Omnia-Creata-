@@ -204,12 +204,15 @@ export function LegalFooter({ className }: { className?: string }) {
   return (
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="hidden flex-wrap items-center gap-x-3 gap-y-1">
           <span>© OmniaCreata 2026</span>
           <span className="text-zinc-600">·</span>
-          <span className="text-zinc-600">{APP_VERSION_LABEL}</span>
+          <span className="hidden text-zinc-600">{APP_VERSION_LABEL}</span>
           <span className="text-zinc-600">·</span>
-          <span className="text-zinc-600">build {APP_BUILD_LABEL}</span>
+          <span className="hidden text-zinc-600">build {APP_BUILD_LABEL}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>OmniaCreata 2026</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/legal/terms" className="transition hover:text-white">

@@ -3,6 +3,7 @@ from fastapi import Request
 import asyncio
 import logging
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from config.env import get_settings, reveal_secret
 from ..models import *
@@ -16,7 +17,7 @@ from ..profile_ops import build_identity_export, purge_identity_state
 from ..creative_profile_ops import attach_creative_profile
 from ..generation_admission_ops import count_incomplete_generations_for_identity
 from ..entitlement_ops import resolve_entitlements, resolve_guest_entitlements
-from security.moderation import ModerationResult
+from security.moderation import ModerationResult, check_display_name_safety
 from ..billing_ops import BillingStateSnapshot, resolve_billing_state
 
 logger = logging.getLogger(__name__)
@@ -54,13 +55,11 @@ if TYPE_CHECKING:
 def _lazy_service_constants():
     """Lazy import to break circular dependency with service.py"""
     from ..service import (
-        _FOUNDER_EMAILS,
         _MODERATION_RESET_WINDOW,
         _TEMP_BLOCK_AFTER_FIVE_STRIKES,
         _TEMP_BLOCK_AFTER_THREE_STRIKES,
     )
     return (
-        _FOUNDER_EMAILS,
         _MODERATION_RESET_WINDOW,
         _TEMP_BLOCK_AFTER_FIVE_STRIKES,
         _TEMP_BLOCK_AFTER_THREE_STRIKES,
@@ -70,12 +69,11 @@ class IdentityService:
     def __init__(self, service: 'StudioService'):
         self.service = service
         # Lazy-loaded to avoid circular import with service.py
-        _fe, _mrw, _tb5, _tb3 = _lazy_service_constants()
+        _mrw, _tb5, _tb3 = _lazy_service_constants()
         self._PLAN_CATALOG = self.service.plan_catalog
         self._CHECKOUT_CATALOG = self.service.checkout_catalog
         self._PUBLIC_PLAN_CATALOG = self.service.public_plan_catalog
         self._PUBLIC_TOP_UP_GROUP = self.service.public_credit_pack_group
-        self._FOUNDER_EMAILS = _fe
         self._MODERATION_RESET_WINDOW = _mrw
         self._TEMP_BLOCK_AFTER_THREE_STRIKES = _tb3
         self._TEMP_BLOCK_AFTER_FIVE_STRIKES = _tb5
@@ -185,7 +183,9 @@ class IdentityService:
             marketing_consent_version=(getattr(auth_user, "metadata", {}) or {}).get("marketing_consent_version"),
         )
         billing_state = await self._resolve_billing_state_for_identity(identity)
-        return self.serialize_identity(identity, billing_state=billing_state)
+        payload = self.serialize_identity(identity, billing_state=billing_state)
+        payload["identity"].update(self._auth_provider_context_for_user(auth_user))
+        return payload
 
 
     async def get_deleted_identity_tombstone(self, identity_id: str) -> DeletedIdentityTombstone | None:
@@ -332,8 +332,9 @@ class IdentityService:
                         ):
                             identity.subscription_status = SubscriptionStatus.NONE
                 identity.email = email or identity.email
-                identity.display_name = display_name or identity.display_name
-                if username:
+                if not (identity.display_name or "").strip():
+                    identity.display_name = display_name or identity.display_name or "Creator"
+                if username and not (identity.username or "").strip():
                     identity.username = username.strip().lower()
                 elif not identity.username:
                     identity.username = (identity.email.split("@")[0] or "creator").strip().lower()
@@ -388,8 +389,8 @@ class IdentityService:
 
     def _resolve_privileged_email_flags(self, email: str) -> Dict[str, bool]:
         normalized_email = (email or "").strip().lower()
-        owner_emails = set(self.service.settings.owner_emails_list) | self._FOUNDER_EMAILS
-        root_admin_emails = set(self.service.settings.root_admin_emails_list) | self._FOUNDER_EMAILS
+        owner_emails = set(self.service.settings.owner_emails_list)
+        root_admin_emails = set(self.service.settings.root_admin_emails_list)
         is_root_admin = normalized_email in root_admin_emails or normalized_email in owner_emails
         is_owner = normalized_email in owner_emails or is_root_admin
         return {
@@ -417,6 +418,33 @@ class IdentityService:
         )
         payload["manual_review_state"] = identity.manual_review_state.value
         return payload
+
+
+    def _auth_provider_context_for_user(self, auth_user: Any | None) -> Dict[str, Any]:
+        metadata = getattr(auth_user, "metadata", {}) or {}
+
+        auth_providers: list[str] = []
+        raw_providers = metadata.get("auth_providers")
+        if isinstance(raw_providers, (list, tuple, set)):
+            for provider_name in raw_providers:
+                if not isinstance(provider_name, str):
+                    continue
+                normalized = provider_name.strip().lower()
+                if normalized and normalized not in auth_providers:
+                    auth_providers.append(normalized)
+
+        raw_primary_provider = metadata.get("auth_provider")
+        auth_provider = raw_primary_provider.strip().lower() if isinstance(raw_primary_provider, str) else None
+        if auth_provider and auth_provider not in auth_providers:
+            auth_providers.insert(0, auth_provider)
+        if not auth_provider and auth_providers:
+            auth_provider = auth_providers[0]
+
+        return {
+            "auth_provider": auth_provider,
+            "auth_providers": auth_providers,
+            "credentials_managed_by_provider": bool(auth_provider and auth_provider != "email"),
+        }
 
 
     def _serialize_guest_identity_payload(self) -> Dict[str, Any]:
@@ -950,19 +978,32 @@ class IdentityService:
         default_visibility: Optional[Visibility] = None,
     ) -> OmniaIdentity:
         identity = await self.get_identity(identity_id)
+        cleaned_name: str | None = None
+
+        if display_name is not None:
+            cleaned_name = re.sub(r"\s+", " ", display_name).strip()[:120]
+            if not cleaned_name:
+                raise ValueError("Display name cannot be blank.")
+
+            moderation_result, _ = check_display_name_safety(cleaned_name)
+            if moderation_result != ModerationResult.SAFE:
+                raise ValueError("That display name is not allowed. Choose a different one.")
 
         def mutation(state: StudioState) -> None:
             current = state.identities[identity.id]
-            if display_name is not None:
-                cleaned_name = display_name.strip()[:120]
-                if cleaned_name:
-                    current.display_name = cleaned_name
+            if cleaned_name is not None:
+                current.display_name = cleaned_name
             if bio is not None:
                 current.bio = bio.strip()[:220]
             if default_visibility is not None:
                 current.default_visibility = default_visibility
             current.updated_at = utc_now()
             state.identities[current.id] = current
+
+            workspace = state.workspaces.get(current.workspace_id)
+            if workspace is not None:
+                workspace.name = f"{current.display_name}'s Studio"
+                state.workspaces[workspace.id] = workspace
 
             for post in state.posts.values():
                 if post.identity_id != current.id:

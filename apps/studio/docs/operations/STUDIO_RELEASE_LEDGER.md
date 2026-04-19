@@ -18,6 +18,117 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.19.140`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.139` had already tightened development-side image routing, but Settings was still carrying one obvious fake account surface: `Credentials` looked like a real privacy/security control while actually doing nothing. The same seam also exposed a deeper truth bug behind the placeholder. Studio could save a new display name, but a later auth refresh could still pull older sign-in metadata back over it, which made the profile story feel shakier than the UI suggested.
+- What:
+  `.140` turns that Settings area into a real account-management surface. `Credentials` now opens a live `Profile and sign-in` dialog that keeps the public `@username` immutable, allows the visible display name to change, and makes the active sign-in provider explicit instead of hiding behind a generic pill. Email/password accounts can now update their password directly from Settings, while Google and other OAuth accounts are handled honestly as provider-managed credentials with the right guidance instead of a dead row.
+  The backend truth moved with the UI. `/v1/auth/me` now carries provider context into the frontend payload, display-name updates are filtered through the deterministic moderation layer, and existing identities no longer let incoming auth metadata quietly overwrite a locked username or the locally chosen display name during refresh. Targeted backend regressions and frontend Settings tests were added for the new source-of-truth behavior and the provider-aware credentials flow. Live local/provider/staging runtime artefacts have not been rerun on `.140`, so the last environment-level proof still belongs to `.137`.
+
+### `0.6.0-alpha` / build `2026.04.19.139`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.138` moved Studio onto the right modern model doctrine, but local development still had one expensive and frustrating operator seam: the new `Fast` lane would keep aiming at billable Runware-first traffic even on a machine where Runware credits were not actually funded yet. In practice that meant local testing could burn time hitting a provider that was expected to fail before Studio fell back, which is the opposite of what a tight cash-safe development loop should feel like.
+- What:
+  `.139` is a narrow development safety wave for `Fast`. In local/development only, `Fast` text-to-image now prefers zero-cost standard fallback lanes first and records that honestly as `development_zero_cost_fast_route`, so route previews, created jobs, and health metadata all say the same thing. This does not rewrite the real launch doctrine: outside development, Studio still treats Runware FLUX.2 as the normal public image path.
+  Verification on `.139` is backend-contract scoped and intentionally modest. Targeted provider-routing regressions, service regressions for wallet-backed free plus zero-cost fast routing, generation-pricing regressions, and backend spine contract tests all pass on the new build. Live local verify, provider smoke, and protected staging have not been rerun on `.139`, so the last runtime proof artefacts still belong to `.137`.
+
+### `0.6.0-alpha` / build `2026.04.18.138`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.137` had the public surface and current proof story in a healthier place, but the actual provider doctrine was still split across legacy catalog ids, OpenAI-image-era docs, and a Runware mapping layer that mostly collapsed old Studio model names onto one generic AIR id. That left the user-facing quality ladder looking more modern than the backend truth really was, and it also left one quiet admission bug in place: a stored legacy job and a new canonical request could slip past duplicate-generation protection because their model ids no longer compared equal.
+- What:
+  `.138` is the provider-doctrine realignment wave. Studio image routing now treats Runware as the normal public image path and maps the public `Fast / Standard / Premium / Signature` ladder onto the modern FLUX.2 family: `flux-2-klein`, `flux-2-dev`, `flux-2-pro`, and `flux-2-flex`. OpenAI image remains available only as a targeted QA lane instead of a normal launch route, while chat env defaults and docs now point at an intentionally cheaper `OpenRouter primary + OpenAI fallback` stack with the tighter Studio-only role prompt. The same wave also closes a real backend regression: duplicate-generation admission now normalizes legacy and canonical model ids before comparing queued work, so older stored jobs cannot bypass duplicate protection after the catalog rename.
+  Current-build verification on `.138` is code-and-build scoped, not overstated runtime proof. Targeted backend suites for generation pricing, chat ops, backend spine, prompt engineering, AI provider catalog, provider routing, router generation, generation runtime, and the touched service-regression slices all pass. Studio web `type-check` and production `build` also pass. The last live local/provider/staging artefacts have not been rerun after the `.138` bump yet, so `.138` does not claim refreshed smoke or staging proof.
+
+### `0.6.0-alpha` / build `2026.04.18.137`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.136` had already cleaned up the highest-visibility launch seams and tightened secret hydration, but a few last-mile polish details still lived outside that proof pass. Billing and legal copy could still read too much like an environment note, the legal placeholder resolver needed a cleaner founder-operated disclosure contract, and the proof chain itself needed to be refreshed again so the current build was not riding on `.136` artefacts. The provider loop also needed one more honest refresh after staging/runtime env hydration so we could stop talking about the older all-green snapshot and say which image backup lane is actually healthy right now.
+- What:
+  `.137` is a narrow launch-surface and truth-refresh wave. Billing copy now reads like a controlled opening instead of an environment warning, the shared legal shell now uses a cleaner `Operating disclosure` block, and legal placeholders resolve to honest launch-safe founder-operated wording without leaving raw placeholder values behind. The current-build proof loop also moved again: local verify passes on `.137`, protected staging now boots and verifies the `.137` build at warning level, and current provider smoke has been refreshed on `.137` from the hydrated effective env.
+  That refreshed provider proof matters because it changed the active risk picture. OpenAI chat and image lanes are healthy, OpenRouter chat remains healthy, Gemini and Fal are still simply unconfigured in this environment, but the Runware managed-secondary image lane is now failing with `insufficientCredits`. So `.137` is technically stronger on launch surface and staging truth, but it also makes one real business/runtime blocker more explicit: if you want a trustworthy managed image backup lane, Runware credits need to be restored or the backup doctrine needs to be changed on purpose.
+
+### `0.6.0-alpha` / build `2026.04.18.136`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.135` had the protected-staging runtime loop back in a truthful place, but the launch surface still had a few high-visibility seams that made Studio feel more like a working internal product than a polished public one. The login Google CTA was visually underweighted, mobile Settings tabs clipped, empty profiles dead-ended, and public/signed-in footers still leaked build metadata. At the same time, env examples and operator scripts were still slightly behind the active provider doctrine and did not hydrate billing/owner secret families as completely as the current launch lane now needs.
+- What:
+  `.136` is a narrow launch-polish plus operator-secret-hydration wave. Login now uses a full-width `Continue with Google` CTA, public and shell footers no longer expose version/build copy, mobile Settings tabs use compact labels that fit cleanly, empty profile galleries now route back into `Create`, and checkout-unavailable copy is calmer and more production-toned. On the operator side, `.env.platform.example` and `backend/.env.example` now default to the current OpenAI-primary chat lane, while staging/runtime helpers and local startup import Supabase, Paddle, and owner/admin secret families from Windows user environment variables so repo env files can stay placeholder-only.
+  Current-build proof on `.136` is intentionally web/operator scoped only. Studio web `type-check` passes, production `build` passes, backend `tests/test_deployment_verification.py` passes with `18 passed`, and browser smoke was refreshed on the new login surface, mobile Settings, and desktop Profile empty-state flow. Provider smoke and protected staging have not been rerun since the `.136` build bump, so the latest provider/staging artefacts still belong to `.135`.
+
+### `0.6.0-alpha` / build `2026.04.18.135`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.134` had already cleared the local proof path, but protected staging was still failing one step too early for the wrong reasons. Once Docker was running, the backend container healthcheck and the local forwarded staging URL were both still vulnerable to TrustedHost drift, and the worker was inheriting an HTTP healthcheck that only made sense for the API image default command, not for `generation_worker.py`.
+- What:
+  `.135` turns that staging proof loop into an honest runtime check instead of a host-header trap. The staging helper now expands `ALLOWED_HOSTS` to include the local forwarded proof hosts plus the configured staging hosts, backend container healthchecks now use `localhost` against `/v1/healthz`, and the worker no longer inherits a broken HTTP healthcheck from the shared backend image.
+  Current-build proof is refreshed on `.135`: local verify passes, current-build provider smoke is green with `ok=5`, `skipped=2`, `error=0`, and protected staging now boots and verifies successfully at warning level instead of failing on environment bring-up. Closure-grade staging is still not claimed on `.135` because the latest verify run was advisory-only without an owner bearer token, so `closure_ready` remains pending that owner-token rerun.
+
+### `0.6.0-alpha` / build `2026.04.18.134`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.133` already aligned source shell metadata and deployment verification around the current `Omnia Creata Studio` shell name, but the local PowerShell readiness loop was still stricter than the backend verifier. That meant the same class of naming drift could still reappear locally if the login shell title/body changed whitespace again without changing the actual brand.
+- What:
+  `.134` closes that last proof-path seam. `start-studio-local.ps1` and `verify-studio-local.ps1` now normalize the Studio shell name before checking `/login`, so local startup and local verify follow the same brand-tolerant contract as deployment verification instead of depending on one exact spacing form.
+  Current-build proof is refreshed on `.134`: the local always-on stack was restarted onto `.134`, `/v1/version` now reports both `build=.134` and `bootBuild=.134`, local verify passes, and current-build provider smoke is green again with `ok=5`, `skipped=2`, `error=0` across chat plus image surfaces. Protected staging was rerun from the same build too, but it still reports `blocked` because Docker engine is not running on this machine, so `.134` still does not claim closure-grade staging proof.
+
+### `0.6.0-alpha` / build `2026.04.18.133`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.132` fixed the first local shell-string blocker, but the source shell metadata and protected deployment verification were still split across older and current brand spellings. That left a smaller naming drift between the login shell HTML and the deployment-side proof logic, which meant current-build verification could still fail on spacing drift instead of real runtime truth.
+- What:
+  `.133` aligns the public login shell metadata and deployment verification around the current `Omnia Creata Studio` brand form. `web/index.html` now emits the current shell title, and deployment verification normalizes login-shell title/body checks so protected deploy proofs no longer depend on one exact spacing form.
+  Current-build proof was refreshed on `.133` too: local verify passed, current-build provider smoke was green with `ok=5`, `skipped=2`, `error=0`, and protected staging remained `blocked` because Docker engine was not running. `.134` immediately followed to bring the same normalization rule into the local PowerShell readiness path as well.
+
+### `0.6.0-alpha` / build `2026.04.18.132`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.131` closed the public SEO/crawl gap, but the first proof-refresh attempt immediately exposed a smaller operator-truth drift: local startup and local verify were still checking for the older `OmniaCreata Studio` shell string even though the live login shell now renders `Omnia Creata Studio`. That meant current-build proof could stay blocked on an outdated shell assumption instead of the actual app state.
+- What:
+  `.132` is a narrow local-ops truth sync. The local startup readiness probe and `verify-studio-local.ps1` now match the current Studio shell branding, so local proof can fail on real runtime problems instead of stale string matching. This keeps the current-build local proof loop aligned with the actual login shell while staying inside the same launch-readiness hardening track.
+  Current-build proof on `.132` is partially refreshed in this wave. The local always-on stack was restarted, backend `bootBuild` is now `.132`, local verify passes on the refreshed shell contract, and current-build provider smoke is green again on `.132` with `ok=5`, `skipped=2`, `error=0` across chat plus image surfaces. Protected staging was rerun from the same build too, but it still reports `blocked` because Docker engine is not running on this machine, so `.132` does not claim closure-grade staging proof.
+
+### `0.6.0-alpha` / build `2026.04.18.131`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.130` tightened Help honesty, but the public launch-readiness surface still had a discoverability gap that would matter immediately outside the product shell: route-level metadata was still effectively generic at initial HTML time, crawl endpoints were missing, and guest Settings still behaved more like a blunt redirect than an intentional public-shell handoff.
+- What:
+  `.131` is a narrow crawl, metadata, and shell-honesty wave. Studio web now has one canonical SEO map for the key public routes, builds route-specific `index.html` variants for those public paths, emits real `robots.txt` plus `sitemap.xml`, and marks alias routes such as `/privacy` and `/billing` as canonicalized `noindex,follow` surfaces instead of letting them look like first-class duplicates.
+  The client-side head contract is tighter on this build too. Public pages now keep title, description, canonical, Open Graph, Twitter, and robots tags aligned through the shared SEO map without duplicating `Omnia Creata Studio` in document titles, and the guest shell now treats `Settings` more honestly by opening an in-shell public-access panel while sending explicit open-intent through `/login?next=%2Fsettings` rather than pretending guest Settings is directly available.
+  Current-build proof on `.131` is intentionally web-scoped only: focused Studio web regressions pass with `4 passed`, `npm run type-check` passes, production `npm run build` passes, generated `dist` output now includes route-specific public HTML files plus `robots.txt` and `sitemap.xml`, and slash-suffixed preview checks confirm `/help/`, `/legal/privacy/`, and `/privacy/` emit the expected title/canonical/robots combinations. Local verify, provider smoke, and protected staging reports have not been rerun on `.131` yet.
+
+### `0.6.0-alpha` / build `2026.04.18.130`
+- Date: `2026-04-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.129` tightened consent honesty, but the Help surface still had two kinds of drift that would be user-facing immediately: account/help guidance was promising controls the current shell does not actually expose yet, and Help was carrying long-form policy text even though Studio now ships separate canonical `/legal/*` pages. The same surface also lost too much of its secondary navigation once the viewport dropped below the large desktop breakpoint.
+- What:
+  `.130` is a narrow help-surface honesty and scanability wave. The Help center now aligns account guidance with the current shell truth: password resets point back to the login flow, active sessions and notification controls are described honestly as not fully exposed in-shell yet, exports now point to the real project-menu and Settings archive paths, and free-account / wallet copy is closer to the current billing contract.
+  The legal/help split is also cleaner on this build. Terms, Privacy, and Usage sections inside Help are now short orientation summaries with direct links to the dedicated `/legal/*` routes instead of acting like a second full legal center, and the secondary help navigation is preserved more intentionally across responsive breakpoints with a compact mobile quick-jump strip plus a wider desktop/tablet TOC range. Focused Help regressions now lock the canonical legal links and the corrected account guidance, and current-build proof on `.130` includes those tests plus Studio web `type-check`, production `build`, and browser smoke on `/help` for both desktop and mobile shell layouts.
+
 ### `0.6.0-alpha` / build `2026.04.18.129`
 - Date: `2026-04-18`
 - Codename: `Foundation`

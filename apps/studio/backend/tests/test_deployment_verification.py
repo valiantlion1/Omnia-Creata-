@@ -13,6 +13,11 @@ from studio_platform.services.deployment_verification import (
 )
 from studio_platform.versioning import load_version_info
 
+CURRENT_LOGIN_SHELL_HTML = (
+    "<html><head><title>Omnia Creata Studio</title></head>"
+    "<body>Omnia Creata Studio</body></html>"
+)
+
 
 def _platform_readiness_payload(
     *,
@@ -661,3 +666,18 @@ def test_deployment_verification_exit_code_blocks_on_blocked_status() -> None:
 
     assert deployment_verification_exit_code(report, require_closure_ready=False) == 1
     assert deployment_verification_exit_code(report, require_closure_ready=True) == 1
+
+
+def test_deployment_verification_accepts_current_login_shell_brand_spacing() -> None:
+    report = build_deployment_verification_report(
+        base_url="https://staging-studio.omniacreata.com",
+        expected_build="2026.04.18.133",
+        version_payload={"build": "2026.04.18.133"},
+        health_payload={"status": "healthy"},
+        health_detail_payload=None,
+        login_page_html=CURRENT_LOGIN_SHELL_HTML,
+        owner_health_checked=False,
+    )
+
+    login_check = next(check for check in report["checks"] if check["key"] == "login_shell")
+    assert login_check["status"] == "pass"

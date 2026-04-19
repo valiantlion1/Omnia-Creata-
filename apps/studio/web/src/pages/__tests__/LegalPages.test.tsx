@@ -34,9 +34,9 @@ describe('Legal pages', () => {
     renderWithProviders(<TermsPage />, { route: '/legal/terms' })
 
     expect(await screen.findByRole('heading', { name: /terms of service/i })).toBeInTheDocument()
-    expect(screen.getAllByText(/founder-operated prelaunch service/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/omnia creata, a founder-operated service/i).length).toBeGreaterThan(0)
     expect(screen.queryByText(/Omnia Creata Legal Entity Name/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/prelaunch disclosure/i)).toBeInTheDocument()
+    expect(screen.getByText(/business status/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /refund policy/i })).toHaveAttribute('href', '/legal/refunds')
   })
 
@@ -49,9 +49,9 @@ describe('Legal pages', () => {
     expect(text).not.toContain('&ldquo;')
     expect(text).not.toContain('&rdquo;')
     expect(text).not.toContain('&rsquo;')
-    expect(text).not.toContain('â€')
-    expect(text).not.toContain('Ã')
-    expect(text).not.toContain('Â')
+    expect(text).not.toContain('Ã¢â‚¬')
+    expect(text).not.toContain('Ãƒ')
+    expect(text).not.toContain('Ã‚')
 
     unmount()
   })

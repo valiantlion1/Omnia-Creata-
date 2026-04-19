@@ -1,14 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, Sora } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "@/app/globals.css";
 
 import { PwaClient } from "@/components/pwa-client";
 
-const spaceGrotesk = Space_Grotesk({
+const sora = Sora({
   subsets: ["latin"],
-  variable: "--font-space-grotesk"
+  variable: "--font-sora"
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b1514"
+  themeColor: "#f2eadf"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${ibmPlexMono.variable}`}>
-      <body>
+    <html lang="en" className={`${sora.variable} ${ibmPlexMono.variable}`}>
+      <body className="antialiased">
         <PwaClient />
         {children}
       </body>

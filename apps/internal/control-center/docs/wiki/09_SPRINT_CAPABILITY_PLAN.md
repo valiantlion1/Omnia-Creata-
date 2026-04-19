@@ -47,16 +47,16 @@ Goal:
 
 Deliver:
 - `ocos-operator-core` custom skill
-- `ocos-api` plugin scaffold
+- `ocos-api` read-only plugin bridge
 - capability stack documentation
 - sprint capability plan documentation
 
 Status:
-- current scaffold sprint
+- in progress
 
 Exit criteria:
 - OCOS has one canonical internal skill for product and ops reasoning
-- the repo has a plugin lane reserved for OCOS-native tools
+- the repo has a real read-only plugin lane for OCOS-native tools
 - future capability work is planned by sprint, not by ad-hoc prompting
 
 ## Sprint 11: Service-Aware Operator Memory
@@ -133,14 +133,14 @@ When deciding what to implement next:
 Right now OCOS should behave as if:
 
 - foundation is implemented
-- capability kernel is established
+- capability kernel is established enough for read-only plugin access
 - service-aware memory scaffolds are landing
 - bounded automation is the next major lane
 
 That means the correct immediate work is:
 
 - custom OCOS skills
-- internal plugin scaffolds
+- internal plugin bridges
 - sprint-aware docs
 
 Not:

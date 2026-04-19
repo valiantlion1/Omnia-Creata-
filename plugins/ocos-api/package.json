@@ -1,0 +1,15 @@
+{
+  "name": "@omnia-internal/ocos-api-plugin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node ./server.mjs",
+    "check": "node --check ./server.mjs",
+    "smoke": "node ./smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.1",
+    "zod": "^3.25.76"
+  }
+}

@@ -31,32 +31,63 @@ export default async function ProjectOperationsPage({
 
   return (
     <NavShell eyebrow={`${project.project.name} Operations`}>
-      <div className="space-y-6">
+      <div className="space-y-5">
         <ProjectHeader summary={project} active="operations" />
 
         {focusedIncident ? (
-          <section className="space-y-5 rounded-[30px] border border-white/10 bg-[#091414]/88 p-6 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill tone={focusedIncident.severity === "P1" ? "failed" : focusedIncident.severity === "P2" ? "degraded" : "open"}>
-                {focusedIncident.severity}
-              </StatusPill>
-              <StatusPill tone={focusedIncident.state === "resolved" ? "resolved" : focusedIncident.state === "silenced" ? "muted" : "open"}>
-                {focusedIncident.state}
-              </StatusPill>
-              <span className="text-xs uppercase tracking-[0.24em] text-white/45">{focusedIncident.environmentName}</span>
+          <section className="ocos-panel-strong">
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill
+                  tone={
+                    focusedIncident.severity === "P1"
+                      ? "failed"
+                      : focusedIncident.severity === "P2"
+                        ? "degraded"
+                        : "open"
+                  }
+                >
+                  {focusedIncident.severity}
+                </StatusPill>
+                <StatusPill
+                  tone={
+                    focusedIncident.state === "resolved"
+                      ? "resolved"
+                      : focusedIncident.state === "silenced"
+                        ? "muted"
+                        : "open"
+                  }
+                >
+                  {focusedIncident.state}
+                </StatusPill>
+                <span className="text-xs uppercase tracking-[0.24em] text-[var(--ocos-muted)]">
+                  {focusedIncident.environmentName}
+                </span>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+                <div>
+                  <p className="ocos-kicker">Focused incident</p>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ocos-ink)]">
+                    {focusedIncident.title}
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ocos-muted)]">{focusedIncident.summary}</p>
+                  <div className="mt-4 rounded-[22px] border border-[var(--ocos-border)] bg-[var(--ocos-surface-muted)] p-4">
+                    <p className="ocos-kicker">Recommended path</p>
+                    <p className="mt-2 text-sm leading-7 text-[var(--ocos-ink)]">
+                      {focusedIncident.recommendedNextPath ??
+                        "Inspect the latest report, then choose the next bounded operator action."}
+                    </p>
+                  </div>
+                </div>
+
+                <QuickActions incidentId={focusedIncident.id} environmentSlug={focusedIncident.environmentSlug} />
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-semibold text-white">{focusedIncident.title}</h2>
-              <p className="mt-3 text-sm leading-7 text-white/68">{focusedIncident.summary}</p>
-              <p className="mt-3 text-sm text-teal-100/82">
-                {focusedIncident.recommendedNextPath ?? "Inspect latest report, then choose a bounded operator action."}
-              </p>
-            </div>
-            <QuickActions incidentId={focusedIncident.id} environmentSlug={focusedIncident.environmentSlug} />
           </section>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <IncidentList incidents={project.activeIncidents} title="Project Incident Queue" />
           <ActionRunList actionRuns={project.actionRuns} />
         </div>

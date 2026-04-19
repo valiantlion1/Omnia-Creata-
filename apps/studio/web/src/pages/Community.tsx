@@ -11,7 +11,7 @@ export default function CommunityPage() {
   const [sort, setSort] = useState<SortMode>('trending')
   const [searchQuery, setSearchQuery] = useState('')
   const normalizedSearch = searchQuery.trim().toLowerCase()
-  usePageMeta('Explore AI Creations', 'Discover breathtaking AI-generated art and connect with creators on the Omnia Creata community.')
+  usePageMeta('Community', 'Browse public creator work, prompts, and shared references on Omnia Creata Studio.')
 
   const fetchFeed = useCallback(async (sortMode: SortMode) => {
     setLoading(true)
@@ -79,7 +79,7 @@ export default function CommunityPage() {
           Explore Creations
         </h1>
         <p className="text-zinc-400 max-w-2xl text-lg">
-          Discover breathtaking art, copy the exact prompts, and connect with other creators across the Omnia Creata ecosystem.
+          Browse public work, study prompt directions, and keep track of what other creators are making across Studio.
         </p>
       </section>
 
@@ -137,7 +137,7 @@ export default function CommunityPage() {
       {loading && (
         <div className="flex items-center gap-3 text-zinc-500 font-medium py-12 justify-center">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
-          Discovering amazing creations…
+          Refreshing the community feed...
         </div>
       )}
 

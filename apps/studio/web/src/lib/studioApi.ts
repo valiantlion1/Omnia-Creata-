@@ -49,6 +49,9 @@ export type IdentityPayload = {
   email: string
   display_name: string
   username?: string | null
+  auth_provider?: string | null
+  auth_providers?: string[]
+  credentials_managed_by_provider?: boolean
   plan: IdentityPlan
   workspace_id: string | null
   guest?: boolean
@@ -315,10 +318,40 @@ function cleanCreativeProfileLabel(value: string) {
 
 export function getCreativeProfileKey(modelId: string | null | undefined): CreativeProfileKey {
   const normalized = modelId?.trim().toLowerCase() ?? ''
-  if (normalized.includes('flux-schnell') || normalized.includes('flux.1-schnell')) return 'fast'
-  if (normalized.includes('sdxl') || normalized.includes('stable-diffusion-xl')) return 'standard'
-  if (normalized.includes('realvis')) return 'premium'
-  if (normalized.includes('juggernaut')) return 'signature'
+  if (
+    normalized.includes('flux-2-klein') ||
+    normalized.includes('flux.2-klein') ||
+    normalized.includes('flux2-klein') ||
+    normalized.includes('flux-schnell') ||
+    normalized.includes('flux.1-schnell')
+  ) {
+    return 'fast'
+  }
+  if (
+    normalized.includes('flux-2-dev') ||
+    normalized.includes('flux.2-dev') ||
+    normalized.includes('flux2-dev') ||
+    normalized.includes('sdxl') ||
+    normalized.includes('stable-diffusion-xl')
+  ) {
+    return 'standard'
+  }
+  if (
+    normalized.includes('flux-2-pro') ||
+    normalized.includes('flux.2-pro') ||
+    normalized.includes('flux2-pro') ||
+    normalized.includes('realvis')
+  ) {
+    return 'premium'
+  }
+  if (
+    normalized.includes('flux-2-flex') ||
+    normalized.includes('flux.2-flex') ||
+    normalized.includes('flux2-flex') ||
+    normalized.includes('juggernaut')
+  ) {
+    return 'signature'
+  }
   return 'studio-default'
 }
 
@@ -345,13 +378,13 @@ export function getCreativeProfileDescription(
 ) {
   switch (getCreativeProfileKey(modelId)) {
     case 'fast':
-      return 'Quick starts for ideas, composition tests, and fast variations.'
+      return 'Quick starts for ideas, composition tests, and fast modern variations.'
     case 'standard':
-      return 'Balanced quality for everyday work when you want clean, dependable detail.'
+      return 'Balanced FLUX.2 Dev quality for everyday work when you want clean, dependable detail.'
     case 'premium':
-      return 'A richer finish with cleaner lighting, better texture, and more polish.'
+      return 'A richer production finish with stronger lighting, materials, and final-pick polish.'
     case 'signature':
-      return 'An internal advanced finish reserved for special high-detail runs.'
+      return 'An internal advanced lane for typography, layout-critical, and brand-system visuals.'
     default:
       return fallbackDescription?.trim() || 'A Studio image quality lane matched to your current plan.'
   }

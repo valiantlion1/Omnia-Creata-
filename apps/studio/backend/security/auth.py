@@ -369,6 +369,48 @@ def create_auth_config_from_env() -> AuthConfig:
 security = HTTPBearer(auto_error=False)
 
 
+def _normalize_auth_provider_name(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def _append_auth_provider(providers: list[str], value: Any) -> None:
+    normalized = _normalize_auth_provider_name(value)
+    if normalized and normalized not in providers:
+        providers.append(normalized)
+
+
+def _extract_supabase_auth_provider_context(payload: Dict[str, Any]) -> tuple[str | None, list[str]]:
+    app_metadata = payload.get("app_metadata") or {}
+    providers: list[str] = []
+
+    _append_auth_provider(providers, app_metadata.get("provider"))
+
+    configured_providers = app_metadata.get("providers")
+    if isinstance(configured_providers, list):
+        for provider_name in configured_providers:
+            _append_auth_provider(providers, provider_name)
+
+    identities = payload.get("identities")
+    if isinstance(identities, list):
+        for identity in identities:
+            if not isinstance(identity, dict):
+                continue
+            _append_auth_provider(providers, identity.get("provider"))
+            identity_data = identity.get("identity_data") or {}
+            if isinstance(identity_data, dict):
+                _append_auth_provider(providers, identity_data.get("provider"))
+
+    primary_provider = providers[0] if providers else None
+    if primary_provider is None and payload.get("email"):
+        primary_provider = "email"
+        providers = ["email"]
+
+    return primary_provider, providers
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
@@ -418,6 +460,7 @@ async def get_current_user(
             user_metadata = payload.get("user_metadata") or {}
             app_metadata = payload.get("app_metadata") or {}
             email = (payload.get("email") or "").strip().lower()
+            auth_provider, auth_providers = _extract_supabase_auth_provider_context(payload)
             owner_email_match = email in settings.owner_emails_list
             root_admin_match = email in settings.root_admin_emails_list
             display_name = (
@@ -444,6 +487,8 @@ async def get_current_user(
                 "marketing_opt_in": bool(user_metadata.get("marketing_opt_in")),
                 "marketing_opt_in_at": user_metadata.get("marketing_opt_in_at"),
                 "marketing_consent_version": user_metadata.get("marketing_consent_version"),
+                "auth_provider": auth_provider,
+                "auth_providers": auth_providers,
                 "supabase": True,
             }
             return User(

@@ -291,8 +291,9 @@ Current provider/runtime truth is controlled by environment variables such as:
 ```env
 CHAT_PRIMARY_PROVIDER=openrouter
 CHAT_FALLBACK_PROVIDER=openai
-PROTECTED_BETA_CHAT_PROVIDER=openai
-PROTECTED_BETA_IMAGE_PROVIDER=openai
+PROTECTED_BETA_CHAT_PROVIDER=openrouter
+PROTECTED_BETA_IMAGE_PROVIDER=runware
+# Optional targeted QA only; OpenAI image is not in the normal public routing path.
 OPENAI_IMAGE_DRAFT_MODEL=gpt-image-1-mini
 OPENAI_IMAGE_MODEL=gpt-image-1.5
 GENERATION_PROVIDER_STRATEGY=balanced

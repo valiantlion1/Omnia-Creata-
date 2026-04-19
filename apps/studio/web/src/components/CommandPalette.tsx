@@ -46,42 +46,42 @@ export function CommandPalette() {
   const commands: CommandInfo[] = [
     {
       id: 'nav-explore',
-      label: 'Explore Gallery',
+      label: 'Explore',
       icon: LayoutDashboard,
       category: 'Navigation',
       action: () => navigate('/explore'),
     },
     {
       id: 'nav-create',
-      label: 'Create New Image',
+      label: 'Open Create',
       icon: Sparkles,
       category: 'Actions',
       action: () => navigate('/create'),
     },
     {
       id: 'nav-chat',
-      label: 'Open AI Assistant',
+      label: 'Open Chat',
       icon: MessageCircle,
       category: 'Actions',
       action: () => navigate('/chat'),
     },
     {
       id: 'nav-library',
-      label: 'View Media Library',
+      label: 'Open Library',
       icon: Library,
       category: 'Navigation',
-      action: () => navigate('/library'),
+      action: () => navigate('/library/images'),
     },
     {
       id: 'nav-settings',
-      label: 'Account & Settings',
+      label: 'Account & settings',
       icon: SettingsIcon,
       category: 'Navigation',
       action: () => navigate('/settings'),
     },
     {
       id: 'nav-docs',
-      label: 'Documentation & Help',
+      label: 'Help & policies',
       icon: BookOpen,
       category: 'Help',
       action: () => navigate('/help'),
@@ -130,7 +130,7 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             className="flex-1 bg-transparent text-[15px] text-white placeholder-zinc-500 outline-none"
-            placeholder="Search commands, navigate apps... (Type to search)"
+            placeholder="Search pages and actions"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -146,7 +146,7 @@ export function CommandPalette() {
         <div className="max-h-[60vh] overflow-y-auto p-2">
           {filteredCommands.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-zinc-500">
-              No results found for "{query}"
+              No matching actions for "{query}"
             </div>
           ) : (
             <div className="flex flex-col">

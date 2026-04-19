@@ -1,7 +1,7 @@
 {
   "name": "ocos-api",
   "version": "0.1.0",
-  "description": "Internal OCOS plugin scaffold for exposing organization, project, incident, and report tooling to Codex.",
+  "description": "Internal OCOS plugin for exposing organization, project, incident, and report tooling to Codex.",
   "author": {
     "name": "OmniaCreata",
     "email": "ops@omniacreata.com",
@@ -19,14 +19,13 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "OCOS API",
-    "shortDescription": "Internal OCOS control-plane plugin scaffold.",
-    "longDescription": "Scaffold for future OCOS-native tooling so Codex can read incidents, reports, projects, and safe action surfaces from the OmniaCreata control plane.",
+    "shortDescription": "Internal OCOS control-plane MCP bridge.",
+    "longDescription": "Read-only OCOS-native tooling so Codex can inspect incidents, reports, projects, and project cockpits from the OmniaCreata control plane.",
     "developerName": "OmniaCreata",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
-      "Read",
-      "Write"
+      "Read"
     ],
     "websiteURL": "https://omniacreata.com",
     "privacyPolicyURL": "https://omniacreata.com",

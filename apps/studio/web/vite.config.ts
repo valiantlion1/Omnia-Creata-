@@ -2,13 +2,15 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { fileURLToPath, URL } from 'node:url'
+import { studioSeoPlugin } from './tools/studioSeoPlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, fileURLToPath(new URL('..', import.meta.url)), '')
+  const siteUrl = env.VITE_CANONICAL_SITE_URL || env.PUBLIC_WEB_BASE_URL || 'https://studio.omniacreata.com'
   return {
     envDir: '..',
-    plugins: [react(), tsconfigPaths()],
+    plugins: [react(), tsconfigPaths(), studioSeoPlugin({ siteUrl })],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

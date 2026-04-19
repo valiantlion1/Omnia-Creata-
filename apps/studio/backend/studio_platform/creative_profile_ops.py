@@ -1,34 +1,41 @@
 from __future__ import annotations
 
 from .models import CreativeProfileEntry, ModelCatalogEntry
+from .studio_model_contract import (
+    STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_SIGNATURE_MODEL_ID,
+    STUDIO_STANDARD_MODEL_ID,
+    normalize_studio_model_id,
+)
 
 _MODEL_PROFILE_OVERRIDES: dict[str, dict[str, str]] = {
-    "flux-schnell": {
+    STUDIO_FAST_MODEL_ID: {
         "id": "fast",
         "label": "Fast",
         "badge": "Quick starts",
-        "description": "Quick starts for ideas, composition checks, and fast variations without making the result feel throwaway.",
+        "description": "Quick starts for ideas, composition checks, and modern low-latency variations without making the result feel throwaway.",
         "default_lane": "draft",
     },
-    "sdxl-base": {
+    STUDIO_STANDARD_MODEL_ID: {
         "id": "standard",
         "label": "Standard",
         "badge": "Everyday detail",
-        "description": "A balanced quality lane for everyday work when you want cleaner detail and dependable final picks.",
+        "description": "A balanced quality lane for everyday work when you want cleaner detail and dependable modern final picks.",
         "default_lane": "standard",
     },
-    "realvis-xl": {
+    STUDIO_PREMIUM_MODEL_ID: {
         "id": "premium",
         "label": "Premium",
         "badge": "Presentation ready",
-        "description": "A richer finish with cleaner lighting, better texture, and more presentation-ready polish.",
+        "description": "A richer production lane with cleaner lighting, stronger materials, and presentation-ready polish.",
         "default_lane": "final",
     },
-    "juggernaut-xl": {
+    STUDIO_SIGNATURE_MODEL_ID: {
         "id": "signature",
         "label": "Signature",
         "badge": "Internal advanced",
-        "description": "An internal advanced finish reserved for special high-detail runs.",
+        "description": "An internal advanced lane for layout-critical, typography-heavy, and brand-system visuals.",
         "default_lane": "final",
     },
 }
@@ -89,7 +96,7 @@ def resolve_creative_profile(
     if existing_profile is not None:
         return existing_profile.model_copy(deep=True)
 
-    normalized_model_id = (model_id or "").strip().lower()
+    normalized_model_id = normalize_studio_model_id(model_id)
     if normalized_model_id in _MODEL_PROFILE_OVERRIDES:
         return CreativeProfileEntry.model_validate(_MODEL_PROFILE_OVERRIDES[normalized_model_id])
 

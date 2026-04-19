@@ -39,6 +39,8 @@ __pycache__/
 *.log
 *.hprof
 *.tsbuildinfo
+.playwright-cli/
+output/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

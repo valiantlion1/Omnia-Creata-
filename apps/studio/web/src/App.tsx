@@ -44,12 +44,20 @@ const LegalCookiesPage = lazy(() => import('@/pages/legal/Cookies'))
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
 const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
 
+function ShellFriendlyPageChrome({ children }: { children: ReactNode }) {
+  return <div className="[&>header]:hidden [&>div>footer]:hidden">{children}</div>
+}
+
 function ShellFriendlyDocumentationPage() {
   return (
-    <div className="[&>header]:hidden [&>div>footer]:hidden">
+    <ShellFriendlyPageChrome>
       <DocumentationPage />
-    </div>
+    </ShellFriendlyPageChrome>
   )
+}
+
+function ShellFriendlyLegalPage({ children }: { children: ReactNode }) {
+  return <ShellFriendlyPageChrome>{children}</ShellFriendlyPageChrome>
 }
 
 type PostHogRuntimeClient = {
@@ -212,11 +220,11 @@ function ProtectedRoutes() {
       <Route path="/help" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/help#getting-started" replace />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
-      <Route path="/legal/terms" element={<LegalTermsPage />} />
-      <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
-      <Route path="/legal/refunds" element={<LegalRefundsPage />} />
-      <Route path="/legal/acceptable-use" element={<LegalAcceptableUsePage />} />
-      <Route path="/legal/cookies" element={<LegalCookiesPage />} />
+      <Route path="/legal/terms" element={<ShellFriendlyLegalPage><LegalTermsPage /></ShellFriendlyLegalPage>} />
+      <Route path="/legal/privacy" element={<ShellFriendlyLegalPage><LegalPrivacyPage /></ShellFriendlyLegalPage>} />
+      <Route path="/legal/refunds" element={<ShellFriendlyLegalPage><LegalRefundsPage /></ShellFriendlyLegalPage>} />
+      <Route path="/legal/acceptable-use" element={<ShellFriendlyLegalPage><LegalAcceptableUsePage /></ShellFriendlyLegalPage>} />
+      <Route path="/legal/cookies" element={<ShellFriendlyLegalPage><LegalCookiesPage /></ShellFriendlyLegalPage>} />
       <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
       <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
       <Route path="/refunds" element={<Navigate to="/legal/refunds" replace />} />

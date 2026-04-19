@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ActionState = {
   pending: boolean;
@@ -24,6 +24,13 @@ async function postJson(url: string, body?: Record<string, unknown>) {
 
   return data;
 }
+
+type ActionButton = {
+  label: string;
+  detail: string;
+  onClick: () => void;
+  accent?: "default" | "warning";
+};
 
 export function QuickActions({
   incidentId,
@@ -72,75 +79,87 @@ export function QuickActions({
     });
   }
 
+  const buttons: ActionButton[] = [
+    {
+      label: "Acknowledge",
+      detail: "Mark the incident as seen and move the queue forward.",
+      onClick: () => run(`/api/incidents/${incidentId}/ack`)
+    },
+    {
+      label: "Mute 30m",
+      detail: "Silence repeat noise while the operator investigates.",
+      onClick: () => run(`/api/incidents/${incidentId}/silence`, { minutes: 30 })
+    },
+    {
+      label: "Recheck public health",
+      detail: "Run the bounded public-facing health check again.",
+      onClick: () =>
+        run(`/api/incidents/${incidentId}/actions/recheck_public_health/run`, {
+          environmentSlug
+        })
+    },
+    {
+      label: "Run verify",
+      detail: "Trigger the staging or environment verify workflow.",
+      onClick: () =>
+        run(`/api/incidents/${incidentId}/actions/trigger_staging_verify/run`, {
+          environmentSlug
+        })
+    },
+    {
+      label: "Collect bundle",
+      detail: "Attach a fresh incident bundle before handoff.",
+      onClick: () =>
+        run(`/api/incidents/${incidentId}/actions/collect_incident_bundle/run`, {
+          environmentSlug
+        })
+    },
+    {
+      label: "Escalate to Codex",
+      detail: "Create the bounded escalation package for deeper help.",
+      onClick: () => run(`/api/incidents/${incidentId}/escalate-codex`),
+      accent: "warning"
+    }
+  ];
+
   return (
-    <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-      <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-white/45">Quick Actions</p>
-        <h3 className="mt-2 text-xl font-semibold text-white">Bounded operator controls</h3>
+    <div className="rounded-[28px] border border-[var(--ocos-border-strong)] bg-white/82 p-5 shadow-[0_18px_40px_rgba(73,58,44,0.08)]">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="ocos-kicker">Quick Actions</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[var(--ocos-ink)]">
+            Bounded operator controls
+          </h3>
+        </div>
+        <p className="text-sm text-[var(--ocos-muted)]">
+          These controls are intentionally narrow so the room stays safe under pressure.
+        </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() => run(`/api/incidents/${incidentId}/ack`)}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white transition hover:border-teal-300/35 hover:bg-teal-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Acknowledge
-        </button>
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() => run(`/api/incidents/${incidentId}/silence`, { minutes: 30 })}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white transition hover:border-teal-300/35 hover:bg-teal-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Mute 30m
-        </button>
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() =>
-            run(`/api/incidents/${incidentId}/actions/recheck_public_health/run`, {
-              environmentSlug
-            })
-          }
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white transition hover:border-teal-300/35 hover:bg-teal-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Recheck public health
-        </button>
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() =>
-            run(`/api/incidents/${incidentId}/actions/trigger_staging_verify/run`, {
-              environmentSlug
-            })
-          }
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white transition hover:border-teal-300/35 hover:bg-teal-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Run verify
-        </button>
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() =>
-            run(`/api/incidents/${incidentId}/actions/collect_incident_bundle/run`, {
-              environmentSlug
-            })
-          }
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-white transition hover:border-teal-300/35 hover:bg-teal-300/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Collect bundle
-        </button>
-        <button
-          type="button"
-          disabled={state.pending}
-          onClick={() => run(`/api/incidents/${incidentId}/escalate-codex`)}
-          className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-left text-sm text-amber-50 transition hover:border-amber-200/40 hover:bg-amber-300/16 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Escalate to Codex
-        </button>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {buttons.map((button) => (
+          <button
+            key={button.label}
+            type="button"
+            disabled={state.pending}
+            onClick={button.onClick}
+            className={
+              button.accent === "warning"
+                ? "rounded-[22px] border border-amber-300/45 bg-amber-100/70 px-4 py-4 text-left transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                : "rounded-[22px] border border-[var(--ocos-border)] bg-[var(--ocos-surface-muted)] px-4 py-4 text-left transition hover:border-[var(--ocos-accent-soft)] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            }
+          >
+            <div className="text-sm font-semibold text-[var(--ocos-ink)]">{button.label}</div>
+            <div className="mt-2 text-sm leading-6 text-[var(--ocos-muted)]">{button.detail}</div>
+          </button>
+        ))}
       </div>
-      {state.message ? <p className="text-sm text-white/70">{state.message}</p> : null}
+
+      {state.message ? (
+        <div className="mt-4 rounded-[20px] border border-[var(--ocos-border)] bg-[var(--ocos-surface-muted)] px-4 py-3 text-sm text-[var(--ocos-ink)]">
+          {state.message}
+        </div>
+      ) : null}
     </div>
   );
 }

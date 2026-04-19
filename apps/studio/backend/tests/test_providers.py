@@ -201,7 +201,7 @@ def test_provider_registry_uses_free_first_strategy_by_default() -> None:
         settings.runware_api_key = None
         settings.enable_demo_generation_fallback = False
         registry = ProviderRegistry()
-        assert [provider.name for provider in registry.providers[:3]] == ["runware", "fal", "openai"]
+        assert [provider.name for provider in registry.providers[:3]] == ["runware", "fal", "pollinations"]
     finally:
         settings.generation_provider_strategy = original_strategy
         settings.huggingface_token = original_hf
@@ -305,7 +305,7 @@ def test_provider_registry_disables_openai_image_premium_qa_by_default_in_develo
         settings.openai_image_premium_qa_enabled = original_openai_image_premium_qa_enabled
 
 
-def test_provider_registry_uses_cost_safe_openai_image_estimate_in_development() -> None:
+def test_provider_registry_keeps_openai_image_estimate_available_for_targeted_qa_in_development() -> None:
     settings = provider_module.get_settings()
     original_environment = settings.environment
     original_openai_api_key = settings.openai_api_key
@@ -328,7 +328,7 @@ def test_provider_registry_uses_cost_safe_openai_image_estimate_in_development()
             prompt="polished beauty portrait for a premium campaign",
             model_id="realvis-xl",
         )
-        assert decision.selected_provider == "openai"
+        assert decision.selected_provider is None
         assert registry.estimate_generation_cost(
             provider_name="openai",
             width=1024,
@@ -407,7 +407,7 @@ def test_plan_generation_route_prefers_huggingface_for_free_stylized_prompts() -
     assert decision.prompt_profile == "stylized_illustration"
 
 
-def test_plan_generation_route_prefers_openai_for_free_prompts_in_development_when_managed_lane_is_available() -> None:
+def test_plan_generation_route_prefers_free_fallback_lanes_when_only_openai_is_available_in_development() -> None:
     settings = provider_module.get_settings()
     original_environment = settings.environment
     try:
@@ -445,11 +445,74 @@ def test_plan_generation_route_prefers_openai_for_free_prompts_in_development_wh
             workflow="text_to_image",
         )
 
-        assert decision.provider_candidates[:4] == ("openai", "huggingface", "pollinations", "demo")
-        assert decision.selected_provider == "openai"
-        assert decision.routing_reason == "wallet_managed_launch_lane"
+        assert decision.provider_candidates[:3] == ("huggingface", "pollinations", "demo")
+        assert decision.selected_provider == "huggingface"
+        assert decision.routing_reason == "development_zero_cost_fast_route"
     finally:
         settings.environment = original_environment
+
+
+def test_plan_generation_route_prefers_zero_cost_fast_lanes_in_development_even_when_runware_is_configured() -> None:
+    settings = provider_module.get_settings()
+    original_environment = settings.environment
+    original_zero_cost_fast_mode = settings.development_fast_zero_cost_mode_enabled
+    try:
+        settings.environment = provider_module.Environment.DEVELOPMENT
+        settings.development_fast_zero_cost_mode_enabled = True
+        registry = _registry_with(
+            _FakeProvider(
+                name="runware",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(
+                    workflows=("text_to_image", "image_to_image", "edit"),
+                    supports_reference_image=True,
+                ),
+                billable=True,
+            ),
+            _FakeProvider(
+                name="fal",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(
+                    workflows=("text_to_image", "image_to_image", "edit"),
+                    supports_reference_image=True,
+                ),
+                billable=True,
+            ),
+            _FakeProvider(
+                name="pollinations",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="huggingface",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="demo",
+                rollout_tier="degraded",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+        )
+
+        decision = registry.plan_generation_route(
+            plan=IdentityPlan.PRO,
+            prompt="simple blue gradient background with a centered white circle",
+            model_id="flux-2-klein",
+            workflow="text_to_image",
+        )
+
+        assert decision.provider_candidates[:3] == ("pollinations", "huggingface", "demo")
+        assert "runware" not in decision.provider_candidates
+        assert "fal" not in decision.provider_candidates
+        assert decision.selected_provider == "pollinations"
+        assert decision.routing_strategy == "premium-managed"
+        assert decision.routing_reason == "development_zero_cost_fast_route"
+        assert decision.selected_quality_tier == "standard"
+        assert decision.degraded is False
+    finally:
+        settings.environment = original_environment
+        settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
 
 
 def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
@@ -492,7 +555,7 @@ def test_plan_generation_route_prefers_fal_for_pro_premium_intent() -> None:
         workflow="text_to_image",
     )
 
-    assert decision.provider_candidates[:3] == ("runware", "fal", "openai")
+    assert decision.provider_candidates[:3] == ("runware", "fal", "pollinations")
     assert decision.provider_candidates[0] == "runware"
     assert decision.requested_quality_tier == "premium"
     assert decision.selected_quality_tier == "premium"
@@ -533,99 +596,111 @@ def test_plan_generation_route_marks_pro_premium_fallback_as_degraded_standard()
 
 
 def test_plan_generation_route_prefers_managed_lanes_for_pro_stylized_prompts() -> None:
-    registry = _registry_with(
-        _FakeProvider(
-            name="openai",
-            rollout_tier="primary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="fal",
-            rollout_tier="secondary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="runware",
-            rollout_tier="secondary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="huggingface",
-            rollout_tier="standard",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="pollinations",
-            rollout_tier="standard",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="demo",
-            rollout_tier="degraded",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-    )
+    settings = provider_module.get_settings()
+    original_zero_cost_fast_mode = settings.development_fast_zero_cost_mode_enabled
+    try:
+        settings.development_fast_zero_cost_mode_enabled = False
+        registry = _registry_with(
+            _FakeProvider(
+                name="openai",
+                rollout_tier="primary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="fal",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="runware",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="huggingface",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="pollinations",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="demo",
+                rollout_tier="degraded",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+        )
 
-    decision = registry.plan_generation_route(
-        plan=IdentityPlan.PRO,
-        prompt="anime warrior princess illustration with dramatic lighting",
-        model_id="flux-schnell",
-        workflow="text_to_image",
-    )
+        decision = registry.plan_generation_route(
+            plan=IdentityPlan.PRO,
+            prompt="anime warrior princess illustration with dramatic lighting",
+            model_id="flux-schnell",
+            workflow="text_to_image",
+        )
 
-    assert decision.provider_candidates[:5] == ("runware", "fal", "openai", "huggingface", "pollinations")
-    assert decision.selected_provider == "runware"
-    assert decision.selected_quality_tier == "premium"
-    assert decision.degraded is False
-    assert decision.routing_reason == "pro_runware_first_default"
+        assert decision.provider_candidates[:5] == ("runware", "fal", "huggingface", "pollinations", "demo")
+        assert decision.selected_provider == "runware"
+        assert decision.selected_quality_tier == "premium"
+        assert decision.degraded is False
+        assert decision.routing_reason == "pro_runware_first_default"
+    finally:
+        settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
 
 
 def test_plan_generation_route_prefers_managed_lanes_for_pro_default_prompts() -> None:
-    registry = _registry_with(
-        _FakeProvider(
-            name="openai",
-            rollout_tier="primary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="fal",
-            rollout_tier="secondary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="runware",
-            rollout_tier="secondary",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="pollinations",
-            rollout_tier="standard",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="huggingface",
-            rollout_tier="standard",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-        _FakeProvider(
-            name="demo",
-            rollout_tier="degraded",
-            capabilities=ProviderCapabilities(workflows=("text_to_image",)),
-        ),
-    )
+    settings = provider_module.get_settings()
+    original_zero_cost_fast_mode = settings.development_fast_zero_cost_mode_enabled
+    try:
+        settings.development_fast_zero_cost_mode_enabled = False
+        registry = _registry_with(
+            _FakeProvider(
+                name="openai",
+                rollout_tier="primary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="fal",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="runware",
+                rollout_tier="secondary",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="pollinations",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="huggingface",
+                rollout_tier="standard",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+            _FakeProvider(
+                name="demo",
+                rollout_tier="degraded",
+                capabilities=ProviderCapabilities(workflows=("text_to_image",)),
+            ),
+        )
 
-    decision = registry.plan_generation_route(
-        plan=IdentityPlan.PRO,
-        prompt="simple blue gradient background with a centered white circle",
-        model_id="flux-schnell",
-        workflow="text_to_image",
-    )
+        decision = registry.plan_generation_route(
+            plan=IdentityPlan.PRO,
+            prompt="simple blue gradient background with a centered white circle",
+            model_id="flux-schnell",
+            workflow="text_to_image",
+        )
 
-    assert decision.provider_candidates[:5] == ("runware", "fal", "openai", "pollinations", "huggingface")
-    assert decision.selected_provider == "runware"
-    assert decision.selected_quality_tier == "premium"
-    assert decision.degraded is False
-    assert decision.routing_reason == "pro_runware_first_default"
+        assert decision.provider_candidates[:5] == ("runware", "fal", "pollinations", "huggingface", "demo")
+        assert decision.selected_provider == "runware"
+        assert decision.selected_quality_tier == "premium"
+        assert decision.degraded is False
+        assert decision.routing_reason == "pro_runware_first_default"
+    finally:
+        settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
 
 
 def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows() -> None:
@@ -674,7 +749,7 @@ def test_plan_generation_route_excludes_pollinations_and_demo_for_edit_workflows
         has_reference_image=True,
     )
 
-    assert decision.provider_candidates == ("openai", "fal", "huggingface")
+    assert decision.provider_candidates == ("fal", "huggingface")
     assert "pollinations" not in decision.provider_candidates
     assert "demo" not in decision.provider_candidates
 
@@ -1143,7 +1218,7 @@ async def test_runware_provider_generates_from_base64_response() -> None:
 
 
 @pytest.mark.asyncio
-async def test_runware_provider_uses_seed_image_for_reference_workflow() -> None:
+async def test_runware_provider_uses_reference_images_for_reference_workflow() -> None:
     submitted_payload: list[dict[str, object]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -1180,8 +1255,9 @@ async def test_runware_provider_uses_seed_image_for_reference_workflow() -> None
     )
 
     assert result.provider == "runware"
-    assert submitted_payload[0]["seedImage"].startswith("data:image/png;base64,")
-    assert submitted_payload[0]["strength"] == 0.7
+    assert submitted_payload[0]["inputs"]["referenceImages"][0].startswith("data:image/png;base64,")
+    assert "seedImage" not in submitted_payload[0]
+    assert "strength" not in submitted_payload[0]
     assert submitted_payload[0]["negativePrompt"] == "blurry"
 
 

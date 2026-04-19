@@ -161,7 +161,7 @@ export default function BillingPage() {
         window.location.assign(result.checkout_url)
         return
       }
-      const msg = 'Checkout is not available for this plan on your account yet.'
+      const msg = 'Purchases are not open for this plan on your account yet.'
       setCheckoutError(msg)
       addToast('warning', msg)
     } catch (err) {
@@ -200,7 +200,7 @@ export default function BillingPage() {
         <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-zinc-300">
           <ShieldCheck className="h-5 w-5 text-zinc-200" />
           <p className="font-semibold text-sm">
-            Owner access mirrors public billing logic without charging this account like a customer account.
+            Owner access mirrors the public billing surface without charging this account like a customer account.
           </p>
         </div>
       )}
@@ -211,7 +211,7 @@ export default function BillingPage() {
           message={plansError}
           onRetry={() => { void loadPublicPlans() }}
           retryDisabled={plansLoading}
-          retryLabel={plansLoading ? 'Retrying…' : 'Try again'}
+          retryLabel={plansLoading ? 'Retrying...' : 'Try again'}
         />
       ) : null}
 
@@ -221,7 +221,7 @@ export default function BillingPage() {
           message={summaryError}
           onRetry={() => { void loadBillingSummary() }}
           retryDisabled={loading}
-          retryLabel={loading ? 'Retrying…' : 'Try again'}
+          retryLabel={loading ? 'Retrying...' : 'Try again'}
         />
       ) : null}
 
@@ -237,14 +237,14 @@ export default function BillingPage() {
       {isAuthenticated && !billing && loading ? (
         <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-4 py-6 text-sm text-zinc-400">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading your billing summary…
+          Loading your billing summary...
         </div>
       ) : null}
 
       {!publicPlans && plansLoading && !plansError ? (
         <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-4 py-6 text-sm text-zinc-400">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading plans…
+          Loading plans...
         </div>
       ) : null}
 
@@ -252,9 +252,9 @@ export default function BillingPage() {
         <div className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] p-4 text-amber-100">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
           <div>
-            <div className="text-sm font-semibold">Self-serve billing is not live on this build.</div>
+            <div className="text-sm font-semibold">Secure checkout is not open for this account yet.</div>
             <p className="mt-1 text-sm text-amber-100/80">
-              You can review the Studio catalog here, but upgrades and credit-pack top-ups stay unavailable until billing is connected for this environment.
+              You can review the Studio catalog now. Upgrades and credit top-ups will appear here once billing is available for this account environment.
             </p>
           </div>
         </div>
@@ -271,7 +271,7 @@ export default function BillingPage() {
                 {isUnlimitedAccess ? 'Access state' : 'Credits available'}
               </div>
               <div className="mt-3 text-4xl font-bold text-white tabular-nums">
-                {isUnlimitedAccess ? '∞' : billing.credits.available_to_spend.toLocaleString()}
+                {isUnlimitedAccess ? 'Unlimited' : billing.credits.available_to_spend.toLocaleString()}
               </div>
               <div className="mt-2 text-[13px] text-zinc-500">
                 {isUnlimitedAccess
@@ -314,7 +314,7 @@ export default function BillingPage() {
                 {isUnlimitedAccess ? 'Metering mode' : 'Monthly allowance'}
               </div>
               <div className="mt-3 text-4xl font-bold text-white tabular-nums">
-                {isUnlimitedAccess ? '∞' : billing.credits.monthly_allowance.toLocaleString()}
+                {isUnlimitedAccess ? 'Unlimited' : billing.credits.monthly_allowance.toLocaleString()}
               </div>
               <div className="mt-2 text-[13px] text-zinc-500">
                 {isUnlimitedAccess
@@ -383,7 +383,7 @@ export default function BillingPage() {
                   {price.period ? <span className="text-base font-medium text-zinc-600">{price.period}</span> : null}
                 </div>
                 <div className="mt-1 text-[12px] text-zinc-600">
-                  {plan.monthly_credits.toLocaleString()} credits/mo · up to {plan.max_resolution}
+                  {plan.monthly_credits.toLocaleString()} credits/mo - up to {plan.max_resolution}
                 </div>
 
                 {/* CTA */}

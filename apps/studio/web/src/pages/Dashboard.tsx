@@ -104,8 +104,8 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
             Your account is ready. Start in Create when you want a direct image run, then come back to Explore and Library whenever you need direction or context.
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium text-zinc-400">
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-300">Free account → Create</span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-500">Creator / Pro → Chat</span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-300">Free account: Create</span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-500">Creator / Pro: Chat</span>
           </div>
         </div>
 
@@ -196,7 +196,7 @@ const showcaseReferences: ShowcaseReference[] = [
     src: '/atmosphere/showcase-03-architecture.png',
     label: 'Architecture',
     tag: 'Structures',
-    prompt: 'Architectural illustration study with premium surfaces and clean depth cues.',
+    prompt: 'Architectural illustration study with clean material contrast and quiet depth.',
     likes: 162,
     createdAt: '2026-04-09T09:20:00Z',
   },
@@ -214,7 +214,7 @@ const showcaseReferences: ShowcaseReference[] = [
     src: '/atmosphere/showcase-05-product-photo.png',
     label: 'Product Photo',
     tag: 'Commercial',
-    prompt: 'Commercial illustration with premium product styling and controlled highlights.',
+    prompt: 'Commercial still life with controlled highlights and tactile surface detail.',
     likes: 131,
     createdAt: '2026-04-08T08:45:00Z',
   },
@@ -282,16 +282,16 @@ type AtmosphereReference = {
 }
 
 const atmosphereReferences: AtmosphereReference[] = [
-  { id: 'atm-01', src: '/atmosphere/atmosphere-01-brutalist.png', label: 'Brutalist', mood: 'Industrial · Concrete · Urban' },
-  { id: 'atm-02', src: '/atmosphere/atmosphere-02-conservatory.png', label: 'Conservatory', mood: 'Organic · Glass · Lush' },
-  { id: 'atm-03', src: '/atmosphere/atmosphere-03-skyline-garden.png', label: 'Skyline Garden', mood: 'Elevated · Verdant · City' },
-  { id: 'atm-04', src: '/atmosphere/atmosphere-04-snow-leopard.png', label: 'Snow Leopard', mood: 'Wild · Alpine · Pristine' },
-  { id: 'atm-05', src: '/atmosphere/atmosphere-05-desert-courtyard.png', label: 'Desert Courtyard', mood: 'Arid · Sun-baked · Serene' },
-  { id: 'atm-06', src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp', label: 'Volcanic Fragrance', mood: 'Raw · Elemental · Intense' },
-  { id: 'atm-07', src: '/atmosphere/atmosphere-07-observatory.webp', label: 'Observatory', mood: 'Cosmic · Precise · Vast' },
-  { id: 'atm-08', src: '/atmosphere/atmosphere-08-glass-fins.webp', label: 'Glass Fins', mood: 'Architectural · Translucent · Light' },
-  { id: 'atm-09', src: '/atmosphere/atmosphere-09-snow-leopard.webp', label: 'Snow Leopard II', mood: 'Arctic · Textured · Silent' },
-  { id: 'atm-10', src: '/atmosphere/atmosphere-10-elven-ward.webp', label: 'Elven Ward', mood: 'Fantasy · Ancient · Luminous' },
+  { id: 'atm-01', src: '/atmosphere/atmosphere-01-brutalist.png', label: 'Brutalist', mood: 'Industrial - Concrete - Urban' },
+  { id: 'atm-02', src: '/atmosphere/atmosphere-02-conservatory.png', label: 'Conservatory', mood: 'Organic - Glass - Lush' },
+  { id: 'atm-03', src: '/atmosphere/atmosphere-03-skyline-garden.png', label: 'Skyline Garden', mood: 'Elevated - Verdant - City' },
+  { id: 'atm-04', src: '/atmosphere/atmosphere-04-snow-leopard.png', label: 'Snow Leopard', mood: 'Wild - Alpine - Pristine' },
+  { id: 'atm-05', src: '/atmosphere/atmosphere-05-desert-courtyard.png', label: 'Desert Courtyard', mood: 'Arid - Sun-baked - Serene' },
+  { id: 'atm-06', src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp', label: 'Volcanic Fragrance', mood: 'Raw - Elemental - Intense' },
+  { id: 'atm-07', src: '/atmosphere/atmosphere-07-observatory.webp', label: 'Observatory', mood: 'Cosmic - Precise - Vast' },
+  { id: 'atm-08', src: '/atmosphere/atmosphere-08-glass-fins.webp', label: 'Glass Fins', mood: 'Architectural - Translucent - Light' },
+  { id: 'atm-09', src: '/atmosphere/atmosphere-09-snow-leopard.webp', label: 'Snow Leopard II', mood: 'Arctic - Textured - Silent' },
+  { id: 'atm-10', src: '/atmosphere/atmosphere-10-elven-ward.webp', label: 'Elven Ward', mood: 'Fantasy - Ancient - Luminous' },
 ]
 
 function matchesExploreQuery(query: string, ...parts: Array<string | null | undefined>) {

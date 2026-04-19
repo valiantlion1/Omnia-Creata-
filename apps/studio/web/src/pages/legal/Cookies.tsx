@@ -31,7 +31,7 @@ export default function CookiePolicy() {
       subtitle="What we store in your browser, why we store it, and how to change your mind."
       lastUpdated={LEGAL_LAST_UPDATED_LABEL}
       effectiveDate={LEGAL_EFFECTIVE_DATE_LABEL}
-      summary="We use strictly necessary cookies to keep you signed in and the Service secure — these can't be turned off. Optional analytics and preference cookies run only with your consent. We don't use advertising cookies and we don't sell cookie data. You can change your choices at any time from the cookie banner or your account settings."
+      summary="We use strictly necessary cookies to keep you signed in and the Service secure - these cannot be turned off. Optional analytics and preference cookies run only with your consent. We do not use advertising cookies and we do not sell cookie data. You can change your choices at any time from the cookie banner or your account settings."
       toc={TOC}
     >
       <LegalSection id="overview" title="1. Overview">
@@ -101,8 +101,8 @@ export default function CookiePolicy() {
 
       <LegalSection id="inventory" title="5. Cookie inventory">
         <p>
-          The table below lists the cookies we use and is kept current. If you want a live, browsable inventory, open
-          your browser developer tools on any Omnia Creata Studio page.
+          The table below lists the cookies we use and is kept current. If you want a live inventory from your browser,
+          open your cookie settings or site-data view on any Omnia Creata Studio page.
         </p>
         <div className="mt-4 overflow-x-auto rounded-[12px] border border-white/[0.08]">
           <table className="w-full min-w-[720px] text-left text-[12.5px]">
@@ -182,7 +182,7 @@ export default function CookiePolicy() {
           </table>
         </div>
         <p className="text-[12.5px] text-zinc-500">
-          Names prefixed with a placeholder are provider-specific and may change when the provider updates their SDK.
+          Some provider-set cookie names vary by environment and may change when the provider updates their SDK.
         </p>
       </LegalSection>
 
@@ -194,16 +194,16 @@ export default function CookiePolicy() {
         <LegalList
           items={[
             <>
-              <strong>Paddle</strong> (merchant of record) — cookies set during checkout are necessary to complete
+              <strong>Paddle</strong> (merchant of record) - cookies set during checkout are necessary to complete
               your purchase and prevent payment fraud. See paddle.com/legal.
             </>,
             <>
               <strong>Analytics &amp; error monitoring</strong> (
-              <LegalPlaceholder>Analytics/Monitoring Provider</LegalPlaceholder>) — set only with your consent where
+              <LegalPlaceholder>Analytics/Monitoring Provider</LegalPlaceholder>) - set only with your consent where
               required.
             </>,
             <>
-              <strong>CDN &amp; security</strong> (<LegalPlaceholder>CDN Provider</LegalPlaceholder>) — strictly
+              <strong>CDN &amp; security</strong> (<LegalPlaceholder>CDN Provider</LegalPlaceholder>) - strictly
               necessary cookies for routing and DDoS protection.
             </>,
           ]}
@@ -212,7 +212,7 @@ export default function CookiePolicy() {
 
       <LegalSection id="consent" title="7. Your consent and choices">
         <p>
-          In the EEA, the United Kingdom, Türkiye, and other jurisdictions that require prior consent for non-essential
+          In the EEA, the United Kingdom, Turkiye, and other jurisdictions that require prior consent for non-essential
           cookies, we show a cookie banner on your first visit and only set non-essential cookies after you consent.
           You can:
         </p>

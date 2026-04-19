@@ -4,6 +4,7 @@ from datetime import datetime
 
 from .models import GenerationJob, JobStatus, PromptSnapshot, StudioState
 from .prompt_engineering import compile_generation_request
+from .studio_model_contract import normalize_studio_model_id
 
 
 INCOMPLETE_GENERATION_STATUSES = {
@@ -42,9 +43,10 @@ def has_duplicate_incomplete_generation(
     model_id: str,
     prompt_snapshot: PromptSnapshot,
 ) -> bool:
+    normalized_model_id = normalize_studio_model_id(model_id)
     normalized_prompt, normalized_negative = _canonical_prompt_parts(
         prompt_snapshot,
-        model_id=model_id,
+        model_id=normalized_model_id,
     )
 
     for job in state.generations.values():
@@ -52,13 +54,13 @@ def has_duplicate_incomplete_generation(
             continue
         if job.status not in INCOMPLETE_GENERATION_STATUSES:
             continue
-        if job.model != model_id:
+        if normalize_studio_model_id(job.model) != normalized_model_id:
             continue
 
         current_snapshot = job.prompt_snapshot
         current_prompt, current_negative = _canonical_prompt_parts(
             current_snapshot,
-            model_id=job.model,
+            model_id=normalize_studio_model_id(job.model),
         )
         if (
             current_snapshot.workflow == prompt_snapshot.workflow

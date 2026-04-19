@@ -5,7 +5,6 @@ import { AlertTriangle, Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal,
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import {
-  getCreativeProfileDescription,
   getCreativeProfileKey,
   getCreativeProfileLabel,
   describeGenerationLaneTrust,
@@ -70,55 +69,50 @@ function usePromptHistory(storageKey: string, { allowLegacyFallback = false }: {
 
 const PROMPT_TEMPLATES = [
   {
-    category: 'Cinematic',
-    icon: '🎬',
+    category: 'Portrait',
     prompts: [
-      'Cinematic still, golden hour light, 35mm film grain, dramatic lens flare, hyperrealistic',
-      'Aerial establishing shot, volumetric fog, epic landscape, cinematic color grade',
-      'Close-up portrait, shallow depth of field, creamy bokeh, soft studio lighting',
+      'Quiet studio portrait, soft side light, deep charcoal backdrop, restrained contrast',
+      'Three-quarter portrait, natural skin texture, clean catchlights, editorial framing',
+      'Close portrait with shallow depth of field, muted palette, calm expression, polished finish',
     ],
   },
   {
-    category: 'Nature',
-    icon: '🌿',
+    category: 'Interiors',
     prompts: [
-      'Misty forest at dawn, god rays through ancient trees, macro detail, 8k nature photography',
-      'Ocean at golden hour, long exposure, silky water, dramatic storm clouds on horizon',
-      'Cherry blossoms in gentle wind, soft pastel tones, Japanese garden, dreamy atmosphere',
+      'Sunlit reading room, oak shelves, linen curtains, warm shadows, tactile detail',
+      'Minimal hotel lobby, polished stone floor, reflected evening light, quiet luxury',
+      'Modern kitchen with brushed metal accents, soft daylight, lived-in styling, clean composition',
     ],
   },
   {
     category: 'Architecture',
-    icon: '🏛️',
     prompts: [
-      'Brutalist concrete architecture, dramatic shadow play, black and white fine art photography',
-      'Futuristic glass tower facade, reflections of city at dusk, blue hour, cyberpunk aesthetic',
-      'Ancient stone ruins at sunset, warm amber light, rich textures, cinematic depth of field',
+      'Concrete gallery facade, long shadows, pale sky, crisp material contrast',
+      'Glass tower at blue hour, restrained reflections, precise lines, atmospheric city edge',
+      'Stone courtyard after rain, soft sunset, weathered surfaces, balanced perspective',
     ],
   },
   {
-    category: 'Fashion',
-    icon: '👗',
+    category: 'Editorial',
     prompts: [
-      'High fashion editorial, avant-garde styling, dramatic studio lighting, Vogue aesthetic',
-      'Street style photography, urban backdrop, candid moment, fashion week crowd behind',
-      'Luxury product shot, dark marble surface, studio light, commercial grade photography',
+      'Editorial still life, folded paper, brushed metal, controlled highlights, matte shadows',
+      'Street editorial at blue hour, tailored coat, wet pavement reflections, calm motion blur',
+      'Product study on smoked glass, soft overhead light, tactile materials, commercial finish',
     ],
   },
   {
-    category: 'Abstract',
-    icon: '✨',
+    category: 'Materials',
     prompts: [
-      'Fluid liquid metal textures, iridescent surfaces, macro photography, dark background',
-      'Bioluminescent deep sea creatures, ethereal glow, dark ocean, otherworldly beauty',
-      'Sacred geometry patterns, vibrant neon colors, mathematical precision, digital art',
+      'Brushed aluminum surface, subtle wear, cool reflections, macro detail',
+      'Folded silk in low light, soft gradients, tactile weave, close crop',
+      'Handmade ceramic glaze, hairline cracks, warm neutral tones, macro study',
     ],
   },
 ] as const
 
 /* ─── Placeholder prompts ──────────────────────────── */
 
-const PLACEHOLDER_PROMPTS = [
+const LEGACY_PLACEHOLDER_PROMPTS = [
   'A neon-lit Tokyo alley at midnight, rain-soaked reflections, cinematic mood…',
   'Minimalist perfume bottle on dark marble, studio lighting, product photography…',
   'Ancient dragon perched on crystal ruins, aurora borealis, fantasy concept art…',
@@ -127,6 +121,16 @@ const PLACEHOLDER_PROMPTS = [
 ]
 
 /* ─── Aspect presets ───────────────────────────────── */
+
+void LEGACY_PLACEHOLDER_PROMPTS
+
+const PLACEHOLDER_PROMPTS = [
+  'Rain-soaked side street at blue hour, reflected shop lights, restrained contrast...',
+  'Perfume bottle on dark stone, soft overhead light, clean commercial framing...',
+  'Ancient watchtower above a frozen lake, wind-cut snow, pale sunrise...',
+  'Tailored coat in motion, quiet street, soft daylight, editorial finish...',
+  'Coastal house in poured concrete and glass, sea haze, late afternoon light...',
+]
 
 const aspectPresets = {
   '1:1':  { aspect: 'aspect-square' },
@@ -138,7 +142,10 @@ const aspectPresets = {
 } as const
 
 const aspectOrder: Array<keyof typeof aspectPresets> = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
-const createFirstRunSteps = ['Prompt', 'Quality', 'Format', 'Library'] as const
+const DEFAULT_CREATE_STEPS = 28
+const DEFAULT_CFG_SCALE = 6.5
+const DEFAULT_OUTPUT_COUNT = 1
+const createFirstRunSteps = ['Prompt', 'Finish', 'Format', 'Library'] as const
 
 /* ─── Toast types ──────────────────────────────────── */
 
@@ -208,6 +215,21 @@ function getProprietaryModelName(id: string, originalLabel: string): string {
   return getCreativeProfileLabel(id, originalLabel)
 }
 
+function getCreateQualityDescription(id: string, fallbackDescription?: string | null) {
+  switch (getCreativeProfileKey(id)) {
+    case 'fast':
+      return 'Quick starts for ideas, framing, and fresh variations.'
+    case 'standard':
+      return 'Balanced detail for everyday image work when you want a clean, dependable result.'
+    case 'premium':
+      return 'Richer light, materials, and polish for images you want to keep.'
+    case 'signature':
+      return 'Reserved for internal art-direction workflows.'
+    default:
+      return fallbackDescription?.trim() || 'A Studio finish matched to your current plan.'
+  }
+}
+
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
   if (!value) return fallback
   const parsed = Number.parseInt(value, 10)
@@ -238,11 +260,11 @@ export default function CreatePage() {
 
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [selectedModelId, setSelectedModelId] = useState('')
+  const [selectedModelId, setSelectedModelId] = useState('flux-2-klein')
   const [aspectRatio, setAspectRatio] = useState<keyof typeof aspectPresets>('1:1')
-  const [steps, setSteps] = useState(28)
-  const [cfgScale, setCfgScale] = useState(6.5)
-  const [outputCount, setOutputCount] = useState(1)
+  const [steps, setSteps] = useState(DEFAULT_CREATE_STEPS)
+  const [cfgScale, setCfgScale] = useState(DEFAULT_CFG_SCALE)
+  const [outputCount, setOutputCount] = useState(DEFAULT_OUTPUT_COUNT)
   const [referenceAssetId, setReferenceAssetId] = useState<string | null>(null)
   const [submittingCount, setSubmittingCount] = useState(0)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -254,7 +276,6 @@ export default function CreatePage() {
   const [ratioPickerOpen, setRatioPickerOpen] = useState(false)
   const [ratioPickerDirection, setRatioPickerDirection] = useState<'down' | 'up'>('down')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [seed, setSeed] = useState<number | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
@@ -373,9 +394,9 @@ export default function CreatePage() {
     if (nextModel) setSelectedModelId(nextModel)
     if (nextAspect && nextAspect in aspectPresets) setAspectRatio(nextAspect)
     setReferenceAssetId(searchParams.get('reference_asset_id'))
-    setSteps(parseBoundedInt(searchParams.get('steps'), 28, 1, 50))
-    setCfgScale(parseBoundedFloat(searchParams.get('cfg_scale'), 6.5, 1, 20))
-    setOutputCount(parseBoundedInt(searchParams.get('output_count'), 1, 1, 4))
+    setSteps(parseBoundedInt(searchParams.get('steps'), DEFAULT_CREATE_STEPS, 1, 50))
+    setCfgScale(parseBoundedFloat(searchParams.get('cfg_scale'), DEFAULT_CFG_SCALE, 1, 20))
+    setOutputCount(parseBoundedInt(searchParams.get('output_count'), DEFAULT_OUTPUT_COUNT, 1, 4))
   }, [searchParams])
 
   useEffect(() => {
@@ -630,7 +651,7 @@ export default function CreatePage() {
         model: selectedModel.id,
         steps,
         cfg_scale: cfgScale,
-        seed: seed ?? Math.floor(Math.random() * 1_000_000_000),
+        seed: Math.floor(Math.random() * 1_000_000_000),
         aspect_ratio: aspectRatio,
         output_count: outputCount,
       })
@@ -643,7 +664,7 @@ export default function CreatePage() {
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
-  }, [aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, pushPromptHistory, queryClient, referenceAssetId, seed, selectedModel, selectedModelCreditGuide, steps])
+  }, [aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, pushPromptHistory, queryClient, referenceAssetId, selectedModel, selectedModelCreditGuide, steps])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -707,7 +728,7 @@ export default function CreatePage() {
             <p className="mt-1 text-sm text-zinc-500">
               {isOutOfCredits
                 ? 'Shape the prompt now, then top up when you are ready to run it.'
-                : 'Describe the image, choose quality, then run it.'}
+                : 'Describe the image, choose a finish, then run it.'}
             </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
@@ -731,7 +752,7 @@ export default function CreatePage() {
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
                   {isOutOfCredits
                     ? 'Free accounts can compose here any time. Add wallet credits when you want to run, or move onto Creator or Pro if you also want the chat surface.'
-                    : 'Create is the direct image workspace inside Studio. Pick a quality, choose a format, and the run lands in your library.'}
+                    : 'Create is the direct image workspace inside Studio. Pick a finish, choose a format, and the run lands in your library.'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {createFirstRunSteps.map((step) => (
@@ -814,13 +835,12 @@ export default function CreatePage() {
                     <button
                       key={cat.category}
                       onClick={() => setActiveTemplateCategory(i)}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                      className={`flex shrink-0 items-center rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                         activeTemplateCategory === i
                           ? 'bg-white/[0.1] text-white ring-1 ring-white/[0.15]'
                           : 'text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
-                      <span>{cat.icon}</span>
                       <span>{cat.category}</span>
                     </button>
                   ))}
@@ -865,7 +885,7 @@ export default function CreatePage() {
                 className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saveStyleMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-[rgb(var(--primary-light))]" />}
-                Save Style
+                Save style
               </button>
               <button
                 onClick={() => {
@@ -881,11 +901,11 @@ export default function CreatePage() {
               <button
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
-                title="Improve prompt with AI"
+                title="Refine prompt"
                 className="group flex h-9 items-center gap-1.5 rounded-full bg-[rgb(var(--primary-light)/0.05)] px-4 text-[12px] font-semibold tracking-wide text-[rgb(var(--primary-light))] ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_0_15px_rgba(var(--primary-light),0.1)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[rgb(var(--primary-light)/0.1)] hover:ring-[rgb(var(--primary-light)/0.4)] hover:shadow-[0_0_20px_rgba(var(--primary-light),0.2)] hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
-                {improveState === 'done' ? 'Improved ✓' : improveState === 'fallback' ? 'Improved' : 'Improve Prompt'}
+                {improveState === 'done' ? 'Refined' : improveState === 'fallback' ? 'Refined' : 'Refine prompt'}
               </button>
             </div>
           </div>
@@ -899,7 +919,7 @@ export default function CreatePage() {
               <span className="relative flex items-center gap-1.5">
                 <SlidersHorizontal className="h-3.5 w-3.5" />
                 Advanced
-                {(negativePrompt || steps !== 28 || cfgScale !== 6.5) && (
+                {(negativePrompt || cfgScale !== DEFAULT_CFG_SCALE || outputCount !== DEFAULT_OUTPUT_COUNT) && (
                   <span className="absolute -right-2.5 -top-0.5 h-[6px] w-[6px] rounded-full bg-[rgb(var(--primary-light))] shadow-[0_0_6px_rgb(var(--primary-light))]" />
                 )}
               </span>
@@ -917,47 +937,9 @@ export default function CreatePage() {
                       value={negativePrompt}
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
-                      placeholder="Things to avoid: blurry, low quality, deformed hands…"
+                      placeholder="Things to avoid: blur, oversharpening, extra fingers..."
                       className="w-full resize-none rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04]"
                       style={{ maxHeight: '80px' }}
-                    />
-                  </div>
-
-                  {/* Seed */}
-                  <div>
-                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Seed</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={seed ?? ''}
-                        onChange={(e) => setSeed(e.target.value ? Number(e.target.value) : null)}
-                        placeholder="Random"
-                        className="w-full rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                      <button
-                        onClick={() => setSeed(Math.floor(Math.random() * 1_000_000_000))}
-                        title="Randomize seed"
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-                      >
-                        <Dices className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Steps */}
-                  <div>
-                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
-                      <span>Steps</span>
-                      <span className="tabular-nums text-zinc-300">{steps}</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={10}
-                      max={50}
-                      step={1}
-                      value={steps}
-                      onChange={(e) => setSteps(Number(e.target.value))}
-                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
                     />
                   </div>
 
@@ -1066,9 +1048,9 @@ export default function CreatePage() {
                   className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Quality</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Finish</div>
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Choose quality'}
+                      {selectedModel ? getProprietaryModelName(selectedModel.id, selectedModel.label) : 'Fast'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -1092,7 +1074,7 @@ export default function CreatePage() {
                               <span className="truncate">{getProprietaryModelName(entry.id, entry.label)}</span>
                             </div>
                             <div className="mt-1 pl-[1.3rem] text-[11px] leading-5 text-zinc-500">
-                              {getCreativeProfileDescription(entry.id, entry.description)}
+                              {getCreateQualityDescription(entry.id, entry.description)}
                             </div>
                           </div>
                         </button>

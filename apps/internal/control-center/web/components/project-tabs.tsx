@@ -17,6 +17,11 @@ const tabs = [
     href: (projectSlug: string) => `/projects/${projectSlug}/operations`
   },
   {
+    key: "automations",
+    label: "Automations",
+    href: (projectSlug: string) => `/projects/${projectSlug}/automations`
+  },
+  {
     key: "reports",
     label: "Reports",
     href: (projectSlug: string) => `/projects/${projectSlug}/reports`
@@ -38,10 +43,10 @@ export function ProjectTabs({
           <Link
             key={tab.key}
             href={tab.href(projectSlug)}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
               selected
-                ? "border-teal-300/40 bg-teal-300/12 text-teal-50"
-                : "border-white/10 bg-white/5 text-white/78 hover:border-teal-300/35 hover:bg-teal-300/10 hover:text-white"
+                ? "border border-[rgba(23,107,102,0.18)] bg-[rgba(23,107,102,0.08)] text-[var(--ocos-accent)]"
+                : "border border-transparent bg-white/58 text-[var(--ocos-muted)] hover:border-[rgba(23,107,102,0.14)] hover:bg-[rgba(23,107,102,0.06)] hover:text-[var(--ocos-ink)]"
             }`}
           >
             {tab.label}

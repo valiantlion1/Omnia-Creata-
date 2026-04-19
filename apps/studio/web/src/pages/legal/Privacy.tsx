@@ -23,8 +23,8 @@ const TOC: LegalTocItem[] = [
   { id: 'retention', title: '10. Retention' },
   { id: 'security', title: '11. Security' },
   { id: 'your-rights', title: '12. Your rights (EU / UK / EEA)' },
-  { id: 'kvkk', title: '13. Türkiye — KVKK rights' },
-  { id: 'ccpa', title: '14. California — CCPA / CPRA rights' },
+  { id: 'kvkk', title: '13. Turkiye - KVKK rights' },
+  { id: 'ccpa', title: '14. California - CCPA / CPRA rights' },
   { id: 'children', title: '15. Children' },
   { id: 'automated', title: '16. Automated decision-making' },
   { id: 'marketing', title: '17. Marketing communications' },
@@ -38,10 +38,10 @@ export default function PrivacyPolicy() {
   return (
     <LegalPage
       title="Privacy Policy"
-      subtitle="How Omnia Creata Studio collects, uses, protects, and shares personal data — and the choices you have."
+      subtitle="How Omnia Creata Studio collects, uses, protects, and shares personal data - and the choices you have."
       lastUpdated={LEGAL_LAST_UPDATED_LABEL}
       effectiveDate={LEGAL_EFFECTIVE_DATE_LABEL}
-      summary="We collect the minimum data needed to run the Service: your account details, your prompts and generated images, billing records via Paddle, and basic technical logs. We do not sell your data, we do not use your content to train third-party AI models, and we honour the rights granted to you under the GDPR, Türkiye's KVKK, and the CCPA. You can request access, correction, export, or deletion at any time."
+      summary="We collect the minimum data needed to run the Service: your account details, your prompts and generated images, billing records via Paddle, and basic technical logs. We do not sell your data, we do not use your content to train third-party AI models, and we honour the rights granted to you under the GDPR, Turkiye's KVKK, and the CCPA. You can request access, correction, export, or deletion at any time."
       toc={TOC}
     >
       <LegalSection id="overview" title="1. Overview">
@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
         </p>
         <p>
           We wrote this notice to be readable. It is still a legal document. Where a specific regional law applies to
-          you (GDPR in the EEA, UK GDPR and the Data Protection Act 2018 in the United Kingdom, the KVKK in Türkiye,
+          you (GDPR in the EEA, UK GDPR and the Data Protection Act 2018 in the United Kingdom, the KVKK in Turkiye,
           the CCPA/CPRA in California), the section addressed to your region applies in addition to the general terms.
         </p>
         <p>
@@ -85,7 +85,7 @@ export default function PrivacyPolicy() {
         />
         <p>
           Where we are required to register with a data protection authority or appoint a representative — including
-          under Article 27 GDPR for EU representation or VERBIS registration in Türkiye — the designated contact point
+          under Article 27 GDPR for EU representation or VERBIS registration in Turkiye - the designated contact point
           will be published here.
         </p>
       </LegalSection>
@@ -212,7 +212,7 @@ export default function PrivacyPolicy() {
           where the law requires it.
         </p>
         <p>
-          Full detail — including a list of each cookie, its purpose, and its duration — is in our{' '}
+          Full detail - including a list of each cookie, its purpose, and its duration - is in our{' '}
           <Link to="/legal/cookies" className="text-white underline-offset-4 hover:underline">
             Cookie Policy
           </Link>
@@ -228,7 +228,7 @@ export default function PrivacyPolicy() {
         <LegalList
           items={[
             <>
-              <strong>Paddle.com Market Limited</strong> (United Kingdom) — merchant of record, payment processing,
+              <strong>Paddle.com Market Limited</strong> (United Kingdom) - merchant of record, payment processing,
               invoicing, tax collection and remittance.
             </>,
             <>
@@ -277,7 +277,7 @@ export default function PrivacyPolicy() {
           items={[
             'European Commission adequacy decisions, where applicable;',
             'Standard Contractual Clauses (SCCs) approved by the European Commission, supplemented by the UK International Data Transfer Addendum where relevant;',
-            'Equivalent mechanisms under Türkiye\'s KVKK (Article 9), including explicit consent or Board-approved undertakings, where required.',
+            'Equivalent mechanisms under Turkiye\'s KVKK (Article 9), including explicit consent or Board-approved undertakings, where required.',
           ]}
         />
         <p>
@@ -358,7 +358,7 @@ export default function PrivacyPolicy() {
               affecting the lawfulness of prior processing.
             </>,
             <>
-              <strong>Lodge a complaint</strong> — with your local supervisory authority (see Section 20).
+              <strong>Lodge a complaint</strong> - with your local supervisory authority (see Section 20).
             </>,
           ]}
         />
@@ -370,16 +370,16 @@ export default function PrivacyPolicy() {
         </p>
       </LegalSection>
 
-      <LegalSection id="kvkk" title="13. Türkiye — KVKK rights">
+      <LegalSection id="kvkk" title="13. Turkiye - KVKK rights">
         <p>
-          If you are in Türkiye, the Personal Data Protection Law No. 6698 ("KVKK") applies to you. Under
+          If you are in Turkiye, the Personal Data Protection Law No. 6698 ("KVKK") applies to you. Under
           Article 11, you have the right to:
         </p>
         <LegalList
           items={[
             'Learn whether your personal data are processed;',
             'Request information about the processing, its purposes, and whether data is used in line with the purpose;',
-            'Know the third parties (in Türkiye or abroad) to whom your data are transferred;',
+            'Know the third parties (in Turkiye or abroad) to whom your data are transferred;',
             'Request correction of incomplete or inaccurate data;',
             'Request erasure or destruction under the conditions set out in Article 7 KVKK;',
             'Request notification of third parties about corrections, erasure, or destruction;',
@@ -399,7 +399,7 @@ export default function PrivacyPolicy() {
         </p>
       </LegalSection>
 
-      <LegalSection id="ccpa" title="14. California — CCPA / CPRA rights">
+      <LegalSection id="ccpa" title="14. California - CCPA / CPRA rights">
         <p>
           If you are a California resident, the California Consumer Privacy Act (as amended by the CPRA) gives you the
           right to:
