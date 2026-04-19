@@ -106,9 +106,6 @@ function ProfileEditorDialog({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Profile</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">Edit profile</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Update the public name and bio people see on your Studio profile. Profile artwork is chosen separately from your gallery.
-            </p>
           </div>
           <button
             type="button"
@@ -144,7 +141,7 @@ function ProfileEditorDialog({
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs leading-5 text-zinc-500">Your public @username stays fixed. Use Settings for sign-in and security controls.</div>
+          <div className="text-xs leading-5 text-zinc-500">@username stays fixed.</div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -196,9 +193,6 @@ function ArtworkPickerDialog({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Profile artwork</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">Choose from your Studio images</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Pick a finished image to personalize the profile header. If you clear it, Studio falls back to the latest visible piece from your gallery.
-            </p>
           </div>
           <button
             type="button"
@@ -219,7 +213,7 @@ function ArtworkPickerDialog({
           >
             Use automatic cover
           </button>
-          <div className="text-xs text-zinc-500">{assets.length} usable image{assets.length === 1 ? '' : 's'} in this profile</div>
+          <div className="text-xs text-zinc-500">{assets.length} image{assets.length === 1 ? '' : 's'}</div>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -321,7 +315,7 @@ function GalleryGrid({
                 <button
                   type="button"
                   onClick={() => onOpenPost(post)}
-                  className="truncate text-left text-base font-medium text-white transition hover:text-[rgb(var(--primary-light))]"
+                  className="block w-full truncate text-left text-base font-medium text-white transition hover:text-[rgb(var(--primary-light))]"
                 >
                   {post.title}
                 </button>
@@ -377,11 +371,11 @@ function GalleryGrid({
               <button
                 type="button"
                 onClick={() => onOpenPost(post)}
-                className="truncate text-left text-base font-medium text-white transition hover:text-[rgb(var(--primary-light))]"
+                className="block w-full line-clamp-2 text-left text-base font-medium leading-6 text-white transition hover:text-[rgb(var(--primary-light))]"
               >
                 {post.title}
               </button>
-              <p className="mt-1 truncate text-sm text-zinc-500">{post.prompt}</p>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-500">{post.prompt}</p>
             </div>
           </article>
         )
@@ -492,7 +486,7 @@ export default function AccountPage() {
 
   return (
     <div className="flex min-h-full flex-col pb-10">
-      <div className="relative isolate min-h-[280px] overflow-hidden border-b border-white/[0.05]">
+      <div className="relative isolate min-h-[220px] overflow-hidden border-b border-white/[0.05]">
         {featuredPreview ? (
           <>
             <img src={featuredPreview} alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name} className="absolute inset-0 h-full w-full object-cover" />
@@ -503,20 +497,7 @@ export default function AccountPage() {
         )}
         <div className="absolute inset-0 opacity-[0.1] mix-blend-screen [background-image:radial-gradient(circle_at_top,rgba(255,255,255,0.22)_0,transparent_55%)]" />
 
-        <div className="relative mx-auto flex h-full min-h-[280px] w-full max-w-[1180px] flex-col px-4 pb-8 pt-5 md:px-8">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <ViewToggle value={view} onChange={setView} />
-            {payload.own_profile ? (
-              <Link
-                to="/settings"
-                className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-black/30 px-4 py-2 text-[13px] font-medium text-white backdrop-blur-md transition hover:bg-white/[0.08]"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            ) : null}
-          </div>
-
+        <div className="relative mx-auto flex h-full min-h-[220px] w-full max-w-[1180px] flex-col px-4 pb-6 pt-5 md:px-8">
           <div className="mt-auto flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
               <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-400">
@@ -538,13 +519,7 @@ export default function AccountPage() {
                   <div className="mt-1 text-sm font-medium text-zinc-300">@{payload.profile.username}</div>
                 </div>
               </div>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-300">
-                {payload.profile.bio
-                  ? payload.profile.bio
-                  : payload.own_profile
-                    ? 'Give your profile a stronger presence with a short bio and a chosen hero image from your own Studio gallery.'
-                    : 'This creator has not added a profile bio yet.'}
-              </p>
+              {payload.profile.bio ? <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300">{payload.profile.bio}</p> : null}
             </div>
 
             {payload.own_profile ? (
@@ -573,140 +548,104 @@ export default function AccountPage() {
       </div>
 
       <div className="mx-auto w-full max-w-[1180px] px-4 pt-6 md:px-8">
-        <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <Surface tone="raised" className="space-y-4">
+        <section className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-5 xl:self-start">
+            <Surface tone="raised" className="space-y-5">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Profile setup</div>
-                  <div className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">Identity and discoverability</div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Profile</div>
+                  <div className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">{payload.profile.display_name}</div>
+                  <div className="mt-1 text-sm text-zinc-400">@{payload.profile.username}</div>
                 </div>
-                {featuredPreview ? (
-                  <button
-                    type="button"
-                    onClick={() => featuredAsset && openLightbox(featuredPreview, featuredAsset.display_title ?? featuredAsset.title, {
-                      title: featuredAsset.display_title ?? featuredAsset.title,
-                      prompt: featuredAsset.prompt,
-                      authorName: payload.profile.display_name,
-                      authorUsername: payload.profile.username,
-                    })}
-                    className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] transition hover:border-white/[0.18]"
-                    title="Open profile artwork"
-                  >
-                    <img src={featuredPreview} alt={featuredAsset?.display_title ?? featuredAsset?.title ?? 'Profile artwork'} className="h-16 w-16 object-cover" />
-                  </button>
+                <div className="flex items-center gap-2">
+                  <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{payload.profile.plan.toUpperCase()}</StatusPill>
+                  {featuredPreview ? (
+                    <button
+                      type="button"
+                      onClick={() => featuredAsset && openLightbox(featuredPreview, featuredAsset.display_title ?? featuredAsset.title, {
+                        title: featuredAsset.display_title ?? featuredAsset.title,
+                        prompt: featuredAsset.prompt,
+                        authorName: payload.profile.display_name,
+                        authorUsername: payload.profile.username,
+                      })}
+                      className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] transition hover:border-white/[0.18]"
+                      title="Open profile artwork"
+                    >
+                      <img src={featuredPreview} alt={featuredAsset?.display_title ?? featuredAsset?.title ?? 'Profile artwork'} className="h-12 w-12 object-cover" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {payload.profile.bio ? <p className="text-sm leading-6 text-zinc-400">{payload.profile.bio}</p> : null}
+
+              <div className="overflow-hidden rounded-[20px] border border-white/[0.06] bg-white/[0.02]">
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Featured artwork</div>
+                  <div className="truncate text-sm text-white">{featuredAsset ? featuredAsset.display_title ?? featuredAsset.title : 'Automatic'}</div>
+                </div>
+                <div className="h-px bg-white/[0.06]" />
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Published</div>
+                  <div className="text-sm font-medium text-white">{payload.profile.public_post_count}</div>
+                </div>
+                <div className="h-px bg-white/[0.06]" />
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Default visibility</div>
+                  {payload.own_profile ? (
+                    <StatusPill tone={activeDefaultVisibility === 'public' ? 'brand' : 'neutral'}>
+                      {activeDefaultVisibility === 'public' ? 'Public' : 'Private'}
+                    </StatusPill>
+                  ) : (
+                    <StatusPill tone="neutral">Public profile</StatusPill>
+                  )}
+                </div>
+                {payload.own_profile && usage ? (
+                  <>
+                    <div className="h-px bg-white/[0.06]" />
+                    <div className="space-y-3 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Credits</div>
+                        <div className="text-sm font-medium text-white">{usage.credits_remaining}</div>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.max(4, 100 - usage.progress_percent)}%`,
+                            background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))',
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <span>{usage.allowance} included</span>
+                        {usageLabel ? <span>{usageLabel}</span> : null}
+                      </div>
+                    </div>
+                  </>
                 ) : null}
               </div>
-
-              <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Featured artwork</div>
-                    <div className="mt-2 text-sm text-white">{featuredAsset ? featuredAsset.display_title ?? featuredAsset.title : 'Automatic gallery cover'}</div>
-                    <div className="mt-1 text-xs leading-5 text-zinc-500">
-                      {payload.own_profile
-                        ? 'Your header can highlight one of your Studio renders instead of leaving the profile cold and empty.'
-                        : 'This header highlights a selected piece from the creator gallery when one is available.'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Published images</div>
-                  <div className="mt-3 text-2xl font-semibold text-white">{payload.profile.public_post_count}</div>
-                  <div className="mt-1 text-xs text-zinc-500">Visible on the public profile and eligible for Explore.</div>
-                </div>
-                <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Default visibility</div>
-                  <div className="mt-3">
-                    {payload.own_profile ? (
-                      <StatusPill tone={activeDefaultVisibility === 'public' ? 'brand' : 'neutral'}>
-                        {activeDefaultVisibility === 'public' ? 'Public by default' : 'Private by default'}
-                      </StatusPill>
-                    ) : (
-                      <StatusPill tone="neutral">Profile view only</StatusPill>
-                    )}
-                  </div>
-                  <div className="mt-2 text-xs text-zinc-500">
-                    {payload.own_profile
-                      ? 'New work starts with this visibility unless you change it on the piece.'
-                      : 'Posting defaults stay private to the creator account. What you see here is only the public gallery.'}
-                  </div>
-                </div>
-              </div>
             </Surface>
-
-            {payload.own_profile && usage ? (
-              <Surface tone="muted" className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Credits</div>
-                    <div className="mt-2 text-xl font-semibold text-white">{usage.credits_remaining}</div>
-                  </div>
-                  <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{usage.plan_label}</StatusPill>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${Math.max(4, 100 - usage.progress_percent)}%`,
-                        background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))',
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span>{usage.allowance} included</span>
-                    {usageLabel ? <span>Resets {usageLabel}</span> : null}
-                  </div>
-                </div>
-              </Surface>
-            ) : null}
-
-            {payload.own_profile ? (
-              <Surface tone="muted" className="space-y-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Quick controls</div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                  <button
-                    type="button"
-                    onClick={() => setProfileEditorOpen(true)}
-                    className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-left text-sm font-medium text-white transition hover:bg-white/[0.05]"
-                  >
-                    Edit public copy
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setArtworkPickerOpen(true)}
-                    disabled={!galleryAssets.length}
-                    className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-left text-sm font-medium text-white transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Choose header artwork
-                  </button>
-                  <Link
-                    to="/settings"
-                    className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.05]"
-                  >
-                    Open Settings
-                  </Link>
-                </div>
-              </Surface>
-            ) : null}
-          </div>
+          </aside>
 
           <Surface tone="raised" className="space-y-5">
             <div className="flex flex-col gap-3 border-b border-white/[0.06] pb-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Your gallery' : 'Public gallery'}</div>
-                <div className="mt-1 text-sm text-zinc-500">
-                  {payload.own_profile
-                    ? 'Published and private work live here. Open anything in the lightbox, and use one of your renders as the profile header when you want more personality.'
-                    : 'Images shared publicly by this creator.'}
-                </div>
+                <div className="text-lg font-semibold text-white">{payload.own_profile ? 'Gallery' : 'Public gallery'}</div>
+                <div className="mt-1 text-sm text-zinc-500">{payload.posts.length} item{payload.posts.length === 1 ? '' : 's'}</div>
               </div>
-              {!payload.own_profile ? <ViewToggle value={view} onChange={setView} /> : null}
+              <div className="flex items-center gap-2">
+                <ViewToggle value={view} onChange={setView} />
+                {payload.own_profile ? (
+                  <Link
+                    to="/settings"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] px-3.5 py-2 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Link>
+                ) : null}
+              </div>
             </div>
 
             <GalleryGrid posts={payload.posts} ownProfile={payload.own_profile} view={view} onOpenPost={openPostPreview} />

@@ -7,7 +7,7 @@ import json
 
 import httpx
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.security.http import HTTPAuthorizationCredentials
 from pydantic import SecretStr
 from starlette.requests import Request as StarletteRequest
@@ -16,14 +16,14 @@ from config.env import Environment, get_settings
 import studio_platform.router as router_module
 from security.auth import User, UserRole, create_user_tokens, get_current_user, setup_auth
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
-from security.supabase_auth import SupabaseAuthUnavailableError
+from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
 from studio_platform.models import IdentityPlan, MediaAsset, OmniaIdentity, Project, PublicPost, ShareLink, StudioWorkspace, SubscriptionStatus, Visibility, utc_now
 from studio_platform.models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
-from studio_platform.store import StudioStateStore
+from studio_platform.store import SqliteStudioStateStore, StudioStateStore
 
 
 async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMemoryRateLimiter]:
@@ -34,6 +34,8 @@ async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMem
     await service.initialize()
 
     app = FastAPI()
+    app.state.studio_service = service
+    app.state.rate_limiter = rate_limiter
 
     async def _current_user(request: Request) -> User | None:
         if request.headers.get("X-Test-Guest", "").strip().lower() in {"1", "true", "yes"}:
@@ -928,6 +930,8 @@ async def test_auth_me_route_returns_guest_payload_without_session(tmp_path: Pat
         assert payload["guest"] is True
         assert payload["identity"]["id"] == "guest"
         assert "entitlements" in payload
+        assert "max_resolution" not in payload["plan"]
+        assert "max_resolution" not in payload["usage_caps"]
     finally:
         await service.shutdown()
 
@@ -967,6 +971,8 @@ async def test_auth_me_route_bootstraps_identity_for_authenticated_user(tmp_path
         assert payload["guest"] is False
         assert payload["identity"]["id"] == "user-1"
         assert "entitlements" in payload
+        assert "max_resolution" not in payload["plan"]
+        assert "max_resolution" not in payload["usage_caps"]
         identity = await service.get_identity("user-1")
         assert identity.username == "user-1"
     finally:
@@ -1007,6 +1013,73 @@ async def test_get_current_user_includes_session_context_for_local_jwt_tokens() 
     assert user.metadata["session_id"]
     assert user.metadata["session_issued_at"] is not None
     assert user.metadata["session_expires_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_persistently_revoked_session_from_shared_sqlite_store(
+    tmp_path: Path,
+) -> None:
+    setup_auth()
+    db_path = tmp_path / "studio-state.sqlite3"
+    first_service = StudioService(SqliteStudioStateStore(db_path), ProviderRegistry(), tmp_path / "media-first")
+    second_service = StudioService(SqliteStudioStateStore(db_path), ProviderRegistry(), tmp_path / "media-second")
+    await first_service.initialize()
+    await second_service.initialize()
+
+    token_payload = create_user_tokens(
+        User(
+            id="revoked-user",
+            email="revoked-user@example.com",
+            username="Revoked User",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={"owner_mode": False},
+        )
+    )
+    session_context = first_service.get_access_session_context_from_token(token_payload["access_token"])
+
+    try:
+        await first_service.record_access_session(
+            identity_id="revoked-user",
+            session_id=session_context["session_id"],
+            auth_provider="email",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+            client_ip="127.0.0.1",
+            host_label="127.0.0.1:5173",
+            display_mode="browser",
+            token_issued_at=session_context["issued_at"],
+            token_expires_at=session_context["expires_at"],
+        )
+        await first_service.revoke_other_access_sessions(
+            identity_id="revoked-user",
+            current_session_id="different-session",
+            reason="user_requested_sign_out_others",
+        )
+
+        app = FastAPI()
+        app.state.studio_service = second_service
+        request = StarletteRequest(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/auth/me",
+                "headers": [],
+                "query_string": b"",
+                "client": ("127.0.0.1", 12345),
+                "server": ("testserver", 80),
+                "scheme": "http",
+                "app": app,
+            }
+        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token_payload["access_token"])
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(request, credentials)
+        assert exc_info.value.detail == "Session has been revoked"
+    finally:
+        await first_service.shutdown()
+        await second_service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -1853,6 +1926,72 @@ async def test_login_returns_503_when_supabase_auth_is_unavailable(
         settings.environment = original_environment
         settings.captcha_verification_enabled = original_enabled
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_lockout_persists_across_shared_sqlite_app_instances(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    original_enabled = settings.captcha_verification_enabled
+    shared_db_path = tmp_path / "studio-state.sqlite3"
+
+    store_one = SqliteStudioStateStore(shared_db_path)
+    store_two = SqliteStudioStateStore(shared_db_path)
+    service_one = StudioService(store_one, ProviderRegistry(), tmp_path / "media-one")
+    service_two = StudioService(store_two, ProviderRegistry(), tmp_path / "media-two")
+    rate_limiter_one = InMemoryRateLimiter()
+    rate_limiter_two = InMemoryRateLimiter()
+    await rate_limiter_one.initialize()
+    await rate_limiter_two.initialize()
+    await service_one.initialize()
+    await service_two.initialize()
+
+    app_one = FastAPI()
+    app_one.state.studio_service = service_one
+    app_one.state.rate_limiter = rate_limiter_one
+    app_one.include_router(create_router(service_one, rate_limiter_one))
+
+    app_two = FastAPI()
+    app_two.state.studio_service = service_two
+    app_two.state.rate_limiter = rate_limiter_two
+    app_two.include_router(create_router(service_two, rate_limiter_two))
+
+    sign_in_calls: list[str] = []
+
+    class FakeSupabaseAuthClient:
+        async def sign_in(self, **kwargs):
+            sign_in_calls.append(str(kwargs.get("email") or ""))
+            raise SupabaseAuthError("Invalid login credentials")
+
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+    settings.captcha_verification_enabled = False
+
+    payload = {
+        "email": "lockout@example.com",
+        "password": "Password123!",
+    }
+
+    transport_one = httpx.ASGITransport(app=app_one)
+    transport_two = httpx.ASGITransport(app=app_two)
+
+    try:
+        async with httpx.AsyncClient(transport=transport_one, base_url="http://testserver") as client_one:
+            for _ in range(5):
+                response = await client_one.post("/v1/auth/login", json=payload)
+                assert response.status_code == 401
+
+        async with httpx.AsyncClient(transport=transport_two, base_url="http://testserver") as client_two:
+            blocked = await client_two.post("/v1/auth/login", json=payload)
+
+        assert blocked.status_code == 429
+        assert blocked.json() == {"detail": "Too many failed login attempts. Please wait and try again."}
+        assert sign_in_calls == ["lockout@example.com"] * 5
+    finally:
+        settings.captcha_verification_enabled = original_enabled
+        await service_one.shutdown()
+        await service_two.shutdown()
 
 
 @pytest.mark.asyncio

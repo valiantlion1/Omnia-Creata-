@@ -70,7 +70,6 @@ describe('BillingPage', () => {
             availability: 'included',
             monthly_credits: 0,
             queue_priority: 'standard',
-            max_resolution: '1024x1024',
             share_links: false,
             can_generate: true,
             can_access_chat: false,

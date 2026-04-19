@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hmac
 import hashlib
 import ipaddress
@@ -17,6 +17,7 @@ from security.auth import (
     UserRole,
     create_user_tokens,
     extract_unverified_session_context,
+    get_auth_security_settings,
     get_current_user,
     get_supabase_auth_client,
     _extract_supabase_auth_provider_context,
@@ -433,6 +434,33 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             detail="Verify your email address before creating generations.",
         )
 
+    async def _enforce_persistent_login_lockout(identifier: str | None) -> None:
+        max_login_attempts, lockout_duration_minutes = get_auth_security_settings()
+        if max_login_attempts <= 0 or lockout_duration_minutes <= 0:
+            return
+        status_payload = await service.get_login_lockout_status(
+            identifier=identifier,
+            max_attempts=max_login_attempts,
+            lockout_window=timedelta(minutes=lockout_duration_minutes),
+        )
+        if status_payload is None:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait and try again.",
+            headers={"Retry-After": str(status_payload["retry_after_seconds"])},
+        )
+
+    async def _record_login_result(identifier: str | None, *, success: bool) -> None:
+        _, lockout_duration_minutes = get_auth_security_settings()
+        if lockout_duration_minutes <= 0:
+            return
+        await service.record_login_result(
+            identifier=identifier,
+            success=success,
+            lockout_window=timedelta(minutes=lockout_duration_minutes),
+        )
+
     async def _require_auth_captcha(
         request: Request,
         *,
@@ -606,30 +634,35 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def login(payload: SupabaseLoginRequest, request: Request):
         await _consume_rate_limit(request, "auth:login", limit=12)
         await _require_auth_captcha(request, token=payload.captcha_token, action="login")
+        normalized_email = payload.email.strip().lower()
+        await _enforce_persistent_login_lockout(normalized_email)
         supabase_client = get_supabase_auth_client()
         if supabase_client is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
 
         try:
             session = await supabase_client.sign_in(
-                email=payload.email.strip().lower(),
+                email=normalized_email,
                 password=payload.password,
             )
         except SupabaseAuthUnavailableError as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
         except SupabaseAuthError as exc:
+            await _record_login_result(normalized_email, success=False)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+
+        await _record_login_result(normalized_email, success=True)
 
         user_data = session.user
         user_metadata = user_data.get("user_metadata") or {}
         display_name = (
             user_metadata.get("display_name")
-            or user_data.get("email", payload.email.strip().lower()).split("@")[0]
+            or user_data.get("email", normalized_email).split("@")[0]
             or "Omnia User"
         )
         identity = await service.ensure_identity(
             user_id=user_data["id"],
-            email=user_data.get("email", payload.email.strip().lower()),
+            email=user_data.get("email", normalized_email),
             display_name=display_name,
             username=(user_metadata.get("username") or user_data.get("email", "").split("@")[0]).strip().lower(),
             desired_plan=IdentityPlan.FREE,

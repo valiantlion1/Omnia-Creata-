@@ -515,7 +515,6 @@ class IdentityService:
             "generation_submit_limit": plan.generation_submit_limit,
             "chat_message_limit": plan.chat_message_limit,
             "max_chat_attachments": plan.max_chat_attachments,
-            "max_resolution": plan.max_resolution,
             "requires_verified_account_for_generation": True,
             "free_image_generation_included": False,
             "wallet_credit_purchase_allowed": True,

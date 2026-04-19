@@ -32,7 +32,6 @@ export type PlanInfo = {
   label: string
   monthly_credits: number
   queue_priority: string
-  max_resolution: string
   share_links: boolean
   can_generate: boolean
   can_access_chat: boolean

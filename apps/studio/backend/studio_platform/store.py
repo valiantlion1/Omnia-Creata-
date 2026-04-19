@@ -177,6 +177,7 @@ class StudioStateStore:
 
     async def save_model(self, collection: str, model: BaseModel) -> BaseModel:
         async with self._lock:
+            self._state = self._load_json_state_locked()
             target = getattr(self._state, collection)
             target[model.id] = model
             await self._save_locked()
@@ -184,6 +185,7 @@ class StudioStateStore:
 
     async def delete_model(self, collection: str, model_id: str) -> None:
         async with self._lock:
+            self._state = self._load_json_state_locked()
             target = getattr(self._state, collection)
             target.pop(model_id, None)
             await self._save_locked()
@@ -191,6 +193,17 @@ class StudioStateStore:
     async def get_model(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
         async with self._lock:
             target = getattr(self._state, collection)
+            item = target.get(model_id)
+            if item is None:
+                return None
+            if isinstance(item, model_type):
+                return item.model_copy(deep=True)
+            return model_type.model_validate(item)
+
+    async def get_model_fresh(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
+        async with self._lock:
+            state = self._load_json_state_locked()
+            target = getattr(state, collection)
             item = target.get(model_id)
             if item is None:
                 return None
@@ -209,8 +222,21 @@ class StudioStateStore:
                     items.append(model_type.model_validate(item))
             return items
 
+    async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
+        async with self._lock:
+            state = self._load_json_state_locked()
+            target = getattr(state, collection)
+            items = []
+            for item in target.values():
+                if isinstance(item, model_type):
+                    items.append(item.model_copy(deep=True))
+                else:
+                    items.append(model_type.model_validate(item))
+            return items
+
     async def mutate(self, callback):
         async with self._lock:
+            self._state = self._load_json_state_locked()
             callback(self._state)
             await self._save_locked()
             return self._state.model_copy(deep=True)
@@ -235,6 +261,10 @@ class StudioStateStore:
         text = json.dumps(payload, indent=2, ensure_ascii=True)
         await asyncio.to_thread(self._write_atomic_sync, text)
         self._last_write_at = _utc_now_iso()
+
+    def _load_json_state_locked(self) -> StudioState:
+        state = _load_json_state_file(self.path)
+        return state or StudioState()
 
     def _write_atomic_sync(self, text: str) -> None:
         temp_path = self.path.with_name(f"{self.path.stem}.{uuid4().hex}.tmp")
@@ -327,6 +357,10 @@ class SqliteStudioStateStore:
                 return item.model_copy(deep=True)
             return model_type.model_validate(item)
 
+    async def get_model_fresh(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
+        async with self._lock:
+            return await asyncio.to_thread(self._get_model_fresh_sync, collection, model_id, model_type)
+
     async def list_models(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
         async with self._lock:
             target = getattr(self._state, collection)
@@ -338,8 +372,13 @@ class SqliteStudioStateStore:
                     items.append(model_type.model_validate(item))
             return items
 
+    async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
+        async with self._lock:
+            return await asyncio.to_thread(self._list_models_fresh_sync, collection, model_type)
+
     async def mutate(self, callback):
         async with self._lock:
+            self._state = await asyncio.to_thread(self._load_sync)
             callback(self._state)
             await asyncio.to_thread(self._replace_state_sync, self._state)
             self._last_write_at = _utc_now_iso()
@@ -471,6 +510,30 @@ class SqliteStudioStateStore:
                 (collection, model_id),
             )
 
+    def _get_model_fresh_sync(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
+        with self._connect() as connection:
+            self._ensure_schema_sync(connection)
+            row = connection.execute(
+                "SELECT payload FROM records WHERE collection = ? AND model_id = ?",
+                (collection, model_id),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = _normalize_loaded_payload(row["payload"])
+        return model_type.model_validate(payload)
+
+    def _list_models_fresh_sync(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
+        with self._connect() as connection:
+            self._ensure_schema_sync(connection)
+            rows = connection.execute(
+                "SELECT payload FROM records WHERE collection = ? ORDER BY model_id",
+                (collection,),
+            ).fetchall()
+        return [
+            model_type.model_validate(_normalize_loaded_payload(row["payload"]))
+            for row in rows
+        ]
+
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")
         rows: list[tuple[str, str, str]] = []
@@ -585,6 +648,10 @@ class PostgresStudioStateStore:
                 return item.model_copy(deep=True)
             return model_type.model_validate(item)
 
+    async def get_model_fresh(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
+        async with self._lock:
+            return await asyncio.to_thread(self._get_model_fresh_sync, collection, model_id, model_type)
+
     async def list_models(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
         async with self._lock:
             target = getattr(self._state, collection)
@@ -596,8 +663,13 @@ class PostgresStudioStateStore:
                     items.append(model_type.model_validate(item))
             return items
 
+    async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
+        async with self._lock:
+            return await asyncio.to_thread(self._list_models_fresh_sync, collection, model_type)
+
     async def mutate(self, callback):
         async with self._lock:
+            self._state = await asyncio.to_thread(self._load_sync)
             callback(self._state)
             await asyncio.to_thread(self._replace_state_sync, self._state)
             self._last_write_at = _utc_now_iso()
@@ -806,6 +878,45 @@ class PostgresStudioStateStore:
             raise
         finally:
             self._release_connection(connection)
+
+    def _get_model_fresh_sync(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
+        connection = self._connect()
+        try:
+            self._ensure_schema_sync(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT payload
+                    FROM {POSTGRES_RECORDS_TABLE}
+                    WHERE collection = %s AND model_id = %s
+                    """,
+                    (collection, model_id),
+                )
+                row = cursor.fetchone()
+        finally:
+            self._release_connection(connection)
+        if row is None:
+            return None
+        return model_type.model_validate(_normalize_loaded_payload(row[0]))
+
+    def _list_models_fresh_sync(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
+        connection = self._connect()
+        try:
+            self._ensure_schema_sync(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT payload
+                    FROM {POSTGRES_RECORDS_TABLE}
+                    WHERE collection = %s
+                    ORDER BY model_id
+                    """,
+                    (collection,),
+                )
+                rows = cursor.fetchall()
+        finally:
+            self._release_connection(connection)
+        return [model_type.model_validate(_normalize_loaded_payload(row[0])) for row in rows]
 
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")

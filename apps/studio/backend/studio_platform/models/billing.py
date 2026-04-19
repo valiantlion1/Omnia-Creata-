@@ -94,7 +94,6 @@ class PlanCatalogEntry(BaseModel):
     max_incomplete_generations: int = 0
     generation_submit_window_seconds: int = 60
     generation_submit_limit: int = 0
-    max_resolution: str
     can_access_chat: bool = False
     premium_chat: bool = False
     chat_modes: list[str] = Field(default_factory=list)

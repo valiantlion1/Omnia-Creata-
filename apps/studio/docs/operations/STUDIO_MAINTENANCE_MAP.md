@@ -12,11 +12,14 @@ Last updated: 2026-04-19
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.19.154`. This wave makes the public Explore `Showcase` shelf feel more curated by replacing the old modulo-based square-wall treatment with an editorial aspect-ratio layout.
-- Current proof on `.154` is targeted rather than a fresh full-environment pass. The Dashboard regression test passes, Studio web `type-check` passes, production `build` passes, and public browser smoke on `/explore` confirms the Showcase tab now renders with varied hero, landscape, portrait, and detail crops instead of a rigid equal-tile wall. This wave was browser-smoked on the public Explore route only, not through the user's live signed-in IAB session.
-- The same `.154` wave also improves crop honesty. Showcase references now carry explicit display modes and crop focus metadata, so the public gallery can feel intentional without pretending the square source assets naturally arrived in those proportions.
+- Current implementation build is `2026.04.19.155`. This wave finishes the lingering billing-honesty cleanup by removing `max_resolution` from public auth, billing, and plan payloads instead of only hiding that promise in the current UI.
+- Current proof on `.155` is targeted rather than a fresh full-environment pass. Backend pytest passes for the public-plan payload, auth-me payload, and settings-plus-billing-summary regression slices. Studio web targeted Billing/Settings/Account tests pass, `type-check` passes, and production `build` passes. This wave was not browser-smoked because it changes API/fixture contract truth behind already-honest rendered surfaces.
+- The same `.155` wave also tightens fixture honesty. Shared web plan typings and MSW/test payloads now match the no-resolution contract, so mocks stop quietly reintroducing a capability claim Studio is not ready to make.
 
 ## Recent stabilization wins
+
+- `.155` closes the last obvious leak in the old `.143` billing-honesty slice. Resolution promises are no longer present in the public auth, billing, or plan payload shapes, which means a future UI change cannot accidentally redisplay them just because the field still exists in the contract.
+- The same wave also keeps automated proof aligned with product truth. Shared Studio typings, Billing/Settings/Account fixtures, and backend serializer regressions now all agree that plan-facing payloads should not advertise `max_resolution`.
 
 - `.154` removes one of the flatter-looking public gallery problems from Explore. Showcase no longer feels like a random square dump with a thin layer of ratio randomness on top.
 - The same wave gives the curated shelf a stronger editorial rhythm. Larger hero frames, calmer landscape breaks, portrait-focused crops, and explicit crop focus points make the wall feel intentional without forcing a perfectly uniform grid.

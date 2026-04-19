@@ -332,7 +332,7 @@ async def test_billing_summary_reports_reserved_and_available_credits(
             for entry in summary["generation_credit_guide"]["lane_highlights"]
             if entry["pricing_lane"] == "fallback"
         )
-        assert job.estimated_cost == 0.003
+        assert job.estimated_cost == 0.001
         assert job.pricing_lane == "fallback"
         assert job.estimated_cost_source == "catalog_fallback"
         assert serialized["reserved_credit_cost"] == 3
@@ -374,22 +374,26 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         assert free_account["availability"] == "included"
         assert free_account["can_access_chat"] is False
         assert free_account["can_generate"] is True
+        assert "max_resolution" not in free_account
 
         assert creator["entitlement_plan"] == "creator"
         assert creator["label"] == "Creator"
         assert creator["price_usd"] == 12
         assert creator["checkout_kind"] == CheckoutKind.CREATOR_MONTHLY.value
         assert creator["availability"] == "self_serve"
+        assert "max_resolution" not in creator
 
         assert pro["entitlement_plan"] == "pro"
         assert pro["label"] == "Pro"
         assert pro["price_usd"] == 24
         assert pro["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
         assert pro["availability"] == "self_serve"
+        assert "max_resolution" not in pro
 
         assert payload["wallet"]["free_account_can_buy_credit_packs"] is True
         assert payload["wallet"]["free_image_generation_included"] is False
         assert payload["usage_caps"]["free_ai_chat_limited"] is False
+        assert "max_resolution" not in payload["entitlements"]["free"]
         assert len(payload["credit_packs"]) == 2
         assert {option["kind"] for option in payload["credit_packs"]} == {
             CheckoutKind.CREDIT_PACK_SMALL.value,

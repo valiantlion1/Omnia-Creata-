@@ -97,7 +97,6 @@ const mockState = vi.hoisted(() => ({
       label: 'Free',
       monthly_credits: 50,
       queue_priority: 'standard',
-      max_resolution: '1024x1024',
       share_links: false,
       can_generate: true,
       can_access_chat: false,

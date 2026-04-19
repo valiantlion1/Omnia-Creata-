@@ -14,7 +14,7 @@ from .studio_model_contract import (
 
 _FALLBACK_ONLY_PROVIDERS = frozenset({"pollinations", "huggingface"})
 _DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
-_MANAGED_BILLABLE_PROVIDERS = frozenset({"fal", "runware"})
+_MANAGED_BILLABLE_PROVIDERS = frozenset({"openai", "fal", "runware"})
 _OPENAI_DRAFT_MODEL_IDS = frozenset({"gpt-image-1-mini"})
 _OPENAI_FINAL_MODEL_IDS = frozenset({"gpt-image-1.5", "gpt-image-1"})
 

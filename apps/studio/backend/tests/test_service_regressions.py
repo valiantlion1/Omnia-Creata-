@@ -2257,6 +2257,7 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
     assert billing_summary["entitlements"]["can_access_chat"] is False
     assert billing_summary["credits"]["credits_remaining"] == 60
     assert billing_summary["wallet_balance"] == 60
+    assert "max_resolution" not in billing_summary["plan"]
     flux_lane = next(
         entry
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
@@ -2335,6 +2336,97 @@ async def test_access_sessions_payload_tracks_recent_devices_and_revokes_other_s
         assert [item["session_id"] for item in revoked["sessions"]] == ["session-current"]
     finally:
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_access_sessions_and_lockout_state_are_visible_across_shared_sqlite_services(tmp_path: Path):
+    db_path = tmp_path / "studio-state.sqlite3"
+    first_service = StudioService(
+        SqliteStudioStateStore(db_path),
+        ProviderRegistry(),
+        tmp_path / "media-first",
+    )
+    second_service = StudioService(
+        SqliteStudioStateStore(db_path),
+        ProviderRegistry(),
+        tmp_path / "media-second",
+    )
+    await first_service.initialize()
+    await second_service.initialize()
+
+    try:
+        await first_service.record_access_session(
+            identity_id="shared-user",
+            session_id="session-current",
+            auth_provider="email",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+            client_ip="127.0.0.1",
+            host_label="127.0.0.1:5173",
+            display_mode="browser",
+        )
+        await first_service.record_access_session(
+            identity_id="shared-user",
+            session_id="session-phone",
+            auth_provider="google",
+            user_agent="Mozilla/5.0 (Linux; Android 14) Chrome/123.0.0.0 Mobile Safari/537.36",
+            client_ip="95.10.11.12",
+            host_label="studio.omniacreata.com",
+            display_mode="standalone",
+        )
+
+        initial_payload = await second_service.get_access_sessions_payload(
+            identity_id="shared-user",
+            current_session_id="session-current",
+        )
+        assert initial_payload["session_count"] == 2
+        assert initial_payload["other_session_count"] == 1
+
+        revoked_payload = await first_service.revoke_other_access_sessions(
+            identity_id="shared-user",
+            current_session_id="session-current",
+            reason="user_requested_sign_out_others",
+        )
+
+        assert revoked_payload["session_count"] == 1
+        assert await second_service.is_access_session_active(
+            identity_id="shared-user",
+            session_id="session-phone",
+        ) is False
+
+        max_attempts = 5
+        lockout_window = timedelta(minutes=15)
+        for _ in range(max_attempts):
+            await first_service.record_login_result(
+                identifier="shared-user@example.com",
+                success=False,
+                lockout_window=lockout_window,
+            )
+
+        lockout_status = await second_service.get_login_lockout_status(
+            identifier="shared-user@example.com",
+            max_attempts=max_attempts,
+            lockout_window=lockout_window,
+        )
+        assert lockout_status is not None
+        assert lockout_status["attempt_count"] == max_attempts
+        assert lockout_status["retry_after_seconds"] >= 1
+
+        await second_service.record_login_result(
+            identifier="shared-user@example.com",
+            success=True,
+            lockout_window=lockout_window,
+        )
+        assert (
+            await first_service.get_login_lockout_status(
+                identifier="shared-user@example.com",
+                max_attempts=max_attempts,
+                lockout_window=lockout_window,
+            )
+            is None
+        )
+    finally:
+        await first_service.shutdown()
+        await second_service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -5526,6 +5618,8 @@ async def test_ensure_identity_preserves_existing_display_name_and_username(tmp_
         assert payload["identity"]["username"] == "lockedhandle"
         assert payload["identity"]["auth_provider"] == "google"
         assert payload["identity"]["credentials_managed_by_provider"] is True
+        assert "max_resolution" not in payload["plan"]
+        assert "max_resolution" not in payload["usage_caps"]
     finally:
         await service.shutdown()
 

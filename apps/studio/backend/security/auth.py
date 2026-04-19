@@ -322,6 +322,19 @@ def get_jwt_manager() -> JWTManager:
     return _jwt_manager
 
 
+def get_auth_security_settings() -> tuple[int, int]:
+    global _jwt_manager
+    if _jwt_manager is not None:
+        return _jwt_manager.config.max_login_attempts, _jwt_manager.config.lockout_duration_minutes
+
+    import os
+
+    return (
+        int(os.getenv("AUTH_MAX_LOGIN_ATTEMPTS", "5")),
+        int(os.getenv("AUTH_LOCKOUT_DURATION_MINUTES", "15")),
+    )
+
+
 def setup_auth(config: Optional[AuthConfig] = None) -> JWTManager:
     """Setup authentication system"""
     global _jwt_manager, _supabase_auth_client
@@ -450,6 +463,35 @@ def extract_unverified_session_context(token: str | None) -> Dict[str, Any]:
     }
 
 
+def _get_studio_service_from_request(request: Request):
+    app = request.scope.get("app")
+    state = getattr(app, "state", None)
+    return getattr(state, "studio_service", None)
+
+
+async def _enforce_persistent_session(
+    request: Request,
+    *,
+    identity_id: str,
+    session_metadata: Dict[str, Any],
+) -> None:
+    service = _get_studio_service_from_request(request)
+    if service is None:
+        return
+
+    session_id = str(session_metadata.get("session_id") or "").strip() or None
+    if session_id is None:
+        return
+
+    if await service.is_access_session_active(identity_id=identity_id, session_id=session_id):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Session has been revoked",
+    )
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
@@ -471,29 +513,9 @@ async def get_current_user(
     
     if not token:
         return None
-    
+
     try:
         payload = jwt_manager.verify_token(token)
-        metadata = payload.get("metadata", {}) or {}
-        if isinstance(metadata, dict):
-            metadata = dict(metadata)
-        else:
-            metadata = {}
-        metadata.update(extract_unverified_session_context(token))
-        
-        # Create user from token payload
-        user = User(
-            id=payload["sub"],
-            email=payload.get("email", ""),
-            username=payload.get("username"),
-            role=UserRole(payload.get("role", "user")),
-            is_active=True,
-            is_verified=True,
-            metadata=metadata,
-        )
-        
-        return user
-    
     except HTTPException as exc:
         supabase_client = get_supabase_auth_client()
         if supabase_client is None:
@@ -537,6 +559,11 @@ async def get_current_user(
                 "supabase": True,
             }
             metadata.update(extract_unverified_session_context(token))
+            await _enforce_persistent_session(
+                request,
+                identity_id=payload["id"],
+                session_metadata=metadata,
+            )
             return User(
                 id=payload["id"],
                 email=email,
@@ -558,6 +585,29 @@ async def get_current_user(
                 },
             )
             return None
+    else:
+        metadata = payload.get("metadata", {}) or {}
+        if isinstance(metadata, dict):
+            metadata = dict(metadata)
+        else:
+            metadata = {}
+        metadata.update(extract_unverified_session_context(token))
+
+        await _enforce_persistent_session(
+            request,
+            identity_id=payload["sub"],
+            session_metadata=metadata,
+        )
+
+        return User(
+            id=payload["sub"],
+            email=payload.get("email", ""),
+            username=payload.get("username"),
+            role=UserRole(payload.get("role", "user")),
+            is_active=True,
+            is_verified=True,
+            metadata=metadata,
+        )
 
 
 async def require_auth(

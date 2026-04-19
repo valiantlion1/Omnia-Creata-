@@ -6,7 +6,6 @@ import hmac
 import logging
 import os
 import re
-import secrets
 import socket
 from contextlib import suppress
 from datetime import datetime, timedelta
@@ -17,10 +16,15 @@ from uuid import uuid4
 from config.env import Environment, get_settings, reveal_secret
 
 from .asset_import_ops import parse_data_url_image
+from .asset_delivery_auth import (
+    DEVELOPMENT_LEGACY_ASSET_SECRET,
+    resolve_asset_delivery_secrets,
+)
 from .asset_storage import ResolvedAssetDelivery, build_asset_storage_registry
 from .billing_ops import BillingStateSnapshot
 from .creative_profile_ops import resolve_creative_profile
 from .experience_contract_ops import build_render_experience
+from .generation_errors import GenerationCapacityError
 from .generation_ops import requeue_incomplete_generations_locked
 from .generation_pricing_ops import resolve_generation_pricing_lane
 from .llm import StudioLLMGateway
@@ -88,57 +92,6 @@ _TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)
 _PROVIDER_SPEND_GUARDRAIL_USER_MESSAGE = (
     "Image generation is temporarily unavailable right now. Please try again later."
 )
-_DEVELOPMENT_LEGACY_ASSET_SECRET = "omnia-creata-local-dev-secret-2026"
-_DEVELOPMENT_JWT_FALLBACK = "dev-jwt-secret-0123456789abcdef0123456789abcdef"
-_ASSET_DELIVERY_SECRET_CONTEXT = "omnia-studio-asset-delivery:v2"
-_ASSET_DELIVERY_SECRET_FILENAME = "asset-delivery-secret.txt"
-
-
-def _derive_scoped_secret(seed: str, *, scope: str) -> str:
-    return hmac.new(
-        seed.encode("utf-8"),
-        scope.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _load_or_create_development_delivery_secret(runtime_root: Path) -> str:
-    secret_path = runtime_root / "config" / _ASSET_DELIVERY_SECRET_FILENAME
-    secret_path.parent.mkdir(parents=True, exist_ok=True)
-    if secret_path.exists():
-        existing = secret_path.read_text(encoding="utf-8").strip()
-        if len(existing) >= 32:
-            return existing
-
-    generated = secrets.token_urlsafe(48)
-    secret_path.write_text(generated, encoding="utf-8")
-    return generated
-
-
-def _resolve_asset_delivery_secrets(*, settings, configured_jwt_secret: str) -> tuple[str, str]:
-    legacy_secret = configured_jwt_secret or _DEVELOPMENT_LEGACY_ASSET_SECRET
-
-    if settings.environment != Environment.DEVELOPMENT:
-        return _derive_scoped_secret(legacy_secret, scope=_ASSET_DELIVERY_SECRET_CONTEXT), legacy_secret
-
-    using_default_development_secret = configured_jwt_secret in {"", _DEVELOPMENT_JWT_FALLBACK}
-    if using_default_development_secret:
-        seed = _load_or_create_development_delivery_secret(settings.runtime_root_path)
-    else:
-        seed = configured_jwt_secret
-    return _derive_scoped_secret(seed, scope=_ASSET_DELIVERY_SECRET_CONTEXT), legacy_secret
-
-class GenerationCapacityError(ValueError):
-    def __init__(
-        self,
-        message: str,
-        *,
-        queue_full: bool = False,
-        estimated_wait_seconds: int | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.queue_full = queue_full
-        self.estimated_wait_seconds = estimated_wait_seconds
 
 class StudioService:
     def __init__(
@@ -176,7 +129,7 @@ class StudioService:
         configured_asset_secret = reveal_secret(settings.jwt_secret).strip()
         if not configured_asset_secret and settings.environment != Environment.DEVELOPMENT:
             raise RuntimeError("JWT secret must be configured outside local development.")
-        self._asset_token_secret, self._legacy_asset_token_secret = _resolve_asset_delivery_secrets(
+        self._asset_token_secret, self._legacy_asset_token_secret = resolve_asset_delivery_secrets(
             settings=settings,
             configured_jwt_secret=configured_asset_secret,
         )
@@ -1454,6 +1407,23 @@ class StudioService:
 
     async def revoke_other_access_sessions(self, *, identity_id: str, current_session_id: str | None, reason: str = "signed_out_elsewhere") -> Dict[str, Any]:
         return await self.access_sessions.revoke_other_sessions(identity_id=identity_id, current_session_id=current_session_id, reason=reason)
+
+    async def is_access_session_active(self, *, identity_id: str, session_id: str | None) -> bool:
+        return await self.access_sessions.is_session_active(identity_id=identity_id, session_id=session_id)
+
+    async def get_login_lockout_status(self, *, identifier: str | None, max_attempts: int, lockout_window: timedelta) -> Dict[str, Any] | None:
+        return await self.access_sessions.get_login_lockout_status(
+            identifier=identifier,
+            max_attempts=max_attempts,
+            lockout_window=lockout_window,
+        )
+
+    async def record_login_result(self, *, identifier: str | None, success: bool, lockout_window: timedelta) -> None:
+        await self.access_sessions.record_login_result(
+            identifier=identifier,
+            success=success,
+            lockout_window=lockout_window,
+        )
 
     def get_access_session_context_from_token(self, access_token: str | None) -> Dict[str, Any]:
         return self.access_sessions.session_context_from_token(access_token)

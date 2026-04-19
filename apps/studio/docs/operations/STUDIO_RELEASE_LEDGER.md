@@ -18,6 +18,16 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.19.155`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.154` improved the public Explore gallery, but the older `.143` billing-honesty contract was still leaking back through the API layer. Even though the current UI no longer rendered plan resolution promises, shared auth/billing/public-plan payloads plus the web fixtures still carried `max_resolution`, which meant unfinished capability claims could quietly re-enter the product through mocks, types, or future UI reuse.
+- What:
+  `.155` finishes that contract at the backend and fixture boundary. Public-facing Studio plan payloads no longer expose `max_resolution` on `/v1/auth/me`, `/v1/billing/summary`, or `/v1/public/plans`, and the internal usage-cap serializer no longer carries it either. The shared Studio web plan typings were tightened to match the slimmer API contract, and the billing/settings/account fixtures plus MSW handlers were cleaned so automated coverage stops rehearsing a promise the product intentionally does not make.
+  Verification on `.155` is targeted and explicit. Backend pytest passes for public-plan payload truth, auth-me payload truth, and the settings-plus-billing-summary regression slice. Studio web targeted Billing/Settings/Account tests pass, `type-check` passes, and production `build` passes. This wave did not require a fresh browser smoke because it changes the contract and fixtures behind already-honest UI surfaces rather than the rendered billing/settings layout itself.
+
 ### `0.6.0-alpha` / build `2026.04.19.154`
 - Date: `2026-04-19`
 - Codename: `Foundation`

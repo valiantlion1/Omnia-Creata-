@@ -757,42 +757,6 @@ export default function CreatePage() {
           </div>
         </div>
 
-        {(showFirstRunGuide || isOutOfCredits) ? (
-          <div className="mb-6 overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03]">
-            <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-end md:justify-between md:px-6">
-              <div className="max-w-2xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  {isOutOfCredits ? 'Wallet needed' : 'First run'}
-                </p>
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">
-                  {isOutOfCredits ? 'Create is ready when you are.' : 'Start here, then save the keepers.'}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  {isOutOfCredits
-                    ? 'Free accounts can compose here any time. Add wallet credits when you want to run, or move onto Creator or Pro if you also want the chat surface.'
-                    : 'Create is the direct image workspace inside Studio. Pick a finish, choose a format, and the run lands in your library.'}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {createFirstRunSteps.map((step) => (
-                    <span
-                      key={step}
-                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-zinc-300"
-                    >
-                      {step}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              {isOutOfCredits ? (
-                <div className="flex shrink-0 flex-wrap gap-3">
-                  <Link to="/subscription" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
-                    Plans & credits
-                  </Link>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
 
         {/* ── Prompt Area ────────────────────────── */}
         <div className="glass-card overflow-visible p-[2px]">
@@ -999,14 +963,6 @@ export default function CreatePage() {
             )}
           </div>
 
-          {/* Credit Warning */}
-          {!isOutOfCredits && !hasUnlimitedCredits && runtimeCredits < 10 && (
-            <div className="mx-6 mb-2 flex items-center gap-2 rounded-xl bg-amber-400/10 px-4 py-2.5 text-[12px] font-semibold text-amber-400 ring-1 ring-amber-400/20">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Only {runtimeCredits} credits remaining.
-              <Link to="/subscription" className="ml-auto whitespace-nowrap text-amber-300 underline underline-offset-2 transition hover:text-white">Upgrade Plan →</Link>
-            </div>
-          )}
 
           {/* Controls bar */}
           <div className="relative z-20 flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">

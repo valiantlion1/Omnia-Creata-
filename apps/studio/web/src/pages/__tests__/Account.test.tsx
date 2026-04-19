@@ -138,7 +138,6 @@ const mockState = vi.hoisted(() => {
         label: 'Pro',
         monthly_credits: 1200,
         queue_priority: 'premium',
-        max_resolution: '1536x1536',
         share_links: true,
         can_generate: true,
         can_access_chat: true,

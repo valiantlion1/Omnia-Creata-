@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.19.154",
+  "build": "2026.04.19.155",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-19",
-  "notes": "Explore Showcase now uses a curated aspect-ratio wall instead of a rigid tile grid, with varied hero, landscape, portrait, and detail crops so the public gallery feels more editorial and less like identical squares."
+  "notes": "Public auth, billing, and plan payloads no longer carry `max_resolution`, so Studio stops leaking unfinished resolution promises back into the product through API responses, shared typings, or test fixtures."
 }

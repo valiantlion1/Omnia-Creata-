@@ -100,8 +100,8 @@ def test_serialize_model_catalog_for_identity_uses_wallet_backed_route_preview()
         providers=providers,
     )
 
-    assert serialized["route_preview"]["planned_provider"] == "pollinations"
-    assert serialized["render_experience"]["state"] == "fallback"
+    assert serialized["route_preview"]["planned_provider"] == "runware"
+    assert serialized["render_experience"]["state"] == "ready"
 
 
 def test_validate_model_for_identity_honors_effective_free_plan_when_subscription_is_inactive() -> None:

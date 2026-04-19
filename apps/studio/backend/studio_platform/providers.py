@@ -1768,6 +1768,13 @@ class ProviderRegistry:
             workflow=normalized_workflow,
             model_id=model_id,
         )
+        if (
+            zero_cost_fast_mode
+            and normalized_plan == IdentityPlan.FREE.value
+            and wallet_backed
+            and self._should_prefer_managed_free_lanes(workflow=normalized_workflow)
+        ):
+            zero_cost_fast_mode = False
         if normalized_plan == IdentityPlan.PRO.value:
             routing_strategy = "premium-managed"
         elif normalized_plan == IdentityPlan.CREATOR.value:
@@ -1796,6 +1803,29 @@ class ProviderRegistry:
                 has_reference_image=has_reference_image,
             )
         )
+        openai_route_eligible = (
+            normalized_workflow == "text_to_image"
+            and (
+                normalized_plan in {IdentityPlan.CREATOR.value, IdentityPlan.PRO.value}
+                or (normalized_plan == IdentityPlan.FREE.value and wallet_backed)
+            )
+        )
+        if openai_route_eligible:
+            openai_provider = self.get_provider("openai")
+            openai_available = (
+                openai_provider is not None
+                and openai_provider.is_configured()
+                and bool(getattr(openai_provider, "premium_qa_enabled", True))
+                and not self._provider_circuit_blocks_routing(openai_provider.name)
+                and openai_provider.supports_generation("text_to_image", has_reference_image=False)
+            )
+            if openai_available and "openai" not in provider_candidates:
+                if not provider_candidates:
+                    provider_candidates = ("openai",)
+                elif all(candidate in _DEGRADED_ONLY_PROVIDERS for candidate in provider_candidates):
+                    provider_candidates = ("openai", *provider_candidates)
+                elif all(candidate in _PREMIUM_CAPABLE_PROVIDERS for candidate in provider_candidates):
+                    provider_candidates = (*provider_candidates, "openai")
         selected_provider = provider_candidates[0] if provider_candidates else None
         selected_quality_tier = self.provider_quality_tier(selected_provider)
         degraded = self._is_degraded_route(

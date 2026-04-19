@@ -173,6 +173,7 @@ function PublicRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/help" element={<DocumentationPage />} />
+      <Route path="/help/:sectionId" element={<DocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/learn/prompt-craft" replace />} />
       <Route path="/docs/:sectionId" element={<DocumentationPage />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />
@@ -220,6 +221,7 @@ function ProtectedRoutes() {
       <Route path="/elements" element={<Navigate to="/elements/styles" replace />} />
       <Route path="/elements/styles" element={<ElementsPage />} />
       <Route path="/help" element={<ShellFriendlyDocumentationPage />} />
+      <Route path="/help/:sectionId" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/docs" element={<Navigate to="/learn/prompt-craft" replace />} />
       <Route path="/docs/:sectionId" element={<ShellFriendlyDocumentationPage />} />
       <Route path="/faq" element={<Navigate to="/help#faq" replace />} />

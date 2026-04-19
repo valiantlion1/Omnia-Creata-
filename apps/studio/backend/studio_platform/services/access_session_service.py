@@ -5,7 +5,7 @@ import hmac
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-from ..models import StudioAccessSession, utc_now
+from ..models import StudioAccessSession, StudioLoginAttemptRecord, utc_now
 
 if TYPE_CHECKING:
     from ..service import StudioService
@@ -14,6 +14,7 @@ _STALE_SESSION_WINDOW = timedelta(days=30)
 _REVOKED_RETENTION_WINDOW = timedelta(days=7)
 _MAX_RECORDED_SESSIONS_PER_IDENTITY = 12
 _ACCESS_SESSION_HASH_SCOPE = "studio-access-session:v1"
+_LOGIN_ATTEMPT_HASH_SCOPE = "studio-login-attempt:v1"
 
 
 def _coerce_datetime(value: Any) -> datetime | None:
@@ -130,17 +131,56 @@ class AccessSessionService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
 
-    def _fingerprint(self, value: str | None) -> str | None:
+    def _hash_value(self, value: str | None, *, scope: str) -> str | None:
         candidate = str(value or "").strip()
         if not candidate:
             return None
         secret = (self.service._asset_token_secret or "").strip() or "omnia-creata-local-session-secret"
-        digest = hmac.new(
+        return hmac.new(
             secret.encode("utf-8"),
-            f"{_ACCESS_SESSION_HASH_SCOPE}:{candidate}".encode("utf-8"),
+            f"{scope}:{candidate}".encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
-        return digest
+
+    async def _get_session(self, session_id: str) -> StudioAccessSession | None:
+        return await self.service.store.get_model_fresh("access_sessions", session_id, StudioAccessSession)
+
+    async def _list_identity_sessions(self, identity_id: str) -> list[StudioAccessSession]:
+        sessions = await self.service.store.list_models_fresh("access_sessions", StudioAccessSession)
+        return [session for session in sessions if session.identity_id == identity_id]
+
+    async def _persist_pruned_sessions(self, *, identity_id: str, current_time: datetime) -> None:
+        sessions = await self._list_identity_sessions(identity_id)
+        retained_ids = self._retained_session_ids(sessions=sessions, current_time=current_time)
+        for session in sessions:
+            if session.id not in retained_ids:
+                await self.service.store.delete_model("access_sessions", session.id)
+
+    def _retained_session_ids(
+        self,
+        *,
+        sessions: list[StudioAccessSession],
+        current_time: datetime,
+    ) -> set[str]:
+        sessions = sorted(sessions, key=lambda session: session.last_seen_at, reverse=True)
+
+        retained: set[str] = set()
+        active_kept = 0
+        for session in sessions:
+            if session.revoked_at is not None:
+                revoked_age = current_time - session.revoked_at
+                if revoked_age <= _REVOKED_RETENTION_WINDOW:
+                    retained.add(session.id)
+                continue
+
+            if current_time - session.last_seen_at > _STALE_SESSION_WINDOW:
+                continue
+
+            if active_kept < _MAX_RECORDED_SESSIONS_PER_IDENTITY:
+                retained.add(session.id)
+                active_kept += 1
+
+        return retained
 
     async def touch_session(
         self,
@@ -168,93 +208,63 @@ class AccessSessionService:
         expires_at = _coerce_datetime(token_expires_at)
         masked_ip = _mask_ip(client_ip)
         normalized_host = _host_label(host_label)
-        user_agent_hash = self._fingerprint(normalized_user_agent)
-        ip_hash = self._fingerprint(client_ip)
+        user_agent_hash = self._hash_value(normalized_user_agent, scope=_ACCESS_SESSION_HASH_SCOPE)
+        ip_hash = self._hash_value(client_ip, scope=_ACCESS_SESSION_HASH_SCOPE)
 
-        def mutate(state) -> None:
-            existing = state.access_sessions.get(normalized_session_id)
-            if existing is not None and existing.identity_id != identity_id:
-                return
+        existing = await self._get_session(normalized_session_id)
+        if existing is not None and existing.identity_id != identity_id:
+            return
+        if existing is not None and existing.revoked_at is not None:
+            return
 
-            session = existing or StudioAccessSession(
-                id=normalized_session_id,
-                identity_id=identity_id,
-                session_id=normalized_session_id,
-                auth_provider=auth_provider,
-                device_label=_device_label(
-                    browser_label=browser_label,
-                    os_label=os_label,
-                    display_mode=normalized_display_mode,
-                ),
+        session = existing or StudioAccessSession(
+            id=normalized_session_id,
+            identity_id=identity_id,
+            session_id=normalized_session_id,
+            auth_provider=auth_provider,
+            device_label=_device_label(
                 browser_label=browser_label,
                 os_label=os_label,
                 display_mode=normalized_display_mode,
-                surface_label=_surface_label(normalized_display_mode),
-                network_label=masked_ip or normalized_host,
-                ip_label=masked_ip,
-                ip_hash=ip_hash,
-                host_label=normalized_host,
-                user_agent_hash=user_agent_hash,
-                first_seen_at=now,
-                last_seen_at=now,
-                token_issued_at=issued_at,
-                token_expires_at=expires_at,
-                revoked_at=None,
-                revoked_reason=None,
-            )
+            ),
+            browser_label=browser_label,
+            os_label=os_label,
+            display_mode=normalized_display_mode,
+            surface_label=_surface_label(normalized_display_mode),
+            network_label=masked_ip or normalized_host,
+            ip_label=masked_ip,
+            ip_hash=ip_hash,
+            host_label=normalized_host,
+            user_agent_hash=user_agent_hash,
+            first_seen_at=now,
+            last_seen_at=now,
+            token_issued_at=issued_at,
+            token_expires_at=expires_at,
+            revoked_at=None,
+            revoked_reason=None,
+        )
 
-            session.auth_provider = auth_provider or session.auth_provider
-            session.browser_label = browser_label
-            session.os_label = os_label
-            session.display_mode = normalized_display_mode
-            session.surface_label = _surface_label(normalized_display_mode)
-            session.device_label = _device_label(
-                browser_label=browser_label,
-                os_label=os_label,
-                display_mode=normalized_display_mode,
-            )
-            session.network_label = masked_ip or normalized_host or session.network_label
-            session.ip_label = masked_ip or session.ip_label
-            session.ip_hash = ip_hash or session.ip_hash
-            session.host_label = normalized_host or session.host_label
-            session.user_agent_hash = user_agent_hash or session.user_agent_hash
-            session.last_seen_at = now
-            session.token_issued_at = issued_at or session.token_issued_at
-            session.token_expires_at = expires_at or session.token_expires_at
-            session.revoked_at = None
-            session.revoked_reason = None
-            state.access_sessions[normalized_session_id] = session
-            self._prune_sessions_locked(state=state, identity_id=identity_id, current_time=now)
+        session.auth_provider = auth_provider or session.auth_provider
+        session.browser_label = browser_label
+        session.os_label = os_label
+        session.display_mode = normalized_display_mode
+        session.surface_label = _surface_label(normalized_display_mode)
+        session.device_label = _device_label(
+            browser_label=browser_label,
+            os_label=os_label,
+            display_mode=normalized_display_mode,
+        )
+        session.network_label = masked_ip or normalized_host or session.network_label
+        session.ip_label = masked_ip or session.ip_label
+        session.ip_hash = ip_hash or session.ip_hash
+        session.host_label = normalized_host or session.host_label
+        session.user_agent_hash = user_agent_hash or session.user_agent_hash
+        session.last_seen_at = now
+        session.token_issued_at = issued_at or session.token_issued_at
+        session.token_expires_at = expires_at or session.token_expires_at
 
-        await self.service.store.mutate(mutate)
-
-    def _prune_sessions_locked(self, *, state, identity_id: str, current_time: datetime) -> None:
-        identity_sessions = [
-            session
-            for session in state.access_sessions.values()
-            if session.identity_id == identity_id
-        ]
-        identity_sessions.sort(key=lambda session: session.last_seen_at, reverse=True)
-
-        retained: set[str] = set()
-        active_kept = 0
-        for session in identity_sessions:
-            if session.revoked_at is not None:
-                revoked_age = current_time - session.revoked_at
-                if revoked_age <= _REVOKED_RETENTION_WINDOW:
-                    retained.add(session.id)
-                continue
-
-            if current_time - session.last_seen_at > _STALE_SESSION_WINDOW:
-                continue
-
-            if active_kept < _MAX_RECORDED_SESSIONS_PER_IDENTITY:
-                retained.add(session.id)
-                active_kept += 1
-
-        for session in identity_sessions:
-            if session.id not in retained:
-                state.access_sessions.pop(session.id, None)
+        await self.service.store.save_model("access_sessions", session)
+        await self._persist_pruned_sessions(identity_id=identity_id, current_time=now)
 
     def _serialize_session(
         self,
@@ -288,37 +298,31 @@ class AccessSessionService:
         current_session_id: str | None,
     ) -> dict[str, Any]:
         current_time = utc_now()
+        await self._persist_pruned_sessions(identity_id=identity_id, current_time=current_time)
 
-        await self.service.store.mutate(
-            lambda state: self._prune_sessions_locked(state=state, identity_id=identity_id, current_time=current_time)
-        )
-
-        def query(state) -> dict[str, Any]:
-            sessions = [
-                session.model_copy(deep=True)
-                for session in state.access_sessions.values()
-                if session.identity_id == identity_id and session.revoked_at is None
-            ]
-            sessions.sort(
-                key=lambda session: (
-                    0 if current_session_id and session.session_id == current_session_id else 1,
-                    -session.last_seen_at.timestamp(),
-                )
+        sessions = [
+            session
+            for session in await self._list_identity_sessions(identity_id)
+            if session.revoked_at is None
+        ]
+        sessions.sort(
+            key=lambda session: (
+                0 if current_session_id and session.session_id == current_session_id else 1,
+                -session.last_seen_at.timestamp(),
             )
-            serialized = [
-                self._serialize_session(session=session, current_session_id=current_session_id)
-                for session in sessions
-            ]
-            other_count = sum(1 for item in serialized if item["current"] is not True)
-            return {
-                "current_session_id": current_session_id,
-                "sessions": serialized,
-                "session_count": len(serialized),
-                "other_session_count": other_count,
-                "can_sign_out_others": other_count > 0,
-            }
-
-        return await self.service.store.read(query)
+        )
+        serialized = [
+            self._serialize_session(session=session, current_session_id=current_session_id)
+            for session in sessions
+        ]
+        other_count = sum(1 for item in serialized if item["current"] is not True)
+        return {
+            "current_session_id": current_session_id,
+            "sessions": serialized,
+            "session_count": len(serialized),
+            "other_session_count": other_count,
+            "can_sign_out_others": other_count > 0,
+        }
 
     async def revoke_other_sessions(
         self,
@@ -328,20 +332,29 @@ class AccessSessionService:
         reason: str = "signed_out_elsewhere",
     ) -> dict[str, Any]:
         current_time = utc_now()
+        sessions = await self._list_identity_sessions(identity_id)
+        for session in sessions:
+            if current_session_id and session.session_id == current_session_id:
+                continue
+            if session.revoked_at is None:
+                session.revoked_at = current_time
+                session.revoked_reason = reason
+                await self.service.store.save_model("access_sessions", session)
 
-        def mutate(state) -> None:
-            for session in state.access_sessions.values():
-                if session.identity_id != identity_id:
-                    continue
-                if current_session_id and session.session_id == current_session_id:
-                    continue
-                if session.revoked_at is None:
-                    session.revoked_at = current_time
-                    session.revoked_reason = reason
-            self._prune_sessions_locked(state=state, identity_id=identity_id, current_time=current_time)
-
-        await self.service.store.mutate(mutate)
+        await self._persist_pruned_sessions(identity_id=identity_id, current_time=current_time)
         return await self.build_payload(identity_id=identity_id, current_session_id=current_session_id)
+
+    async def is_session_active(self, *, identity_id: str, session_id: str | None) -> bool:
+        normalized_session_id = str(session_id or "").strip()
+        if not normalized_session_id:
+            return True
+
+        session = await self._get_session(normalized_session_id)
+        if session is None:
+            return True
+        if session.identity_id != identity_id:
+            return False
+        return session.revoked_at is None
 
     def session_context_from_token(self, access_token: str | None) -> dict[str, Any]:
         candidate = str(access_token or "").strip()
@@ -354,8 +367,8 @@ class AccessSessionService:
         try:
             header_b64, payload_b64, *_ = candidate.split(".")
             _ = header_b64
-            # PyJWT adds padding when decoding; using its public API keeps the helper small.
-            from jwt import decode as jwt_decode  # local import keeps service dependency-light
+            _ = payload_b64
+            from jwt import decode as jwt_decode
 
             payload = jwt_decode(
                 candidate,
@@ -378,3 +391,108 @@ class AccessSessionService:
             "expires_at": _coerce_datetime(payload.get("exp")),
             "claims": payload if isinstance(payload, dict) else {},
         }
+
+    def _normalize_login_identifier(self, identifier: str | None) -> str | None:
+        candidate = str(identifier or "").strip().lower()
+        return candidate or None
+
+    def _login_attempt_record_id(self, identifier: str | None) -> str | None:
+        normalized = self._normalize_login_identifier(identifier)
+        if normalized is None:
+            return None
+        return self._hash_value(normalized, scope=_LOGIN_ATTEMPT_HASH_SCOPE)
+
+    async def _get_login_attempt_record(self, identifier: str | None) -> tuple[str | None, StudioLoginAttemptRecord | None]:
+        record_id = self._login_attempt_record_id(identifier)
+        if record_id is None:
+            return None, None
+        record = await self.service.store.get_model_fresh("login_attempts", record_id, StudioLoginAttemptRecord)
+        return record_id, record
+
+    def _prune_recent_failures(
+        self,
+        *,
+        record: StudioLoginAttemptRecord | None,
+        current_time: datetime,
+        lockout_window: timedelta,
+    ) -> list[datetime]:
+        if record is None:
+            return []
+        return [
+            attempt
+            for attempt in record.failed_attempts
+            if current_time - attempt < lockout_window
+        ]
+
+    async def get_login_lockout_status(
+        self,
+        *,
+        identifier: str | None,
+        max_attempts: int,
+        lockout_window: timedelta,
+    ) -> dict[str, Any] | None:
+        if max_attempts <= 0 or lockout_window.total_seconds() <= 0:
+            return None
+
+        current_time = utc_now()
+        record_id, record = await self._get_login_attempt_record(identifier)
+        recent_failures = self._prune_recent_failures(
+            record=record,
+            current_time=current_time,
+            lockout_window=lockout_window,
+        )
+        if record_id is None:
+            return None
+
+        if not recent_failures:
+            if record is not None:
+                await self.service.store.delete_model("login_attempts", record_id)
+            return None
+
+        if record is not None and recent_failures != record.failed_attempts:
+            record.failed_attempts = recent_failures
+            record.last_failure_at = recent_failures[-1]
+            await self.service.store.save_model("login_attempts", record)
+
+        if len(recent_failures) < max_attempts:
+            return None
+
+        locked_until = recent_failures[0] + lockout_window
+        retry_after_seconds = max(int((locked_until - current_time).total_seconds()), 1)
+        return {
+            "attempt_count": len(recent_failures),
+            "locked_until": locked_until,
+            "retry_after_seconds": retry_after_seconds,
+        }
+
+    async def record_login_result(
+        self,
+        *,
+        identifier: str | None,
+        success: bool,
+        lockout_window: timedelta,
+    ) -> None:
+        record_id, record = await self._get_login_attempt_record(identifier)
+        if record_id is None:
+            return
+
+        current_time = utc_now()
+        if success:
+            if record is not None:
+                await self.service.store.delete_model("login_attempts", record_id)
+            return
+
+        recent_failures = self._prune_recent_failures(
+            record=record,
+            current_time=current_time,
+            lockout_window=lockout_window,
+        )
+        recent_failures.append(current_time)
+        await self.service.store.save_model(
+            "login_attempts",
+            StudioLoginAttemptRecord(
+                id=record_id,
+                failed_attempts=recent_failures,
+                last_failure_at=current_time,
+            ),
+        )
