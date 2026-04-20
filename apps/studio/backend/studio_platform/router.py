@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hmac
 import hashlib
@@ -31,7 +32,7 @@ from security.captcha import (
 )
 from security.rate_limit import RateLimiter
 from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
-from security.moderation import PromptModerationDecision, check_prompt_safety, ModerationResult
+from security.moderation import ModerationAction, PromptModerationDecision, check_prompt_safety, ModerationResult
 
 from .asset_storage import AssetStorageError
 from .experience_contract_ops import attach_chat_experience
@@ -800,8 +801,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "prompt:improve", limit=20, identifier=auth_user.id)
-        mod_result, flagged_term = await check_prompt_safety(payload.prompt)
-        if mod_result == ModerationResult.HARD_BLOCK:
+        moderation_decision = await check_prompt_safety(payload.prompt)
+        if moderation_decision.action == ModerationAction.HARD_BLOCK:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Your prompt was flagged by our content safety filter.",
@@ -1106,8 +1107,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
-        mod_result, flagged_term = await check_prompt_safety(payload.content)
-        if mod_result == ModerationResult.HARD_BLOCK:
+        moderation_decision = await check_prompt_safety(payload.content)
+        if moderation_decision.action == ModerationAction.HARD_BLOCK:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Your message was flagged by our content safety filter.",
@@ -1142,8 +1143,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:edit-message", limit=24, identifier=auth_user.id)
-        mod_result, flagged_term = await check_prompt_safety(payload.content)
-        if mod_result == ModerationResult.HARD_BLOCK:
+        moderation_decision = await check_prompt_safety(payload.content)
+        if moderation_decision.action == ModerationAction.HARD_BLOCK:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Your message was flagged by our content safety filter.",
@@ -1255,16 +1256,40 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         await _consume_generation_rate_limits(request, auth_user)
         _require_verified_generation_account(auth_user)
 
-        moderation_decision = await check_prompt_safety(payload.prompt)
-        if isinstance(moderation_decision, PromptModerationDecision):
-            mod_result = moderation_decision.result
-            flagged_term = moderation_decision.reason
-            moderation_tier = moderation_decision.provider_moderation
+        raw_moderation_decision = await check_prompt_safety(payload.prompt)
+        if isinstance(raw_moderation_decision, PromptModerationDecision):
+            moderation_decision = raw_moderation_decision
         else:
-            mod_result, flagged_term = moderation_decision
-            moderation_tier = "auto"
+            mod_result, flagged_term = raw_moderation_decision
+            moderation_decision = PromptModerationDecision(
+                result=mod_result,
+                action=ModerationAction.HARD_BLOCK if mod_result in {
+                    ModerationResult.SOFT_BLOCK,
+                    ModerationResult.HARD_BLOCK,
+                } else ModerationAction.ALLOW,
+                reason=flagged_term,
+            )
+        if (
+            moderation_decision.result == ModerationResult.REVIEW
+            and moderation_decision.action == ModerationAction.ALLOW
+        ):
+            moderation_decision = replace(moderation_decision, action=ModerationAction.REVIEW)
+        mod_result = moderation_decision.result
+        flagged_term = moderation_decision.reason
+        rewritten_prompt = moderation_decision.rewritten_prompt or payload.prompt
+        moderation_tier = moderation_decision.provider_moderation
+        audit = await service.record_prompt_moderation_audit(
+            surface="generation_prompt",
+            identity_id=auth_user.id,
+            original_text=payload.prompt,
+            final_text=rewritten_prompt,
+            decision=moderation_decision,
+        )
 
-        if mod_result in {ModerationResult.SOFT_BLOCK, ModerationResult.HARD_BLOCK}:
+        if moderation_decision.action == ModerationAction.HARD_BLOCK or mod_result in {
+            ModerationResult.SOFT_BLOCK,
+            ModerationResult.HARD_BLOCK,
+        }:
             await service.record_generation_moderation_block(
                 auth_user.id,
                 mod_result,
@@ -1280,7 +1305,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             job = await service.create_generation(
                 identity_id=auth_user.id,
                 project_id=payload.project_id,
-                prompt=payload.prompt,
+                prompt=rewritten_prompt,
+                source_prompt=payload.prompt,
                 negative_prompt=payload.negative_prompt,
                 reference_asset_id=payload.reference_asset_id,
                 model_id=payload.model,
@@ -1293,6 +1319,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 output_count=payload.output_count,
                 moderation_tier=moderation_tier,
                 moderation_reason=flagged_term,
+                moderation_action=moderation_decision.action.value,
+                moderation_risk_level=moderation_decision.risk_level.value,
+                moderation_risk_score=moderation_decision.risk_score,
+                moderation_age_ambiguity=moderation_decision.age_ambiguity.value,
+                moderation_sexual_intent=moderation_decision.sexual_intent.value,
+                moderation_context_type=moderation_decision.context_type.value,
+                moderation_audit_id=audit.id,
+                moderation_rewrite_applied=moderation_decision.rewrite_applied,
+                moderation_rewritten_prompt=moderation_decision.rewritten_prompt,
+                moderation_llm_used=moderation_decision.llm_used,
             )
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

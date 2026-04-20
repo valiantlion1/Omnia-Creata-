@@ -39,6 +39,7 @@ from .login_attempt import StudioLoginAttemptRecord
 from .state import StudioState
 from .style import StudioStyle
 from .moderation import (
+    ModerationAuditRecord,
     ModerationCase,
     ModerationCaseSource,
     ModerationCaseStatus,
@@ -90,6 +91,7 @@ __all__ = [
     "PlanCatalogEntry",
     "StudioPersona",
     "StudioStyle",
+    "ModerationAuditRecord",
     "ModerationCase",
     "ModerationCaseSource",
     "ModerationCaseStatus",

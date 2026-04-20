@@ -1,3 +1,42 @@
+"""Provider registry and implementations for external generation services.
+
+**Purpose:** Abstract over every upstream generation API (OpenAI Images,
+Runware, Replicate, Gemini, OpenRouter, the internal pseudo-provider, etc.)
+so the rest of the backend dispatches jobs without knowing which vendor
+actually executes them.
+
+**Layers:**
+    - :class:`BaseProvider` — abstract contract every provider implements.
+    - Concrete ``*Provider`` classes — one per vendor; each owns its API
+      client, pricing math, health probing, and capability reporting.
+    - :class:`ProviderRegistry` — assembles concrete providers from settings,
+      orders them by rollout tier, exposes dispatch helpers.
+
+**Invariants:**
+    - Every provider must be safe to call concurrently (no shared mutable
+      state on ``self`` without a lock).
+    - ``is_available`` is a cheap check; ``health`` may probe the upstream
+      with a short timeout; ``generate`` is the real call.
+    - Each provider has a :class:`ProviderCircuitState` tracked in the
+      registry — consecutive failures trip the circuit locally even before
+      the cross-cutting :mod:`studio_platform.resilience` layer kicks in.
+    - Pricing lookups must return a concrete number or ``None`` — never
+      raise — so the generation pipeline can fall back to defaults.
+
+**Adding a provider (AI-maintainer checklist):**
+    1. Subclass :class:`BaseProvider`; implement ``is_available``,
+       ``health``, ``generate``, ``capabilities``.
+    2. Register the class in :class:`ProviderRegistry._instantiate_providers`.
+    3. Add its credential slots to :mod:`config.env`.
+    4. Document rollout tier (``primary`` / ``secondary`` / ``experimental``).
+    5. Add a truth/smoke test under :mod:`studio_platform.services.provider_smoke`.
+
+**Why this file is so large:** Each provider carries its own request/response
+shaping, and we keep them co-located to make cross-provider comparisons easy.
+If a provider grows past ~400 lines, split it into its own module under
+``studio_platform/provider_impls/``.
+"""
+
 from __future__ import annotations
 
 import asyncio

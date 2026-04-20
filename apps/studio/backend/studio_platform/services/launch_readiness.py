@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from config.env import Environment, Settings, has_configured_secret
+from config.env import Environment, Settings, has_configured_secret, has_configured_string
 
 from ..versioning import load_version_info
 from .provider_truth import (
@@ -399,18 +399,29 @@ def build_launch_readiness_report(
         )
 
     auth_fields = {
-        "supabase_url": bool((settings.supabase_url or "").strip()),
+        "supabase_url": has_configured_string(settings.supabase_url),
         "supabase_anon_key": _has_secret_value(settings.supabase_anon_key),
         "supabase_service_role_key": _has_secret_value(settings.supabase_service_role_key),
     }
     missing_auth = [key for key, present in auth_fields.items() if not present]
     if missing_auth:
-        add_check(
-            "auth_configuration",
-            "blocked",
-            "Supabase auth configuration is incomplete.",
-            f"Missing auth settings: {', '.join(missing_auth)}.",
-        )
+        if settings.environment == Environment.DEVELOPMENT and settings.enable_demo_auth:
+            add_check(
+                "auth_configuration",
+                "warning",
+                "Supabase auth configuration is incomplete, but development demo auth still supports local alpha iteration.",
+                (
+                    f"Missing auth settings: {', '.join(missing_auth)}. "
+                    "Local alpha can still use demo auth in development, but protected/staged launch environments must switch to real Supabase auth."
+                ),
+            )
+        else:
+            add_check(
+                "auth_configuration",
+                "blocked",
+                "Supabase auth configuration is incomplete.",
+                f"Missing auth settings: {', '.join(missing_auth)}.",
+            )
     else:
         add_check(
             "auth_configuration",

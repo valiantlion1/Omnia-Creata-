@@ -19,6 +19,7 @@ from studio_platform.model_catalog_ops import (
 from studio_platform.models import IdentityPlan, OmniaIdentity
 from studio_platform.operator_control_plane_ops import build_owner_ai_control_plane
 from studio_platform.owner_health_ops import build_owner_health_payload
+from studio_platform.owner_health_ops import build_runtime_topology_summary
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, StudioImageProvider
 from studio_platform.service import StudioService
 from studio_platform.studio_model_contract import (
@@ -161,6 +162,11 @@ def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
         "platform_readiness": {"status": "ready"},
         "truth_sync": {"all_current_build": True},
     }
+    runtime_topology = {
+        "status": "warning",
+        "mode": "all",
+        "topology_class": "all_in_one",
+    }
 
     payload = build_owner_health_payload(
         overall_status="healthy",
@@ -176,10 +182,12 @@ def test_build_owner_health_payload_promotes_launch_truth_keys() -> None:
         data_authority={"mode": "sqlite"},
         provider_economics_dossier={"report_kind": "provider_economics_dossier", "build": "2026.04.14.99"},
         ai_control_plane={"surface_matrix": [], "contract_freeze": {}},
+        runtime_topology=runtime_topology,
         launch_readiness=launch_readiness,
     )
 
     assert payload["launch_readiness"] == launch_readiness
+    assert payload["runtime_topology"] == runtime_topology
     assert payload["launch_gate"] == launch_readiness["launch_gate"]
     assert payload["provider_truth"] == launch_readiness["provider_truth"]
     assert payload["platform_readiness"] == launch_readiness["platform_readiness"]
@@ -212,6 +220,117 @@ def test_build_owner_health_payload_keeps_moderation_summary() -> None:
 
     assert payload["moderation_summary"]["open_case_count"] == 2
     assert payload["moderation_summary"]["hidden_pending_review_post_count"] == 1
+
+
+def test_build_runtime_topology_summary_marks_local_all_in_one_as_alpha_ready_but_not_launch_ready() -> None:
+    settings = get_settings()
+    launch_readiness = {
+        "checks": [
+            {
+                "key": "runtime_topology",
+                "status": "warning",
+                "summary": "Generation still runs in all-in-one local convenience mode.",
+                "detail": "Launch readiness is stronger with explicit web/worker topology.",
+            }
+        ],
+        "launch_gate": {"ready_for_protected_launch": False},
+        "platform_readiness": {"current_stage": "local_alpha", "next_stage": "protected_beta"},
+    }
+
+    summary = build_runtime_topology_summary(
+        settings=settings,
+        generation_runtime_mode="all",
+        generation_broker_payload={"enabled": False, "configured": False, "advisory": False, "degraded": False},
+        launch_readiness=launch_readiness,
+    )
+
+    assert summary["status"] == "warning"
+    assert summary["mode"] == "all"
+    assert summary["topology_class"] == "all_in_one"
+    assert summary["generation_delivery_mode"] == "local_all_in_one"
+    assert summary["operator_posture"] == "local_alpha_safe"
+    assert "same local process" in summary["generation_delivery_summary"].lower()
+    assert summary["local_processing_enabled"] is True
+    assert summary["local_alpha_ready"] is True
+    assert summary["topology_ready_for_protected_launch"] is False
+    assert summary["launch_gate_ready"] is False
+    assert any("split web/worker" in item.lower() for item in summary["action_items"])
+
+
+def test_build_runtime_topology_summary_marks_split_broker_as_launch_shaped() -> None:
+    settings = get_settings()
+    launch_readiness = {
+        "checks": [
+            {
+                "key": "runtime_topology",
+                "status": "pass",
+                "summary": "Generation runtime topology is coherent.",
+                "detail": "Runtime mode is web.",
+            }
+        ],
+        "launch_gate": {"ready_for_protected_launch": True},
+        "platform_readiness": {"current_stage": "protected_beta", "next_stage": "public_paid_platform"},
+    }
+
+    summary = build_runtime_topology_summary(
+        settings=settings,
+        generation_runtime_mode="web",
+        generation_broker_payload={"enabled": True, "configured": True, "advisory": False, "degraded": False},
+        launch_readiness=launch_readiness,
+    )
+
+    assert summary["status"] == "pass"
+    assert summary["mode"] == "web"
+    assert summary["topology_class"] == "split_shared_broker"
+    assert summary["generation_delivery_mode"] == "web_enqueue_shared_worker"
+    assert summary["operator_posture"] == "split_submission_surface"
+    assert summary["shared_broker_active"] is True
+    assert summary["local_processing_enabled"] is False
+    assert summary["local_alpha_ready"] is True
+    assert summary["topology_ready_for_protected_launch"] is True
+    assert summary["launch_gate_ready"] is True
+    assert any("worker runtime" in item.lower() for item in summary["action_items"])
+
+
+def test_build_runtime_topology_summary_marks_dev_web_fallback_as_local_alpha_only() -> None:
+    settings = get_settings()
+    original_environment = settings.environment
+    settings.environment = owner_health_ops.Environment.DEVELOPMENT
+    launch_readiness = {
+        "checks": [
+            {
+                "key": "runtime_topology",
+                "status": "warning",
+                "summary": "Generation broker is not configured for web runtime; falling back to local processing in degraded mode.",
+                "detail": "Local alpha can keep working, but protected launch wants a real shared broker.",
+            }
+        ],
+        "launch_gate": {"ready_for_protected_launch": False},
+        "platform_readiness": {"current_stage": "local_alpha", "next_stage": "protected_beta"},
+    }
+
+    try:
+        summary = build_runtime_topology_summary(
+            settings=settings,
+            generation_runtime_mode="web",
+            generation_broker_payload={
+                "enabled": False,
+                "configured": True,
+                "advisory": True,
+                "degraded": False,
+                "detail": "redis_unavailable_fallback_local_queue",
+            },
+            launch_readiness=launch_readiness,
+        )
+    finally:
+        settings.environment = original_environment
+
+    assert summary["status"] == "warning"
+    assert summary["topology_class"] == "split_advisory_fallback"
+    assert summary["generation_delivery_mode"] == "local_web_fallback"
+    assert summary["operator_posture"] == "local_alpha_only"
+    assert "processing jobs locally" in summary["generation_delivery_summary"].lower()
+    assert any("local alpha only" in item.lower() for item in summary["action_items"])
 
 
 def test_build_owner_ai_control_plane_keeps_surface_matrix_and_contract_freeze() -> None:
@@ -315,6 +434,11 @@ async def test_health_detail_survives_cost_telemetry_failure(tmp_path: Path, mon
         assert "telemetry unavailable" not in payload["cost_telemetry"]["detail"]
         assert "RuntimeError" in payload["cost_telemetry"]["detail"]
         assert "runtime logs" in payload["cost_telemetry"]["detail"].lower()
+        assert payload["runtime_topology"]["mode"] == "all"
+        assert payload["runtime_topology"]["topology_class"] == "all_in_one"
+        assert payload["runtime_topology"]["generation_delivery_mode"] == "local_all_in_one"
+        assert payload["runtime_topology"]["operator_posture"] == "local_alpha_safe"
+        assert payload["runtime_topology"]["action_items"]
         assert payload["launch_gate"]["status"] in {"ready", "blocked", "needs_attention"}
         assert "truth_sync" in payload
     finally:

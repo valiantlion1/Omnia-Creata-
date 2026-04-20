@@ -659,8 +659,19 @@ class GenerationService:
         seed: int,
         aspect_ratio: str,
         output_count: int = 1,
+        source_prompt: str | None = None,
         moderation_tier: str = "auto",
         moderation_reason: str | None = None,
+        moderation_action: str = "allow",
+        moderation_risk_level: str = "low",
+        moderation_risk_score: int = 0,
+        moderation_age_ambiguity: str = "unknown",
+        moderation_sexual_intent: str = "none",
+        moderation_context_type: str = "general",
+        moderation_audit_id: str | None = None,
+        moderation_rewrite_applied: bool = False,
+        moderation_rewritten_prompt: str | None = None,
+        moderation_llm_used: bool = False,
     ) -> GenerationJob:
         identity = await self.service.get_identity(identity_id)
         self.service._assert_identity_action_allowed(
@@ -698,6 +709,11 @@ class GenerationService:
         )
         if not cleaned_prompt:
             raise ValueError("Prompt cannot be empty")
+        cleaned_source_prompt = self._sanitize_generation_text(
+            source_prompt or prompt,
+            field_name="source_prompt",
+            max_length=2000,
+        ) or cleaned_prompt
         cleaned_negative_prompt = self._sanitize_generation_text(
             negative_prompt,
             field_name="negative_prompt",
@@ -706,7 +722,7 @@ class GenerationService:
         admission_prompt_snapshot = build_prompt_snapshot(
             prompt=cleaned_prompt,
             negative_prompt=cleaned_negative_prompt,
-            source_prompt=cleaned_prompt,
+            source_prompt=cleaned_source_prompt,
             source_negative_prompt=cleaned_negative_prompt,
             model_id=model.id,
             reference_asset_id=reference_asset.id if reference_asset else None,
@@ -746,7 +762,7 @@ class GenerationService:
         prompt_snapshot = build_prompt_snapshot(
             prompt=compiled_request.prompt,
             negative_prompt=compiled_request.negative_prompt,
-            source_prompt=cleaned_prompt,
+            source_prompt=cleaned_source_prompt,
             source_negative_prompt=cleaned_negative_prompt,
             model_id=model.id,
             reference_asset_id=reference_asset.id if reference_asset else None,
@@ -826,6 +842,16 @@ class GenerationService:
             prompt_profile=effective_routing_decision.prompt_profile,
             moderation_tier=moderation_tier,
             moderation_reason=moderation_reason,
+            moderation_action=moderation_action,
+            moderation_risk_level=moderation_risk_level,
+            moderation_risk_score=moderation_risk_score,
+            moderation_age_ambiguity=moderation_age_ambiguity,
+            moderation_sexual_intent=moderation_sexual_intent,
+            moderation_context_type=moderation_context_type,
+            moderation_audit_id=moderation_audit_id,
+            moderation_rewrite_applied=moderation_rewrite_applied,
+            moderation_rewritten_prompt=moderation_rewritten_prompt,
+            moderation_llm_used=moderation_llm_used,
             provider_candidates=list(filtered_provider_candidates),
             reserved_credit_cost=pricing_quote.reserved_credit_cost,
             credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",

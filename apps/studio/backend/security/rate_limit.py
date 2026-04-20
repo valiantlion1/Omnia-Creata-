@@ -1,3 +1,31 @@
+"""Rate limiting — sliding-window decisions with Redis or in-memory backing.
+
+**Purpose:** Cap request rates per logical key (usually identity or IP) so
+abusive traffic can't flood the generation queue or auth endpoints.
+
+**Implementations:**
+    - :class:`InMemoryRateLimiter` — dev-only, per-process, not sharded.
+    - :class:`RedisRateLimiter` — production, sliding window implemented
+      with a sorted set (``ZADD`` + ``ZREMRANGEBYSCORE``). Falls back to
+      an injected in-memory limiter when Redis is unreachable *and* a
+      fallback is configured (dev only).
+
+**Decision shape:** :class:`RateLimitDecision` carries ``allowed``,
+``limit``, ``remaining``, ``retry_after`` — exported by middleware as the
+standard ``X-RateLimit-*`` and ``Retry-After`` headers.
+
+**Factory:**
+    :func:`build_rate_limiter` returns the right implementation based on
+    :class:`config.env.Settings`. Staging/production REQUIRE a Redis URL;
+    local dev may fall back.
+
+**Invariants:**
+    - ``check`` is safe to call concurrently.
+    - A limiter must be ``initialize()``'d once before the first ``check``.
+    - Redis failures in production propagate (no silent downgrade); in dev
+      the injected fallback is used and a warning is logged.
+"""
+
 from __future__ import annotations
 
 import logging

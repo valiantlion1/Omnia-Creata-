@@ -204,6 +204,9 @@ class Settings(BaseSettings):
     legacy_state_store_path: Optional[str] = None
     studio_runtime_root: Optional[str] = None
     studio_log_directory: Optional[str] = None
+    postgres_state_store_min_connections: int = 2
+    postgres_state_store_max_connections: int = 10
+    postgres_state_store_statement_timeout_ms: int = 30000
 
     # Asset Storage
     asset_storage_backend: str = "local"
@@ -245,11 +248,14 @@ class Settings(BaseSettings):
     turnstile_site_key: Optional[str] = None
     turnstile_secret_key: Optional[SecretStr] = None
     enable_api_docs: Optional[bool] = None
+    enable_metrics_endpoint: bool = True
     enable_demo_auth: Optional[bool] = None
 
     # Rate Limiting
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 10
+    max_request_header_bytes: int = 16 * 1024
+    max_request_body_bytes: int = 8 * 1024 * 1024
 
     # Paddle Configuration
     paddle_api_key: Optional[SecretStr] = None
@@ -440,6 +446,9 @@ class Settings(BaseSettings):
         "credit_pack_large_credits",
         "creator_chat_message_limit",
         "pro_chat_message_limit",
+        "postgres_state_store_min_connections",
+        "postgres_state_store_max_connections",
+        "postgres_state_store_statement_timeout_ms",
     )
     @classmethod
     def validate_generation_runtime_limits(cls, v: int) -> int:
@@ -452,6 +461,13 @@ class Settings(BaseSettings):
     def validate_free_account_chat_message_limit(cls, value: int) -> int:
         if value < 0:
             raise ValueError("Free account chat message limit cannot be negative")
+        return value
+
+    @field_validator("max_request_header_bytes", "max_request_body_bytes")
+    @classmethod
+    def validate_ingress_limits(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Ingress size limits must be positive")
         return value
 
     @field_validator(
@@ -614,6 +630,8 @@ class Settings(BaseSettings):
             hard_value = getattr(self, hard_field)
             if soft_value is not None and hard_value is not None and hard_value < soft_value:
                 setattr(self, hard_field, soft_value)
+        if self.postgres_state_store_max_connections < self.postgres_state_store_min_connections:
+            self.postgres_state_store_max_connections = self.postgres_state_store_min_connections
         return self
 
     def validate_production_requirements(self):

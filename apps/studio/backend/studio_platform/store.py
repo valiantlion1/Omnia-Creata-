@@ -1,3 +1,31 @@
+"""Durable state store for Studio — JSON, SQLite, and Postgres backends.
+
+**Purpose:** Persist the entire :class:`StudioState` snapshot + per-model
+upserts with a uniform API across three backends. Callers (``StudioService``
+and ``StudioRepository``) treat the store as an opaque :class:`StudioPersistence`.
+
+**Backends:**
+    - ``JsonStudioStateStore`` — single-file JSON, dev only. Not concurrent.
+    - ``SqliteStudioStateStore`` — local SQLite with WAL mode, dev + self-host.
+    - ``PostgresStudioStateStore`` — production, connection pooled, uses
+      advisory locks to serialize writers across processes.
+
+**Invariants:**
+    - ``load`` and ``save``/``mutate`` are the only public mutation paths;
+      do not touch the underlying files/tables directly.
+    - For Postgres, every writer holds advisory lock
+      :data:`POSTGRES_WRITE_LOCK_KEY` for the duration of the mutation so
+      no two processes can race the same state snapshot.
+    - State schema is versioned (see ``store_schema.STORE_SCHEMA_VERSION``);
+      migrations are handled by :mod:`alembic`, not by ad-hoc code here.
+
+**Choosing a backend:**
+    :func:`build_state_store` inspects settings (primarily ``database_url``)
+    and returns the right implementation. Do not instantiate backends
+    directly — call the factory so future additions (e.g. read replicas)
+    land in one place.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,13 +45,23 @@ from pydantic import BaseModel
 from config.env import reveal_secret
 
 from .models import StudioState
+from .store_schema import (
+    POSTGRES_METADATA_TABLE,
+    POSTGRES_RECORDS_TABLE,
+    STORE_SCHEMA_VERSION,
+    postgres_state_store_schema_statements,
+    postgres_state_store_schema_version_upsert_sql,
+)
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 STATE_COLLECTIONS = tuple(StudioState.model_fields.keys())
-POSTGRES_RECORDS_TABLE = "studio_state_records"
-POSTGRES_METADATA_TABLE = "studio_state_metadata"
-STORE_SCHEMA_VERSION = "2"
+
+# Postgres advisory lock key used by every writer to serialize state
+# mutations across processes. The value is an arbitrary but stable 32-bit
+# integer — changing it would break concurrent deployments during rollout,
+# so treat this as an append-only invariant.
 POSTGRES_WRITE_LOCK_KEY = 902417531
+
 logger = logging.getLogger("omnia.studio.store")
 
 
@@ -581,6 +619,9 @@ class PostgresStudioStateStore:
         *,
         bootstrap_json_path: Path | None = None,
         bootstrap_paths: list[Path] | None = None,
+        pool_minconn: int = 2,
+        pool_maxconn: int = 10,
+        statement_timeout_ms: int = 30000,
     ):
         self.dsn = dsn.strip()
         if not self.dsn:
@@ -594,9 +635,9 @@ class PostgresStudioStateStore:
         self._lock = asyncio.Lock()
         self._state = StudioState()
         self._pool = None
-        self._pool_minconn = 2
-        self._pool_maxconn = 10
-        self._statement_timeout_ms = 30000
+        self._pool_minconn = max(1, int(pool_minconn))
+        self._pool_maxconn = max(self._pool_minconn, int(pool_maxconn))
+        self._statement_timeout_ms = max(1, int(statement_timeout_ms))
         self._bootstrap_source_path: Path | None = None
         self._bootstrap_source_kind: str | None = None
         self._last_loaded_at: str | None = None
@@ -684,6 +725,9 @@ class PostgresStudioStateStore:
                 "schema_version": STORE_SCHEMA_VERSION,
                 "path": None,
                 "connection_target": _redact_postgres_dsn(self.dsn),
+                "pool_min_connections": self._pool_minconn,
+                "pool_max_connections": self._pool_maxconn,
+                "statement_timeout_ms": self._statement_timeout_ms,
                 "bootstrap_source": str(self._bootstrap_source_path) if self._bootstrap_source_path else None,
                 "bootstrap_source_kind": self._bootstrap_source_kind,
                 "last_loaded_at": self._last_loaded_at,
@@ -751,48 +795,10 @@ class PostgresStudioStateStore:
 
     def _ensure_schema_sync(self, connection) -> None:
         with connection.cursor() as cursor:
+            for statement in postgres_state_store_schema_statements():
+                cursor.execute(statement)
             cursor.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {POSTGRES_RECORDS_TABLE} (
-                    collection TEXT NOT NULL,
-                    model_id TEXT NOT NULL,
-                    payload JSONB NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    PRIMARY KEY (collection, model_id)
-                )
-                """
-            )
-            cursor.execute(
-                f"""
-                CREATE INDEX IF NOT EXISTS idx_{POSTGRES_RECORDS_TABLE}_collection
-                ON {POSTGRES_RECORDS_TABLE}(collection)
-                """
-            )
-            cursor.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS {POSTGRES_METADATA_TABLE} (
-                    key TEXT PRIMARY KEY,
-                    value JSONB NOT NULL
-                )
-                """
-            )
-            cursor.execute(
-                f"""
-                CREATE INDEX IF NOT EXISTS idx_{POSTGRES_RECORDS_TABLE}_generations_identity_status_created_at
-                ON {POSTGRES_RECORDS_TABLE} (
-                    ((payload ->> 'identity_id')),
-                    ((payload ->> 'status')),
-                    ((payload ->> 'created_at'))
-                )
-                WHERE collection = 'generations'
-                """
-            )
-            cursor.execute(
-                f"""
-                INSERT INTO {POSTGRES_METADATA_TABLE} (key, value)
-                VALUES ('schema_version', %s::jsonb)
-                ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-                """,
+                postgres_state_store_schema_version_upsert_sql(),
                 (json.dumps(STORE_SCHEMA_VERSION),),
             )
         connection.commit()
@@ -946,11 +952,7 @@ class PostgresStudioStateStore:
                     rows,
                 )
             cursor.execute(
-                f"""
-                INSERT INTO {POSTGRES_METADATA_TABLE} (key, value)
-                VALUES ('schema_version', %s::jsonb)
-                ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value
-                """,
+                postgres_state_store_schema_version_upsert_sql(),
                 (json.dumps(STORE_SCHEMA_VERSION),),
             )
         connection.commit()
@@ -978,6 +980,9 @@ def build_state_store(
         return PostgresStudioStateStore(
             reveal_secret(settings.database_url),
             bootstrap_paths=bootstrap_paths,
+            pool_minconn=getattr(settings, "postgres_state_store_min_connections", 2),
+            pool_maxconn=getattr(settings, "postgres_state_store_max_connections", 10),
+            statement_timeout_ms=getattr(settings, "postgres_state_store_statement_timeout_ms", 30000),
         )
 
     sqlite_path = _resolve_store_path(settings.state_store_path, default_sqlite_path)

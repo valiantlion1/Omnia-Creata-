@@ -112,6 +112,16 @@ class GenerationJob(BaseModel):
     prompt_profile: str = "generic"
     moderation_tier: str = "auto"
     moderation_reason: Optional[str] = None
+    moderation_action: str = "allow"
+    moderation_risk_level: str = "low"
+    moderation_risk_score: int = 0
+    moderation_age_ambiguity: str = "unknown"
+    moderation_sexual_intent: str = "none"
+    moderation_context_type: str = "general"
+    moderation_audit_id: Optional[str] = None
+    moderation_rewrite_applied: bool = False
+    moderation_rewritten_prompt: Optional[str] = None
+    moderation_llm_used: bool = False
     provider_candidates: List[str] = Field(default_factory=list)
     output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)

@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-19
+Last updated: 2026-04-20
 
 ## Current baseline
 
@@ -12,12 +12,21 @@ Last updated: 2026-04-19
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.19.160`. This wave hardens Studio's backend-side moderation path instead of making economics or package decisions: reviewable adult-adjacent image prompts now route through a provider-aware review lane, while explicit sexual or exploitative requests still stop at the Studio gate.
-- Current proof on `.160` is no longer source-only. From `apps/studio/backend`, the targeted moderation/router/provider suite plus `test_security_hardening.py` pass. From `apps/studio/web`, `type-check`, production `build`, and the targeted `Dashboard` / `Documentation` vitest slice pass. The local stack was then restarted onto build `.160`, `ops/start-studio-local.ps1` rewrote `local-verify-latest.json` as `pass`, live provider smoke refreshed on `.160`, and protected staging rebuilt plus verified on `.160`.
-- The refreshed runtime truth is honest, not victory theater. `local-verify-latest.json` is green with backend/frontend build match on `.160`, but `provider-smoke-latest.json` still shows an image-lane blocker: `runware` errors with `insufficientCredits`, `fal` is skipped as not configured in this environment, and only the chat launch-grade lanes (`openrouter`, `openai`) come back `ok`. Protected staging verifies the correct `.160` build at `http://127.0.0.1:8080`, but without an owner bearer token it remains `warning`/`closure_ready=false`, so closure-grade staging truth is still not fully closed for this build.
-- The same `.160` wave is intentionally narrow on doctrine. Pricing, public package economics, and final model-cost decisions remain deferred to the separate economics lock wave; this build focuses on safer moderation behavior, stronger regression coverage, and honest release bookkeeping.
+- Current implementation build is `2026.04.20.170`. This wave stays backend-only and makes runtime topology easier to operate: owner health now exposes a compact runtime-delivery contract with `generation_delivery_mode`, `generation_delivery_summary`, `operator_posture`, and concrete `action_items` beside the existing broker flags.
+- Current proof on `.170` is still honest alpha proof, not launch closure. From `apps/studio/backend`, the focused runtime-topology slice in `test_backend_spine_ops.py` passes for local all-in-one, split shared-broker, and dev-web advisory fallback shapes, and local verify was refreshed and passes on build `.170`. Provider smoke and protected staging were intentionally not refreshed on `.170` during this no-spend wave, so both artefacts are now stale relative to the current build.
+- The refreshed backend truth remains intentionally narrower than full launch closure. `.170` improves operator readability around where generation jobs really flow, but it still does not claim that dashboards, alerts, distributed tracing, provider economics signoff, provider proof, runtime topology closure, or protected staging closure are fully done yet.
+- Studio's moderation contract is still the larger behavior change from `.168`, and provider truth from `.169` remains useful beside it. `.170` simply makes the runtime side equally legible, so a human can now read both "which provider lane is blocking" and "how jobs are supposed to move through this runtime shape" without spelunking several nested payloads.
 
 ## Recent stabilization wins
+
+- `.170` removes one of the more annoying runtime-reading gaps from owner health. Backend truth no longer stops at broker booleans; it now says whether this process is doing local all-in-one work, acting as the web submitter in a split topology, acting as the worker side, or limping along in a local fallback.
+- The same wave keeps the story actionable instead of abstract. Local alpha now says to keep all-in-one or fallback modes for low-cost development, while split runtime tells the operator whether a shared worker or shared broker is the next required piece.
+
+- `.169` removes one of the more annoying operator-readability gaps from owner health. Current-build provider truth no longer forces humans to mentally diff selected lane, backups, smoke, and recent errors across separate nested structures just to answer why chat or image is blocking.
+- The same wave keeps the story actionable instead of merely verbose. Chat can now read as cleanly proven with no action items, while image now spells out that `runware` failed current-build smoke because of insufficient credits and that backup credentials such as `fal` still need to be configured.
+
+- `.168` removes one of the clumsiest moderation failure modes from generation intake. Age-ambiguous adult-adjacent prompts no longer have to jump straight from a heuristic match to a blunt rejection; Studio can now rewrite salvageable prompts into explicit-adult fashion phrasing, keep the final decision inside its own engine, and leave a durable audit trail behind.
+- The same wave also keeps moderation from turning into an always-on LLM tax. Safe prompts can pass on the cheap path, obviously unsafe prompts can fail on the cheap path, and the structured LLM analyzer only wakes up on the gray middle where context and rewrite quality actually matter.
 
 - `.160` removes one of the more frustrating false-positive blocks from the image path. Reviewable adult fashion and glamour prompts no longer die at the first Studio regex-style gate just because they mention swimwear, lingerie styling, sensual editorial framing, cleavage, or similar non-explicit intent.
 - The same wave keeps safety layered instead of going lax. Explicit pornographic requests, minor sexualization, and exploitative abuse still block, while provider-aware moderation hints now travel with the generation job so upstream providers can enforce the lighter review lane where supported.

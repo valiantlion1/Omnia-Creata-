@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, Request
 
 import studio_platform.router as router_module
+from security.moderation_engine import AgeAmbiguity, ContextType, PromptRiskLevel, SexualIntent
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter
 from studio_platform.models import GenerationJob, JobStatus, PromptSnapshot
@@ -640,6 +641,16 @@ async def test_generation_endpoint_allows_review_prompt_and_passes_low_moderatio
         return _build_generation_job(
             moderation_tier=str(kwargs.get("moderation_tier") or "auto"),
             moderation_reason=str(kwargs.get("moderation_reason") or "") or None,
+            moderation_action=str(kwargs.get("moderation_action") or "allow"),
+            moderation_risk_level=str(kwargs.get("moderation_risk_level") or "low"),
+            moderation_risk_score=int(kwargs.get("moderation_risk_score") or 0),
+            moderation_age_ambiguity=str(kwargs.get("moderation_age_ambiguity") or "unknown"),
+            moderation_sexual_intent=str(kwargs.get("moderation_sexual_intent") or "none"),
+            moderation_context_type=str(kwargs.get("moderation_context_type") or "general"),
+            moderation_audit_id=str(kwargs.get("moderation_audit_id") or "") or None,
+            moderation_rewrite_applied=bool(kwargs.get("moderation_rewrite_applied")),
+            moderation_rewritten_prompt=str(kwargs.get("moderation_rewritten_prompt") or "") or None,
+            moderation_llm_used=bool(kwargs.get("moderation_llm_used")),
         )
 
     service.create_generation = fake_create_generation  # type: ignore[method-assign]
@@ -668,11 +679,98 @@ async def test_generation_endpoint_allows_review_prompt_and_passes_low_moderatio
         assert response.status_code == 202
         assert captured_kwargs["moderation_tier"] == "low"
         assert captured_kwargs["moderation_reason"] == "bikini"
+        assert captured_kwargs["moderation_action"] == "review"
         payload = response.json()
-        assert payload["moderation"] == {
-            "tier": "low",
-            "reason": "bikini",
-            "review_routed": True,
-        }
+        assert payload["moderation"]["tier"] == "low"
+        assert payload["moderation"]["reason"] == "bikini"
+        assert payload["moderation"]["review_routed"] is True
+        assert payload["moderation"]["decision"] == "review"
+        assert payload["moderation"]["rewrite_applied"] is False
+        assert payload["moderation"]["audit_id"] is not None
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_rewrites_ambiguous_prompt_and_persists_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def rewrite(_: str):
+        return router_module.PromptModerationDecision(
+            result=router_module.ModerationResult.REVIEW,
+            action=router_module.ModerationAction.REWRITE,
+            risk_level=PromptRiskLevel.MEDIUM,
+            risk_score=42,
+            reason="age_ambiguity",
+            age_ambiguity=AgeAmbiguity.AMBIGUOUS,
+            sexual_intent=SexualIntent.MILD,
+            context_type=ContextType.SWIMWEAR,
+            rewrite_applied=True,
+            rewritten_prompt="adult woman in swimwear, summer fashion portrait",
+        )
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", rewrite)
+    captured_kwargs: dict[str, object] = {}
+
+    async def fake_create_generation(**kwargs: object) -> GenerationJob:
+        captured_kwargs.update(kwargs)
+        return _build_generation_job(
+            moderation_tier=str(kwargs.get("moderation_tier") or "auto"),
+            moderation_reason=str(kwargs.get("moderation_reason") or "") or None,
+            moderation_action=str(kwargs.get("moderation_action") or "allow"),
+            moderation_risk_level=str(kwargs.get("moderation_risk_level") or "low"),
+            moderation_risk_score=int(kwargs.get("moderation_risk_score") or 0),
+            moderation_age_ambiguity=str(kwargs.get("moderation_age_ambiguity") or "unknown"),
+            moderation_sexual_intent=str(kwargs.get("moderation_sexual_intent") or "none"),
+            moderation_context_type=str(kwargs.get("moderation_context_type") or "general"),
+            moderation_audit_id=str(kwargs.get("moderation_audit_id") or "") or None,
+            moderation_rewrite_applied=bool(kwargs.get("moderation_rewrite_applied")),
+            moderation_rewritten_prompt=str(kwargs.get("moderation_rewritten_prompt") or "") or None,
+            moderation_llm_used=bool(kwargs.get("moderation_llm_used")),
+        )
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "girl with bikini",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 202
+        assert captured_kwargs["prompt"] == "adult woman in swimwear, summer fashion portrait"
+        assert captured_kwargs["source_prompt"] == "girl with bikini"
+        assert captured_kwargs["moderation_action"] == "rewrite"
+        assert captured_kwargs["moderation_rewrite_applied"] is True
+
+        payload = response.json()
+        assert payload["moderation"]["decision"] == "rewrite"
+        assert payload["moderation"]["rewrite_applied"] is True
+        assert payload["moderation"]["rewritten_prompt"] == "adult woman in swimwear, summer fashion portrait"
+
+        snapshot = await service.store.snapshot()
+        assert len(snapshot.moderation_audits) == 1
+        audit = next(iter(snapshot.moderation_audits.values()))
+        assert audit.original_text == "girl with bikini"
+        assert audit.final_text == "adult woman in swimwear, summer fashion portrait"
+        assert audit.action == "rewrite"
     finally:
         await service.shutdown()

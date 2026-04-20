@@ -486,6 +486,44 @@ class TestChatProviderTruthWithSmoke:
             settings.protected_beta_chat_provider = original_chat
             settings.gemini_service_tier = original_tier
 
+    def test_chat_selected_lane_diagnostics_call_out_unproven_backup(self) -> None:
+        settings = get_settings()
+        current_build = load_version_info().build
+        original_chat = settings.protected_beta_chat_provider
+        original_openai_tier = settings.openai_service_tier
+        original_openrouter_tier = settings.openrouter_service_tier
+        settings.protected_beta_chat_provider = "openai"
+        settings.openai_service_tier = "paid"
+        settings.openrouter_service_tier = "paid"
+        try:
+            result = build_provider_truth_report(
+                settings=settings,
+                provider_status=[],
+                chat_routing=_make_chat_routing(
+                    providers={
+                        "openai": _provider_payload("openai"),
+                        "openrouter": _provider_payload("openrouter"),
+                    },
+                    primary="openai",
+                    fallback="openrouter",
+                ),
+                provider_smoke_report=_make_smoke_report(
+                    build=current_build,
+                    results=[{"provider_name": "openai", "surface": "chat", "status": "ok"}],
+                ),
+                cost_telemetry=None,
+            )
+            diagnostics = result["chat"]["selected_lane_diagnostics"]
+            assert diagnostics["selected_lane"]["provider"] == "openai"
+            assert diagnostics["selected_lane"]["smoke_status"] == "verified"
+            assert diagnostics["backup_lanes"][0]["provider"] == "openrouter"
+            assert diagnostics["backup_lanes"][0]["smoke_status"] == "missing"
+            assert any("Run current-build live smoke for openrouter" in item for item in diagnostics["action_items"])
+        finally:
+            settings.protected_beta_chat_provider = original_chat
+            settings.openai_service_tier = original_openai_tier
+            settings.openrouter_service_tier = original_openrouter_tier
+
 
 # ---------------------------------------------------------------------------
 # Image provider truth with smoke
@@ -564,6 +602,43 @@ class TestImageProviderTruthWithSmoke:
             settings.protected_beta_image_provider = original_image
             settings.protected_beta_image_require_final_lane = original_final
             settings.openai_api_key = original_key
+
+    def test_image_selected_lane_diagnostics_surface_smoke_error_and_missing_backup_credentials(self) -> None:
+        settings = get_settings()
+        current_build = load_version_info().build
+        original_image = settings.protected_beta_image_provider
+        settings.protected_beta_image_provider = "runware"
+        try:
+            result = build_provider_truth_report(
+                settings=settings,
+                provider_status=[
+                    {"name": "runware", "status": "healthy", "detail": "configured"},
+                ],
+                chat_routing=_make_chat_routing(),
+                provider_smoke_report=_make_smoke_report(
+                    build=current_build,
+                    results=[
+                        {
+                            "provider_name": "runware",
+                            "surface": "image",
+                            "status": "error",
+                            "error_type": "ProviderFatalError",
+                            "error": "Insufficient credits on Runware",
+                        },
+                    ],
+                ),
+                cost_telemetry=None,
+            )
+            diagnostics = result["image"]["selected_lane_diagnostics"]
+            assert diagnostics["selected_lane"]["provider"] == "runware"
+            assert diagnostics["selected_lane"]["smoke_status"] == "error"
+            assert diagnostics["selected_lane"]["last_error_type"] == "ProviderFatalError"
+            assert diagnostics["selected_lane"]["last_error"] == "Insufficient credits on Runware"
+            assert any(item["provider"] == "fal" and item["configured"] is False for item in diagnostics["backup_lanes"])
+            assert any("restore runware credits" in item.lower() for item in diagnostics["action_items"])
+            assert any("Configure fal credentials" in item for item in diagnostics["action_items"])
+        finally:
+            settings.protected_beta_image_provider = original_image
 
 
 # ---------------------------------------------------------------------------

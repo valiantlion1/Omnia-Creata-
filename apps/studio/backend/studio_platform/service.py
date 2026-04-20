@@ -1,3 +1,46 @@
+"""StudioService — the top-level orchestrator for the Studio backend.
+
+**Purpose:** Coordinate every cross-cutting operation that touches more than
+one domain (projects, generations, identity, billing, chat, moderation,
+assets). Route handlers in :mod:`studio_platform.router` delegate here; this
+module in turn delegates to feature-specific services in
+:mod:`studio_platform.services`.
+
+**Responsibilities owned here (don't move without replacing the caller):**
+    - Bootstrapping the store, providers, broker, asset storage
+    - Lifecycle: ``initialize`` / ``shutdown``, state recovery, orphan cleanup
+    - Provider dispatch for image/text generation
+    - Moderation decisions (combining case service + provider signals)
+    - Public-facing content safety rails (blocklists, low-signal filter)
+    - Asset token signing + secret rotation handoff
+
+**Responsibilities delegated to sub-services:**
+    - ``billing`` → :class:`BillingService` (entitlements, cost telemetry)
+    - ``chat`` → :class:`ChatService` (conversation + message lifecycle)
+    - ``generation`` → :class:`GenerationService` (job submission + pricing)
+    - ``identity`` → :class:`IdentityService` (accounts, sessions, deletions)
+    - ``library`` → :class:`LibraryService` (media library queries)
+    - ``projects`` → :class:`ProjectService` (project CRUD)
+    - ``public`` → :class:`PublicService` (anon/marketing endpoints)
+    - ``shell`` → :class:`ShellService` (UI shell bootstrap payloads)
+    - ``health_service`` → :class:`HealthService` (health probes)
+    - ``moderation_cases`` → :class:`ModerationCaseService`
+
+**Invariants:**
+    - ``initialize`` must be awaited exactly once before serving traffic.
+    - Most mutations go through :class:`StudioRepository` for transaction
+      scoping; direct store access is a smell.
+    - Circuit-broker fallback rules are enforced by
+      ``_requires_strict_shared_generation_broker`` — do not silently
+      downgrade to local mode in staging/production.
+
+**Extensibility note for AI maintainers:**
+    New feature areas should land as a new service class under
+    :mod:`studio_platform.services` with an attribute on ``StudioService``
+    (``self.my_service = MyService(self)``) rather than adding methods here.
+    Keep this file focused on orchestration.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -79,6 +122,7 @@ from .services.generation_service import GenerationService
 from .services.health_service import HealthService
 from .services.identity_service import DeletedIdentityError, IdentityService
 from .services.library_service import LibraryService
+from .services.moderation_audit_service import ModerationAuditService
 from .services.moderation_case_service import ModerationCaseService
 from .services.project_service import ProjectService
 from .services.public_service import PublicService
@@ -91,10 +135,22 @@ from .services.generation_dispatcher import GenerationDispatcher
 from security.moderation import ModerationResult
 
 logger = logging.getLogger(__name__)
+
+# Strips ASCII control chars from generation prompts (except tab/newline/CR)
+# so provider APIs that tokenise by byte can't be confused by stray bytes.
 _GENERATION_TEXT_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+# Moderation strike bookkeeping. Strikes decay after this window so a user
+# whose policy violation was a one-off isn't permanently flagged.
 _MODERATION_RESET_WINDOW = timedelta(hours=24)
+# After the 3rd strike, pause generation for a cool-down. After the 5th, a
+# longer block. Values chosen empirically to match Trust & Safety playbook
+# (see apps/studio/docs/operations/STUDIO_MAINTENANCE_MAP.md).
 _TEMP_BLOCK_AFTER_THREE_STRIKES = timedelta(minutes=15)
 _TEMP_BLOCK_AFTER_FIVE_STRIKES = timedelta(hours=24)
+
+# Shown to end users when provider spend guardrails trip. Kept vague on
+# purpose: don't leak cost/quota details to the public surface.
 _PROVIDER_SPEND_GUARDRAIL_USER_MESSAGE = (
     "Image generation is temporarily unavailable right now. Please try again later."
 )
@@ -221,6 +277,7 @@ class StudioService:
         self.public = PublicService(self)
         self.shell = ShellService(self)
         self.access_sessions = AccessSessionService(self)
+        self.moderation_audits = ModerationAuditService(self)
         self.moderation_cases = ModerationCaseService(self)
 
     def _can_process_generations(self) -> bool:
@@ -232,13 +289,27 @@ class StudioService:
     def _uses_local_generation_fallback(self) -> bool:
         return self.generation._uses_local_generation_fallback()
 
+    def _requires_strict_shared_generation_broker(self) -> bool:
+        return self.settings.environment in {Environment.STAGING, Environment.PRODUCTION} and (
+            self._generation_runtime_mode in {"web", "worker"}
+        )
+
     async def initialize(self) -> None:
         await self.store.load()
+        strict_shared_broker_required = self._requires_strict_shared_generation_broker()
+        if self.generation_broker is None and strict_shared_broker_required:
+            raise RuntimeError(
+                "Shared generation broker is required for split runtime outside local development."
+            )
         if self.generation_broker is not None:
             try:
                 await self.generation_broker.initialize()
                 self._generation_broker_degraded_reason = None
             except Exception as exc:
+                if strict_shared_broker_required:
+                    raise RuntimeError(
+                        "Shared generation broker is unavailable for split runtime outside local development."
+                    ) from exc
                 if not self._owns_generation_broker:
                     raise
                 logger.warning(
@@ -251,6 +322,10 @@ class StudioService:
                 self.generation_broker = None
                 self._owns_generation_broker = False
         if self._uses_local_generation_fallback() and self._generation_broker_degraded_reason is None:
+            if strict_shared_broker_required:
+                raise RuntimeError(
+                    "Local generation fallback is not allowed for split runtime outside local development."
+                )
             self._generation_broker_degraded_reason = "web_runtime_local_fallback_no_shared_broker"
             logger.warning(
                 "Generation broker is not configured for web runtime; falling back to local processing in degraded mode"
@@ -474,6 +549,23 @@ class StudioService:
             prompt=(prompt or reason or moderation_result.value),
             improved=False,
             flagged=True,
+        )
+
+    async def record_prompt_moderation_audit(
+        self,
+        *,
+        surface: str,
+        identity_id: str | None,
+        original_text: str,
+        final_text: str,
+        decision,
+    ):
+        return await self.moderation_audits.record_prompt_decision(
+            surface=surface,
+            identity_id=identity_id,
+            original_text=original_text,
+            final_text=final_text,
+            decision=decision,
         )
 
     def _assert_identity_action_allowed(
@@ -737,6 +829,16 @@ class StudioService:
                 "tier": (job.moderation_tier or "auto"),
                 "reason": job.moderation_reason,
                 "review_routed": str(job.moderation_tier or "").strip().lower() not in {"", "auto"},
+                "decision": job.moderation_action,
+                "risk_level": job.moderation_risk_level,
+                "risk_score": job.moderation_risk_score,
+                "age_ambiguity": job.moderation_age_ambiguity,
+                "sexual_intent": job.moderation_sexual_intent,
+                "context_type": job.moderation_context_type,
+                "audit_id": job.moderation_audit_id,
+                "rewrite_applied": job.moderation_rewrite_applied,
+                "rewritten_prompt": job.moderation_rewritten_prompt,
+                "llm_used": job.moderation_llm_used,
             },
             "actual_cost_usd": job.actual_cost_usd,
             "credit_cost": job.credit_cost,
@@ -1280,8 +1382,48 @@ class StudioService:
         seed: int,
         aspect_ratio: str,
         output_count: int = 1,
+        source_prompt: str | None = None,
+        moderation_tier: str = "auto",
+        moderation_reason: str | None = None,
+        moderation_action: str = "allow",
+        moderation_risk_level: str = "low",
+        moderation_risk_score: int = 0,
+        moderation_age_ambiguity: str = "unknown",
+        moderation_sexual_intent: str = "none",
+        moderation_context_type: str = "general",
+        moderation_audit_id: str | None = None,
+        moderation_rewrite_applied: bool = False,
+        moderation_rewritten_prompt: str | None = None,
+        moderation_llm_used: bool = False,
     ) -> GenerationJob:
-        return await self.generation.create_generation(identity_id=identity_id, project_id=project_id, prompt=prompt, negative_prompt=negative_prompt, reference_asset_id=reference_asset_id, model_id=model_id, width=width, height=height, steps=steps, cfg_scale=cfg_scale, seed=seed, aspect_ratio=aspect_ratio, output_count=output_count)
+        return await self.generation.create_generation(
+            identity_id=identity_id,
+            project_id=project_id,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            reference_asset_id=reference_asset_id,
+            model_id=model_id,
+            width=width,
+            height=height,
+            steps=steps,
+            cfg_scale=cfg_scale,
+            seed=seed,
+            aspect_ratio=aspect_ratio,
+            output_count=output_count,
+            source_prompt=source_prompt,
+            moderation_tier=moderation_tier,
+            moderation_reason=moderation_reason,
+            moderation_action=moderation_action,
+            moderation_risk_level=moderation_risk_level,
+            moderation_risk_score=moderation_risk_score,
+            moderation_age_ambiguity=moderation_age_ambiguity,
+            moderation_sexual_intent=moderation_sexual_intent,
+            moderation_context_type=moderation_context_type,
+            moderation_audit_id=moderation_audit_id,
+            moderation_rewrite_applied=moderation_rewrite_applied,
+            moderation_rewritten_prompt=moderation_rewritten_prompt,
+            moderation_llm_used=moderation_llm_used,
+        )
 
     async def _persist_generation_job_with_reservation(
         self,

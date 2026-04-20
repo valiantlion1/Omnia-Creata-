@@ -7,6 +7,18 @@ from config.env import Environment, Settings
 from main import _requires_no_store_headers, _should_enforce_trusted_hosts, app, settings
 
 
+def _ensure_runtime_error_probe_route() -> None:
+    if any(getattr(route, "path", None) == "/__tests/runtime-error" for route in app.routes):
+        return
+
+    @app.get("/__tests/runtime-error", include_in_schema=False)
+    async def _runtime_error_probe():
+        raise RuntimeError("security headers probe boom")
+
+
+_ensure_runtime_error_probe_route()
+
+
 @pytest.fixture()
 def _restore_security_header_settings():
     original_environment = settings.environment
@@ -30,6 +42,8 @@ def test_api_responses_emit_locked_csp_when_docs_are_disabled(_restore_security_
         "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     )
     assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert response.headers["X-Request-ID"]
+    assert response.headers["X-Response-Time"].endswith("s")
 
 
 def test_api_responses_emit_hsts_for_staging(_restore_security_header_settings):
@@ -121,3 +135,21 @@ def test_asset_delivery_route_responses_emit_no_store_headers(_restore_security_
     assert response.status_code in {403, 404}
     assert response.headers["Cache-Control"] == "no-store, private"
     assert response.headers["Pragma"] == "no-cache"
+
+
+def test_unhandled_error_responses_keep_trace_and_security_headers(_restore_security_header_settings):
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_api_docs = False
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/__tests/runtime-error")
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["error"] == "A server error occurred. Our team has been notified."
+    assert response.headers["X-Request-ID"] == body["request_id"]
+    assert response.headers["X-Response-Time"].endswith("s")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Content-Security-Policy"] == (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    )

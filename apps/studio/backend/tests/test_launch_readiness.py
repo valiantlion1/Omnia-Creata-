@@ -1080,6 +1080,51 @@ def test_launch_readiness_blocks_when_only_fallback_image_lanes_exist(tmp_path: 
         settings.protected_beta_chat_provider = original_protected_beta_chat_provider
 
 
+def test_launch_readiness_keeps_local_alpha_when_development_uses_demo_auth(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_enable_demo_auth = settings.enable_demo_auth
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_demo_auth = True
+    settings.supabase_url = None
+    settings.supabase_anon_key = None
+    settings.supabase_service_role_key = None
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[],
+            data_authority={"backend": "sqlite", "durable": True},
+            generation_runtime_mode="all",
+            generation_broker={"enabled": False, "configured": False},
+            chat_routing={"providers": {}},
+            provider_smoke_report=None,
+            startup_verification_report=startup_report,
+            deployment_verification_report=None,
+            runtime_logs=runtime_logs,
+        )
+
+        auth_check = next(check for check in readiness["checks"] if check["key"] == "auth_configuration")
+        assert auth_check["status"] == "warning"
+        assert readiness["platform_readiness"]["current_stage"] == "local_alpha"
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.enable_demo_auth = original_enable_demo_auth
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+
+
 @pytest.mark.asyncio
 async def test_health_detail_includes_provider_smoke_and_launch_readiness(tmp_path: Path) -> None:
     settings = get_settings()

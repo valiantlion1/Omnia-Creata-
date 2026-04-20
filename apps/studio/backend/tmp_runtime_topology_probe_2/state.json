@@ -1,0 +1,24 @@
+{
+  "identities": {},
+  "deleted_identity_tombstones": {},
+  "workspaces": {},
+  "projects": {},
+  "conversations": {},
+  "chat_messages": {},
+  "generations": {},
+  "assets": {},
+  "posts": {},
+  "shares": {},
+  "credit_ledger": {},
+  "billing_webhook_receipts": {},
+  "cost_telemetry_events": {},
+  "personas": {},
+  "styles": {},
+  "prompt_memories": {},
+  "access_sessions": {},
+  "login_attempts": {},
+  "moderation_cases": {},
+  "migrations_applied": {
+    "visibility_defaults_v1": "2026-04-20T00:09:45.212682+00:00"
+  }
+}

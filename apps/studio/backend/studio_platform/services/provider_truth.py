@@ -180,6 +180,97 @@ def _smoke_lane_verified_for_current_build(smoke: dict[str, Any] | None, *, lane
     return lane_ok.get(normalized_lane) is True
 
 
+def _smoke_status_label(smoke: dict[str, Any] | None) -> str:
+    if _smoke_verified_for_current_build(smoke):
+        return "verified"
+    if _smoke_has_current_build_error(smoke):
+        return "error"
+    if isinstance(smoke, dict) and smoke.get("current_build_match") is True:
+        return "unverified"
+    if isinstance(smoke, dict):
+        return "stale"
+    return "missing"
+
+
+def _provider_lane_snapshot(provider_state: dict[str, Any] | None, *, provider: str) -> dict[str, Any]:
+    state = provider_state if isinstance(provider_state, dict) else {}
+    smoke = state.get("smoke") if isinstance(state.get("smoke"), dict) else None
+    recent_failure = state.get("recent_failure_state") if isinstance(state.get("recent_failure_state"), dict) else {}
+    circuit_breaker = state.get("circuit_breaker") if isinstance(state.get("circuit_breaker"), dict) else {}
+    return {
+        "provider": provider,
+        "lane_class": state.get("lane_class"),
+        "configured": state.get("configured") is True,
+        "runtime_available": state.get("runtime_available") is True,
+        "healthy_for_launch": state.get("healthy_for_launch") is True,
+        "smoke_verified_for_current_build": state.get("smoke_verified_for_current_build") is True,
+        "smoke_status": _smoke_status_label(smoke),
+        "status": state.get("status") or "not_configured",
+        "detail": state.get("detail") or f"{provider}:not_configured",
+        "last_error": recent_failure.get("last_error") or (smoke.get("last_error") if smoke else None),
+        "last_error_type": smoke.get("last_error_type") if smoke else None,
+        "circuit_state": circuit_breaker.get("state"),
+        "retry_after_seconds": circuit_breaker.get("retry_after_seconds"),
+    }
+
+
+def _lane_action_hints(*, surface: str, snapshot: dict[str, Any], selected: bool) -> list[str]:
+    provider = str(snapshot.get("provider") or "provider").strip().lower() or "provider"
+    role_label = "selected launch lane" if selected else "backup lane"
+    hints: list[str] = []
+
+    if snapshot.get("configured") is not True:
+        hints.append(f"Configure {provider} credentials for the {surface} {role_label}.")
+        return hints
+
+    last_error = str(snapshot.get("last_error") or "").strip()
+    last_error_lower = last_error.lower()
+    if snapshot.get("smoke_status") == "error":
+        if "insufficientcredits" in last_error_lower or "insufficient credits" in last_error_lower:
+            hints.append(f"Restore {provider} credits or switch the {surface} {role_label}.")
+        else:
+            hints.append(f"Resolve the current-build {provider} smoke error before treating the {surface} {role_label} as healthy.")
+    elif snapshot.get("runtime_available") is True and snapshot.get("smoke_verified_for_current_build") is not True:
+        hints.append(f"Run current-build live smoke for {provider} before treating the {surface} {role_label} as proven.")
+    elif snapshot.get("runtime_available") is not True:
+        hints.append(f"Restore {provider} runtime health before treating the {surface} {role_label} as launch-ready.")
+
+    return hints
+
+
+def _build_selected_lane_diagnostics(
+    *,
+    surface: str,
+    status: str,
+    summary: str,
+    selected_provider: str,
+    selected_state: dict[str, Any] | None,
+    backup_states: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selected_snapshot = _provider_lane_snapshot(selected_state, provider=selected_provider)
+    backup_snapshots = [
+        _provider_lane_snapshot(item, provider=str(item.get("provider") or "").strip().lower() or "provider")
+        for item in backup_states
+    ]
+    action_items: list[str] = []
+    action_items.extend(_lane_action_hints(surface=surface, snapshot=selected_snapshot, selected=True))
+    for snapshot in backup_snapshots:
+        action_items.extend(_lane_action_hints(surface=surface, snapshot=snapshot, selected=False))
+
+    deduped_actions: list[str] = []
+    for item in action_items:
+        if item and item not in deduped_actions:
+            deduped_actions.append(item)
+
+    return {
+        "status": status,
+        "summary": summary,
+        "selected_lane": selected_snapshot,
+        "backup_lanes": backup_snapshots,
+        "action_items": deduped_actions,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Spend helpers
 # ---------------------------------------------------------------------------
@@ -733,6 +824,14 @@ def _build_chat_provider_truth(
         )
         for item in provider_states
     ]
+    selected_lane_diagnostics = _build_selected_lane_diagnostics(
+        surface="chat",
+        status=status,
+        summary=summary,
+        selected_provider=selected_provider,
+        selected_state=selected_state if isinstance(selected_state, dict) else None,
+        backup_states=configured_backup_launch_grade,
+    )
 
     return {
         "status": status,
@@ -769,6 +868,7 @@ def _build_chat_provider_truth(
         "resilience_status": resilience_status,
         "resilience_summary": resilience_summary,
         "comparison": comparison,
+        "selected_lane_diagnostics": selected_lane_diagnostics,
         "providers": provider_states,
     }
 
@@ -1070,6 +1170,18 @@ def _build_image_provider_truth(
         public_paid_usage_status = "blocked"
         public_paid_usage_summary = "No launch-grade billable image provider is configured for public paid usage."
 
+    selected_lane_diagnostics = _build_selected_lane_diagnostics(
+        surface="image",
+        status=status,
+        summary=summary,
+        selected_provider=selected_provider,
+        selected_state=next(
+            (item for item in launch_grade_states if str(item.get("provider") or "").strip().lower() == selected_provider),
+            None,
+        ),
+        backup_states=managed_backup_states,
+    )
+
     return {
         "status": status,
         "summary": summary,
@@ -1097,6 +1209,7 @@ def _build_image_provider_truth(
         "resilience_status": resilience_status,
         "resilience_summary": resilience_summary,
         "lane_truth": lane_truth,
+        "selected_lane_diagnostics": selected_lane_diagnostics,
         "providers": launch_grade_states + fallback_states + degraded_states,
     }
 

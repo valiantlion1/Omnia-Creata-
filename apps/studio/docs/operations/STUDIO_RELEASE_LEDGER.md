@@ -18,6 +18,106 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.20.170`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.169` made provider blockers much easier to read, but runtime topology still stopped one step short of the operator question that matters in day-to-day alpha work: in this exact mode, where do generation jobs actually go, and what should we do next? The old payload told you whether broker flags were on or off, but it still made humans infer whether the process was doing all-in-one local work, acting as a web submitter for a worker, or quietly living in a split-runtime fallback.
+- What:
+  `.170` adds that missing runtime-delivery contract to `runtime_topology`. Owner-health consumers now get a compact `generation_delivery_mode`, `generation_delivery_summary`, `operator_posture`, and `action_items` set alongside the existing broker and topology booleans. The payload now says things like "local all-in-one", "web enqueue to shared worker", "worker claims shared broker jobs", or "split runtime fallback/block" in one place, and it gives the next concrete operator move instead of leaving the reader to reconstruct it.
+  Verification on `.170` is targeted backend proof plus refreshed local startup truth. From `apps/studio/backend`, `python -m pytest -q tests/test_backend_spine_ops.py -k "runtime_topology or health_detail_survives_cost_telemetry_failure"` passes (`4 passed`). A live in-process health probe also returns the new runtime-delivery fields in `runtime_topology`. After the build bump, local verify was refreshed and passes on build `.170`. Provider smoke and protected staging were intentionally not refreshed on `.170` in this wave, so those proof artefacts now remain stale relative to the current build.
+
+### `0.6.0-alpha` / build `2026.04.20.169`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.168` made moderation decisions more nuanced, but provider truth still made operators mentally stitch together several nested fields to answer a simple question: which selected chat or image lane is actually blocking this build, what did current-build smoke say about it, and what concrete next action would unblock it? That was especially clumsy on the image side now that current-build proof already showed `runware` blocked on insufficient credits while backup lanes were still missing or unproven.
+- What:
+  `.169` adds a compact `selected_lane_diagnostics` contract to provider truth for both `chat` and `image`. Owner-health consumers now get one focused block with the selected lane snapshot, backup lane snapshots, current-build smoke status, the latest smoke/runtime error, and deduplicated operator action items such as restoring credits, rerunning live smoke, or configuring missing backup credentials. The live `.169` payload now reads cleanly: chat shows a verified selected lane with no action items, while image explicitly calls out the `runware` smoke error plus missing backup credentials instead of forcing operators to reconstruct that story from multiple lower-level fields.
+  Verification on `.169` is targeted backend plus refreshed local truth. From `apps/studio/backend`, `python -m pytest -q tests/test_provider_truth.py` passes (`41 passed`). A live in-process health probe also returns the new `selected_lane_diagnostics` payload for both chat and image. After the build bump, local verify and provider smoke were refreshed again so current-build runtime truth stays on `.169`: local verify passes on the current build, chat provider smoke stays proven, image provider smoke stays honestly blocked by `runware` insufficient credits with `fal` still not configured, and deployment verification remains the only stale proof artifact.
+
+### `0.6.0-alpha` / build `2026.04.20.168`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.167` made runtime topology truth easier to read, but prompt moderation itself was still too monolithic and too eager to hard-stop on heuristic matches. The old path mixed normalization, rules, vendor calls, and final decisions in one place, which made it harder to lower false positives, distinguish age ambiguity from explicit abuse, or salvage medium-risk prompts with a safe rewrite instead of a blunt rejection.
+- What:
+  `.168` replaces that one-note path with a layered moderation engine. Studio image prompts now flow through a fast filter, context analyzer, risk scorer, selective LLM analysis layer, decision engine, rewrite engine, and durable moderation-audit logger. The LLM is advisory only: it can return structured analysis for risk, age ambiguity, sexual intent, context type, and rewrite suggestions, but final decisions still stay inside Studio's own decision engine. Generation intake now persists a prompt-audit record for every decision, carries richer moderation metadata on the generation payload, and can automatically rewrite ambiguous adult-adjacent prompts such as age-unclear swimwear requests into explicit-adult fashion phrasing instead of immediately blocking the user.
+  Verification on `.168` is targeted backend moderation proof. From `apps/studio/backend`, `python -m pytest -q tests/test_moderation.py tests/test_router_generation.py` passes for allow/review/rewrite/block flows and audit persistence, `python -m pytest -q tests/test_moderation_cases.py tests/test_security_hardening.py -k moderation` passes for existing moderation-case and identity-hardening behavior, and `python -m pytest -q tests/test_providers.py -k moderation` passes for provider moderation-tier behavior. This wave did not rerun local verify, provider smoke, or protected staging, so broader environment proof still belongs to the freshest `.160` runtime artifact set plus the newer backend-only follow-up waves.
+
+### `0.6.0-alpha` / build `2026.04.20.167`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.166` made failures traceable again, but runtime topology truth was still spread across too many places for a human operator. You could inspect `generation_runtime_mode`, `generation_broker`, and `launch_readiness` separately, but there still was not one compact owner-health block that answered the practical question: are we in local all-in-one alpha shape, split shared-broker shape, or a launch-incoherent fallback shape?
+- What:
+  `.167` adds that missing owner-health summary layer. `/v1/healthz/detail` now includes an explicit `runtime_topology` block that summarizes the current mode, topology class, shared-broker requirement/configuration/activity, local-processing state, and the difference between topology-ready-for-protected-launch versus the broader launch gate. This keeps the current alpha truth easier to read without changing the existing readiness contract underneath.
+  Verification on `.167` is targeted backend proof. From `apps/studio/backend`, the focused `test_backend_spine_ops.py` and `test_router_security.py` slice passes with the new runtime-topology assertions, and a live in-process owner-health probe now returns the new `runtime_topology` payload on detail health. This wave did not rerun local verify, provider smoke, or protected staging, so broader environment proof still belongs to the freshest `.160` runtime artifact set plus the narrower backend-only follow-up waves.
+
+### `0.6.0-alpha` / build `2026.04.20.166`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.165` finally gave Studio a scrapeable `/metrics` surface, but one real observability seam was still open: unhandled backend exceptions were returning the JSON error body without the normal trace headers, and those failed requests were not showing up clearly in the runtime metrics story. That meant the new Prometheus floor was still blind right where operators most need it during a real incident.
+- What:
+  `.166` closes that gap without widening into full tracing work. Unhandled backend exceptions now stay inside the normal request instrumentation path, so `500` responses keep `X-Request-ID`, `X-Response-Time`, and the same locked security headers as successful API responses. The Prometheus collector also now exposes a dedicated unhandled-exception counter by method, normalized path, and exception type, and those failed requests now count toward the standard request totals with `500` status instead of disappearing from the scrape surface.
+  Verification on `.166` is targeted backend proof. From `apps/studio/backend`, `tests/test_metrics_endpoint.py` now passes with the new exception counter assertions and `tests/test_main_security_headers.py` now passes with the unhandled-error header assertions. This wave did not rerun local verify, provider smoke, or protected staging, so broader environment proof still belongs to the freshest `.160` runtime artifact set plus the narrower backend-only follow-up waves.
+
+### `0.6.0-alpha` / build `2026.04.20.165`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.164` closed the remaining startup/readiness fallout on `main`, but Studio still had no standard scrapeable runtime signal surface. We had better logs and request IDs than before, yet an operator still could not point Prometheus at the backend and get basic build identity, request volume, in-flight load, or latency truth in one place.
+- What:
+  `.165` adds that missing observability floor. The backend now exposes a Prometheus-format `/metrics` endpoint with build info, process uptime, in-flight request count, completed request totals, and request-duration histograms labeled by method plus normalized route path. Request middleware now records those metrics while intentionally excluding `/metrics` from self-counting so scrape traffic stays cleaner.
+  Verification on `.165` is targeted backend proof. From `apps/studio/backend`, the new `tests/test_metrics_endpoint.py` passes for content type and request-count exposure, and the combined targeted suite still passes for the earlier request-hardening, migration, and auth-session slices. This wave did not rerun local verify, provider smoke, or protected staging, so broader environment proof still belongs to the freshest `.160` artifact set plus the narrower backend-only follow-up waves.
+
+### `0.6.0-alpha` / build `2026.04.20.164`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.163` tightened the local JWT session-family contract, but `main` was still missing two smaller backend fallout fixes from the earlier alpha-hardening wave. Startup/auth boot was still assuming every JWT secret arrived as a `SecretStr`, which could still break app startup when tests or runtime overrides supplied a plain string. Owner-health/readiness truth was also still too harsh in development-mode alpha loops, flattening stable local iteration into `foundation_blocked` even when demo auth was intentionally carrying the local path and only the external launch gates were missing.
+- What:
+  `.164` closes that remaining backend fallout without widening scope. Startup auth boot now reads the JWT secret through the shared config helper so both `SecretStr` and plain string values initialize cleanly. Launch-readiness truth now keeps the two questions separate: a stable development loop can remain `local_alpha` under demo auth, while protected/public launch gates still stay blocked until real Supabase auth and launch-grade operator proof exist. This wave also adds a regression test that locks that local-alpha behavior in place instead of relying on incidental owner-health expectations.
+  Verification on `.164` is full backend proof, but sharded instead of monolithic. The targeted `test_main_security_headers.py` + `test_launch_readiness.py` slice passes first, and the backend test corpus was then completed file-by-file because one monolithic `pytest tests/ -p no:cacheprovider -q` run stalled deep in the long `test_service_regressions.py` / `test_security_hardening.py` part of the suite. Sharded verification still closes the truth honestly: all backend test files now pass, including `test_service_regressions.py` (`86 passed`) and the remaining tail slice (`16 passed`), which brings the current backend corpus to `583` collected tests passing on `.164`.
+
+### `0.6.0-alpha` / build `2026.04.20.163`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.162` formalized the Postgres state-store contract, but one older auth helper seam still lagged behind the newer access-session truth. Local JWT helpers were still generating access and refresh tokens as separate families, and legacy blacklist behavior still only revoked one raw token string at a time. That left an avoidable mismatch between the persistent session model and the fallback/local JWT helper behavior.
+- What:
+  `.163` tightens that seam without opening a new auth subsystem. Local JWT access and refresh tokens now share one stable `session_id`, refresh-based access-token renewal preserves that same session identity, and legacy `blacklist_token()` now revokes the whole token family by session and token id instead of only one exact token string. The new regression slice also proves the important behavior directly: access/refresh tokens round-trip as one session family, blacklisting one token revokes its sibling refresh path too, and refreshed access tokens keep the same session identity instead of quietly hopping to a new one.
+  Verification on `.163` is targeted backend proof. From `apps/studio/backend`, the local JWT/session regression additions in `tests/test_router_security.py` pass along with the earlier persistent-session checks. This wave did not rerun local verify, provider smoke, or protected staging, so broader environment proof still belongs to the freshest `.160` artifact set plus the narrower `.161` and `.162` backend slices.
+
+### `0.6.0-alpha` / build `2026.04.20.162`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.161` made split runtime startup and ingress behavior more honest, but the durable state-store layer was still too implicit for a serious production path. The Postgres store still depended on runtime auto-created schema and hardcoded connection-pool defaults, which meant deployment truth, migration truth, and capacity tuning were still buried in application code instead of living behind one explicit operator contract.
+- What:
+  `.162` adds that missing persistence foundation without reopening the whole state-authority redesign at once. Studio backend now includes a repo-local Alembic baseline for the current Postgres state-store tables and indexes, plus a `python scripts/run_migrations.py` runner that can execute or render the migration plan directly from the backend workspace. The Postgres state store also no longer hides its durability knobs in code: min/max pool connections and statement timeout are now explicit environment settings that flow into the runtime store description. The backend README now matches current topology truth too, including the fail-closed split-runtime rule introduced in `.161` and the new canonical migration command.
+  Verification on `.162` is targeted backend proof. From `apps/studio/backend`, `tests/test_store.py` passes with the new pool-sizing assertions and shared schema-contract checks, and the new `tests/test_alembic_setup.py` passes for migration-runner config and env-file loading behavior. This wave did not rerun local verify, provider smoke, or protected staging, so environment/runtime proof outside those backend tests still belongs to the freshest `.160` artifact set plus the narrower `.161` backend proof.
+
+### `0.6.0-alpha` / build `2026.04.19.161`
+- Date: `2026-04-19`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.160` made moderation truth safer and more nuanced, but one launch-facing platform seam was still too permissive for a real split deployment: outside development, Studio could still come up in `web` or `worker` runtime mode while silently degrading onto local queue behavior if the shared Redis broker was missing or unavailable. At the same time, backend ingress still lacked one global request-size boundary and one mounted correlation header path, which made abuse handling and incident tracing weaker than the new production roadmap requires.
+- What:
+  `.161` hardens that backend seam without reopening a broad persistence wave. Split `web` and `worker` runtime now fail closed outside development if the shared generation broker is missing or cannot initialize, instead of booting into a degraded local-fallback posture that hides topology mistakes. Backend ingress now also enforces global header and body size limits before route logic runs, and API responses now consistently emit `X-Request-ID` plus `X-Response-Time`, with request correlation carried through the standard exception payloads too.
+  Verification on `.161` is backend-only and targeted. From `apps/studio/backend`, the new request-hardening middleware tests pass, the main security-header regression file passes with correlation-header assertions, and the broker/startup regression slice now proves both sides of the new split-runtime rule: development still keeps advisory fallback behavior, while staging split runtime fails closed when Redis is missing or unavailable.
+
 ### `0.6.0-alpha` / build `2026.04.19.160`
 - Date: `2026-04-19`
 - Codename: `Foundation`

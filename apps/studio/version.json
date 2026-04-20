@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.19.160",
+  "build": "2026.04.20.170",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-19",
-  "notes": "Layered moderation now routes reviewable adult-adjacent image prompts through provider-aware low-moderation lanes while explicit sexual or exploitative requests still block, and the current web and backend verification gates are back in sync with the same build."
+  "releaseDate": "2026-04-20",
+  "notes": "Studio runtime topology now exposes a delivery contract for owner health, so backend truth can say whether jobs run all-in-one locally, enqueue to a shared worker, or are stuck in a split-runtime fallback or broker-missing posture."
 }

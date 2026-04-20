@@ -182,6 +182,160 @@ def _is_expected_local_generation_broker_fallback(
     }
 
 
+def _find_launch_readiness_check(launch_readiness: Mapping[str, Any] | None, key: str) -> Mapping[str, Any] | None:
+    if not isinstance(launch_readiness, Mapping):
+        return None
+    checks = launch_readiness.get("checks")
+    if not isinstance(checks, list):
+        return None
+    for check in checks:
+        if isinstance(check, Mapping) and str(check.get("key") or "").strip() == key:
+            return check
+    return None
+
+
+def _build_runtime_delivery_contract(
+    *,
+    settings: Settings,
+    generation_runtime_mode: str,
+    topology_class: str,
+    advisory: bool,
+    broker_detail: str | None,
+) -> dict[str, Any]:
+    action_items: list[str] = []
+
+    if generation_runtime_mode == "all":
+        delivery_mode = "local_all_in_one"
+        operator_posture = "local_alpha_safe"
+        summary = "This runtime accepts generation requests and executes them on the same local process."
+        if settings.environment == Environment.DEVELOPMENT:
+            action_items.append("Keep this all-in-one mode for low-cost local alpha work.")
+        action_items.append("Switch to split web/worker plus a shared broker when you want protected-launch topology.")
+    elif topology_class == "split_shared_broker" and generation_runtime_mode == "web":
+        delivery_mode = "web_enqueue_shared_worker"
+        operator_posture = "split_submission_surface"
+        summary = "This web runtime accepts generation jobs and leaves execution to workers on the shared broker."
+        action_items.append("Keep at least one worker runtime attached to the same shared broker.")
+    elif topology_class == "split_shared_broker" and generation_runtime_mode == "worker":
+        delivery_mode = "worker_claim_shared_broker"
+        operator_posture = "split_worker_surface"
+        summary = "This worker runtime claims queued jobs from the shared broker and executes them."
+        action_items.append("Keep at least one web runtime attached to the same shared broker for submissions.")
+    elif topology_class == "split_advisory_fallback" or advisory:
+        delivery_mode = "local_web_fallback"
+        operator_posture = "local_alpha_only"
+        summary = "This split-shaped runtime is still processing jobs locally because the shared broker is unavailable."
+        action_items.append("Safe for local alpha only; do not treat this fallback as protected-launch topology.")
+        action_items.append("Restore the shared broker if you want real web/worker separation.")
+    elif topology_class == "split_broker_missing":
+        delivery_mode = "split_runtime_blocked"
+        operator_posture = "launch_blocked"
+        summary = "This split runtime cannot reliably move jobs because the shared broker is missing."
+        action_items.append("Configure and start the shared broker for web/worker runtime.")
+        action_items.append("Do not run protected-launch proof until the shared broker is active.")
+    else:
+        delivery_mode = "custom_runtime"
+        operator_posture = "custom"
+        summary = broker_detail or "Runtime delivery behavior needs manual inspection."
+
+    return {
+        "generation_delivery_mode": delivery_mode,
+        "generation_delivery_summary": summary,
+        "operator_posture": operator_posture,
+        "action_items": action_items,
+    }
+
+
+def build_runtime_topology_summary(
+    *,
+    settings: Settings,
+    generation_runtime_mode: str,
+    generation_broker_payload: Mapping[str, Any],
+    launch_readiness: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    runtime_check = _find_launch_readiness_check(launch_readiness, "runtime_topology")
+    shared_broker_configured = generation_broker_payload.get("configured") is True
+    shared_broker_active = generation_broker_payload.get("enabled") is True
+    advisory = generation_broker_payload.get("advisory") is True
+    degraded = generation_broker_payload.get("degraded") is True
+    broker_detail = str(generation_broker_payload.get("detail") or "").strip() or None
+    shared_broker_required = (
+        settings.environment != Environment.DEVELOPMENT
+        and generation_runtime_mode in {"web", "worker"}
+    )
+    local_processing_enabled = generation_runtime_mode in {"all", "worker"}
+
+    if isinstance(runtime_check, Mapping):
+        status = str(runtime_check.get("status") or "unknown").strip().lower() or "unknown"
+        summary = str(runtime_check.get("summary") or "Runtime topology status is unavailable.").strip()
+        detail = str(runtime_check.get("detail") or "").strip() or None
+    elif generation_runtime_mode == "all":
+        status = "warning"
+        summary = "Generation is running in all-in-one local convenience mode."
+        detail = "This is fine for local alpha work, but protected launch wants split web/worker topology."
+    elif generation_runtime_mode in {"web", "worker"} and not (shared_broker_active or shared_broker_configured):
+        status = "blocked"
+        summary = "Split runtime is missing its shared broker."
+        detail = "Web/worker topology is not coherent until the shared queue is configured."
+    else:
+        status = "pass"
+        summary = "Generation runtime topology is coherent."
+        detail = broker_detail or f"Runtime mode is {generation_runtime_mode}."
+
+    if generation_runtime_mode == "all":
+        topology_class = "all_in_one"
+    elif shared_broker_active:
+        topology_class = "split_shared_broker"
+    elif advisory:
+        topology_class = "split_advisory_fallback"
+    elif generation_runtime_mode in {"web", "worker"}:
+        topology_class = "split_broker_missing"
+    else:
+        topology_class = "custom"
+
+    delivery_contract = _build_runtime_delivery_contract(
+        settings=settings,
+        generation_runtime_mode=generation_runtime_mode,
+        topology_class=topology_class,
+        advisory=advisory,
+        broker_detail=broker_detail,
+    )
+
+    platform_readiness = launch_readiness.get("platform_readiness") if isinstance(launch_readiness, Mapping) else None
+    launch_gate = launch_readiness.get("launch_gate") if isinstance(launch_readiness, Mapping) else None
+    current_stage = (
+        str(platform_readiness.get("current_stage") or "").strip()
+        if isinstance(platform_readiness, Mapping)
+        else ""
+    )
+    next_stage = (
+        str(platform_readiness.get("next_stage") or "").strip()
+        if isinstance(platform_readiness, Mapping)
+        else ""
+    )
+
+    return {
+        "status": status,
+        "summary": summary,
+        "detail": detail,
+        "mode": generation_runtime_mode,
+        "topology_class": topology_class,
+        "shared_broker_required": shared_broker_required,
+        "shared_broker_configured": shared_broker_configured,
+        "shared_broker_active": shared_broker_active,
+        "shared_broker_advisory_fallback": advisory,
+        "shared_broker_degraded": degraded,
+        "shared_broker_detail": broker_detail,
+        "local_processing_enabled": local_processing_enabled,
+        "topology_ready_for_protected_launch": status == "pass",
+        "launch_gate_ready": launch_gate.get("ready_for_protected_launch") is True if isinstance(launch_gate, Mapping) else False,
+        "local_alpha_ready": current_stage in {"local_alpha", "protected_beta", "public_paid_platform"},
+        "current_stage": current_stage or None,
+        "next_stage": next_stage or None,
+        **delivery_contract,
+    }
+
+
 def derive_overall_health_status(
     *,
     settings: Settings,
@@ -377,6 +531,12 @@ async def build_owner_health_detail_extensions(
                 exc=exc,
             )
         )
+    runtime_topology = build_runtime_topology_summary(
+        settings=settings,
+        generation_runtime_mode=generation_runtime_mode,
+        generation_broker_payload=generation_broker_payload,
+        launch_readiness=launch_readiness,
+    )
     return {
         "security_summary": security_summary,
         "moderation_summary": moderation_summary,
@@ -390,6 +550,7 @@ async def build_owner_health_detail_extensions(
         "provider_economics_dossier": economics_dossier,
         "ai_control_plane": ai_control_plane,
         "launch_readiness": launch_readiness,
+        "runtime_topology": runtime_topology,
     }
 
 
@@ -446,6 +607,7 @@ def build_owner_health_payload(
     provider_economics_dossier: Mapping[str, Any] | None = None,
     ai_control_plane: Mapping[str, Any] | None = None,
     launch_readiness: Mapping[str, Any] | None = None,
+    runtime_topology: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "status": overall_status,
@@ -484,6 +646,8 @@ def build_owner_health_payload(
         payload["provider_economics_dossier"] = dict(provider_economics_dossier)
     if ai_control_plane is not None:
         payload["ai_control_plane"] = dict(ai_control_plane)
+    if runtime_topology is not None:
+        payload["runtime_topology"] = dict(runtime_topology)
     if launch_readiness is not None:
         payload["launch_readiness"] = dict(launch_readiness)
         launch_gate = launch_readiness.get("launch_gate")

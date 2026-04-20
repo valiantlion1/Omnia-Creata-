@@ -3929,32 +3929,53 @@ async def test_service_health_treats_dev_redis_fallback_as_advisory_when_local_q
 
 
 @pytest.mark.asyncio
-async def test_service_health_keeps_redis_fallback_degraded_outside_development(tmp_path: Path):
+async def test_split_runtime_requires_shared_broker_when_web_runtime_starts_outside_development(
+    tmp_path: Path,
+):
     settings = get_settings()
     original_environment = settings.environment
+    original_mode = settings.generation_runtime_mode
     original_redis_url = settings.redis_url
-    service: StudioService | None = None
 
     try:
         settings.environment = Environment.STAGING
+        settings.generation_runtime_mode = "web"
+        settings.redis_url = ""
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        with pytest.raises(
+            RuntimeError,
+            match="Shared generation broker is required for split runtime outside local development.",
+        ):
+            await service.initialize()
+    finally:
+        settings.environment = original_environment
+        settings.generation_runtime_mode = original_mode
+        settings.redis_url = original_redis_url
+
+
+@pytest.mark.asyncio
+async def test_split_runtime_rejects_unavailable_shared_broker_outside_development(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_mode = settings.generation_runtime_mode
+    original_redis_url = settings.redis_url
+
+    try:
+        settings.environment = Environment.STAGING
+        settings.generation_runtime_mode = "worker"
         settings.redis_url = "redis://127.0.0.1:6399/0"
         store = StudioStateStore(tmp_path / "state.json")
         service = StudioService(store, ProviderRegistry(), tmp_path / "media")
-        await service.initialize()
-
-        health = await service.health()
-
-        assert health["status"] == "degraded"
-        assert health["generation_broker"]["configured"] is True
-        assert health["generation_broker"]["enabled"] is False
-        assert health["generation_broker"]["degraded"] is True
-        assert health["generation_broker"]["advisory"] is False
-        assert health["generation_broker"]["detail"] == "redis_unavailable_fallback_local_queue"
+        with pytest.raises(
+            RuntimeError,
+            match="Shared generation broker is unavailable for split runtime outside local development.",
+        ):
+            await service.initialize()
     finally:
         settings.environment = original_environment
+        settings.generation_runtime_mode = original_mode
         settings.redis_url = original_redis_url
-        if service is not None:
-            await service.shutdown()
 
 
 @pytest.mark.asyncio

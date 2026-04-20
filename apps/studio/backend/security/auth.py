@@ -122,17 +122,41 @@ class JWTManager:
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self._blacklisted_tokens: set = set()
         self._login_attempts: Dict[str, List[float]] = {}
+
+    def _extract_jwt_token(self, token: str) -> str:
+        candidate = str(token or "").strip()
+        if candidate.startswith(self.config.api_key_prefix):
+            if "." not in candidate:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid API key format"
+                )
+            _, jwt_token = candidate.split(".", 1)
+            return jwt_token
+        return candidate
+
+    def _token_revocation_keys(self, payload: Dict[str, Any]) -> set[str]:
+        keys: set[str] = set()
+        session_id = str(payload.get("session_id") or "").strip()
+        jti = str(payload.get("jti") or "").strip()
+        if session_id:
+            keys.add(f"session:{session_id}")
+        if jti:
+            keys.add(f"jti:{jti}")
+        return keys
     
     def create_access_token(
         self,
         user: User,
-        expires_delta: Optional[timedelta] = None
+        expires_delta: Optional[timedelta] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """Create access token"""
+        issued_at = datetime.now(timezone.utc)
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = issued_at + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=self.config.access_token_expire_minutes)
+            expire = issued_at + timedelta(minutes=self.config.access_token_expire_minutes)
         
         payload = {
             "sub": user.id,
@@ -142,8 +166,9 @@ class JWTManager:
             "metadata": user.metadata,
             "type": TokenType.ACCESS.value,
             "exp": expire,
-            "iat": datetime.now(timezone.utc),
-            "jti": secrets.token_urlsafe(16)  # JWT ID for blacklisting
+            "iat": issued_at,
+            "session_id": str(session_id or "").strip() or secrets.token_urlsafe(16),
+            "jti": secrets.token_urlsafe(16),
         }
         
         return jwt.encode(payload, self.config.secret_key, algorithm=self.config.algorithm)
@@ -151,20 +176,27 @@ class JWTManager:
     def create_refresh_token(
         self,
         user: User,
-        expires_delta: Optional[timedelta] = None
+        expires_delta: Optional[timedelta] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """Create refresh token"""
+        issued_at = datetime.now(timezone.utc)
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = issued_at + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(days=self.config.refresh_token_expire_days)
+            expire = issued_at + timedelta(days=self.config.refresh_token_expire_days)
         
         payload = {
             "sub": user.id,
+            "email": user.email,
+            "username": user.username,
+            "role": user.role.value,
+            "metadata": user.metadata,
             "type": TokenType.REFRESH.value,
             "exp": expire,
-            "iat": datetime.now(timezone.utc),
-            "jti": secrets.token_urlsafe(16)
+            "iat": issued_at,
+            "session_id": str(session_id or "").strip() or secrets.token_urlsafe(16),
+            "jti": secrets.token_urlsafe(16),
         }
         
         return jwt.encode(payload, self.config.secret_key, algorithm=self.config.algorithm)
@@ -194,30 +226,26 @@ class JWTManager:
     def verify_token(self, token: str, token_type: Optional[TokenType] = None) -> Dict[str, Any]:
         """Verify and decode token"""
         try:
-            # Check if token is blacklisted
-            if token in self._blacklisted_tokens:
+            normalized_token = self._extract_jwt_token(token)
+
+            if token in self._blacklisted_tokens or normalized_token in self._blacklisted_tokens:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token has been revoked"
                 )
-            
-            # Handle API key format
-            if token.startswith(self.config.api_key_prefix):
-                if "." in token:
-                    _, jwt_token = token.split(".", 1)
-                    token = jwt_token
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid API key format"
-                    )
-            
+
             # Decode JWT
             payload = jwt.decode(
-                token,
+                normalized_token,
                 self.config.secret_key,
                 algorithms=[self.config.algorithm]
             )
+
+            if any(key in self._blacklisted_tokens for key in self._token_revocation_keys(payload)):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked"
+                )
             
             # Verify token type if specified
             if token_type and payload.get("type") != token_type.value:
@@ -241,7 +269,20 @@ class JWTManager:
     
     def blacklist_token(self, token: str):
         """Add token to blacklist"""
+        normalized_token = self._extract_jwt_token(token)
         self._blacklisted_tokens.add(token)
+        self._blacklisted_tokens.add(normalized_token)
+        try:
+            payload = jwt.decode(
+                normalized_token,
+                self.config.secret_key,
+                algorithms=[self.config.algorithm],
+                options={"verify_exp": False},
+            )
+        except jwt.InvalidTokenError:
+            payload = {}
+        if isinstance(payload, dict):
+            self._blacklisted_tokens.update(self._token_revocation_keys(payload))
         logger.info("Token blacklisted")
     
     def hash_password(self, password: str) -> str:
@@ -661,9 +702,10 @@ def require_permission(permission: str):
 def create_user_tokens(user: User) -> Dict[str, str]:
     """Create access and refresh tokens for user"""
     jwt_manager = get_jwt_manager()
-    
-    access_token = jwt_manager.create_access_token(user)
-    refresh_token = jwt_manager.create_refresh_token(user)
+    session_id = secrets.token_urlsafe(16)
+
+    access_token = jwt_manager.create_access_token(user, session_id=session_id)
+    refresh_token = jwt_manager.create_refresh_token(user, session_id=session_id)
     
     return {
         "access_token": access_token,
@@ -682,8 +724,10 @@ def refresh_access_token(refresh_token: str) -> str:
     # Create new access token
     user = User(
         id=payload["sub"],
-        email="",  # Email not stored in refresh token
-        role=UserRole.USER  # Default role, should be fetched from database
+        email=str(payload.get("email") or "").strip(),
+        username=payload.get("username"),
+        role=UserRole(str(payload.get("role") or UserRole.USER.value)),
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
     )
-    
-    return jwt_manager.create_access_token(user)
+
+    return jwt_manager.create_access_token(user, session_id=str(payload.get("session_id") or "").strip() or None)

@@ -1,4 +1,39 @@
+"""Studio backend FastAPI entrypoint.
+
+**Purpose:** Wire up every singleton the app needs — state store, providers,
+service orchestrator, rate limiter, metrics collector — and expose the HTTP
+surface (router, middlewares, health probes, metrics endpoint).
+
+**Bootstrap order (do not reorder without testing):**
+    1. :mod:`runtime_logging` — configure log handlers/levels.
+    2. :func:`build_state_store` — pick JSON/SQLite/Postgres backend.
+    3. :class:`ProviderRegistry` — assemble upstream generation clients.
+    4. :class:`StudioService` — orchestrator (calls back into store/providers).
+    5. Rate limiter + metrics collector.
+    6. FastAPI app creation, middleware registration, router mounting.
+    7. ``lifespan`` context — ``setup_auth``, ``rate_limiter.initialize``,
+       ``service.initialize`` (in that order).
+
+**Middleware order (outermost first when a request comes in):**
+    - CORSMiddleware (cross-origin handling)
+    - MaintenanceMiddleware (503 when maintenance flag is on)
+    - TrustedHostMiddleware (staging/prod only)
+    - IngressLimitMiddleware (body size caps, request ID resolution)
+    - Request logging / timing (in ``@app.middleware``)
+
+**Why everything is module-level:** FastAPI builds the app once at import
+time. Keeping singletons at the module level (rather than inside a factory)
+matches the uvicorn ``main:app`` reload model and avoids re-initialising
+expensive objects on every worker boot.
+
+**AI-maintainer note:** If you need a new singleton, add it next to the
+existing ones (``state_store``, ``providers``, ``service``) and initialise
+it inside ``lifespan`` if it has async setup. Do not hide lifecycle inside
+:class:`StudioService`; keep startup ordering visible here.
+"""
+
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -6,10 +41,12 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from config.env import Environment, get_settings
+from config.env import Environment, get_settings, reveal_secret
+from observability.metrics import PrometheusMetricsCollector
 from security.auth import AuthConfig, setup_auth
+from security.ingress import IngressLimitMiddleware, resolve_request_id
 from security.maintenance import MaintenanceMiddleware, load_maintenance_config
 from security.rate_limit import build_rate_limiter
 from runtime_logging import configure_runtime_logging
@@ -43,6 +80,7 @@ state_store = build_state_store(
 providers = ProviderRegistry()
 service = StudioService(state_store, providers, MEDIA_DIR)
 rate_limiter = build_rate_limiter(settings)
+metrics_collector = PrometheusMetricsCollector()
 
 
 def _should_enforce_trusted_hosts(current_settings) -> bool:
@@ -55,7 +93,7 @@ def _should_enforce_trusted_hosts(current_settings) -> bool:
 async def lifespan(app: FastAPI):
     setup_auth(
         AuthConfig(
-            secret_key=settings.jwt_secret.get_secret_value() if settings.jwt_secret else "",
+            secret_key=reveal_secret(settings.jwt_secret),
             algorithm=settings.jwt_algorithm,
         )
     )
@@ -95,6 +133,12 @@ if maintenance_config.enabled or maintenance_config.override_token:
 if _should_enforce_trusted_hosts(settings):
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
 
+app.add_middleware(
+    IngressLimitMiddleware,
+    max_header_bytes=settings.max_request_header_bytes,
+    max_body_bytes=settings.max_request_body_bytes,
+)
+
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 app.include_router(create_router(service, rate_limiter))
@@ -123,9 +167,7 @@ def _requires_no_store_headers(path: str) -> bool:
     return False
 
 
-@app.middleware("http")
-async def security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
+def _apply_security_headers(response: Response, *, request_path: str) -> None:
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -139,9 +181,108 @@ async def security_headers_middleware(request: Request, call_next):
             "Content-Security-Policy",
             "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
         )
-    if _requires_no_store_headers(request.url.path):
+    if _requires_no_store_headers(request_path):
         response.headers.setdefault("Cache-Control", "no-store, private")
         response.headers.setdefault("Pragma", "no-cache")
+
+
+def _apply_request_context_headers(
+    response: Response,
+    *,
+    request_id: str | None,
+    duration_seconds: float | None = None,
+) -> None:
+    if request_id:
+        response.headers.setdefault("X-Request-ID", request_id)
+    if duration_seconds is not None:
+        response.headers.setdefault("X-Response-Time", f"{duration_seconds:.3f}s")
+
+
+def _request_duration_seconds(request: Request) -> float | None:
+    started_at = getattr(request.state, "request_started_at", None)
+    if isinstance(started_at, (float, int)):
+        return max(0.0, time.perf_counter() - float(started_at))
+    return None
+
+
+def _path_label_for_request(request: Request) -> str:
+    route_path = getattr(request.scope.get("route"), "path", None)
+    return metrics_collector.route_label(request.url.path, route_path)
+
+
+def _log_completed_request(request: Request, *, request_id: str | None, status_code: int, duration_seconds: float) -> None:
+    if request.url.path in {"/docs", "/openapi.json", "/redoc", "/metrics"}:
+        return
+    duration_ms = int(duration_seconds * 1000)
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "request_completed request_id=%s method=%s path=%s status=%s duration_ms=%s client_ip=%s",
+        request_id or "unknown",
+        request.method,
+        request.url.path,
+        status_code,
+        duration_ms,
+        client_ip,
+    )
+
+
+def _build_internal_error_response(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled backend exception: %s", exc)
+    payload = {"error": "A server error occurred. Our team has been notified."}
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    response = JSONResponse(status_code=500, content=payload)
+    duration_seconds = _request_duration_seconds(request)
+    _apply_request_context_headers(response, request_id=request_id, duration_seconds=duration_seconds)
+    _apply_security_headers(response, request_path=request.url.path)
+    return response
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = resolve_request_id(request.headers.get("X-Request-ID"))
+    request.state.request_id = request_id
+    request.state.request_started_at = time.perf_counter()
+    started_at = float(request.state.request_started_at)
+    metrics_collector.request_started()
+    try:
+        try:
+            response = await call_next(request)
+        except Exception as exc:  # pragma: no cover - exercised via TestClient runtime behavior
+            path_label = _path_label_for_request(request)
+            if path_label != "/metrics":
+                metrics_collector.record_exception(
+                    method=request.method,
+                    path=path_label,
+                    exception_type=exc.__class__.__name__,
+                )
+            response = _build_internal_error_response(request, exc)
+    finally:
+        metrics_collector.request_finished()
+    duration_seconds = time.perf_counter() - started_at
+    path_label = _path_label_for_request(request)
+    if path_label != "/metrics":
+        metrics_collector.record_request(
+            method=request.method,
+            path=path_label,
+            status_code=response.status_code,
+            duration_seconds=duration_seconds,
+        )
+    _apply_request_context_headers(response, request_id=request_id, duration_seconds=duration_seconds)
+    _log_completed_request(
+        request,
+        request_id=request_id,
+        status_code=response.status_code,
+        duration_seconds=duration_seconds,
+    )
+    return response
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    _apply_security_headers(response, request_path=request.url.path)
     return response
 
 
@@ -182,21 +323,43 @@ async def get_version():
     )
 
 
+if settings.enable_metrics_endpoint:
+    @app.get("/metrics", include_in_schema=False)
+    async def get_metrics():
+        version_payload = build_runtime_version_payload(
+            boot_build=boot_version_info.build,
+            booted_at=process_booted_at,
+        )
+        return PlainTextResponse(
+            metrics_collector.render(
+                version=version_payload["version"],
+                build=version_payload["build"],
+                channel=version_payload["channel"],
+                status=version_payload["status"],
+            ),
+            media_type="text/plain; version=0.0.4",
+        )
+
+
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.detail},
+async def http_exception_handler(request: Request, exc: HTTPException):
+    payload = {"error": exc.detail}
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    response = JSONResponse(status_code=exc.status_code, content=payload)
+    _apply_request_context_headers(
+        response,
+        request_id=request_id,
+        duration_seconds=_request_duration_seconds(request),
     )
+    _apply_security_headers(response, request_path=request.url.path)
+    return response
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(_, exc: Exception):
-    logger.error(f"Unhandled backend exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"error": "A server error occurred. Our team has been notified."},
-    )
+async def global_exception_handler(request: Request, exc: Exception):
+    return _build_internal_error_response(request, exc)
 
 
 if __name__ == "__main__":

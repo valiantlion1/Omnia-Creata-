@@ -12,6 +12,13 @@ from studio_platform.store import (
     _load_state_from_rows,
     build_state_store,
 )
+from studio_platform.store_schema import (
+    POSTGRES_COLLECTION_INDEX,
+    POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX,
+    POSTGRES_METADATA_TABLE,
+    POSTGRES_RECORDS_TABLE,
+    STORE_SCHEMA_VERSION,
+)
 
 
 class _FakeCursor:
@@ -190,6 +197,9 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
         state_store_path=None,
         legacy_state_store_path=None,
         database_url="postgresql://studio:secret@localhost:5432/studio",
+        postgres_state_store_min_connections=4,
+        postgres_state_store_max_connections=12,
+        postgres_state_store_statement_timeout_ms=45000,
     )
 
     json_store = build_state_store(
@@ -218,9 +228,9 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
     assert sqlite_store.bootstrap_paths == [legacy_sqlite_path.resolve(), json_path.resolve()]
     assert postgres_store.dsn == postgres_settings.database_url
     assert postgres_store.bootstrap_paths == [legacy_sqlite_path.resolve(), json_path.resolve()]
-    assert postgres_store._pool_minconn == 2
-    assert postgres_store._pool_maxconn == 10
-    assert postgres_store._statement_timeout_ms == 30000
+    assert postgres_store._pool_minconn == 4
+    assert postgres_store._pool_maxconn == 12
+    assert postgres_store._statement_timeout_ms == 45000
 
 
 def test_build_state_store_accepts_secretstr_database_url(tmp_path: Path):
@@ -243,15 +253,21 @@ def test_build_state_store_accepts_secretstr_database_url(tmp_path: Path):
 
 
 def test_postgres_store_prepares_statement_timeout_and_generation_index():
-    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    store = PostgresStudioStateStore(
+        "postgresql://studio:secret@localhost:5432/studio",
+        pool_minconn=3,
+        pool_maxconn=9,
+        statement_timeout_ms=45000,
+    )
     connection = _FakeConnection()
 
     store._prepare_connection(connection)
     store._ensure_schema_sync(connection)
 
     joined_sql = "\n".join(connection.statements)
-    assert "SET statement_timeout = 30000" in joined_sql
-    assert "idx_studio_state_records_generations_identity_status_created_at" in joined_sql
+    assert "SET statement_timeout = 45000" in joined_sql
+    assert POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX in joined_sql
+    assert POSTGRES_COLLECTION_INDEX in joined_sql
     assert "payload ->> 'identity_id'" in joined_sql
 
 
@@ -272,8 +288,8 @@ def test_postgres_store_replace_rows_uses_advisory_lock():
 
     joined_sql = "\n".join(connection.statements)
     assert "SELECT pg_advisory_xact_lock" in joined_sql
-    assert "DELETE FROM studio_state_records" in joined_sql
-    assert "INSERT INTO studio_state_records (collection, model_id, payload)" in joined_sql
+    assert f"DELETE FROM {POSTGRES_RECORDS_TABLE}" in joined_sql
+    assert f"INSERT INTO {POSTGRES_RECORDS_TABLE} (collection, model_id, payload)" in joined_sql
 
 
 def test_load_state_from_rows_skips_malformed_payloads(caplog: pytest.LogCaptureFixture):
@@ -301,4 +317,15 @@ def test_load_state_from_rows_skips_malformed_payloads(caplog: pytest.LogCapture
     assert any(
         "Skipping malformed Studio state row while loading durable store" in record.message
         for record in caplog.records
+    )
+
+
+def test_store_schema_contract_is_stable():
+    assert POSTGRES_RECORDS_TABLE == "studio_state_records"
+    assert POSTGRES_METADATA_TABLE == "studio_state_metadata"
+    assert STORE_SCHEMA_VERSION == "2"
+    assert POSTGRES_COLLECTION_INDEX == "idx_studio_state_records_collection"
+    assert (
+        POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX
+        == "idx_studio_state_records_generations_identity_status_created_at"
     )

@@ -1,9 +1,34 @@
+"""Security-aware HTTP middlewares.
+
+**Purpose:** ASGI middlewares that every request flows through for
+structured logging, per-user rate limiting, auth enrichment, and correlation.
+
+**Registered in:** :mod:`main` — order matters; see the comment block next
+to ``app.add_middleware`` calls there for the current wiring.
+
+**Invariants:**
+    - Middlewares must be idempotent — a request dropped by an earlier
+      middleware should not be double-counted.
+    - Correlation IDs are sourced via :func:`security.ingress.resolve_request_id`
+      and bound to :mod:`observability.context` so service-layer logs inherit
+      them automatically.
+    - No middleware raises unhandled exceptions; all error paths produce a
+      :class:`JSONResponse` and emit a structured log entry.
+
+**Adding middleware (AI-maintainer checklist):**
+    1. Subclass ``BaseHTTPMiddleware`` or write a plain ASGI callable.
+    2. Register via ``app.add_middleware`` in :mod:`main`.
+    3. Remember: ``app.add_middleware`` wraps in REVERSE order — the last
+       one added runs first.
+    4. Add a test under ``tests/test_main_security_headers.py`` or
+       ``tests/test_request_hardening_middleware.py``.
+"""
+
 import time
 import uuid
 from typing import Callable, Optional, Dict, Any, List
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.base import BaseHTTPMiddleware
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.types import ASGIApp

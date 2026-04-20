@@ -44,7 +44,7 @@ Studio generation now supports three explicit runtime modes:
   - keep `REDIS_URL` configured
   - treat `all` mode as development-only convenience
 
-If `REDIS_URL` is configured but Redis is unavailable, Studio starts in degraded mode and falls back to the local queue instead of crashing. In `web` runtime without an active shared broker, Studio also marks itself degraded and temporarily processes generations locally instead of leaving jobs stranded forever. Inspect `/v1/healthz` to confirm whether the shared broker is active.
+In local development, `REDIS_URL` can still be optional and `all` mode can fall back to the local dispatcher. Outside development, split `web` / `worker` runtime is now fail-closed: if the shared Redis broker is missing or unavailable, startup should stop instead of silently degrading onto local queue behavior. Inspect `/v1/healthz` to confirm whether the shared broker is active.
 Broker/state reconciliation also runs during generation maintenance, so terminal, missing, or duplicate running jobs that reappear in the broker are discarded instead of being processed twice.
 `GENERATION_CLAIM_LEASE_SECONDS` controls how long a worker claim remains valid before recovery logic can recycle the job. Keep it comfortably above `GENERATION_MAINTENANCE_INTERVAL_SECONDS`; Studio normalizes unsafe values automatically.
 When a worker task is cancelled during shutdown or crash-like interruption, Studio intentionally keeps the shared broker claim alive until it goes stale, so another worker can recover it through normal stale-claim recycling instead of treating it as successfully completed.
@@ -74,13 +74,23 @@ When a worker task is cancelled during shutdown or crash-like interruption, Stud
    pip install -r requirements.txt
    ```
 
-4. **Configure environment**:
+4. **Apply Postgres migrations when using the durable production store**:
+   ```bash
+   python scripts/run_migrations.py upgrade head
+   ```
+
+   To preview the SQL without executing it:
+   ```bash
+   python scripts/run_migrations.py upgrade head --sql
+   ```
+
+5. **Configure environment**:
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and settings
    ```
 
-5. **Start the server**:
+6. **Start the server**:
    ```bash
    python main.py
    ```
@@ -182,6 +192,10 @@ Once running, visit:
 
 ## API Notes
 
+- The durable Postgres state-store schema now has a repo-local Alembic baseline under `backend/alembic/`.
+- `python scripts/run_migrations.py upgrade head` is now the canonical way to apply that baseline before first production use.
+- Runtime schema sync is still kept as a defensive safety net, but operators should treat the migration runner as the real deployment contract.
+
 - `/v1/healthz` now reports:
   - `generation_runtime_mode`
   - `generation_broker.enabled`
@@ -272,6 +286,9 @@ OPENAI_API_KEY=your_openai_key
 STATE_STORE_BACKEND=sqlite
 STATE_STORE_PATH=
 LEGACY_STATE_STORE_PATH=
+POSTGRES_STATE_STORE_MIN_CONNECTIONS=2
+POSTGRES_STATE_STORE_MAX_CONNECTIONS=10
+POSTGRES_STATE_STORE_STATEMENT_TIMEOUT_MS=30000
 
 # Server
 HOST=0.0.0.0

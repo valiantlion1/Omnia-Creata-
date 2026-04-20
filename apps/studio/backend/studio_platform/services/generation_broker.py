@@ -1,3 +1,26 @@
+"""Generation job broker — queue + claim lifecycle for image/text jobs.
+
+**Purpose:** Decouple job enqueue from job execution across web/worker split
+runtimes. The broker owns queue ordering (priority/standard/browse-only),
+claim leases, stale-claim recovery, and metrics.
+
+**Implementations:**
+    - ``InMemoryGenerationBroker`` — single-process, no Redis, test/dev only.
+    - ``RedisGenerationBroker`` — shared across processes, production default.
+
+**Invariants:**
+    - ``enqueue`` returns ``False`` if job already queued/claimed (idempotent).
+    - ``dequeue_next`` atomically moves a job from queue to claim set.
+    - ``requeue_stale_claims`` returns jobs whose claim heartbeat expired.
+    - All mutations are safe to call concurrently.
+
+**Factory:**
+    :func:`build_generation_broker` chooses an implementation based on
+    ``redis_url``. When Redis URL is empty and the in-memory fallback flag is
+    enabled, returns an :class:`InMemoryGenerationBroker` so single-process
+    deployments stay functional.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -317,6 +340,24 @@ class RedisGenerationBroker(GenerationBroker):
 
 
 def build_generation_broker(*, redis_url: str | None) -> GenerationBroker | None:
+    """Pick the right broker implementation for the current runtime.
+
+    Returns a ``RedisGenerationBroker`` when ``redis_url`` is configured.
+    When the URL is empty, returns ``None`` and the caller (``StudioService``)
+    is responsible for deciding the fallback behavior:
+
+    - In ``DEVELOPMENT`` single-process mode, ``StudioService`` runs the
+      generation loop locally (no broker needed).
+    - In ``STAGING`` / ``PRODUCTION`` split runtimes this is treated as a
+      fatal configuration error via
+      ``_requires_strict_shared_generation_broker``.
+
+    **Note:** An in-memory broker is intentionally *not* auto-created here.
+    Tests rely on the ``None`` return to exercise the local-queue fallback
+    path. If a future caller wants an explicit in-memory broker (e.g.
+    integration tests), instantiate :class:`InMemoryGenerationBroker`
+    directly rather than via this factory.
+    """
     normalized = (redis_url or "").strip()
     if not normalized:
         return None

@@ -340,12 +340,19 @@ function New-StagingEffectiveEnvFile {
 
   $configDir = Join-Path $RuntimeRoot "config"
   New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-  $effectiveEnvFile = Join-Path $configDir "staging-effective.env"
+  $stableEffectiveEnvFile = Join-Path $configDir "staging-effective.env"
+  $sessionSuffix = "{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $PID
+  $effectiveEnvFile = Join-Path $configDir ("staging-effective-{0}.env" -f $sessionSuffix)
   $lines = foreach ($entry in $effective.GetEnumerator()) {
     "{0}={1}" -f $entry.Key, $entry.Value
   }
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllLines($effectiveEnvFile, $lines, $utf8NoBom)
+  try {
+    [System.IO.File]::WriteAllLines($stableEffectiveEnvFile, $lines, $utf8NoBom)
+  } catch [System.IO.IOException] {
+    # Keep the per-run env file when another process has the stable file locked.
+  }
 
   return @{
     Path = $effectiveEnvFile

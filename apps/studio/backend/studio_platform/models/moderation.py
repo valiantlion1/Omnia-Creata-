@@ -62,3 +62,26 @@ class ModerationCase(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     resolution: Optional[ModerationResolution] = None
+
+
+class ModerationAuditRecord(BaseModel):
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().__str__())
+    surface: str = "generation_prompt"
+    identity_id: Optional[str] = None
+    original_text: str = ""
+    final_text: str = ""
+    action: str = "allow"
+    legacy_result: str = "safe"
+    risk_level: str = "low"
+    risk_score: int = 0
+    reason_code: Optional[str] = None
+    age_ambiguity: str = "unknown"
+    sexual_intent: str = "none"
+    context_type: str = "general"
+    provider_moderation: str = "auto"
+    rewrite_applied: bool = False
+    llm_used: bool = False
+    llm_model: Optional[str] = None
+    explanation: str = ""
+    signals: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)

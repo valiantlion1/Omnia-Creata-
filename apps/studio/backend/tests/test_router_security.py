@@ -14,7 +14,16 @@ from starlette.requests import Request as StarletteRequest
 
 from config.env import Environment, get_settings
 import studio_platform.router as router_module
-from security.auth import User, UserRole, create_user_tokens, get_current_user, setup_auth
+from security.auth import (
+    User,
+    UserRole,
+    create_user_tokens,
+    extract_unverified_session_context,
+    get_current_user,
+    get_jwt_manager,
+    refresh_access_token,
+    setup_auth,
+)
 from security.rate_limit import InMemoryRateLimiter, RateLimitDecision
 from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
 from studio_platform.asset_storage import AssetStorageError, ResolvedAssetDelivery
@@ -1029,6 +1038,69 @@ async def test_get_current_user_includes_session_context_for_local_jwt_tokens() 
     assert user.metadata["session_expires_at"] is not None
 
 
+def test_create_user_tokens_share_one_session_family_across_access_and_refresh_tokens() -> None:
+    setup_auth()
+    token_payload = create_user_tokens(
+        User(
+            id="family-user",
+            email="family-user@example.com",
+            username="Family User",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={"owner_mode": False},
+        )
+    )
+
+    access_context = extract_unverified_session_context(token_payload["access_token"])
+    refresh_context = extract_unverified_session_context(token_payload["refresh_token"])
+
+    assert access_context["session_id"]
+    assert access_context["session_id"] == refresh_context["session_id"]
+
+
+def test_blacklisting_access_token_revokes_the_related_refresh_token_family() -> None:
+    setup_auth()
+    token_payload = create_user_tokens(
+        User(
+            id="family-revoked-user",
+            email="family-revoked-user@example.com",
+            username="Family Revoked User",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={"owner_mode": False},
+        )
+    )
+    get_jwt_manager().blacklist_token(token_payload["access_token"])
+
+    with pytest.raises(HTTPException) as exc_info:
+        refresh_access_token(token_payload["refresh_token"])
+
+    assert exc_info.value.detail == "Token has been revoked"
+
+
+def test_refresh_access_token_preserves_session_context() -> None:
+    setup_auth()
+    token_payload = create_user_tokens(
+        User(
+            id="refresh-user",
+            email="refresh-user@example.com",
+            username="Refresh User",
+            role=UserRole.USER,
+            is_active=True,
+            is_verified=True,
+            metadata={"owner_mode": False, "local_access": True},
+        )
+    )
+
+    refreshed_access_token = refresh_access_token(token_payload["refresh_token"])
+    refresh_context = extract_unverified_session_context(token_payload["refresh_token"])
+    refreshed_context = extract_unverified_session_context(refreshed_access_token)
+
+    assert refreshed_context["session_id"] == refresh_context["session_id"]
+
+
 @pytest.mark.asyncio
 async def test_get_current_user_rejects_persistently_revoked_session_from_shared_sqlite_store(
     tmp_path: Path,
@@ -1372,6 +1444,7 @@ async def test_healthz_detail_route_requires_owner_mode_and_returns_truth_payloa
         assert "launch_gate" in payload
         assert "provider_truth" in payload
         assert "truth_sync" in payload
+        assert "runtime_topology" in payload
         assert "ai_control_plane" in payload
     finally:
         await service.shutdown()
