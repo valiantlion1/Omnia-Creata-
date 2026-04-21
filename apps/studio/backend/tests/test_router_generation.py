@@ -11,7 +11,14 @@ from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
 from security.moderation_engine import AgeAmbiguity, ContextType, PromptRiskLevel, SexualIntent
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter
-from studio_platform.models import GenerationJob, JobStatus, PromptSnapshot
+from studio_platform.models import (
+    GenerationJob,
+    IdentityPlan,
+    JobStatus,
+    OmniaIdentity,
+    PromptSnapshot,
+    SubscriptionStatus,
+)
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import GenerationCapacityError, StudioService
@@ -183,6 +190,71 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["creative_profile"]["id"] == "fast"
         assert payload["creative_profile"]["label"] == "Fast"
         assert payload["render_experience"]["state"] == "fallback"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_capacity_uses_repository_status_counts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    prompt_snapshot = PromptSnapshot(
+        prompt="editorial portrait",
+        negative_prompt="",
+        model="flux-schnell",
+        width=1024,
+        height=1024,
+        steps=28,
+        cfg_scale=6.5,
+        seed=1,
+        aspect_ratio="1:1",
+    )
+
+    async def _explode_list(*args, **kwargs):
+        raise AssertionError("queue admission should not materialize queued jobs")
+
+    async def _count_queued(statuses):
+        assert statuses == {JobStatus.QUEUED}
+        return min(service.settings.max_queue_size, 50)
+
+    async def _zero(*args, **kwargs):
+        return 0
+
+    async def _no_duplicate(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(service.store, "list_generations_with_statuses", _explode_list)
+    monkeypatch.setattr(service.store, "count_generations_with_statuses", _count_queued)
+    monkeypatch.setattr(service.store, "count_incomplete_generations", _zero)
+    monkeypatch.setattr(service.store, "count_incomplete_generations_for_identity", _zero)
+    monkeypatch.setattr(service.store, "count_recent_generation_requests_for_identity", _zero)
+    monkeypatch.setattr(service.store, "has_duplicate_incomplete_generation", _no_duplicate)
+
+    try:
+        with pytest.raises(GenerationCapacityError, match="Generation queue is currently full"):
+            await service.generation._ensure_generation_capacity(
+                identity=identity,
+                project_id="project-1",
+                model_id="flux-schnell",
+                prompt_snapshot=prompt_snapshot,
+                plan_config=service.plan_catalog[IdentityPlan.PRO],
+            )
     finally:
         await service.shutdown()
 

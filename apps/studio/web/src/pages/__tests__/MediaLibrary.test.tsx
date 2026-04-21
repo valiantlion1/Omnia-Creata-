@@ -237,7 +237,7 @@ vi.mock('@/lib/usePageMeta', () => ({
 import MediaLibraryPage from '@/pages/MediaLibrary'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
-describe('MediaLibraryPage processing failures', () => {
+describe('MediaLibraryPage final image library', () => {
   afterEach(() => {
     mockState.listAssets.mockClear()
     mockState.listProjects.mockClear()
@@ -247,33 +247,15 @@ describe('MediaLibraryPage processing failures', () => {
     mockState.deleteGeneration.mockClear()
   })
 
-  it('keeps failed renders out of All and moves them into Processing with passive credit-return notice', async () => {
+  it('keeps My Images focused on final results and hides processing-only surfaces', async () => {
     renderWithProviders(<MediaLibraryPage />, { route: '/library/images' })
 
     expect(await screen.findByText(/Golden portrait/i)).toBeInTheDocument()
     expect(screen.queryByText(/Retry portrait/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Held portrait/i)).not.toBeInTheDocument()
-
-    expect(
-      await screen.findByText(
-        /Studio could not finish that image because it tripped a safety review\. Reserved credits were returned\./i,
-      ),
-    ).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: /^Processing$/i }))
-
-    expect(await screen.findByText(/Needs attention/i)).toBeInTheDocument()
-    expect(screen.getByText(/Retry portrait/i)).toBeInTheDocument()
-    expect(screen.getByText(/Held portrait/i)).toBeInTheDocument()
-    expect(screen.queryByText(/Retry in Create/i)).not.toBeInTheDocument()
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /Remove Retry portrait from Processing/i }),
-    )
-
-    await waitFor(() => {
-      expect(mockState.deleteGeneration).toHaveBeenCalledWith('generation-failed')
-    })
+    expect(screen.queryByRole('button', { name: /^Processing$/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Only completed results live here\./i)).not.toBeInTheDocument()
+    expect(screen.getByText(/finished image/i)).toBeInTheDocument()
   })
 
   it('renders liked public posts in Favorites and keeps grid/list actions working', async () => {

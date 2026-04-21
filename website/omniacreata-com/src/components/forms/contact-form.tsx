@@ -51,7 +51,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
     sending: copy?.sending ?? "Sending...",
     helper:
       copy?.helper ??
-      "Share a short note and our team will get back to you.",
+      "Share a short note and we will get back to you.",
   };
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -90,9 +90,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
 
       setState({
         status: "success",
-        message:
-          result.message ??
-          "Your message has been received. We will follow up through omniacreata.com contact channels.",
+        message: result.message ?? "Thanks. We will get back to you soon.",
       });
       form.reset();
     });
@@ -142,7 +140,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
           {resolvedCopy.labels.message}
         </span>
         <textarea
-          className="min-h-40 w-full rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(217,181,109,0.26)]"
+          className="min-h-40 w-full rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(188,209,229,0.26)]"
           defaultValue={prefill?.message}
           name="message"
           placeholder={resolvedCopy.placeholders.message}
@@ -190,7 +188,7 @@ function Field({
       <span className="text-sm font-medium text-foreground">{label}</span>
       <input
         autoComplete={autoComplete}
-        className="h-[52px] w-full rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(217,181,109,0.26)]"
+        className="h-[52px] w-full rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(188,209,229,0.26)]"
         defaultValue={defaultValue}
         name={name}
         placeholder={placeholder}

@@ -35,6 +35,28 @@
 - When work spans multiple apps or layers, keep the main path narrow and sequence changes so verification stays understandable.
 - If the same mistake or friction appears twice, capture the fix in `AGENTS.md` or a referenced operations doc instead of relying on memory.
 
+## UI Excellence
+- For UI-heavy work, do not jump straight into components. Read `docs/operations/codex/UI_EXCELLENCE_WORKFLOW.md` and the nearest product UI docs first.
+- Automatically use the strongest matching UI skill stack. In this repo that usually means `frontend-skill`, `omnia-ui-guardrails`, `omnia-art-direction-lock`, `omnia-visual-composition-judge`, `omnia-microcopy-minimizer`, and `omnia-playwright-ui-verify`.
+- Before editing UI, define the screen job, gather current references, and list anti-goals. Do not improvise art direction from nothing when live references can be inspected.
+- Public and marketing surfaces must never ship internal, developer-facing, roadmap, TODO, or MVP-style copy.
+- For meaningful UI changes, browser proof is mandatory on desktop and narrow/mobile viewports. If the route is important or interactive, include at least a basic accessibility sanity pass in addition to screenshots.
+
+## User communication
+- When explaining work to the user, prefer plain language first and explain it like you would to an interested non-engineer, not only to another engineer.
+- Start with what changed, why it matters, and what it means in real use before diving into file names, abstractions, or implementation jargon.
+- If technical terms are necessary, briefly translate them into everyday language in the same answer instead of assuming the user already knows them.
+
+## UI and design defaults
+- Treat every user-facing Omnia screen as a polished live product surface, not as a dev sandbox or implementation explainer.
+- Never expose developer notes, backend mechanics, session bookkeeping, fake KPI cards, or operator-only summaries in normal product UI unless the route is explicitly operator-facing.
+- On design work, prefer fewer regions, stronger visual hierarchy, real content, better motion, and clearer actions over adding explanatory chrome, filler cards, or generic AI-dashboard patterns.
+- If a surface feels empty, solve it with composition, previews, crop, typography, spacing, and motion before adding more boxes or more text.
+- Do not add cards by default. Every container must earn its place by holding real content, real controls, or a meaningful state. Empty space is not a reason to invent a panel.
+- Keep controls close to the content they affect. Do not separate the main action from the main visual result with dashboard furniture.
+- Use motion only for orientation, feedback, and state change. Prefer transform/opacity-based motion, keep it restrained, and always respect reduced-motion behavior.
+- If the art direction or interaction treatment is uncertain, research current high-quality references first instead of improvising a generic AI layout.
+
 ## Verification discipline
 - Root topology or repo-governance changes must run `npm run repo:check`.
 - Use `npm run repo:inventory` when repo structure or manifest-backed inventory is relevant.

@@ -14,11 +14,11 @@ export function BrandMark({
   compact = false,
   className,
 }: BrandMarkProps) {
-  const topLabel = locale === "tr" ? "Studio merkezli HQ" : "Studio-first HQ";
+  const topLabel = locale === "tr" ? "Image work" : "Image work";
   const subLabel =
     locale === "tr"
-      ? "Public giris ve urun yonlendirmesi"
-      : "Public entry and product routing";
+      ? "Studio once"
+      : "Studio first";
 
   return (
     <Link

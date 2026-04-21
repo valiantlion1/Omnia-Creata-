@@ -259,7 +259,7 @@ class Settings(BaseSettings):
 
     # CORS Configuration
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
-    cors_allow_headers: str = "Authorization,Content-Type,X-API-Key,Accept,Origin"
+    cors_allow_headers: str = "Authorization,Content-Type,X-API-Key,Accept,Origin,X-Omnia-Client-Display-Mode"
     allowed_hosts: str = "localhost,127.0.0.1,studio.omniacreata.com"
 
     # Security

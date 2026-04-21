@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { PageHero } from "@/components/marketing/page-hero";
+import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
+import { withLocalePrefix } from "@/lib/utils";
 
 type PrivacyPolicyPageProps = {
   params: Promise<{
@@ -24,7 +25,7 @@ export async function generateMetadata({
     path: "/privacy-policy",
     title: "Privacy Policy",
     description:
-      "Privacy policy for omniacreata.com and its public contact flows.",
+      "Privacy policy for omniacreata.com and its contact forms.",
   });
 }
 
@@ -63,7 +64,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "5. Paylasim ve ifsa",
           content:
-            "Omnia Creata, public siteden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
+            "Omnia Creata, website uzerinden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
         },
         {
           title: "6. Veri saklama",
@@ -80,12 +81,12 @@ export default async function PrivacyPolicyPage({
         {
           title: "1. Information we collect",
           content:
-            "We may collect information that you submit directly through contact forms, email conversations, or future support routes on omniacreata.com. This can include your name, email address, company name, request type, and message content.",
+            "We may collect information that you submit directly through contact forms or email conversations on omniacreata.com. This can include your name, email address, company name, request type, and message content.",
         },
         {
           title: "2. How we use information",
           content:
-            "Submitted information is used to respond to inquiries, evaluate platform fit, coordinate support, improve the public product experience, and maintain the quality and security of the Omnia Creata ecosystem.",
+            "Submitted information is used to respond to inquiries, coordinate support, improve the website and product experience, and maintain quality and security.",
         },
         {
           title: "3. Contact submissions",
@@ -95,12 +96,12 @@ export default async function PrivacyPolicyPage({
         {
           title: "4. Cookies and preferences",
           content:
-            "The public site may store a locale preference cookie so your language and region selection can persist across visits. Additional cookies may be added in the future for security, performance, or analytics purposes.",
+            "The website may store a locale preference cookie so your language and region selection can persist across visits. Additional cookies may be added later for security, performance, or analytics purposes.",
         },
         {
           title: "5. Sharing and disclosure",
           content:
-            "Omnia Creata does not sell personal information submitted through the public site. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
+            "Omnia Creata does not sell personal information submitted through the website. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
         },
         {
           title: "6. Data retention",
@@ -115,43 +116,67 @@ export default async function PrivacyPolicyPage({
       ];
 
   return (
-    <>
-      <PageHero
-        description={
-          isTurkish
-            ? "Bu gizlilik politikasi, omniacreata.com public sitesinde iletisim taleplerinin, veri yonetiminin ve yasal sureclerin nasil ele alindigini aciklar."
-            : "This page explains how omniacreata.com handles contact submissions, cookies, and basic data management."
-        }
-        eyebrow={isTurkish ? "Gizlilik politikasi" : "Privacy Policy"}
-        meta={[
-          {
-            label: isTurkish ? "Kapsam" : "Scope",
-            value: isTurkish ? "Public web sitesi" : "Public website",
-          },
-          { label: isTurkish ? "Alan adi" : "Domain", value: "omniacreata.com" },
-          {
-            label: isTurkish ? "Yururluk tarihi" : "Effective date",
-            value: isTurkish ? "14 Mart 2026" : "March 14, 2026",
-          },
-        ]}
-        title={
-          isTurkish
-            ? "Omnia Creata public sitesi gizlilik taahhutleri."
-            : "Privacy commitments for the Omnia Creata public site."
-        }
-        locale={locale}
-      />
-
-      <section className="px-6 py-10 sm:px-8 lg:px-10">
-        <article className="legal-copy luxury-panel mx-auto max-w-5xl rounded-[32px] p-7 sm:p-10">
-          {sections.map((section) => (
-            <div key={section.title}>
-              <h2>{section.title}</h2>
-              <p>{section.content}</p>
-            </div>
-          ))}
-        </article>
-      </section>
-    </>
+    <LegalDocumentPage
+      actions={[
+        {
+          href: withLocalePrefix(locale, "/contact"),
+          label: isTurkish ? "Iletisim" : "Contact",
+        },
+        {
+          href: withLocalePrefix(locale, "/terms-of-service"),
+          label: isTurkish ? "Sartlari gor" : "View terms",
+          variant: "secondary",
+        },
+      ]}
+      description={
+        isTurkish
+          ? "Bu sayfa omniacreata.com uzerindeki iletisim talepleri, cerezler ve temel veri islemleri icin gecerli gizlilik kurallarini aciklar."
+          : "This page explains how omniacreata.com handles contact submissions, cookies, and basic data practices."
+      }
+      documentDescription={
+        isTurkish
+          ? "Temel basliklari tarayip ilgili konuda bize dogrudan privacy@omniacreata.com uzerinden ulasabilirsiniz."
+          : "Review the sections below for the main privacy commitments and contact us directly if you need a specific answer."
+      }
+      documentEyebrow={isTurkish ? "Belge" : "Document"}
+      documentTitle={
+        isTurkish ? "Bu politika neleri kapsiyor?" : "What this policy covers"
+      }
+      eyebrow={isTurkish ? "Gizlilik politikasi" : "Privacy Policy"}
+      footerDescription={
+        isTurkish
+          ? "Daha spesifik bir talebiniz varsa bizimle iletisime gecebilir veya kullanim kosullarini da inceleyebilirsiniz."
+          : "If you need a more specific answer, contact us directly or review the related public terms as well."
+      }
+      footerEyebrow={isTurkish ? "Ilgili sayfa" : "Related page"}
+      footerTitle={
+        isTurkish
+          ? "Gizlilik sorulari icin dogrudan iletisim kurabilirsiniz."
+          : "You can reach us directly for privacy-specific questions."
+      }
+      meta={[
+        {
+          label: isTurkish ? "Kapsam" : "Scope",
+          value: isTurkish ? "Website" : "Website",
+        },
+        { label: isTurkish ? "Alan adi" : "Domain", value: "omniacreata.com" },
+        {
+          label: isTurkish ? "Yururluk tarihi" : "Effective date",
+          value: isTurkish ? "14 Mart 2026" : "March 14, 2026",
+        },
+      ]}
+      sections={sections}
+      summary={
+        isTurkish
+          ? "Bu politika, sitede toplanan bilgilerin hangi amacla kullanildigini, nasil saklandigini ve hangi durumlarda paylasilabilecegini sade bicimde ozetler."
+          : "This policy gives a clear overview of what the website collects, why it is used, how long it is kept, and when it may be disclosed."
+      }
+      summaryTitle={isTurkish ? "Kisa ozet" : "Quick summary"}
+      title={
+        isTurkish
+          ? "Gizlilik Politikasi"
+          : "Privacy Policy"
+      }
+    />
   );
 }

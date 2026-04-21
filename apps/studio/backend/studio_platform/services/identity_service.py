@@ -347,7 +347,11 @@ class IdentityService:
                         )
                         if (
                             identity.plan not in {IdentityPlan.CREATOR, IdentityPlan.PRO}
-                            and identity.subscription_status not in {SubscriptionStatus.CANCELED, SubscriptionStatus.PAST_DUE}
+                            and identity.subscription_status not in {
+                                SubscriptionStatus.CANCELED,
+                                SubscriptionStatus.PAUSED,
+                                SubscriptionStatus.PAST_DUE,
+                            }
                         ):
                             identity.subscription_status = SubscriptionStatus.NONE
                 identity.email = email or identity.email
@@ -903,6 +907,7 @@ class IdentityService:
         username: Optional[str] = None,
         identity_id: Optional[str] = None,
         viewer_identity_id: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> Dict[str, Any]:
         if username:
             identity = await self.get_identity_by_username(username)
@@ -993,6 +998,9 @@ class IdentityService:
                 break
 
         billing_state = await self._resolve_billing_state_for_identity(identity) if own_profile else None
+        posts_for_payload = visible_posts
+        if limit is not None:
+            posts_for_payload = visible_posts[:limit]
 
         return {
             "profile": {
@@ -1017,7 +1025,7 @@ class IdentityService:
                     viewer_identity_id=viewer_identity_id,
                     public_preview=not own_profile,
                 )
-                for post in visible_posts
+                for post in posts_for_payload
             ],
             "own_profile": own_profile,
             "can_edit": own_profile,

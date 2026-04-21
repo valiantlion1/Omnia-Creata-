@@ -703,7 +703,13 @@ class StudioService:
             public_preview=public_preview,
         )
 
-    def serialize_generation_for_identity(self, job: GenerationJob, identity_id: str) -> Dict[str, Any]:
+    def serialize_generation_for_identity(
+        self,
+        job: GenerationJob,
+        identity_id: str,
+        *,
+        project: Project | None = None,
+    ) -> Dict[str, Any]:
         outputs: List[Dict[str, Any]] = []
         for output in job.outputs:
             outputs.append(
@@ -725,6 +731,88 @@ class StudioService:
                     "variation_index": output.variation_index,
                 }
             )
+
+        normalized_status = JobStatus.coerce(job.status)
+        moderation_outcome = "allowed"
+        if job.moderation_action == "review":
+            moderation_outcome = "reviewed"
+        elif job.moderation_action == "hard_block" or self._generation_library_state(job) == "blocked":
+            moderation_outcome = "blocked"
+        elif job.moderation_rewrite_applied:
+            moderation_outcome = "adapted"
+
+        if job.credit_status == "settled":
+            default_refund_state = "committed"
+        elif job.credit_status == "released":
+            default_refund_state = "refunded"
+        elif job.reserved_credit_cost > 0:
+            default_refund_state = "reserved"
+        else:
+            default_refund_state = "pending"
+
+        slot_status_lookup = {
+            JobStatus.QUEUED: "queued",
+            JobStatus.RUNNING: "running" if job.claim_token else "claimed",
+            JobStatus.SUCCEEDED: "succeeded",
+            JobStatus.FAILED: "failed",
+            JobStatus.RETRYABLE_FAILED: "failed",
+            JobStatus.CANCELLED: "cancelled",
+            JobStatus.TIMED_OUT: "timed_out",
+        }
+
+        output_by_index = {output["variation_index"]: output for output in outputs}
+        slots: list[Dict[str, Any]] = []
+        for slot_index in range(max(int(job.output_count or 0), 1)):
+            slot_output = output_by_index.get(slot_index)
+            slot_status = slot_status_lookup.get(normalized_status, "queued")
+            refund_state = default_refund_state
+            if slot_output is not None:
+                slot_status = "succeeded"
+                refund_state = "committed" if (job.final_credit_cost or 0) > 0 else "refunded"
+            elif normalized_status == JobStatus.SUCCEEDED:
+                slot_status = "failed"
+            elif self._generation_library_state(job) == "blocked":
+                slot_status = "blocked"
+                refund_state = "refunded"
+            elif normalized_status in {JobStatus.FAILED, JobStatus.RETRYABLE_FAILED, JobStatus.CANCELLED, JobStatus.TIMED_OUT}:
+                refund_state = "refunded"
+
+            slots.append(
+                {
+                    "slot_index": slot_index,
+                    "slot_status": slot_status,
+                    "moderation_outcome": "allowed" if slot_output is not None else moderation_outcome,
+                    "error_code": None if slot_output is not None else job.error_code,
+                    "refund_state": refund_state,
+                    "output": slot_output,
+                }
+            )
+
+        committed_slots = sum(1 for slot in slots if slot["refund_state"] == "committed")
+        refunded_slots = sum(1 for slot in slots if slot["refund_state"] == "refunded")
+        blocked_slots = sum(1 for slot in slots if slot["slot_status"] == "blocked")
+        failed_slots = sum(
+            1 for slot in slots if slot["slot_status"] in {"failed", "cancelled", "timed_out"}
+        )
+        session_status = (
+            "blocked"
+            if blocked_slots and committed_slots == 0
+            else "completed"
+            if committed_slots == len(slots)
+            else normalized_status.value
+        )
+        project_assignment_state = {
+            "project_id": job.project_id,
+            "system_managed": project.system_managed if project is not None else None,
+            "surface": project.surface if project is not None else None,
+            "assignment_mode": (
+                "system_draft"
+                if project is not None and project.system_managed
+                else "user_project"
+                if project is not None
+                else "unknown"
+            ),
+        }
 
         pricing_lane = job.pricing_lane or resolve_generation_pricing_lane(
             provider_name=job.provider,
@@ -792,6 +880,30 @@ class StudioService:
             "credit_status": job.credit_status,
             "output_count": job.output_count,
             "outputs": outputs,
+            "slots": slots,
+            "session_status": session_status,
+            "settlement_summary": {
+                "requested_slots": len(slots),
+                "produced_slots": len(outputs),
+                "committed_slots": committed_slots,
+                "refunded_slots": refunded_slots,
+                "blocked_slots": blocked_slots,
+                "failed_slots": failed_slots,
+                "reserved_credits": job.reserved_credit_cost,
+                "committed_credits": max(int(job.final_credit_cost or 0), 0),
+                "refunded_credits": max(int(job.reserved_credit_cost or 0) - max(int(job.final_credit_cost or 0), 0), 0),
+                "charge_state": job.credit_status,
+            },
+            "moderation_summary": {
+                "outcome": moderation_outcome,
+                "decision": job.moderation_action,
+                "rewrite_applied": job.moderation_rewrite_applied,
+                "review_routed": str(job.moderation_tier or "").strip().lower() not in {"", "auto"},
+                "allowed_slots": len(slots) - blocked_slots,
+                "blocked_slots": blocked_slots,
+                "adapted_slots": len(slots) if moderation_outcome == "adapted" else 0,
+            },
+            "project_assignment_state": project_assignment_state,
             "error": job.error,
             "error_code": job.error_code,
             "attempt_count": job.attempt_count,
@@ -932,11 +1044,17 @@ class StudioService:
         surface: Optional[Literal["compose", "chat"]] = None,
         *,
         include_system_managed: bool = False,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "updated",
     ) -> List[Project]:
         return await self.projects.list_projects(
             identity_id,
             surface=surface,
             include_system_managed=include_system_managed,
+            limit=limit,
+            offset=offset,
+            sort=sort,
         )
     async def create_project(
         self,
@@ -1064,8 +1182,22 @@ class StudioService:
             assistant_message_id=assistant_message_id,
         )
 
-    async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
-        return await self.generation.list_generations(identity_id=identity_id, project_id=project_id)
+    async def list_generations(
+        self,
+        identity_id: str,
+        project_id: Optional[str] = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "newest",
+    ) -> List[GenerationJob]:
+        return await self.generation.list_generations(
+            identity_id=identity_id,
+            project_id=project_id,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        )
 
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
         return await self.generation.get_generation(identity_id=identity_id, generation_id=generation_id)
@@ -1073,8 +1205,24 @@ class StudioService:
     async def delete_generation(self, identity_id: str, generation_id: str) -> dict[str, str]:
         return await self.generation.delete_generation(identity_id=identity_id, generation_id=generation_id)
 
-    async def list_assets(self, identity_id: str, project_id: Optional[str] = None, include_deleted: bool = False) -> List[MediaAsset]:
-        return await self.library.list_assets(identity_id, project_id=project_id, include_deleted=include_deleted)
+    async def list_assets(
+        self,
+        identity_id: str,
+        project_id: Optional[str] = None,
+        include_deleted: bool = False,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "newest",
+    ) -> List[MediaAsset]:
+        return await self.library.list_assets(
+            identity_id,
+            project_id=project_id,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        )
 
     async def can_identity_clean_export(self, identity_id: str) -> bool:
         return await self.library.can_identity_clean_export(identity_id)
@@ -1233,14 +1381,14 @@ class StudioService:
     async def _owned_post(self, identity_id: str, post_id: str) -> PublicPost:
         return await self.public.owned_post(identity_id, post_id)
 
-    async def list_public_posts(self, *, sort: str = "trending", viewer_identity_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        return await self.public.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id)
+    async def list_public_posts(self, *, sort: str = "trending", viewer_identity_id: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        return await self.public.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id, limit=limit)
 
-    async def list_liked_posts(self, identity_id: str) -> List[Dict[str, Any]]:
-        return await self.public.list_liked_posts(identity_id)
+    async def list_liked_posts(self, identity_id: str, *, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        return await self.public.list_liked_posts(identity_id, limit=limit)
 
-    async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
-        return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id)
+    async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
+        return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id, limit=limit)
 
     async def update_profile(self, identity_id: str, *, display_name: Optional[str] = None, bio: Optional[str] = None, default_visibility: Optional[Visibility] = None, featured_asset_id: Optional[str] = None, featured_asset_id_provided: bool = False) -> OmniaIdentity:
         return await self.public.update_profile(identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility, featured_asset_id=featured_asset_id, featured_asset_id_provided=featured_asset_id_provided)

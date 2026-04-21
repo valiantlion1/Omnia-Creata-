@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 from urllib.parse import urlencode
 
@@ -81,6 +81,12 @@ class BillingWebhookMutationResult:
     upgraded_email: Optional[str] = None
 
 
+REFUND_REVIEW_WINDOW_DAYS = 14
+_REFUND_SUMMARY_CASE_LIMIT = 8
+_PAID_SUBSCRIPTION_CHECKOUT_KINDS = frozenset({CheckoutKind.CREATOR_MONTHLY, CheckoutKind.PRO_MONTHLY})
+_CREDIT_PACK_CHECKOUT_KINDS = frozenset({CheckoutKind.CREDIT_PACK_SMALL, CheckoutKind.CREDIT_PACK_LARGE})
+
+
 def resolve_effective_plan(
     *,
     identity: OmniaIdentity,
@@ -151,6 +157,114 @@ def calculate_generation_final_charge(
     return ("standard_discount", max(1, int(math.ceil(normalized_cost * 0.5))))
 
 
+def build_refund_policy_summary(
+    *,
+    identity: OmniaIdentity,
+    ledger_entries: Sequence[CreditLedgerEntry],
+    billing_receipts: Sequence[BillingWebhookReceipt],
+    generation_jobs: Sequence[GenerationJob],
+    now: datetime,
+    contact_email: str,
+) -> Dict[str, Any]:
+    automatic_cases: list[dict[str, Any]] = []
+    manual_cases: list[dict[str, Any]] = []
+    release_job_ids: set[str] = set()
+
+    for entry in sorted(ledger_entries, key=lambda item: item.created_at, reverse=True):
+        if entry.identity_id != identity.id or entry.entry_type != CreditEntryType.GENERATION_RELEASE:
+            continue
+        if entry.job_id:
+            release_job_ids.add(entry.job_id)
+        automatic_cases.append(
+            {
+                "kind": "generation_credit_reversal",
+                "status": "automatic_resolved",
+                "job_id": entry.job_id,
+                "created_at": entry.created_at.isoformat(),
+                "hold_amount": max(int(entry.hold_amount or 0), 0),
+                "final_credit_cost": max(int(entry.final_credit_cost or 0), 0),
+                "provider_name": entry.provider_name,
+                "reason": entry.description,
+            }
+        )
+
+    for job in sorted(generation_jobs, key=lambda item: item.updated_at or item.created_at, reverse=True):
+        if job.identity_id != identity.id or job.id in release_job_ids:
+            continue
+        if (
+            job.reserved_credit_cost > 0
+            and str(job.credit_status or "").strip().lower() == "released"
+            and job.status in {JobStatus.FAILED, JobStatus.TIMED_OUT, JobStatus.CANCELLED}
+        ):
+            automatic_cases.append(
+                {
+                    "kind": "generation_credit_reversal",
+                    "status": "automatic_resolved",
+                    "job_id": job.id,
+                    "created_at": (job.completed_at or job.updated_at or job.created_at).isoformat(),
+                    "hold_amount": max(int(job.reserved_credit_cost or 0), 0),
+                    "final_credit_cost": max(int(job.final_credit_cost or 0), 0),
+                    "provider_name": job.provider,
+                    "reason": "Studio released the held credits after the generation did not finish successfully.",
+                }
+            )
+
+    for receipt in sorted(billing_receipts, key=lambda item: item.processed_at, reverse=True):
+        if receipt.identity_id != identity.id or receipt.event_name != "transaction.completed" or receipt.checkout_kind is None:
+            continue
+        if receipt.checkout_kind in _PAID_SUBSCRIPTION_CHECKOUT_KINDS:
+            case_kind = "subscription_charge"
+            reason = (
+                "Running subscription time is not normally refunded, but mistaken renewals, "
+                "unauthorized charges, or material service outages can be reviewed."
+            )
+        elif receipt.checkout_kind in _CREDIT_PACK_CHECKOUT_KINDS:
+            case_kind = "credit_pack_charge"
+            reason = (
+                "Delivered credit packs are generally non-refundable, but duplicate, unauthorized, "
+                "or misapplied charges can still be reviewed."
+            )
+        else:
+            continue
+        request_deadline = receipt.processed_at + timedelta(days=REFUND_REVIEW_WINDOW_DAYS)
+        manual_cases.append(
+            {
+                "kind": case_kind,
+                "status": "manual_review_possible" if request_deadline >= now else "standard_window_elapsed",
+                "request_window_open": request_deadline >= now,
+                "request_deadline": request_deadline.isoformat(),
+                "receipt_id": receipt.id,
+                "processed_at": receipt.processed_at.isoformat(),
+                "checkout_kind": receipt.checkout_kind.value,
+                "merchant_of_record": receipt.provider,
+                "reason": reason,
+            }
+        )
+
+    combined_cases = sorted(
+        [*automatic_cases, *manual_cases],
+        key=lambda item: str(item.get("created_at") or item.get("processed_at") or ""),
+        reverse=True,
+    )[:_REFUND_SUMMARY_CASE_LIMIT]
+
+    return {
+        "request_window_days": REFUND_REVIEW_WINDOW_DAYS,
+        "billing_contact_email": contact_email,
+        "automatic_credit_reversal_supported": True,
+        "statutory_rights_notice": (
+            "Mandatory consumer refund, withdrawal, or cancellation rights can still override the default policy."
+        ),
+        "policy_notes": [
+            "Platform-side failed runs should reverse consumed value automatically.",
+            "Elapsed subscription time is not normally refunded once the billing period has started.",
+            "Duplicate, unauthorized, or misapplied charges can still be reviewed manually.",
+        ],
+        "automatic_resolution_count": len(automatic_cases),
+        "manual_review_count": len(manual_cases),
+        "recent_cases": combined_cases,
+    }
+
+
 def build_billing_summary(
     *,
     identity: OmniaIdentity,
@@ -161,6 +275,7 @@ def build_billing_summary(
     checkout_catalog: Mapping[CheckoutKind, Dict[str, Any]],
     entitlements: Mapping[str, Any] | None = None,
     generation_credit_guide: Mapping[str, Any] | None = None,
+    refund_policy: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     recent_entries = [
         entry
@@ -191,6 +306,7 @@ def build_billing_summary(
             else None
         ),
         "generation_credit_guide": dict(generation_credit_guide or {}),
+        "refund_policy": dict(refund_policy or {}),
         "checkout_options": [
             {"kind": kind.value, **meta}
             for kind, meta in checkout_catalog.items()
@@ -305,9 +421,10 @@ def _apply_subscription_deactivated(
     current: OmniaIdentity,
     plan_catalog: Mapping[IdentityPlan, PlanCatalogEntry],
     finalize: bool,
+    status: SubscriptionStatus = SubscriptionStatus.CANCELED,
     now: datetime,
 ) -> BillingWebhookMutationResult:
-    current.subscription_status = SubscriptionStatus.CANCELED
+    current.subscription_status = status
     if finalize:
         free_allowance = int(plan_catalog[IdentityPlan.FREE].monthly_credits)
         current.plan = IdentityPlan.FREE
@@ -469,6 +586,11 @@ def apply_paddle_webhook_event(
             current=current,
             plan_catalog=plan_catalog,
             finalize=event_name == "subscription.expired",
+            status=(
+                SubscriptionStatus.PAUSED
+                if event_name == "subscription.paused"
+                else SubscriptionStatus.CANCELED
+            ),
             now=now,
         )
 

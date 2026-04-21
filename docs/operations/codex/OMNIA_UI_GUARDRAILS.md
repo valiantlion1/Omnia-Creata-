@@ -59,6 +59,8 @@ Across Omnia products, UI should not feel like:
 - The user's content, workflow, and next action should dominate.
 - Decorative containers, filler metrics, and visual tricks are not substitutes for hierarchy.
 - If a block does not help orient, explain, prove, recommend, or act, remove it.
+- Do not create panels just because there is empty space on the screen.
+- When in doubt, give more space to the core content instead of adding another card.
 
 ### 3. Premium means clarity
 
@@ -98,6 +100,8 @@ It does not mean:
 - Keep it restrained and fast.
 - Respect reduce-motion.
 - Avoid decorative float, wobble, tilt, glow, and hype motion.
+- Prefer transform and opacity for motion work so the interface stays smooth under load.
+- Default to quiet motion unless the movement is necessary to understand a result changing on screen.
 
 ### 7. Copy must stay grounded
 
@@ -135,6 +139,9 @@ Copy rules:
 - Do not add new chrome, helper panels, empty-state essays, or extra navigation just because space exists.
 - Do not turn a correction task into a redesign task.
 - Reuse the product's current spacing, composition, and information density unless the task explicitly calls for a new pattern.
+- Do not turn implementation work into visible interface copy. End-user screens must not read like release notes, backend summaries, QA notes, or developer tooltips.
+- Do not add metric cards, session summaries, system-state pills, or similar dashboard furniture to creative surfaces unless the product explicitly calls for an operator view.
+- Keep the main action close to the main result. Do not split them apart with reporting furniture or side dashboards when the product job is creation, browsing, or editing.
 
 ### 9. Progressive complexity
 
@@ -204,7 +211,9 @@ These patterns are likely wrong unless a product doc explicitly justifies them:
 - fake KPI grids with no operational meaning
 - enterprise dashboard density for consumer or utility products
 - card-on-card-on-card mosaic layouts
+- cards used as filler when the screen could simply be quieter
 - decorative right rails with weak information value
+- developer or backend-facing explanation copy inside normal product UI
 - random charts used as filler
 - gradient-heavy premium-dark styling
 - purple SaaS default identity

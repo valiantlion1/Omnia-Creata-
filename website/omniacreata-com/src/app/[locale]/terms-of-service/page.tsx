@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { PageHero } from "@/components/marketing/page-hero";
+import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
+import { withLocalePrefix } from "@/lib/utils";
 
 type TermsOfServicePageProps = {
   params: Promise<{
@@ -24,7 +25,7 @@ export async function generateMetadata({
     path: "/terms-of-service",
     title: "Terms of Service",
     description:
-      "Terms for using omniacreata.com and its related public communication routes.",
+      "Terms for using omniacreata.com and its official contact channels.",
   });
 }
 
@@ -48,7 +49,7 @@ export default async function TermsOfServicePage({
         {
           title: "2. Public bilgi kapsami",
           content:
-            "Bu site; Omnia Creata urunlerini, fiyatlandirma yaklasimini, yasal metinleri ve resmi iletisim yollarini sunar. Ozellikler zamanla degisebilir.",
+            "Bu site; Omnia Creata urunlerini, fiyatlandirma bilgisini, yasal metinleri ve resmi iletisim yollarini sunar. Ozellikler zamanla degisebilir.",
         },
         {
           title: "3. Kabul edilebilir kullanim",
@@ -68,12 +69,12 @@ export default async function TermsOfServicePage({
         {
           title: "6. Garanti yoktur",
           content:
-            "Public site oldugu gibi sunulur. Icerikte ileriye donuk ifadeler veya surekli guncellenen bilgiler bulunabilir.",
+            "Website oldugu gibi sunulur. Icerikte zamanla degisebilecek bilgiler bulunabilir.",
         },
         {
           title: "7. Sorumlulugun sinirlandirilmasi",
           content:
-            "Yururlukteki hukukun izin verdigi olcude, public site kullanimindan dogan zararlardan Omnia Creata sorumlu tutulamaz.",
+            "Yururlukteki hukukun izin verdigi olcude, website kullanimindan dogan zararlardan Omnia Creata sorumlu tutulamaz.",
         },
         {
           title: "8. Iletisim",
@@ -85,17 +86,17 @@ export default async function TermsOfServicePage({
         {
           title: "1. Acceptance of terms",
           content:
-            "By accessing or using omniacreata.com, you agree to these terms and any applicable laws governing the use of the public Omnia Creata website.",
+            "By accessing or using omniacreata.com, you agree to these terms and any applicable laws governing use of the website.",
         },
         {
-          title: "2. Public information only",
+          title: "2. Website information",
           content:
-            "The public site is intended to present Omnia Creata, its flagship products, pricing posture, legal terms, and official contact routes. Availability, features, and access conditions may change over time.",
+            "This website is intended to present Omnia Creata, its products, pricing information, legal terms, and official contact channels. Availability, features, and access conditions may change over time.",
         },
         {
           title: "3. Acceptable use",
           content:
-            "You may not misuse the public site, interfere with its operation, attempt unauthorized access, or use the website in ways that violate law, security, or the rights of others.",
+            "You may not misuse the website, interfere with its operation, attempt unauthorized access, or use it in ways that violate law, security, or the rights of others.",
         },
         {
           title: "4. Product access and future services",
@@ -110,12 +111,12 @@ export default async function TermsOfServicePage({
         {
           title: "6. No warranty",
           content:
-            "The public site is provided on an as-is basis. While Omnia Creata aims for accuracy and quality, the site may contain future-looking statements, placeholder product details, or evolving access information.",
+            "The website is provided on an as-is basis. While Omnia Creata aims for accuracy and quality, some details may change as the products and services evolve.",
         },
         {
           title: "7. Limitation of liability",
           content:
-            "To the maximum extent permitted by law, Omnia Creata will not be liable for damages arising from use of, or inability to use, the public site or related public information.",
+            "To the maximum extent permitted by law, Omnia Creata will not be liable for damages arising from use of, or inability to use, the website or related information.",
         },
         {
           title: "8. Contact",
@@ -125,43 +126,67 @@ export default async function TermsOfServicePage({
       ];
 
   return (
-    <>
-      <PageHero
-        description={
-          isTurkish
-            ? "Bu sartlar, omniacreata.com public merkezinin ve ilgili erisim kanallarinin kullanim kurallarini belirler."
-            : "These terms explain the basic rules for using omniacreata.com and its public contact routes."
-        }
-        eyebrow={isTurkish ? "Hizmet sartlari" : "Terms of Service"}
-        meta={[
-          {
-            label: isTurkish ? "Kapsam" : "Scope",
-            value: isTurkish ? "Public site ve talepler" : "Public website and inquiries",
-          },
-          { label: isTurkish ? "Alan adi" : "Domain", value: "omniacreata.com" },
-          {
-            label: isTurkish ? "Yururluk tarihi" : "Effective date",
-            value: isTurkish ? "14 Mart 2026" : "March 14, 2026",
-          },
-        ]}
-        title={
-          isTurkish
-            ? "Omnia Creata public web sitesi kullanim sartlari."
-            : "Terms for using the Omnia Creata public website."
-        }
-        locale={locale}
-      />
-
-      <section className="px-6 py-10 sm:px-8 lg:px-10">
-        <article className="legal-copy luxury-panel mx-auto max-w-5xl rounded-[32px] p-7 sm:p-10">
-          {sections.map((section) => (
-            <div key={section.title}>
-              <h2>{section.title}</h2>
-              <p>{section.content}</p>
-            </div>
-          ))}
-        </article>
-      </section>
-    </>
+    <LegalDocumentPage
+      actions={[
+        {
+          href: withLocalePrefix(locale, "/contact"),
+          label: isTurkish ? "Iletisim" : "Contact",
+        },
+        {
+          href: withLocalePrefix(locale, "/privacy-policy"),
+          label: isTurkish ? "Gizliligi gor" : "View privacy",
+          variant: "secondary",
+        },
+      ]}
+      description={
+        isTurkish
+          ? "Bu sayfa omniacreata.com ve resmi iletisim kanallarini kullanirken gecerli olan temel kosullari aciklar."
+          : "This page explains the core rules for using omniacreata.com and its official contact channels."
+      }
+      documentDescription={
+        isTurkish
+          ? "Belgenin temel basliklarini asagida okuyabilir, daha spesifik bir durumda resmi iletisim yolunu kullanabilirsiniz."
+          : "Read the main sections below for the website usage rules, then contact us if a specific case needs clarification."
+      }
+      documentEyebrow={isTurkish ? "Belge" : "Document"}
+      documentTitle={
+        isTurkish ? "Bu sartlar neleri duzenliyor?" : "What these terms cover"
+      }
+      eyebrow={isTurkish ? "Hizmet sartlari" : "Terms of Service"}
+      footerDescription={
+        isTurkish
+          ? "Daha net bir cevap gerekiyorsa bizimle iletisime gecebilir veya privacy politikasini da birlikte inceleyebilirsiniz."
+          : "If you need a more specific answer, contact us directly or review the related privacy commitments as well."
+      }
+      footerEyebrow={isTurkish ? "Ilgili sayfa" : "Related page"}
+      footerTitle={
+        isTurkish
+          ? "Kullanim kosullariyla ilgili sorular icin dogrudan bize ulasabilirsiniz."
+          : "You can reach us directly for terms-related questions."
+      }
+      meta={[
+        {
+          label: isTurkish ? "Kapsam" : "Scope",
+          value: isTurkish ? "Website ve talepler" : "Website and inquiries",
+        },
+        { label: isTurkish ? "Alan adi" : "Domain", value: "omniacreata.com" },
+        {
+          label: isTurkish ? "Yururluk tarihi" : "Effective date",
+          value: isTurkish ? "14 Mart 2026" : "March 14, 2026",
+        },
+      ]}
+      sections={sections}
+      summary={
+        isTurkish
+          ? "Bu belge, sitenin ne icin kullanildigini ve hangi kullanimlarin kabul edilmedigini aciklar."
+          : "This document outlines what the website is for and what kinds of use are not allowed."
+      }
+      summaryTitle={isTurkish ? "Kisa ozet" : "Quick summary"}
+      title={
+        isTurkish
+          ? "Hizmet Sartlari"
+          : "Terms of Service"
+      }
+    />
   );
 }

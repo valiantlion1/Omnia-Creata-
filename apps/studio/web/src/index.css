@@ -318,3 +318,140 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
 .animate-glass-reveal {
   animation: oc-glass-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+@keyframes oc-create-cloud-drift {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1); opacity: 0.18; }
+  50% { transform: translate3d(4%, 3%, 0) scale(1.08); opacity: 0.3; }
+  100% { transform: translate3d(-1%, 5%, 0) scale(0.96); opacity: 0.16; }
+}
+
+@keyframes oc-create-sheen {
+  0% { transform: translateX(-130%) skewX(-14deg); opacity: 0; }
+  18% { opacity: 0.12; }
+  48% { opacity: 0.32; }
+  100% { transform: translateX(155%) skewX(-14deg); opacity: 0; }
+}
+
+@keyframes oc-create-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes oc-create-ring-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.16; }
+  50% { transform: scale(1.08); opacity: 0.36; }
+}
+
+@keyframes oc-create-core-breathe {
+  0%, 100% { transform: scale(0.92); box-shadow: 0 0 0 0 rgba(255,255,255,0.08); }
+  50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(255,255,255,0.03); }
+}
+
+@keyframes oc-create-failure-flicker {
+  0%, 100% { opacity: 0.22; }
+  25% { opacity: 0.34; }
+  54% { opacity: 0.18; }
+  72% { opacity: 0.3; }
+}
+
+.create-preview-shell {
+  background:
+    radial-gradient(circle at top, rgba(255,255,255,0.06), transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.015), rgba(0,0,0,0.02));
+}
+
+.create-preview-cloud {
+  position: absolute;
+  inset: -18%;
+  filter: blur(44px);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: oc-create-cloud-drift 12s ease-in-out infinite alternate;
+}
+
+.create-preview-cloud-a {
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.1), transparent 42%);
+}
+
+.create-preview-cloud-b {
+  background: radial-gradient(circle at 68% 62%, rgba(168, 183, 214, 0.14), transparent 48%);
+  animation-duration: 15s;
+  animation-direction: alternate-reverse;
+}
+
+.create-preview-sheen {
+  position: absolute;
+  inset: -24%;
+  background: linear-gradient(115deg, transparent 28%, rgba(255,255,255,0.18) 44%, transparent 60%);
+  filter: blur(18px);
+  mix-blend-mode: screen;
+  opacity: 0.24;
+  pointer-events: none;
+  animation: oc-create-sheen 3.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.create-preview-orbit-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 136px;
+  height: 136px;
+  margin-left: -68px;
+  margin-top: -68px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: radial-gradient(circle, rgba(255,255,255,0.03), transparent 70%);
+  pointer-events: none;
+  animation: oc-create-ring-breathe 3.1s ease-in-out infinite;
+}
+
+.create-preview-orbit-ring-delayed {
+  width: 188px;
+  height: 188px;
+  margin-left: -94px;
+  margin-top: -94px;
+  opacity: 0.1;
+  animation-delay: 1s;
+}
+
+.create-preview-orbit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: oc-create-orbit 4.8s linear infinite;
+}
+
+.create-preview-orbit-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.5);
+  box-shadow: 0 0 24px rgba(255,255,255,0.28);
+  transform: translateY(-76px);
+}
+
+.create-preview-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  margin-top: -36px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.14), rgba(255,255,255,0.03) 55%, transparent 70%);
+  pointer-events: none;
+  animation: oc-create-core-breathe 2.8s ease-in-out infinite;
+}
+
+.create-preview-failure-veil {
+  background:
+    linear-gradient(180deg, rgba(5, 6, 10, 0.14), rgba(8, 8, 12, 0.4)),
+    radial-gradient(circle at 50% 70%, rgba(255,255,255,0.06), transparent 38%);
+  pointer-events: none;
+  animation: oc-create-failure-flicker 2.6s ease-in-out infinite;
+}

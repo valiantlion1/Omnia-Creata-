@@ -38,11 +38,11 @@ const notoSansSc = Noto_Sans_SC({
 export const metadata: Metadata = {
   metadataBase: new URL("https://omniacreata.com"),
   title: {
-    default: "Omnia Creata | Premium Software Headquarters",
+    default: "Omnia Creata | Image work, with taste",
     template: "%s | Omnia Creata",
   },
   description:
-    "Official website for omniacreata.com and the Omnia Creata software ecosystem.",
+    "Omnia Creata builds creative software for image work, starting with Studio.",
   applicationName: "Omnia Creata",
   alternates: {
     canonical: `/${defaultLocale}`,
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Omnia Creata",
     description:
-      "Product headquarters for the Omnia Creata ecosystem across web, mobile, desktop, and PWA surfaces.",
+      "Creative software for image work, starting with Studio.",
     url: absoluteUrl(`/${defaultLocale}`),
     siteName: "Omnia Creata",
     locale: "en_US",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Omnia Creata",
     description:
-      "Official website for the Omnia Creata ecosystem and its flagship software products.",
+      "Creative software for image work, starting with Studio.",
     images: [absoluteUrl("/opengraph-image")],
   },
   icons: {
@@ -78,12 +78,10 @@ export const metadata: Metadata = {
   keywords: [
     "Omnia Creata",
     "omniacreata.com",
-    "premium software ecosystem",
+    "creative software",
     "OmniaCreata Studio",
-    "OmniaPixels",
-    "OmniaOrganizer",
-    "Prompt Vault",
-    "Omnia Watch",
+    "AI image workflow",
+    "software company",
   ],
 };
 

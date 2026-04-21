@@ -1465,6 +1465,90 @@ async def test_public_profile_route_hides_private_usage_and_visibility_defaults(
 
 
 @pytest.mark.asyncio
+async def test_public_profile_route_uses_explicit_rate_limits_and_limit_param(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+    captured: dict[str, object] = {}
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None, limit=None) -> dict:
+        captured.update(
+            {
+                "identity_id": identity_id,
+                "username": username,
+                "viewer_identity_id": viewer_identity_id,
+                "limit": limit,
+            }
+        )
+        return {"profile": {"username": username}, "posts": [], "own_profile": False, "can_edit": False}
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.get_profile_payload = fake_get_profile_payload  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/profiles/userone?limit=15",
+            headers={"X-Test-User": "user-1"},
+        )
+
+    try:
+        assert response.status_code == 200
+        assert captured == {
+            "identity_id": None,
+            "username": "userone",
+            "viewer_identity_id": "user-1",
+            "limit": 15,
+        }
+        assert any("profiles:public:ip" in key and limit == 90 and window == 60 for key, limit, window in calls)
+        assert any("profiles:public:user" in key and limit == 240 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_posts_route_uses_explicit_rate_limits_and_limit_param(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, rate_limiter = await _build_test_app(tmp_path)
+    calls: list[tuple[str, int, int]] = []
+    captured: dict[str, object] = {}
+
+    async def fake_check(key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
+        calls.append((key, limit, window_seconds))
+        return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
+
+    async def fake_list_public_posts(*, sort: str, viewer_identity_id: str | None, limit: int | None = None):
+        captured.update({"sort": sort, "viewer_identity_id": viewer_identity_id, "limit": limit})
+        return []
+
+    monkeypatch.setattr(rate_limiter, "check", fake_check)
+    service.list_public_posts = fake_list_public_posts  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/v1/public/posts?sort=top&limit=12",
+            headers={"X-Test-User": "user-1"},
+        )
+
+    try:
+        assert response.status_code == 200
+        assert captured == {"sort": "top", "viewer_identity_id": "user-1", "limit": 12}
+        assert any("public:posts:ip" in key and limit == 90 and window == 60 for key, limit, window in calls)
+        assert any("public:posts:user" in key and limit == 240 and window == 3600 for key, limit, window in calls)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_healthz_detail_route_requires_owner_mode_and_returns_truth_payload(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     await service.ensure_identity(
@@ -2750,7 +2834,7 @@ async def test_public_export_route_uses_ip_rate_limit(
         calls.append((key, limit, window_seconds))
         return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
 
-    async def fake_list_public_posts(sort: str, viewer_identity_id: str | None):
+    async def fake_list_public_posts(*, sort: str, viewer_identity_id: str | None, limit: int | None = None):
         return [{"id": "post-1", "thumbnail_url": "https://example.com/image.png", "prompt": "sunset", "owner_display_name": "User", "like_count": 4}]
 
     monkeypatch.setattr(rate_limiter, "check", fake_check)
@@ -2774,7 +2858,7 @@ async def test_public_export_route_uses_nested_public_asset_urls_when_flat_field
 ) -> None:
     app, service, _ = await _build_test_app(tmp_path)
 
-    async def fake_list_public_posts(sort: str, viewer_identity_id: str | None):
+    async def fake_list_public_posts(*, sort: str, viewer_identity_id: str | None, limit: int | None = None):
         return [
             {
                 "id": "post-1",
@@ -2867,7 +2951,8 @@ async def test_profile_favorites_route_uses_explicit_rate_limit(
         calls.append((key, limit, window_seconds))
         return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
 
-    async def fake_list_liked_posts(identity_id: str) -> list[dict[str, object]]:
+    async def fake_list_liked_posts(identity_id: str, *, limit: int | None = None) -> list[dict[str, object]]:
+        assert limit == 12
         return [
             {
                 "id": "post-1",
@@ -2891,7 +2976,7 @@ async def test_profile_favorites_route_uses_explicit_rate_limit(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/v1/profiles/me/favorites", headers={"X-Test-User": "user-1"})
+        response = await client.get("/v1/profiles/me/favorites?limit=12", headers={"X-Test-User": "user-1"})
 
     try:
         assert response.status_code == 200
@@ -2942,7 +3027,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
         )
         return None
 
-    async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None) -> dict:
+    async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None, limit=None) -> dict:
         target_identity_id = identity_id or username or "user-1"
         return {"profile": {"id": target_identity_id}, "own_profile": True, "can_edit": True}
 

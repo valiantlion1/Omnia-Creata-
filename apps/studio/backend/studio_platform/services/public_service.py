@@ -303,6 +303,7 @@ class PublicService:
         *,
         sort: str = "trending",
         viewer_identity_id: str | None = None,
+        limit: int | None = None,
     ) -> list[Dict[str, Any]]:
         posts = await self.service.store.list_public_posts()
         assets_by_id, identities_by_id, generations_by_id = await asyncio.gather(
@@ -350,6 +351,8 @@ class PublicService:
                 continue
             seen_keys.add(dedupe_key)
             deduped_posts.append(post)
+            if limit is not None and len(deduped_posts) >= limit:
+                break
 
         return [
             self.serialize_post(
@@ -363,7 +366,7 @@ class PublicService:
             for post in deduped_posts
         ]
 
-    async def list_liked_posts(self, identity_id: str) -> list[Dict[str, Any]]:
+    async def list_liked_posts(self, identity_id: str, *, limit: int | None = None) -> list[Dict[str, Any]]:
         await self.service.get_identity(identity_id)
         posts = await self.service.store.list_posts_liked_by_identity(identity_id)
         assets_by_id, identities_by_id, generations_by_id = await asyncio.gather(
@@ -396,6 +399,8 @@ class PublicService:
             key=lambda item: (item.updated_at, item.created_at),
             reverse=True,
         )
+        if limit is not None:
+            liked_posts = liked_posts[:limit]
 
         return [
             self.serialize_post(
@@ -415,11 +420,13 @@ class PublicService:
         username: str | None = None,
         identity_id: str | None = None,
         viewer_identity_id: str | None = None,
+        limit: int | None = None,
     ) -> Dict[str, Any]:
         return await self.service.identity.get_profile_payload(
             username=username,
             identity_id=identity_id,
             viewer_identity_id=viewer_identity_id,
+            limit=limit,
         )
 
     async def update_profile(

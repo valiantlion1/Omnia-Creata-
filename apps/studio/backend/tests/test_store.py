@@ -5,7 +5,7 @@ import pytest
 from pydantic import SecretStr
 
 from config.feature_flags import FEATURE_FLAGS, FLAG_CIRCUIT_BREAKER_ENABLED
-from studio_platform.models import OmniaIdentity, StudioWorkspace
+from studio_platform.models import GenerationJob, JobStatus, OmniaIdentity, PromptSnapshot, StudioWorkspace
 from studio_platform.store import (
     PostgresStudioStateStore,
     SqliteStudioStateStore,
@@ -510,3 +510,223 @@ async def test_postgres_store_describe_exposes_runtime_pool_budget_profile():
     assert description["pool_budget_profile"] == "worker"
     assert description["pool_min_connections"] == 5
     assert description["pool_max_connections"] == 14
+
+
+@pytest.mark.asyncio
+async def test_sqlite_store_counts_generation_statuses_with_identity_scope(tmp_path: Path):
+    store = SqliteStudioStateStore(tmp_path / "studio-state.sqlite3")
+    await store.load()
+
+    queued_prompt = PromptSnapshot(
+        prompt="editorial portrait",
+        negative_prompt="",
+        model="flux-schnell",
+        width=1024,
+        height=1024,
+        steps=24,
+        cfg_scale=6.5,
+        seed=42,
+        aspect_ratio="1:1",
+    )
+    await store.save_model(
+        "generations",
+        GenerationJob(
+            id="job-queued-user-1",
+            workspace_id="ws-user-1",
+            project_id="project-1",
+            identity_id="user-1",
+            title="Queued One",
+            status=JobStatus.QUEUED,
+            model="flux-schnell",
+            prompt_snapshot=queued_prompt,
+            estimated_cost=0.0,
+            credit_cost=6,
+        ),
+    )
+    await store.save_model(
+        "generations",
+        GenerationJob(
+            id="job-running-user-2",
+            workspace_id="ws-user-2",
+            project_id="project-2",
+            identity_id="user-2",
+            title="Running One",
+            status=JobStatus.RUNNING,
+            model="flux-schnell",
+            prompt_snapshot=queued_prompt,
+            estimated_cost=0.0,
+            credit_cost=6,
+        ),
+    )
+
+    assert await store.count_generations_with_statuses({JobStatus.QUEUED}) == 1
+    assert await store.count_generations_with_statuses({JobStatus.QUEUED, JobStatus.RUNNING}) == 2
+    assert await store.count_generations_with_statuses_for_identity("user-1", {JobStatus.QUEUED}) == 1
+    assert await store.count_generations_with_statuses_for_identity("user-1", {JobStatus.RUNNING}) == 0
+
+
+@pytest.mark.asyncio
+async def test_sqlite_store_mutate_generation_updates_one_job(tmp_path: Path):
+    store = SqliteStudioStateStore(tmp_path / "studio-state.sqlite3")
+    await store.load()
+
+    await store.save_model(
+        "generations",
+        GenerationJob(
+            id="job-mutate-one",
+            workspace_id="ws-user-1",
+            project_id="project-1",
+            identity_id="user-1",
+            title="Queued One",
+            status=JobStatus.QUEUED,
+            model="flux-schnell",
+            prompt_snapshot=PromptSnapshot(
+                prompt="editorial portrait",
+                negative_prompt="",
+                model="flux-schnell",
+                width=1024,
+                height=1024,
+                steps=24,
+                cfg_scale=6.5,
+                seed=42,
+                aspect_ratio="1:1",
+            ),
+            estimated_cost=0.0,
+            credit_cost=6,
+        ),
+    )
+
+    def promote(job: GenerationJob) -> bool:
+        job.status = JobStatus.RUNNING
+        job.claim_token = "claim-1"
+        return True
+
+    updated_job = await store.mutate_generation("job-mutate-one", promote)
+    persisted_job = await store.get_model("generations", "job-mutate-one", GenerationJob)
+
+    assert updated_job is not None
+    assert updated_job.status == JobStatus.RUNNING
+    assert persisted_job is not None
+    assert persisted_job.status == JobStatus.RUNNING
+    assert persisted_job.claim_token == "claim-1"
+
+
+def test_postgres_store_counts_generation_statuses_with_json_filters():
+    class _CountingCursor:
+        def __init__(self) -> None:
+            self.executed: list[tuple[str, tuple[object, ...]]] = []
+
+        def execute(self, sql: str, params=None):
+            normalized_params = tuple(params or ())
+            self.executed.append((sql, normalized_params))
+
+        def fetchone(self):
+            return (7,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _CountingConnection:
+        def __init__(self) -> None:
+            self.cursor_instance = _CountingCursor()
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self) -> None:
+            return None
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _CountingConnection()
+    store._connect = lambda: connection  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: None  # type: ignore[method-assign]
+    store._ensure_schema_sync = lambda connection: None  # type: ignore[method-assign]
+
+    count = store._count_generations_with_statuses_sync(("queued", "running"), identity_id="user-1")
+
+    assert count == 7
+    sql, params = connection.cursor_instance.executed[0]
+    assert "payload ->> 'status'" in sql
+    assert "payload ->> 'identity_id'" in sql
+    assert params == ("generations", "user-1", "queued", "running")
+
+
+def test_postgres_store_mutate_generation_uses_row_level_update():
+    class _MutationCursor:
+        def __init__(self) -> None:
+            self.executed: list[tuple[str, tuple[object, ...]]] = []
+
+        def execute(self, sql: str, params=None):
+            normalized_params = tuple(params or ())
+            self.executed.append((sql, normalized_params))
+
+        def fetchone(self):
+            if "SELECT payload" in self.executed[-1][0]:
+                payload = GenerationJob(
+                    id="job-pg-mutate",
+                    workspace_id="ws-user-1",
+                    project_id="project-1",
+                    identity_id="user-1",
+                    title="Queued One",
+                    status=JobStatus.QUEUED,
+                    model="flux-schnell",
+                    prompt_snapshot=PromptSnapshot(
+                        prompt="editorial portrait",
+                        negative_prompt="",
+                        model="flux-schnell",
+                        width=1024,
+                        height=1024,
+                        steps=24,
+                        cfg_scale=6.5,
+                        seed=42,
+                        aspect_ratio="1:1",
+                    ),
+                    estimated_cost=0.0,
+                    credit_cost=6,
+                ).model_dump(mode="json")
+                return (payload,)
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _MutationConnection:
+        def __init__(self) -> None:
+            self.cursor_instance = _MutationCursor()
+            self.commits = 0
+            self.rollbacks = 0
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self) -> None:
+            self.commits += 1
+
+        def rollback(self) -> None:
+            self.rollbacks += 1
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _MutationConnection()
+    store._connect = lambda: connection  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: None  # type: ignore[method-assign]
+    store._ensure_schema_sync = lambda connection: None  # type: ignore[method-assign]
+
+    def promote(job: GenerationJob) -> bool:
+        job.status = JobStatus.RUNNING
+        job.claim_token = "claim-1"
+        return True
+
+    updated_job = store._mutate_generation_sync("job-pg-mutate", promote)
+
+    assert updated_job is not None
+    assert updated_job.status == JobStatus.RUNNING
+    executed_sql = "\n".join(sql for sql, _ in connection.cursor_instance.executed)
+    assert "FOR UPDATE" in executed_sql
+    assert f"UPDATE {POSTGRES_RECORDS_TABLE}" in executed_sql
+    assert f"DELETE FROM {POSTGRES_RECORDS_TABLE}" not in executed_sql

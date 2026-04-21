@@ -92,6 +92,11 @@ describe('CreatePage model picker', () => {
           draft_projects: { compose: 'draft-project-1', chat: 'draft-chat-1' },
         }),
       ),
+      http.get('*/v1/generations', () =>
+        HttpResponse.json({
+          generations: [],
+        }),
+      ),
       http.get('*/v1/billing/summary', () =>
         HttpResponse.json({
           ...sampleBillingSummary,
@@ -196,6 +201,9 @@ describe('CreatePage model picker', () => {
     })
     expect(screen.getByText(/pick the model, then run it/i)).toBeInTheDocument()
     expect(screen.queryByText(/^finish$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Live result set/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Recent Create sessions/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('create-preview-surface')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /model/i }))
 

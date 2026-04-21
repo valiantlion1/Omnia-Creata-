@@ -661,6 +661,93 @@ async def test_public_post_payload_avoids_full_global_scans(
 
 
 @pytest.mark.asyncio
+async def test_public_feed_limit_truncates_serialized_posts(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store)
+
+    await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-feed-limit-1.png",
+        post_id="post-public-feed-1",
+        title="Editorial Portrait One",
+    )
+    second_asset = MediaAsset(
+        id="asset-user-1-b",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Render Two",
+        prompt="editorial portrait two",
+        url="/media/render-two.png",
+        metadata={},
+    )
+    await store.mutate(lambda state: state.assets.__setitem__(second_asset.id, second_asset))
+    await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=second_asset,
+        render_path=tmp_path / "public-feed-limit-2.png",
+        post_id="post-public-feed-2",
+        title="Editorial Portrait Two",
+    )
+
+    try:
+        payload = await service.list_public_posts(limit=1)
+        assert len(payload) == 1
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_profile_limit_truncates_posts_but_keeps_total_count(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store, identity_id="creator-limit")
+
+    await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-profile-limit-1.png",
+        post_id="post-public-profile-1",
+    )
+    second_asset = MediaAsset(
+        id="asset-creator-limit-b",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Render Two",
+        prompt="editorial portrait two",
+        url="/media/render-two.png",
+        metadata={},
+    )
+    await store.mutate(lambda state: state.assets.__setitem__(second_asset.id, second_asset))
+    await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=second_asset,
+        render_path=tmp_path / "public-profile-limit-2.png",
+        post_id="post-public-profile-2",
+    )
+
+    try:
+        payload = await service.get_profile_payload(username=identity.username, limit=1)
+        assert payload["profile"]["public_post_count"] == 2
+        assert len(payload["posts"]) == 1
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_hashed_legacy_share_scope_still_resolves_asset_delivery(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
     identity, _, _, asset = await _seed_identity_project_asset(store)

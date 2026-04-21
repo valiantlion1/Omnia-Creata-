@@ -18,6 +18,96 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.21.187`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.186` fixed the worst empty-state lie in Create, but the page still felt more like a restrained prototype than a premium creation surface. The prompt tools were still cramped into the text area, the live stage motion was too dead for a visual product, and provider-auth failures could still leak raw upstream language into the user experience.
+- What:
+  `.187` turns that follow-up into a more intentional Create pass. The composer breathes more with a taller prompt field and a real footer action row instead of floating buttons inside the text area, the split layout gives the preview side more authority when a session exists, and the live result stage now uses richer ambient motion instead of a static placeholder pulse. Terminal failure tiles also resolve to calmer, product-safe labels like `Unavailable` instead of surfacing raw provider mechanics, and the old floating Create toast rail is now hidden from the main product flow so result state stays on the page instead of overlapping it.
+  Verification on `.187` covers the touched frontend and the nearby backend error-normalization seam. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Create.test.tsx` passes (`1 passed`), and `npm run build` passes. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py -k auth_failure_does_not_retry_and_updates_job_provider_to_last_actual_attempt` passes (`1 passed`). A live desktop screenshot also confirms the empty Create page no longer carries the always-on right preview rail; this wave does not claim a full automated running-session browser proof because the Playwright transport was unstable in this turn.
+
+### `0.6.0-alpha` / build `2026.04.21.186`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.185` brought the first Create workspace pass, but the empty state still behaved like a fake dashboard. The right rail could stay open even before a real generation session existed, square placeholder tiles ignored the chosen format, and the left composer still felt more boxed-in than a premium creation surface should.
+- What:
+  `.186` tightens that Create behavior without pretending the whole surface redesign is done. The right preview surface now stays hidden until there is a real active session, prompt-only history picks no longer force an old session back onto the page, and preview tiles now inherit the real aspect ratio instead of always rendering as square placeholders. The Create layout also relaxes the double-shell treatment on the left so the composer can breathe more when the preview surface is absent, and a frontend test now locks the new rule that an empty Create screen must not render the preview surface by default.
+  Verification on `.186` is frontend-only and focused on the touched Create behavior. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Create.test.tsx` passes (`1 passed`), and `npm run build` passes. This wave does not claim a full multi-route browser QA pass, mobile proof, backend changes, provider smoke, or deployment verification.
+
+### `0.6.0-alpha` / build `2026.04.21.185`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.184` made billing and refund policy much more honest, but the product surface still lagged behind the new Create / My Images / Projects contract. Create could start sessions, yet it still pushed too much context into toasts and background library surfaces instead of behaving like a live workspace, while My Images and Projects still needed clearer sorting and paging rules.
+- What:
+  `.185` lands the first real frontend wave for that contract. Create now keeps the user on the page with a right-side live result set panel, server-backed recent session history, settlement summary, slot-level status cards, and lightbox previews for completed variations. My Images now presents itself as a final-results surface, hides the old `Processing` entry from the main IA, remembers grid/list and sort preferences, adds image/project sort controls, and paginates both image sets and projects so the library no longer degrades into one endless vertical wall. The project detail page also drops the overloaded `History` label in favor of `Recent runs` / `Project timeline` wording so Create owns the main `History` concept.
+  Verification on `.185` covers the touched frontend and the nearby backend contract. From `apps/studio/web`, `npm run type-check` passes and `npm run test:ci -- src/pages/__tests__/Create.test.tsx src/pages/__tests__/MediaLibrary.test.tsx` passes (`3 passed`). From the repo root, `python -m pytest -q apps/studio/backend/tests/test_router_generation.py` passes (`17 passed`). This wave does not claim refreshed live browser proof, provider smoke, deploy verification, or full load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.21.184`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.183` made subscription state more honest, but the refund side of billing was still mostly just legal copy. Studio could tell you how many credits you had, but it could not yet compress the account's own ledger, failed-generation reversals, and Paddle charge receipts into a concrete refund-policy picture.
+- What:
+  `.184` adds a real refund-policy assessment to backend billing summaries. Studio now distinguishes between automatic generation credit reversals and manual-review charge disputes using the account's own credit ledger, generation history, and Paddle receipts. Recent failed runs that already released held credits now show up as automatic resolution cases, while recent subscription or credit-pack charge receipts show up as manual review candidates inside the standard 14-day window. The summary also carries the billing contact email and the default policy notes so the backend can explain the difference between “already reversed”, “reviewable charge”, and “normally not refundable” without relying only on static legal pages.
+  Verification on `.184` is backend-only and focused on billing truth. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py` passes (`44 passed`), and `python -m pytest -q apps/studio/backend/tests/test_service_regressions.py -k "settings_and_billing_summary_include_resolved_entitlements or paddle_pro_checkout_transaction_waits_for_subscription_event or paddle_subscription_webhook_activates_pro_plan or paddle_credit_pack_webhook_uses_checkout_kind_credit_amount or paddle_duplicate_credit_pack_webhook_is_idempotent"` passes (`5 passed, 84 deselected`). This wave does not claim refreshed frontend proof, provider smoke, deployment verification, or load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.21.183`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.182` made generation credit trails much more honest, but subscription truth still had a subtle lie in it. If Paddle reported a paid subscription as paused, Studio collapsed that state into canceled, which meant the backend lost a real business distinction even though the user was only temporarily stopped.
+- What:
+  `.183` teaches the backend to keep `paused` as a first-class subscription state. The identity model now knows `paused`, Paddle webhook processing maps pause events into that exact state instead of rewriting them to `canceled`, and identity normalization preserves the paused marker instead of flattening it back to `none`. Billing and entitlement resolution still fail closed to the free tier for any non-active paid subscription, so paused users lose premium access and monthly paid credits while keeping their wallet balance, but now the stored subscription truth matches what really happened.
+  Verification on `.183` is backend-only and focused on billing truth. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py` passes (`42 passed`), `python -m pytest -q apps/studio/backend/tests/test_router_generation.py` passes (`17 passed`), and `python -m pytest -q apps/studio/backend/tests/test_service_regressions.py -k "settings_and_billing_summary_include_resolved_entitlements"` passes (`1 passed, 88 deselected`). This wave does not claim refreshed frontend proof, provider smoke, deployment verification, or load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.21.182`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.181` made the worker lane lighter on durable writes, but Studio still had a money-truth blind spot in the generation lifecycle. A job could reserve credits, settle, fail, or downgrade without leaving a clear reserve/release trail, and duplicate success callbacks still relied too much on the surrounding control flow to avoid charging twice.
+- What:
+  `.182` makes the generation credit path more audit-friendly and more resilient. Generation creation now writes an explicit reserve ledger event, terminal failure paths write a matching release event, successful settlements keep real spend in their own ledger record, and zero-charge or downgraded completions now release any unused hold instead of silently disappearing. `CreditLedgerEntry` now carries hold and settlement metadata so reserve/spend/release can be read as one story, and duplicate completion callbacks are ignored once a job is already settled so one finished generation cannot charge twice.
+  Verification on `.182` is backend-only and focused on the money path plus nearby generation surfaces. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py` passes (`41 passed`), `python -m pytest -q apps/studio/backend/tests/test_router_generation.py` passes (`17 passed`), and `python -m pytest -q apps/studio/backend/tests/test_service_regressions.py -k "generation_hot_updates_bypass_full_state_mutate or worker_runtime_mode_picks_up_new_queued_jobs_after_startup or web_runtime_mode_with_shared_broker_enqueues_generation_for_external_worker"` passes (`3 passed`). This wave does not claim refreshed frontend proof, provider smoke, deployment verification, or load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.21.181`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.180` made generation admission reads cheaper, but the worker lifecycle still had a louder persistence problem right behind it. Claim, heartbeat refresh, retry/requeue, timeout/fail transitions, and delete flows were still leaning on the full-state `mutate()` path, which means a single hot generation-row change could still fan out into a wider durable-store rewrite shape than a SaaS-style worker lane should tolerate.
+- What:
+  `.181` introduces a row-level generation mutation seam across the durable store boundary. Repository/store now expose `mutate_generation(...)`, JSON keeps the local file-safe fallback, and SQLite/Postgres now persist one generation row at a time instead of routing these hot worker updates through full-state mutation. `GenerationService` claim, refresh, retry/requeue, timeout/fail maintenance, shutdown recovery, status updates, orphan cleanup, and delete paths now use that seam, so the busiest generation lifecycle writes no longer require the old broad rewrite path. New store and service regressions lock both the row-level mutation contract and the “do not fall back to full-state mutate” behavior on hot generation writes.
+  Verification on `.181` is backend-only and targeted. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_store.py apps/studio/backend/tests/test_service_regressions.py -k "mutate_generation or hot_updates_bypass_full_state_mutate or count_generations_with_statuses or runtime_specific_postgres_pool_budget or pool_budget_profile"` passes (`8 passed, 103 deselected`), `python -m pytest -q apps/studio/backend/tests/test_service_regressions.py -k "generation_hot_updates_bypass_full_state_mutate or worker_runtime_mode_picks_up_new_queued_jobs_after_startup or web_runtime_mode_with_shared_broker_enqueues_generation_for_external_worker"` passes (`3 passed`), `python -m pytest -q apps/studio/backend/tests/test_repository.py apps/studio/backend/tests/test_store.py` passes (`25 passed`), and `python -m pytest -q apps/studio/backend/tests/test_router_generation.py` passes (`17 passed`). A combined four-file run hit the local timeout ceiling, so this wave records the passing shard results instead of pretending one monolithic command finished cleanly.
+
+### `0.6.0-alpha` / build `2026.04.21.180`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.179` tightened the public feed/profile abuse surface, but the generation admission path still had a quieter scale drag left in it. Before a job was even accepted, backend capacity checks were still willing to materialize queued-generation lists just to count them, which is exactly the kind of hot-path read that feels harmless in alpha traffic and then starts aging badly once more users pile into Create at the same time.
+- What:
+  `.180` narrows that admission hot path without pretending Studio has already solved the larger whole-state persistence problem. The durable-store seam now exposes targeted generation-status counters, with scoped identity-aware variants and fresh SQL-backed implementations for SQLite and Postgres. Repository admission counts now reuse those counters for incomplete-job checks, and generation pre-submit queue checks now count queued jobs directly instead of listing and measuring them. New repository, store, and router-generation regressions lock the status-count contract and the non-materializing queue-admission path.
+  Verification on `.180` is targeted backend proof. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_repository.py apps/studio/backend/tests/test_store.py apps/studio/backend/tests/test_router_generation.py` passes (`40 passed`). This wave does not claim refreshed frontend proof, local verify, provider smoke, deployment verification, or live load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.21.179`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.178` removed full-collection scans from the public feed/profile read path, but the public query surface still had two easy abuse levers left: there were no explicit throttles on `/v1/public/posts` or `/v1/profiles/{username}`, and public feed/profile/favorites payloads could still return an unbounded number of serialized posts if the dataset kept growing. That is the kind of soft edge that starts as harmless convenience and then becomes scrape-friendly or response-amplifying under real traffic.
+- What:
+  `.179` closes that public-surface abuse gap without changing Studio's product contract. The router now applies explicit rate limits to the public feed and public profile routes, and feed/profile/favorites reads now accept bounded `limit` query parameters with safe server-side caps. Public export also now requests a bounded feed slice directly instead of pulling the full feed and slicing afterward. Service-level regressions lock the truncation behavior and preserve honest `public_post_count` truth for creator profiles even when the returned post list is intentionally capped.
+  Verification on `.179` is backend-only and current-build honest. From `apps/studio/backend`, targeted security-hardening and router-security regressions pass, `python -m compileall .` passes, and the full backend suite passes end-to-end at `633 passed` on the current build. This wave does not claim refreshed frontend proof, local verify, provider smoke, deployment verification, or live load-test closure.
+
 ### `0.6.0-alpha` / build `2026.04.20.178`
 - Date: `2026-04-20`
 - Codename: `Foundation`

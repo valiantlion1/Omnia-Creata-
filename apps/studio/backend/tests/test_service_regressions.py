@@ -192,6 +192,86 @@ async def test_service_log_security_event_forwards_fields(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_generation_hot_updates_bypass_full_state_mutate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-hot-write",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-hot-write",
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-hot-write",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    job = GenerationJob(
+        id="job-hot-write",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Queued One",
+        status=JobStatus.QUEUED,
+        model="flux-schnell",
+        prompt_snapshot=PromptSnapshot(
+            prompt="editorial portrait",
+            negative_prompt="",
+            model="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=24,
+            cfg_scale=6.5,
+            seed=42,
+            aspect_ratio="1:1",
+        ),
+        estimated_cost=0.0,
+        credit_cost=6,
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.generations.__setitem__(job.id, job),
+        )
+    )
+
+    async def _explode_mutate(*args, **kwargs):
+        raise AssertionError("generation hot writes should not fall back to full-state mutate")
+
+    monkeypatch.setattr(service.store, "mutate", _explode_mutate)
+
+    try:
+        claim_token = await service.generation._claim_generation_job(job.id)
+        assert claim_token is not None
+
+        updated_job = await service.generation._update_job_status(
+            job.id,
+            JobStatus.RETRYABLE_FAILED,
+            error="temporary failure",
+            error_code="provider_temporary",
+        )
+
+        assert updated_job is not None
+        assert updated_job.status == JobStatus.RETRYABLE_FAILED
+        persisted_job = await service.store.get_generation(job.id)
+        assert persisted_job is not None
+        assert persisted_job.status == JobStatus.RETRYABLE_FAILED
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_service_requires_jwt_secret_outside_local_development(tmp_path: Path):
     settings = get_settings()
     original_environment = settings.environment

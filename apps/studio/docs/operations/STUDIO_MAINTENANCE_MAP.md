@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-20
+Last updated: 2026-04-21
 
 ## Current baseline
 
@@ -12,12 +12,39 @@ Last updated: 2026-04-20
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.20.178`. This wave is backend-only public-surface hardening on top of `.177`. Studio keeps the secret-hygiene gains from `.177`, but now also keeps Explore feed, public profile, single-post payloads, username resolution, and publish-time validation on scoped repository reads instead of global collection materialization.
-- Current proof on `.178` is honest backend proof only. From `apps/studio/backend`, targeted security-hardening, service-regression, and router-security slices pass; `python -m compileall .` passes; and the full backend suite now passes at `629 passed`. This wave does not claim refreshed frontend, local verify, provider smoke, deployment verification, or true load-test closure.
-- The local frontend host discipline from `.173`, visible shell/explore polish from `.172`, backend hardening from `.171`, the `.174` persistence-and-migration follow-through, the `.175` runtime-aware Postgres pool-budget layer, the `.176` split-runtime startup validation, and the `.177` secret-hygiene/public-preview hardening all remain underneath the current build. `.178` is the public-surface scoped-read counterpart to that backend foundation rather than a new provider/deploy wave.
-- Studio's moderation contract from `.168`, provider-truth readability from `.169`, runtime-topology clarity from `.170`, backend hardening from `.171`, shell/explore polish from `.172`, local-host discipline from `.173`, the `.174` atomic session plus schema-versioning work, the `.175` runtime-aware durable-store pool budgeting, the `.176` stricter startup pool-budget truth, and the `.177` secret/log/token hardening all remain active. `.178` adds narrower public-surface repository reads and a smaller collection-scan footprint on top of that stack.
+- Current implementation build is `2026.04.21.187`. This wave keeps the `.186` empty-state honesty fix, then adds a more premium Create follow-up: the prompt composer gets a calmer footer action row, the live stage gets real ambient motion instead of a dead placeholder pulse, the floating Create toast rail is hidden from the main surface, and provider-auth failures now normalize to product-safe language.
+- Current proof on `.187` is still targeted, but broader than `.186`: from `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Create.test.tsx` passes (`1 passed`), and `npm run build` passes; from the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py -k auth_failure_does_not_retry_and_updates_job_provider_to_last_actual_attempt` passes (`1 passed`). A live desktop screenshot also confirms the empty Create route no longer shows the permanent right preview rail. This wave does not claim a full automated running-session browser proof, provider smoke, deployment verification, or load-test closure.
+- The backend hardening stack from `.171` through `.184` remains underneath the current build, `.185` remains the broader Create / Library / Projects contract pass, `.186` is the empty-state/layout honesty follow-up, and `.187` is the motion plus failure-language refinement on top of that foundation.
+- Studio's moderation contract from `.168`, provider-truth readability from `.169`, runtime-topology clarity from `.170`, backend hardening from `.171`, shell/explore polish from `.172`, local-host discipline from `.173`, the `.174` atomic session plus schema-versioning work, the `.175` runtime-aware durable-store pool budgeting, the `.176` stricter startup pool-budget truth, the `.177` secret/log/token hardening, the `.178` scoped public-surface reads, the `.179` public-route throttles, the `.180` targeted generation-status counts, the `.181` row-level generation hot writes, the `.182` reserve/spend/release audit truth, the `.183` paused-subscription state truth, and the `.184` refund-policy assessment all remain active. `.185` is the corresponding frontend IA and workspace wave on top of that stack.
 
 ## Recent stabilization wins
+
+- `.187` makes Create feel less like a frozen prototype. The prompt tools are no longer crammed inside the text area, the split layout gives the preview stage more authority when it exists, and the live stage finally has ambient motion that feels intentional instead of generic.
+- The same wave also removes one more ugly launch-grade leak. Raw provider-auth failure text now normalizes into calm product language, and the old floating Create toast rail is hidden so session state lives on the page instead of fighting the composition.
+
+- `.186` removes one of the ugliest Create empty-state lies. The page no longer pretends a live preview exists before a real generation session does.
+- The same wave also makes Create previews more truthful to the work itself. Once a session exists, the preview tiles open in the chosen image aspect instead of flattening everything into a square placeholder rhythm.
+
+- `.185` finally makes Create behave like a workspace instead of a launcher. Users can stay on the Create page, watch per-slot progress and settlement, reopen recent sessions from backend history, and zoom completed outputs without being pushed into My Images just to understand what happened.
+- The same wave also makes the library IA calmer and more honest. My Images now reads as final results only, while Projects gain remembered sort plus pagination so large libraries and project lists do not collapse into one long vertical feed.
+
+- `.184` gives Studio a real refund-policy backend surface instead of just a legal promise. Billing summaries can now say which failed runs were already auto-reversed and which recent charge events are still inside the manual review window.
+- The same wave also makes the money story more realistic. Subscription and credit-pack disputes are no longer treated as vague support email situations only; the backend now classifies them as reviewable charge cases with the actual merchant-of-record receipt context and a clear 14-day window.
+
+- `.183` makes Studio's billing truth less sloppy. A paused paid subscription is no longer rewritten into canceled just because the backend only knew active, past_due, and canceled.
+- The same wave keeps the fail-closed safety rule intact. Paused subscriptions still lose paid entitlements and monthly paid credits until they become active again, but their wallet balance remains intact and the stored subscription state now matches reality.
+
+- `.182` makes Studio's generation money trail easier to trust. Job creation now writes a reserve audit entry, terminal failures write a release entry, successful settlements keep real spend separate from the hold activity, and downgraded zero-charge completions release the unused hold instead of leaving that story implicit.
+- The same wave also closes a duplicate-settlement hole. Once a generation is already settled, a second completion callback is ignored so the same finished job cannot silently charge the user twice.
+
+- `.181` removes one of the louder remaining durable-store amplification problems from Studio's worker lane. Claim, refresh, retry/requeue, timeout/fail, orphan cleanup, shutdown recovery, and delete are no longer forced through the broad full-state generation mutate path.
+- The same wave also gives the backend a better P22-shaped seam without pretending P22 is done. JSON still uses the local safe fallback, but SQLite and Postgres now have a dedicated row-level generation mutation path that future domain-write work can extend instead of cloning more full-state rewrites.
+
+- `.180` removes one of the quieter scale drags from Studio's Create submit path. Queue admission no longer needs to materialize queued generation jobs just to learn how many are waiting; it can now ask the durable-store seam for a targeted status count instead.
+- The same wave also makes admission truth more consistent across backends. JSON keeps the in-memory fast path, while SQLite and Postgres now have identity-aware fresh status counters, so queued and incomplete-job preflight checks lean less on full collection reads before a generation request is even accepted.
+
+- `.179` removes one of the remaining scrape-friendly public query gaps from Studio backend. `/v1/public/posts` and `/v1/profiles/{username}` no longer sit outside the explicit throttle map, so public feed and public profile traffic now have real backend-side request ceilings instead of relying only on whatever upstream edge behavior might eventually exist.
+- The same wave also reduces response amplification on the public surface. Public feed, public profile, and favorites reads now honor bounded server-side limits, and public export now asks for a bounded feed slice directly instead of materializing a larger list and trimming it later.
 
 - `.178` removes one of the quieter scale and abuse liabilities from Studio's public surfaces. Explore feed, public profile, and single-post payload reads no longer need to materialize the entire asset, identity, or generation collections just to answer a request about one post or one creator.
 - The same wave also makes publish-time checks cheaper and more future-proof. Post publication validation now scopes asset and generation reads to the owning identity, and username-based public profile resolution no longer round-trips through global identity and post lists first.

@@ -7,9 +7,9 @@ type ButtonSize = "md" | "lg";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border border-[#5f7692] bg-[linear-gradient(135deg,#314255_0%,#435a73_100%)] text-white shadow-[0_18px_44px_rgba(3,10,18,0.24)] hover:-translate-y-0.5 hover:border-[#748ca8] hover:shadow-[0_24px_56px_rgba(3,10,18,0.3)]",
+    "border border-[rgba(188,209,229,0.2)] bg-[linear-gradient(135deg,rgba(84,108,137,0.94)_0%,rgba(112,139,170,0.9)_100%)] text-white shadow-[0_24px_64px_rgba(3,10,18,0.28)] hover:-translate-y-0.5 hover:border-[rgba(214,228,241,0.38)] hover:shadow-[0_28px_72px_rgba(3,10,18,0.34)]",
   secondary:
-    "border border-white/10 bg-white/[0.04] text-foreground hover:-translate-y-0.5 hover:border-white/[0.16] hover:bg-white/[0.07]",
+    "border border-white/10 bg-white/[0.045] text-foreground backdrop-blur-md hover:-translate-y-0.5 hover:border-white/[0.18] hover:bg-white/[0.08]",
   ghost:
     "border border-white/8 bg-transparent text-foreground-soft hover:bg-white/[0.04] hover:text-foreground",
 };

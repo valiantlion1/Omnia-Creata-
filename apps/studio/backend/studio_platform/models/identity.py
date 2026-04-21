@@ -29,6 +29,7 @@ class Visibility(str, Enum):
 class SubscriptionStatus(str, Enum):
     NONE = "none"
     ACTIVE = "active"
+    PAUSED = "paused"
     PAST_DUE = "past_due"
     CANCELED = "canceled"
 

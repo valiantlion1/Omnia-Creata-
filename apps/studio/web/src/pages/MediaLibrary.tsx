@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -42,6 +42,8 @@ type ViewMode = 'grid' | 'list'
 type ImageFilter = 'all' | 'processing' | 'recent'
 type CollectionFilter = 'all' | 'with-work' | 'empty'
 type TrashFilter = 'all' | 'recent'
+type ImageSort = 'newest' | 'oldest' | 'name' | 'model'
+type ProjectSort = 'updated' | 'newest' | 'oldest' | 'name'
 
 type ConfirmState =
   | { kind: 'permanent-delete'; asset: MediaAsset }
@@ -60,20 +62,15 @@ type FavoritePreviewState = {
 } | null
 
 type MoveState = {
-  postId: string
+  postIds: string[]
   currentProjectId: string
   title: string
+  count: number
 } | null
 
 type NoticeState = {
   title: string
   body: string
-} | null
-
-type PassiveLibraryNotice = {
-  id: string
-  tone: 'warning' | 'error'
-  message: string
 } | null
 
 type RenameState =
@@ -106,7 +103,6 @@ type LibraryState = 'generating' | 'ready' | 'failed' | 'blocked'
 
 const imageFilters: Array<{ id: ImageFilter; label: string }> = [
   { id: 'all', label: 'All' },
-  { id: 'processing', label: 'Processing' },
   { id: 'recent', label: 'Recent' },
 ]
 
@@ -120,6 +116,45 @@ const trashFilters: Array<{ id: TrashFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'recent', label: 'Recent' },
 ]
+
+const imageSortOptions: Array<{ id: ImageSort; label: string }> = [
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'name', label: 'Name' },
+  { id: 'model', label: 'Model' },
+]
+
+const projectSortOptions: Array<{ id: ProjectSort; label: string }> = [
+  { id: 'updated', label: 'Updated' },
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'name', label: 'Name' },
+]
+
+const LIBRARY_VIEW_STORAGE_KEY = 'studio-library-views'
+const IMAGE_SORT_STORAGE_KEY = 'studio-library-sort:images'
+const PROJECT_SORT_STORAGE_KEY = 'studio-library-sort:projects'
+const IMAGE_PAGE_SIZE = 12
+const PROJECT_PAGE_SIZE = 12
+
+function readStoredViews() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LIBRARY_VIEW_STORAGE_KEY) ?? 'null') as Record<LibrarySection, ViewMode> | null
+    if (!parsed) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function readStoredValue<T extends string>(key: string, fallback: T) {
+  try {
+    const value = localStorage.getItem(key)
+    return (value as T) || fallback
+  } catch {
+    return fallback
+  }
+}
 
 function assetLibraryState(asset: MediaAsset): LibraryState {
   return (
@@ -139,39 +174,10 @@ function generationLibraryState(generation: Generation): LibraryState {
   ) {
     return 'blocked'
   }
-  if ((generation.error ?? '').toLowerCase().includes('policy'))
+  if ((generation.error ?? '').toLowerCase().includes('policy')) {
     return 'blocked'
+  }
   return 'failed'
-}
-
-function generationCreditsReturned(generation: Generation) {
-  return (
-    generation.credit_status === 'released' ||
-    generation.final_credit_cost === 0
-  )
-}
-
-function buildGenerationPassiveNotice(
-  generation: Generation,
-  state: Extract<LibraryState, 'failed' | 'blocked'>,
-): Exclude<PassiveLibraryNotice, null> {
-  const creditsReturned = generationCreditsReturned(generation)
-  if (state === 'blocked') {
-    return {
-      id: `${generation.job_id}:blocked:${generation.completed_at ?? generation.created_at}`,
-      tone: 'warning',
-      message: creditsReturned
-        ? 'Studio could not finish that image because it tripped a safety review. Reserved credits were returned.'
-        : 'Studio could not finish that image because it tripped a safety review.',
-    }
-  }
-  return {
-    id: `${generation.job_id}:failed:${generation.completed_at ?? generation.created_at}`,
-    tone: 'error',
-    message: creditsReturned
-      ? 'Studio could not finish that image because of a provider or system issue. Reserved credits were returned.'
-      : 'Studio could not finish that image because of a provider or system issue.',
-  }
 }
 
 function assetDisplayTitle(asset: MediaAsset) {
@@ -1063,7 +1069,8 @@ function MovePostDialog({
 
   const destinations = projects.filter(
     (project) =>
-      project.id !== state.currentProjectId && !isChatProject(project),
+      (!state.currentProjectId || project.id !== state.currentProjectId) &&
+      !isChatProject(project),
   )
 
   return (
@@ -1075,7 +1082,7 @@ function MovePostDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-lg font-semibold text-white">
-              Move image set
+              {state.count > 1 ? 'Move image sets' : 'Move image set'}
             </div>
             <p className="mt-2 text-sm leading-7 text-zinc-400">
               Choose where <span className="text-white">{state.title}</span>{' '}
@@ -1192,14 +1199,6 @@ function BrowseBadgeRow({
   )
 }
 
-function OpenDetailsHint({ className = '' }: { className?: string }) {
-  return (
-    <div className={`text-[11px] font-medium text-zinc-500 ${className}`}>
-      Open for prompt, variations, and actions.
-    </div>
-  )
-}
-
 function LightboxMetaTile({
   label,
   value,
@@ -1265,6 +1264,35 @@ function FilterBar<T extends string>({
         </button>
       ))}
     </div>
+  )
+}
+
+function SortControl<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T
+  options: Array<{ id: T; label: string }>
+  onChange: (value: T) => void
+}) {
+  return (
+    <label className="flex items-center gap-2 rounded-full border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-[12px] text-zinc-400 backdrop-blur-md">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        Sort
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as T)}
+        className="bg-transparent text-[12px] font-medium text-white outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.id} value={option.id} className="bg-[#101115] text-white">
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
 
@@ -1369,31 +1397,41 @@ function EmptyInline({
   )
 }
 
-function ProjectHighlightsStrip({
-  items,
+function PaginationControls({
+  page,
+  totalPages,
+  onPageChange,
 }: {
-  items: Array<{ label: string; value: string; detail: string }>
+  page: number
+  totalPages: number
+  onPageChange: (page: number) => void
 }) {
+  if (totalPages <= 1) return null
+
   return (
-    <section className="grid gap-2 pb-4 sm:grid-cols-2 xl:grid-cols-4">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] p-5 transition-all duration-400 hover:-translate-y-0.5 hover:ring-white/[0.12] hover:shadow-[0_16px_40px_rgba(0,0,0,0.3)] hover:bg-[#13151c]"
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.05] pt-4">
+      <div className="text-[12px] text-zinc-500">
+        Page {page} of {totalPages}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <div className="absolute -inset-px rounded-[24px] bg-gradient-to-b from-white/5 to-transparent opacity-0 transition-opacity duration-400 group-hover:opacity-100" />
-          <div className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 transition-colors group-hover:text-zinc-400">
-            {item.label}
-          </div>
-          <div className="relative z-10 mt-3 text-[28px] font-semibold tracking-tight text-white/90 transition-colors group-hover:text-white">
-            {item.value}
-          </div>
-          <div className="relative z-10 mt-1.5 text-[12px] leading-5 text-zinc-500">
-            {item.detail}
-          </div>
-        </div>
-      ))}
-    </section>
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Previous
+        </button>
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-3 py-1.5 text-[12px] font-medium text-zinc-200 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -1620,16 +1658,27 @@ export default function MediaLibraryPage() {
     !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
 
   const [search, setSearch] = useState('')
-  const [views, setViews] = useState<Record<LibrarySection, ViewMode>>({
-    images: 'grid',
-    collections: 'grid',
-    likes: 'grid',
-    trash: 'grid',
-  })
+  const [views, setViews] = useState<Record<LibrarySection, ViewMode>>(
+    () =>
+      readStoredViews() ?? {
+        images: 'grid',
+        collections: 'grid',
+        likes: 'grid',
+        trash: 'grid',
+      },
+  )
   const [imageFilter, setImageFilter] = useState<ImageFilter>('all')
   const [collectionFilter, setCollectionFilter] =
     useState<CollectionFilter>('all')
   const [trashFilter, setTrashFilter] = useState<TrashFilter>('all')
+  const [imageSort, setImageSort] = useState<ImageSort>(() =>
+    readStoredValue(IMAGE_SORT_STORAGE_KEY, 'newest'),
+  )
+  const [projectSort, setProjectSort] = useState<ProjectSort>(() =>
+    readStoredValue(PROJECT_SORT_STORAGE_KEY, 'updated'),
+  )
+  const [imagePage, setImagePage] = useState(1)
+  const [projectPage, setProjectPage] = useState(1)
   const [confirmState, setConfirmState] = useState<ConfirmState>(null)
   const [actionMenu, setActionMenu] = useState<string | null>(null)
   const [previewState, setPreviewState] = useState<PreviewState>(null)
@@ -1637,10 +1686,8 @@ export default function MediaLibraryPage() {
     useState<FavoritePreviewState>(null)
   const [moveState, setMoveState] = useState<MoveState>(null)
   const [noticeState, setNoticeState] = useState<NoticeState>(null)
-  const [passiveNotice, setPassiveNotice] = useState<PassiveLibraryNotice>(null)
   const [renameState, setRenameState] = useState<RenameState>(null)
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
-  const seenGenerationNoticeKeys = useRef<Set<string>>(new Set())
   const deferredSearch = useDeferredValue(search)
 
   const section = useMemo<LibrarySection>(() => {
@@ -1653,6 +1700,30 @@ export default function MediaLibraryPage() {
     if (location.pathname.startsWith('/library/trash')) return 'trash'
     return 'images'
   }, [location.pathname])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LIBRARY_VIEW_STORAGE_KEY, JSON.stringify(views))
+    } catch {
+      /* noop */
+    }
+  }, [views])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(IMAGE_SORT_STORAGE_KEY, imageSort)
+    } catch {
+      /* noop */
+    }
+  }, [imageSort])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROJECT_SORT_STORAGE_KEY, projectSort)
+    } catch {
+      /* noop */
+    }
+  }, [projectSort])
 
   const assetsQuery = useQuery({
     queryKey: ['assets', 'library', 'all'],
@@ -1903,6 +1974,11 @@ export default function MediaLibraryPage() {
     }))
   }, [activeAssets, projectMap])
 
+  const readyGroups = useMemo(
+    () => groupedAssets.filter((group) => group.libraryState === 'ready'),
+    [groupedAssets],
+  )
+
   const pendingGenerations = useMemo(
     () =>
       generations
@@ -1948,11 +2024,6 @@ export default function MediaLibraryPage() {
     [groupedAssets],
   )
 
-  const readyGroups = useMemo(
-    () => groupedAssets.filter((group) => group.libraryState === 'ready'),
-    [groupedAssets],
-  )
-
   const composeProjects = useMemo(
     () => projects.filter((project) => !isChatProject(project)),
     [projects],
@@ -1977,11 +2048,30 @@ export default function MediaLibraryPage() {
             Date.now() - new Date(group.createdAt).getTime() <=
             1000 * 60 * 60 * 24 * 3
           )
-        if (imageFilter === 'processing') return false
         return true
       }),
     [deferredSearch, imageFilter, readyGroups],
   )
+
+  const sortedImageGroups = useMemo(() => {
+    const next = [...filteredImageGroups]
+    next.sort((left, right) => {
+      if (imageSort === 'oldest') {
+        return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      }
+      if (imageSort === 'name') {
+        return left.title.localeCompare(right.title)
+      }
+      if (imageSort === 'model') {
+        return (
+          left.modelLabel.localeCompare(right.modelLabel) ||
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        )
+      }
+      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    })
+    return next
+  }, [filteredImageGroups, imageSort])
 
   const filteredProjects = useMemo(
     () =>
@@ -1995,6 +2085,21 @@ export default function MediaLibraryPage() {
       }),
     [assetsByProject, collectionFilter, composeProjects, deferredSearch],
   )
+
+  const sortedProjects = useMemo(() => {
+    const next = [...filteredProjects]
+    next.sort((left, right) => {
+      if (projectSort === 'name') return left.title.localeCompare(right.title)
+      if (projectSort === 'newest') {
+        return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+      }
+      if (projectSort === 'oldest') {
+        return new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+      }
+      return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+    })
+    return next
+  }, [filteredProjects, projectSort])
 
   const filteredTrash = useMemo(
     () =>
@@ -2046,53 +2151,34 @@ export default function MediaLibraryPage() {
     return next
   }, [readyGroups])
 
-  const projectHighlights = useMemo(() => {
-    const withWorkCount = composeProjects.filter(
-      (project) => (assetsByProject.get(project.id) ?? []).length > 0,
-    ).length
-    const emptyCount = Math.max(composeProjects.length - withWorkCount, 0)
-    const recentlyUpdated = [...composeProjects].sort(
-      (left, right) =>
-        new Date(right.updated_at).getTime() -
-        new Date(left.updated_at).getTime(),
-    )[0]
-
-    return [
-      {
-        label: 'Projects',
-        value: String(composeProjects.length),
-        detail: 'spaces for campaigns and series',
-      },
-      {
-        label: 'With work',
-        value: String(withWorkCount),
-        detail: 'ready to reopen or extend',
-      },
-      {
-        label: 'Empty',
-        value: String(emptyCount),
-        detail: 'reserved for future directions',
-      },
-      {
-        label: 'Latest activity',
-        value: recentlyUpdated
-          ? formatRelativeDate(recentlyUpdated.updated_at)
-          : 'No activity',
-        detail: recentlyUpdated?.title ?? 'Create a project to start a thread',
-      },
-    ]
-  }, [assetsByProject, composeProjects])
-
   const activeView = views[section]
-  const totalImageCount = filteredImageGroups.reduce((sum, g) => sum + g.items.length, 0)
+  const totalImageCount = sortedImageGroups.reduce((sum, g) => sum + g.items.length, 0)
+  const imageTotalPages = Math.max(1, Math.ceil(sortedImageGroups.length / IMAGE_PAGE_SIZE))
+  const projectTotalPages = Math.max(1, Math.ceil(sortedProjects.length / PROJECT_PAGE_SIZE))
+  const pagedImageGroups = useMemo(
+    () =>
+      sortedImageGroups.slice(
+        (imagePage - 1) * IMAGE_PAGE_SIZE,
+        imagePage * IMAGE_PAGE_SIZE,
+      ),
+    [imagePage, sortedImageGroups],
+  )
+  const pagedProjects = useMemo(
+    () =>
+      sortedProjects.slice(
+        (projectPage - 1) * PROJECT_PAGE_SIZE,
+        projectPage * PROJECT_PAGE_SIZE,
+      ),
+    [projectPage, sortedProjects],
+  )
   const imageViewDescription =
     activeView === 'grid'
-      ? `${totalImageCount} image${totalImageCount === 1 ? '' : 's'} across ${filteredImageGroups.length} set${filteredImageGroups.length === 1 ? '' : 's'}. Open any card for prompt, variations, and actions.`
-      : `${totalImageCount} image${totalImageCount === 1 ? '' : 's'} in list view — more context per row, prompt details inside the lightbox.`
+      ? `${totalImageCount} finished image${totalImageCount === 1 ? '' : 's'} across ${sortedImageGroups.length} set${sortedImageGroups.length === 1 ? '' : 's'}.`
+      : `${totalImageCount} finished image${totalImageCount === 1 ? '' : 's'} in a quieter list view.`
   const favoriteViewDescription =
     activeView === 'grid'
-      ? 'References you saved from the community. Open any card to reuse prompts or revisit the source.'
-      : 'Full context per reference — creator, prompt, and quick actions for work you want to revisit.'
+      ? 'Saved references from Explore.'
+      : 'Saved references with the full prompt and creator details.'
   const isBusy =
     permanentDeleteMutation.isPending || emptyTrashMutation.isPending
 
@@ -2107,34 +2193,24 @@ export default function MediaLibraryPage() {
   }, [])
 
   useEffect(() => {
-    if (!canLoadPrivate || section !== 'images') return
-    const twoMinutesAgo = Date.now() - 2 * 60 * 1000
-    const unseen = [...generations]
-      .sort(
-        (left, right) =>
-          new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-      )
-      .find((generation) => {
-        const state = generationLibraryState(generation)
-        if (state !== 'failed' && state !== 'blocked') return false
-        const completedAt = generation.completed_at ?? generation.created_at
-        if (new Date(completedAt).getTime() < twoMinutesAgo) return false
-        const key = `${generation.job_id}:${state}:${generation.error_code ?? ''}:${generation.credit_status ?? ''}:${completedAt}`
-        if (seenGenerationNoticeKeys.current.has(key)) return false
-        seenGenerationNoticeKeys.current.add(key)
-        return true
-      })
-
-    if (!unseen) return
-    const state = generationLibraryState(unseen) as 'failed' | 'blocked'
-    setPassiveNotice(buildGenerationPassiveNotice(unseen, state))
-  }, [canLoadPrivate, generations, section])
+    setImagePage(1)
+  }, [deferredSearch, imageFilter, imageSort])
 
   useEffect(() => {
-    if (!passiveNotice) return
-    const timeout = window.setTimeout(() => setPassiveNotice(null), 6000)
-    return () => window.clearTimeout(timeout)
-  }, [passiveNotice])
+    setProjectPage(1)
+  }, [collectionFilter, deferredSearch, projectSort])
+
+  useEffect(() => {
+    if (imagePage > imageTotalPages) {
+      setImagePage(imageTotalPages)
+    }
+  }, [imagePage, imageTotalPages])
+
+  useEffect(() => {
+    if (projectPage > projectTotalPages) {
+      setProjectPage(projectTotalPages)
+    }
+  }, [projectPage, projectTotalPages])
 
   const openComposeWith = (params: Record<string, string>) => {
     const next = new URLSearchParams(params)
@@ -2191,14 +2267,6 @@ export default function MediaLibraryPage() {
     })
   }
 
-  const handleDeleteGeneration = async (generation: Generation) => {
-    try {
-      await deleteGenerationMutation.mutateAsync(generation.job_id)
-    } catch (error) {
-      handleMenuError(error)
-    }
-  }
-
   const handleVisibilityChange = async (
     postId: string,
     visibility: 'public' | 'private',
@@ -2215,6 +2283,14 @@ export default function MediaLibraryPage() {
             ? 'This image set can now appear on public Studio surfaces.'
             : 'This image set is now hidden from public Studio surfaces.',
       })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const handleDeleteGeneration = async (generation: Generation) => {
+    try {
+      await deleteGenerationMutation.mutateAsync(generation.job_id)
     } catch (error) {
       handleMenuError(error)
     }
@@ -2284,13 +2360,15 @@ export default function MediaLibraryPage() {
     }
   }
 
-  const handleMoveGroup = async (
-    postId: string,
+  const handleMoveGroups = async (
+    postIds: string[],
     projectId: string,
     title: string,
   ) => {
     try {
-      await movePostMutation.mutateAsync({ postId, projectId })
+      for (const postId of postIds) {
+        await movePostMutation.mutateAsync({ postId, projectId })
+      }
       const targetProject = composeProjects.find(
         (project) => project.id === projectId,
       )
@@ -2300,6 +2378,7 @@ export default function MediaLibraryPage() {
           ? `"${title}" now lives in "${targetProject.title}".`
           : `"${title}" was moved to another project.`,
       })
+      setSelectedGroups(new Set())
     } catch (error) {
       handleMenuError(error)
     }
@@ -2476,6 +2555,13 @@ export default function MediaLibraryPage() {
                   onChange={setImageFilter}
                 />
               }
+              actions={
+                <SortControl
+                  value={imageSort}
+                  options={imageSortOptions}
+                  onChange={setImageSort}
+                />
+              }
             />
 
             {imageFilter === 'processing' && pendingGenerations.length ? (
@@ -2507,7 +2593,7 @@ export default function MediaLibraryPage() {
               </section>
             ) : null}
 
-            {imageFilter !== 'processing' && blockedGroups.length ? (
+            {false && imageFilter !== 'processing' && blockedGroups.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[13px] font-semibold text-white">
@@ -2613,10 +2699,10 @@ export default function MediaLibraryPage() {
                   description="Head to Create and start generating — your images will appear here while they're in progress."
                 />
               )
-            ) : filteredImageGroups.length ? (
+            ) : sortedImageGroups.length ? (
               activeView === 'grid' ? (
                 <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {filteredImageGroups.map((group) => {
+                  {pagedImageGroups.map((group) => {
                     const leadAsset = group.items[0]
                     const isSelected = selectedGroups.has(group.id)
                     const menuId = `post:${group.id}`
@@ -2761,9 +2847,10 @@ export default function MediaLibraryPage() {
                               <MenuAction
                                 onClick={() => {
                                   setMoveState({
-                                    postId: group.id,
+                                    postIds: [group.id],
                                     currentProjectId: group.projectId,
                                     title: group.title,
+                                    count: 1,
                                   })
                                   setActionMenu(null)
                                 }}
@@ -2825,7 +2912,6 @@ export default function MediaLibraryPage() {
                           <div className="flex items-start gap-3 px-4 py-3.5">
                             <div className="min-w-0 flex-1">
                               <BrowseBadgeRow group={group} />
-                              <OpenDetailsHint className="mt-2" />
                             </div>
                           </div>
                         </button>
@@ -2835,7 +2921,7 @@ export default function MediaLibraryPage() {
                 </section>
               ) : (
                 <section className="space-y-3">
-                  {filteredImageGroups.map((group) => {
+                  {pagedImageGroups.map((group) => {
                     const leadAsset = group.items[0]
                     const isSelected = selectedGroups.has(group.id)
                     const menuId = `post:${group.id}`
@@ -2909,7 +2995,6 @@ export default function MediaLibraryPage() {
                                 ) : null}
                               </div>
                               <BrowseBadgeRow group={group} limit={4} />
-                              <OpenDetailsHint className="mt-2" />
                             </div>
                           </button>
 
@@ -3036,9 +3121,10 @@ export default function MediaLibraryPage() {
                                 <MenuAction
                                   onClick={() => {
                                     setMoveState({
-                                      postId: group.id,
+                                      postIds: [group.id],
                                       currentProjectId: group.projectId,
                                       title: group.title,
+                                      count: 1,
                                     })
                                     setActionMenu(null)
                                   }}
@@ -3072,9 +3158,15 @@ export default function MediaLibraryPage() {
               <EmptyInline
                 icon={<ImageIcon className="h-4 w-4" />}
                 title="No images yet."
-                description="Generate something in Create and it will land here automatically."
+                description="Finished images will appear here."
               />
             )}
+
+            <PaginationControls
+              page={imagePage}
+              totalPages={imageTotalPages}
+              onPageChange={setImagePage}
+            />
 
             {/* Bulk action bar - Summoning Animation */}
             {selectedGroups.size > 0 && (
@@ -3101,12 +3193,29 @@ export default function MediaLibraryPage() {
                     <button
                       onClick={() =>
                         setSelectedGroups(
-                          new Set(filteredImageGroups.map((g) => g.id)),
+                          new Set(sortedImageGroups.map((g) => g.id)),
                         )
                       }
                       className="rounded-full px-3 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/5 hover:text-white active:scale-95"
                     >
                       Select all
+                    </button>
+                    <button
+                      onClick={() =>
+                        setMoveState({
+                          postIds: Array.from(selectedGroups),
+                          currentProjectId: '',
+                          title:
+                            selectedGroups.size === 1
+                              ? (sortedImageGroups.find((group) => group.id === Array.from(selectedGroups)[0])?.title ?? 'Selected image set')
+                              : `${selectedGroups.size} selected image sets`,
+                          count: selectedGroups.size,
+                        })
+                      }
+                      disabled={movePostMutation.isPending}
+                      className="rounded-full bg-white/[0.06] px-4 py-2 text-xs font-bold text-zinc-100 ring-1 ring-white/[0.12] transition-all hover:bg-white/[0.1] active:scale-95 disabled:opacity-50"
+                    >
+                      Move to project
                     </button>
                     <button
                       onClick={handleBulkTrash}
@@ -3136,7 +3245,7 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Projects"
-              description={`${composeProjects.length} project${composeProjects.length === 1 ? '' : 's'} organising your work. Use them to keep one campaign, character, or visual direction together.`}
+              description={`${composeProjects.length} project${composeProjects.length === 1 ? '' : 's'} for your campaigns, characters, and directions.`}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -3151,27 +3260,32 @@ export default function MediaLibraryPage() {
                 />
               }
               actions={
-                <button
-                  onClick={() =>
-                    openProjectEditor(
-                      { id: '', title: '', description: '' },
-                      'create',
-                    )
-                  }
-                  className="group inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-[12px] font-semibold text-black transition-all duration-300 hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  New project
-                </button>
+                <>
+                  <SortControl
+                    value={projectSort}
+                    options={projectSortOptions}
+                    onChange={setProjectSort}
+                  />
+                  <button
+                    onClick={() =>
+                      openProjectEditor(
+                        { id: '', title: '', description: '' },
+                        'create',
+                      )
+                    }
+                    className="group inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-[12px] font-semibold text-black transition-all duration-300 hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    New project
+                  </button>
+                </>
               }
             />
 
-            <ProjectHighlightsStrip items={projectHighlights} />
-
-            {filteredProjects.length ? (
+            {sortedProjects.length ? (
               activeView === 'grid' ? (
                 <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {filteredProjects.map((project) => {
+                  {pagedProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0] ?? null
                     const setCount = projectGroupCounts.get(project.id) ?? 0
@@ -3233,10 +3347,10 @@ export default function MediaLibraryPage() {
                                   <Folder className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
                                 </div>
                                 <div className="mt-4 text-[13px] font-semibold text-zinc-300 transition-colors group-hover:text-white">
-                                  Empty project shell
+                                  Empty project
                                 </div>
                                 <div className="mt-1.5 max-w-[14rem] text-[11px] leading-5 text-zinc-500">
-                                  Hold a destination ready before the first run starts.
+                                  Waiting for the first image set.
                                 </div>
                               </Link>
                             )}
@@ -3271,8 +3385,8 @@ export default function MediaLibraryPage() {
                           <div className="mt-1 line-clamp-2 text-[12.5px] leading-6 text-zinc-500">
                             {project.description?.trim() ||
                               (hasAssets
-                                ? 'A working container for related image sets, prompt branches, and final picks.'
-                                : 'Use this as a ready-made slot for the next concept, client round, or moodboard thread.')}
+                                ? 'Keep related selects together.'
+                                : 'A fresh space for a new direction.')}
                           </div>
                         </div>
                         <div className="mt-4 flex items-end justify-between gap-3">
@@ -3306,7 +3420,7 @@ export default function MediaLibraryPage() {
                 </section>
               ) : (
                 <section className="space-y-2 pt-2">
-                  {filteredProjects.map((project) => {
+                  {pagedProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0] ?? null
                     const setCount = projectGroupCounts.get(project.id) ?? 0
@@ -3353,8 +3467,8 @@ export default function MediaLibraryPage() {
                           <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-zinc-500">
                             {project.description?.trim() ||
                               (hasAssets
-                                ? 'Grouped image sets, prompt branches, and final picks.'
-                                : 'An empty project shell ready for the next run.')}
+                                ? 'Keep related selects together.'
+                                : 'A fresh space for a new direction.')}
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-600">
                             <span>
@@ -3414,8 +3528,7 @@ export default function MediaLibraryPage() {
                   No projects yet
                 </h3>
                 <p className="relative mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-zinc-500 transition-colors group-hover:text-zinc-400">
-                  Projects keep related image sets together. Create one when you
-                  want a dedicated space for a campaign, concept, or series.
+                  Start a named space for a campaign, character, or direction.
                 </p>
                 <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
                   <button
@@ -3441,6 +3554,12 @@ export default function MediaLibraryPage() {
                 </div>
               </section>
             )}
+
+            <PaginationControls
+              page={projectPage}
+              totalPages={projectTotalPages}
+              onPageChange={setProjectPage}
+            />
           </>
         ) : null}
 
@@ -3594,7 +3713,6 @@ export default function MediaLibraryPage() {
                               <div className="mt-2 line-clamp-2 text-[12px] leading-6 text-zinc-500">
                                 {post.prompt || favoritePostTitle(post)}
                               </div>
-                              <OpenDetailsHint className="mt-2" />
                             </div>
                           </div>
                         </button>
@@ -3673,7 +3791,6 @@ export default function MediaLibraryPage() {
                                   ))}
                                 </div>
                               ) : null}
-                              <OpenDetailsHint className="mt-2" />
                             </div>
                           </button>
 
@@ -3969,27 +4086,6 @@ export default function MediaLibraryPage() {
         ) : null}
       </AppPage>
 
-      {section === 'images' && passiveNotice ? (
-        <div className="fixed inset-x-0 bottom-5 z-[70] flex justify-center px-4 animate-[slideUp_0.35s_ease-out]">
-          <div
-            className={`pointer-events-auto flex max-w-xl items-center gap-3 rounded-2xl border px-5 py-3 text-[12px] leading-5 text-white/90 shadow-[0_16px_48px_rgba(0,0,0,0.45)] backdrop-blur-2xl ${
-              passiveNotice.tone === 'warning'
-                ? 'border-amber-400/20 bg-[#1a130a]/85'
-                : 'border-rose-400/20 bg-[#1a0d11]/85'
-            }`}
-          >
-            <span className="flex-1">{passiveNotice.message}</span>
-            <button
-              onClick={() => setPassiveNotice(null)}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-              title="Dismiss"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <ConfirmDialog
         state={confirmState}
         busy={isBusy || deleteProjectMutation.isPending}
@@ -4107,9 +4203,10 @@ export default function MediaLibraryPage() {
         onMove={() => {
           if (!previewState) return
           setMoveState({
-            postId: previewState.group.id,
+            postIds: [previewState.group.id],
             currentProjectId: previewState.group.projectId,
             title: previewState.group.title,
+            count: 1,
           })
           setPreviewState(null)
         }}
@@ -4157,7 +4254,7 @@ export default function MediaLibraryPage() {
         onClose={() => setMoveState(null)}
         onMove={async (projectId) => {
           if (!moveState) return
-          await handleMoveGroup(moveState.postId, projectId, moveState.title)
+          await handleMoveGroups(moveState.postIds, projectId, moveState.title)
           setMoveState(null)
         }}
       />

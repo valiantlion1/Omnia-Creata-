@@ -249,6 +249,25 @@ export type GenerationOutput = {
   variation_index: number
 }
 
+export type GenerationSlotStatus =
+  | 'queued'
+  | 'claimed'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'blocked'
+  | 'cancelled'
+  | 'timed_out'
+
+export type GenerationSlot = {
+  slot_index: number
+  slot_status: GenerationSlotStatus
+  moderation_outcome: 'allowed' | 'adapted' | 'blocked' | 'reviewed'
+  error_code: string | null
+  refund_state: 'pending' | 'reserved' | 'committed' | 'refunded'
+  output: GenerationOutput | null
+}
+
 export type GenerationPricingLane = 'draft' | 'standard' | 'final' | 'fallback' | 'degraded'
 export type EstimatedCostSource = 'provider_quote' | 'catalog_fallback'
 
@@ -257,6 +276,7 @@ export type Generation = {
   title: string
   display_title?: string
   status: JobStatus
+  session_status?: string
   library_state?: 'generating' | 'ready' | 'failed' | 'blocked'
   project_id: string
   provider: string
@@ -276,6 +296,34 @@ export type Generation = {
   credit_status?: string | null
   output_count: number
   outputs: GenerationOutput[]
+  slots?: GenerationSlot[]
+  settlement_summary?: {
+    requested_slots: number
+    produced_slots: number
+    committed_slots: number
+    refunded_slots: number
+    blocked_slots: number
+    failed_slots: number
+    reserved_credits: number
+    committed_credits: number
+    refunded_credits: number
+    charge_state: string | null
+  }
+  moderation_summary?: {
+    outcome: 'allowed' | 'adapted' | 'blocked' | 'reviewed'
+    decision: string
+    rewrite_applied: boolean
+    review_routed: boolean
+    allowed_slots: number
+    blocked_slots: number
+    adapted_slots: number
+  }
+  project_assignment_state?: {
+    project_id: string
+    system_managed: boolean | null
+    surface: ProjectSurface | null
+    assignment_mode: 'user_project' | 'system_draft' | 'unknown'
+  }
   error: string | null
   error_code?: string | null
   attempt_count?: number
@@ -658,6 +706,12 @@ export type StyleCatalogEntry = {
   favorite: boolean
 }
 
+type PagedQuery = {
+  limit?: number
+  offset?: number
+  sort?: string
+}
+
 export type StylesPayload = {
   catalog: StyleCatalogEntry[]
   my_styles: StudioStyle[]
@@ -1031,7 +1085,16 @@ export const studioApi = {
         plan,
       }),
     }),
-  listProjects: () => apiFetch<{ projects: Project[] }>('/projects'),
+  listProjects: (params?: PagedQuery & { surface?: ProjectSurface; include_system_managed?: boolean }) => {
+    const search = new URLSearchParams()
+    if (params?.surface) search.set('surface', params.surface)
+    if (params?.include_system_managed) search.set('include_system_managed', 'true')
+    if (typeof params?.limit === 'number') search.set('limit', String(params.limit))
+    if (typeof params?.offset === 'number') search.set('offset', String(params.offset))
+    if (params?.sort) search.set('sort', params.sort)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return apiFetch<{ projects: Project[]; total: number; limit: number; offset: number }>(`/projects${suffix}`)
+  },
   createProject: (payload: { title: string; description?: string; surface?: ProjectSurface }) =>
     apiFetch<Project>('/projects', { method: 'POST', body: JSON.stringify(payload) }),
   getProject: (projectId: string) => apiFetch<{ project: Project; recent_generations: Generation[]; recent_assets: MediaAsset[] }>(`/projects/${projectId}`),
@@ -1078,8 +1141,15 @@ export const studioApi = {
       method: 'PATCH',
       body: JSON.stringify({ feedback }),
     }),
-  listGenerations: (projectId?: string) =>
-    apiFetch<{ generations: Generation[] }>(projectId ? `/generations?project_id=${encodeURIComponent(projectId)}` : '/generations'),
+  listGenerations: (projectId?: string, params?: PagedQuery) => {
+    const search = new URLSearchParams()
+    if (projectId) search.set('project_id', projectId)
+    if (typeof params?.limit === 'number') search.set('limit', String(params.limit))
+    if (typeof params?.offset === 'number') search.set('offset', String(params.offset))
+    if (params?.sort) search.set('sort', params.sort)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return apiFetch<{ generations: Generation[]; total: number; limit: number; offset: number }>(`/generations${suffix}`)
+  },
   createGeneration: (payload: {
     project_id: string
     prompt: string
@@ -1097,12 +1167,15 @@ export const studioApi = {
   getGeneration: (generationId: string) => apiFetch<Generation>(`/generations/${generationId}`),
   deleteGeneration: (generationId: string) =>
     apiFetch<{ generation_id: string; status: string }>(`/generations/${generationId}`, { method: 'DELETE' }),
-  listAssets: (projectId?: string, includeDeleted = false) => {
-    const params = new URLSearchParams()
-    if (projectId) params.set('project_id', projectId)
-    if (includeDeleted) params.set('include_deleted', 'true')
-    const suffix = params.toString() ? `?${params.toString()}` : ''
-    return apiFetch<{ assets: MediaAsset[] }>(`/assets${suffix}`)
+  listAssets: (projectId?: string, includeDeleted = false, query?: PagedQuery) => {
+    const search = new URLSearchParams()
+    if (projectId) search.set('project_id', projectId)
+    if (includeDeleted) search.set('include_deleted', 'true')
+    if (typeof query?.limit === 'number') search.set('limit', String(query.limit))
+    if (typeof query?.offset === 'number') search.set('offset', String(query.offset))
+    if (query?.sort) search.set('sort', query.sort)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return apiFetch<{ assets: MediaAsset[]; total: number; limit: number; offset: number }>(`/assets${suffix}`)
   },
   importAsset: (payload: { project_id: string; data_url: string; title: string }) =>
     apiFetch<MediaAsset>('/assets/import', { method: 'POST', body: JSON.stringify(payload) }),

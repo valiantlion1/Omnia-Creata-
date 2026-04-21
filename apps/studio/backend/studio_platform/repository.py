@@ -8,11 +8,10 @@ from pydantic import BaseModel
 
 from .conversation_ops import filter_conversation_messages, filter_conversations
 from .generation_admission_ops import (
-    count_incomplete_generations_for_identity,
+    INCOMPLETE_GENERATION_STATUSES,
     count_recent_generation_requests_for_identity,
     has_duplicate_incomplete_generation,
 )
-from .generation_ops import count_incomplete_generations
 from .models import (
     BillingWebhookReceipt,
     ChatConversation,
@@ -83,6 +82,9 @@ class StudioPersistence(Protocol):
     async def get_model_fresh(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None: ...
     async def list_models(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]: ...
     async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]: ...
+    async def count_generations_with_statuses(self, statuses: set[JobStatus]) -> int: ...
+    async def count_generations_with_statuses_for_identity(self, identity_id: str, statuses: set[JobStatus]) -> int: ...
+    async def mutate_generation(self, job_id: str, callback: Callable[[GenerationJob], bool]) -> GenerationJob | None: ...
     async def mutate(self, callback): ...
     async def describe(self) -> dict[str, Any]: ...
 
@@ -126,6 +128,15 @@ class StudioRepository:
 
     async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
         return await self._persistence.list_models_fresh(collection, model_type)
+
+    async def count_generations_with_statuses(self, statuses: set[JobStatus]) -> int:
+        return await self._persistence.count_generations_with_statuses(statuses)
+
+    async def count_generations_with_statuses_for_identity(self, identity_id: str, statuses: set[JobStatus]) -> int:
+        return await self._persistence.count_generations_with_statuses_for_identity(identity_id, statuses)
+
+    async def mutate_generation(self, job_id: str, callback: Callable[[GenerationJob], bool]) -> GenerationJob | None:
+        return await self._persistence.mutate_generation(job_id, callback)
 
     async def mutate(self, callback):
         return await self._persistence.mutate(callback)
@@ -482,13 +493,13 @@ class StudioRepository:
         return await self.read(query)
 
     async def count_incomplete_generations(self) -> int:
-        return await self.read(count_incomplete_generations)
+        return await self.count_generations_with_statuses(set(INCOMPLETE_GENERATION_STATUSES))
 
     async def count_incomplete_generations_for_identity(self, identity_id: str) -> int:
-        def query(state: StudioState) -> int:
-            return count_incomplete_generations_for_identity(state, identity_id)
-
-        return await self.read(query)
+        return await self.count_generations_with_statuses_for_identity(
+            identity_id,
+            set(INCOMPLETE_GENERATION_STATUSES),
+        )
 
     async def count_recent_generation_requests_for_identity(self, identity_id: str, *, since: datetime) -> int:
         def query(state: StudioState) -> int:

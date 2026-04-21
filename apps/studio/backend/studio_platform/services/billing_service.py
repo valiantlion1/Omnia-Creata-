@@ -20,6 +20,7 @@ from ..billing_ops import (
     apply_demo_checkout,
     apply_paddle_webhook_event,
     build_billing_summary,
+    build_refund_policy_summary,
     build_paddle_checkout_url,
     build_paddle_webhook_receipt,
     checkout_catalog_kind_to_plan,
@@ -83,6 +84,20 @@ class BillingService:
         identity = await self.service.get_identity(identity_id)
         billing_state = await self._resolve_billing_state_for_identity(identity)
         ledger = await self.service.store.list_credit_entries_for_identity(identity_id)
+        billing_context = await self.service.store.read(
+            lambda state: {
+                "generation_jobs": [
+                    job.model_copy(deep=True)
+                    for job in state.generations.values()
+                    if job.identity_id == identity_id
+                ],
+                "billing_receipts": [
+                    receipt.model_copy(deep=True)
+                    for receipt in state.billing_webhook_receipts.values()
+                    if receipt.identity_id == identity_id
+                ],
+            }
+        )
         accessible_models = [
             model
             for model in await self.service.list_models_for_identity(identity)
@@ -103,6 +118,14 @@ class BillingService:
                 billing_state=billing_state,
                 models=accessible_models,
                 providers=self.service.providers,
+            ),
+            refund_policy=build_refund_policy_summary(
+                identity=identity,
+                ledger_entries=ledger,
+                billing_receipts=billing_context["billing_receipts"],
+                generation_jobs=billing_context["generation_jobs"],
+                now=utc_now(),
+                contact_email=mailer.sender,
             ),
         )
 

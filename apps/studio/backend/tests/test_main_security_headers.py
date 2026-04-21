@@ -183,3 +183,22 @@ def test_request_context_middleware_binds_request_id_contextvar(_restore_securit
     assert response.status_code == 200
     assert response.json()["request_id"] == "studio-context-test-1234"
     assert response.headers["X-Request-ID"] == "studio-context-test-1234"
+
+
+def test_cors_preflight_allows_studio_display_mode_header(_restore_security_header_settings):
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_api_docs = False
+
+    with TestClient(app) as client:
+        response = client.options(
+            "/v1/auth/me",
+            headers={
+                "Origin": "http://127.0.0.1:5173",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "content-type,x-omnia-client-display-mode",
+            },
+        )
+
+    assert response.status_code == 200
+    allowed_headers = response.headers["Access-Control-Allow-Headers"].lower()
+    assert "x-omnia-client-display-mode" in allowed_headers

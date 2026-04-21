@@ -374,6 +374,116 @@ def consume_credits_locked(identity: OmniaIdentity, amount: int) -> None:
     identity.extra_credits = max(identity.extra_credits - remainder, 0)
 
 
+def _generation_reserve_ledger_key(job_id: str) -> str:
+    return f"generation_reserve_{job_id}"
+
+
+def _generation_spend_ledger_key(job_id: str) -> str:
+    return f"generation_spend_{job_id}"
+
+
+def _generation_release_ledger_key(job_id: str) -> str:
+    return f"generation_release_{job_id}"
+
+
+def _write_generation_credit_event_locked(
+    *,
+    state: StudioState,
+    ledger_key: str,
+    identity_id: str,
+    amount: int,
+    entry_type: CreditEntryType,
+    description: str,
+    now: datetime,
+    job_id: str,
+    hold_amount: Optional[int] = None,
+    final_credit_cost: Optional[int] = None,
+    job_credit_status: Optional[str] = None,
+    provider_name: Optional[str] = None,
+    provider_cost_usd: Optional[float] = None,
+    credit_charge_policy: Optional[str] = None,
+) -> None:
+    if ledger_key in state.credit_ledger:
+        return
+    state.credit_ledger[ledger_key] = CreditLedgerEntry(
+        identity_id=identity_id,
+        amount=amount,
+        entry_type=entry_type,
+        description=description,
+        created_at=now,
+        job_id=job_id,
+        hold_amount=hold_amount,
+        final_credit_cost=final_credit_cost,
+        job_credit_status=job_credit_status,
+        provider_name=provider_name,
+        provider_cost_usd=round(float(provider_cost_usd), 6) if provider_cost_usd is not None else None,
+        credit_charge_policy=credit_charge_policy,
+    )
+
+
+def record_generation_reservation_locked(
+    *,
+    state: StudioState,
+    job: GenerationJob,
+    now: datetime,
+) -> None:
+    hold_amount = max(int(job.reserved_credit_cost or 0), 0)
+    if hold_amount <= 0:
+        return
+    _write_generation_credit_event_locked(
+        state=state,
+        ledger_key=_generation_reserve_ledger_key(job.id),
+        identity_id=job.identity_id,
+        amount=0,
+        entry_type=CreditEntryType.GENERATION_RESERVE,
+        description=f"Reserved {hold_amount} credits for {job.model} generation",
+        now=now,
+        job_id=job.id,
+        hold_amount=hold_amount,
+        final_credit_cost=job.final_credit_cost,
+        job_credit_status="reserved",
+        provider_name=job.provider,
+        provider_cost_usd=job.actual_cost_usd,
+        credit_charge_policy=job.credit_charge_policy,
+    )
+
+
+def record_generation_release_locked(
+    *,
+    state: StudioState,
+    job: GenerationJob,
+    now: datetime,
+    description: str,
+    hold_amount: Optional[int] = None,
+) -> None:
+    release_amount = max(
+        int(
+            hold_amount
+            if hold_amount is not None
+            else max(int(job.reserved_credit_cost or 0), 0) - max(int(job.final_credit_cost or 0), 0)
+        ),
+        0,
+    )
+    if release_amount <= 0:
+        return
+    _write_generation_credit_event_locked(
+        state=state,
+        ledger_key=_generation_release_ledger_key(job.id),
+        identity_id=job.identity_id,
+        amount=0,
+        entry_type=CreditEntryType.GENERATION_RELEASE,
+        description=description,
+        now=now,
+        job_id=job.id,
+        hold_amount=release_amount,
+        final_credit_cost=job.final_credit_cost,
+        job_credit_status=job.credit_status,
+        provider_name=job.provider,
+        provider_cost_usd=job.actual_cost_usd,
+        credit_charge_policy=job.credit_charge_policy,
+    )
+
+
 def apply_generation_status_update(
     *,
     state: StudioState,
@@ -467,6 +577,12 @@ def apply_completed_generation_to_state(
     now: datetime,
 ) -> None:
     current_job = state.generations[job_id]
+    if (
+        current_job.status == JobStatus.SUCCEEDED
+        and current_job.completed_at is not None
+        and current_job.final_credit_cost is not None
+    ):
+        return
     current_job.status = JobStatus.SUCCEEDED
     current_job.provider = provider_name or current_job.provider
     current_job.provider_rollout_tier = provider_rollout_tier or current_job.provider_rollout_tier
@@ -535,15 +651,34 @@ def apply_completed_generation_to_state(
         created_at=current_job.created_at,
         updated_at=now,
     )
-    if current_job.final_credit_cost and current_job.final_credit_cost > 0:
+    spend_ledger_key = _generation_spend_ledger_key(current_job.id)
+    release_amount = max(current_job.reserved_credit_cost - current_job.final_credit_cost, 0)
+    if current_job.final_credit_cost and current_job.final_credit_cost > 0 and spend_ledger_key not in state.credit_ledger:
         consume_credits_locked(identity, current_job.final_credit_cost)
     identity.updated_at = now
     state.identities[identity.id] = identity
     if current_job.final_credit_cost and current_job.final_credit_cost > 0:
-        state.credit_ledger[f"spend_{current_job.id}"] = CreditLedgerEntry(
+        _write_generation_credit_event_locked(
+            state=state,
+            ledger_key=spend_ledger_key,
             identity_id=identity.id,
             amount=-current_job.final_credit_cost,
             entry_type=CreditEntryType.GENERATION_SPEND,
             description=f"{current_job.model} image generation",
+            now=now,
             job_id=current_job.id,
+            hold_amount=current_job.reserved_credit_cost,
+            final_credit_cost=current_job.final_credit_cost,
+            job_credit_status=current_job.credit_status,
+            provider_name=current_job.provider,
+            provider_cost_usd=current_job.actual_cost_usd,
+            credit_charge_policy=current_job.credit_charge_policy,
+        )
+    if release_amount > 0:
+        record_generation_release_locked(
+            state=state,
+            job=current_job,
+            now=now,
+            description=f"Released {release_amount} reserved credits after final settlement.",
+            hold_amount=release_amount,
         )

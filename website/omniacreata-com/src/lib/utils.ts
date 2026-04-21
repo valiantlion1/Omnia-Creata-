@@ -1,11 +1,23 @@
 import { isLocale } from "@/i18n/config";
 
+export const STUDIO_PREVIEW_URL =
+  process.env.NEXT_PUBLIC_STUDIO_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://127.0.0.1:5173"
+    : "");
+
+export const STUDIO_PREVIEW_AVAILABLE = Boolean(STUDIO_PREVIEW_URL);
+
 export function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
 export function absoluteUrl(path = "/") {
   return new URL(path, "https://omniacreata.com").toString();
+}
+
+export function studioUrl(path = "/") {
+  return new URL(path, STUDIO_PREVIEW_URL || absoluteUrl("/")).toString();
 }
 
 export function withLocalePrefix(locale: string, href: string) {
@@ -27,4 +39,26 @@ export function withLocalePrefix(locale: string, href: string) {
   }
 
   return `/${locale}${pathname}${hash}`;
+}
+
+export function studioPageHref(locale: string) {
+  return withLocalePrefix(locale, "/products/omnia-creata-studio");
+}
+
+export function studioPrimaryHref(locale: string) {
+  return STUDIO_PREVIEW_AVAILABLE ? studioUrl("/") : studioPageHref(locale);
+}
+
+export function studioPrimaryLabel() {
+  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "See Studio";
+}
+
+export function studioAccessHref(locale: string) {
+  return STUDIO_PREVIEW_AVAILABLE
+    ? studioUrl("/")
+    : `${withLocalePrefix(locale, "/contact")}?intent=studio_preview`;
+}
+
+export function studioAccessLabel() {
+  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "Contact us";
 }

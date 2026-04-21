@@ -36,7 +36,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Type, TypeVar
+from typing import Any, Callable, Type, TypeVar
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -45,7 +45,7 @@ from pydantic import BaseModel
 from config.env import reveal_secret_with_audit
 from config.feature_flags import FEATURE_FLAGS, FLAG_CIRCUIT_BREAKER_ENABLED
 
-from .models import StudioState
+from .models import GenerationJob, JobStatus, StudioState
 from .resilience import CircuitBreaker, CircuitOpenError, describe_breaker
 from .store_schema import (
     POSTGRES_METADATA_TABLE,
@@ -78,6 +78,28 @@ def _utc_now_iso() -> str:
 def _count_state_records(state: StudioState) -> int:
     payload = state.model_dump(mode="json")
     return sum(len(payload.get(collection, {})) for collection in STATE_COLLECTIONS)
+
+
+def _normalize_generation_status_values(statuses: set[JobStatus]) -> tuple[str, ...]:
+    return tuple(sorted({JobStatus.coerce(status).value for status in statuses}))
+
+
+def _count_generation_jobs_in_state(
+    state: StudioState,
+    *,
+    statuses: tuple[str, ...],
+    identity_id: str | None = None,
+) -> int:
+    if not statuses:
+        return 0
+
+    status_set = set(statuses)
+    return sum(
+        1
+        for job in state.generations.values()
+        if JobStatus.coerce(job.status).value in status_set
+        and (identity_id is None or job.identity_id == identity_id)
+    )
 
 
 def _coerce_pool_budget(value: Any, default: int) -> int:
@@ -312,6 +334,41 @@ class StudioStateStore:
                     items.append(model_type.model_validate(item))
             return items
 
+    async def count_generations_with_statuses(self, statuses: set[JobStatus]) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return _count_generation_jobs_in_state(self._state, statuses=normalized_statuses)
+
+    async def count_generations_with_statuses_for_identity(
+        self,
+        identity_id: str,
+        statuses: set[JobStatus],
+    ) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return _count_generation_jobs_in_state(
+                self._state,
+                statuses=normalized_statuses,
+                identity_id=identity_id,
+            )
+
+    async def mutate_generation(
+        self,
+        job_id: str,
+        callback: Callable[[GenerationJob], bool],
+    ) -> GenerationJob | None:
+        async with self._lock:
+            self._state = self._load_json_state_locked()
+            current_job = self._state.generations.get(job_id)
+            if current_job is None:
+                return None
+            updated_job = current_job.model_copy(deep=True)
+            if not callback(updated_job):
+                return None
+            self._state.generations[job_id] = updated_job
+            await self._save_locked()
+            return updated_job.model_copy(deep=True)
+
     async def mutate(self, callback):
         async with self._lock:
             self._state = self._load_json_state_locked()
@@ -459,6 +516,40 @@ class SqliteStudioStateStore:
     async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
         async with self._lock:
             return await asyncio.to_thread(self._list_models_fresh_sync, collection, model_type)
+
+    async def count_generations_with_statuses(self, statuses: set[JobStatus]) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._count_generations_with_statuses_sync,
+                normalized_statuses,
+            )
+
+    async def count_generations_with_statuses_for_identity(
+        self,
+        identity_id: str,
+        statuses: set[JobStatus],
+    ) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._count_generations_with_statuses_sync,
+                normalized_statuses,
+                identity_id,
+            )
+
+    async def mutate_generation(
+        self,
+        job_id: str,
+        callback: Callable[[GenerationJob], bool],
+    ) -> GenerationJob | None:
+        async with self._lock:
+            updated_job = await asyncio.to_thread(self._mutate_generation_sync, job_id, callback)
+            if updated_job is None:
+                return None
+            self._state.generations[job_id] = updated_job
+            self._last_write_at = _utc_now_iso()
+            return updated_job.model_copy(deep=True)
 
     async def mutate(self, callback):
         async with self._lock:
@@ -624,6 +715,61 @@ class SqliteStudioStateStore:
             for row in rows
         ]
 
+    def _count_generations_with_statuses_sync(
+        self,
+        statuses: tuple[str, ...],
+        identity_id: str | None = None,
+    ) -> int:
+        if not statuses:
+            return 0
+
+        status_placeholders = ", ".join("?" for _ in statuses)
+        conditions = ["collection = ?"]
+        parameters: list[Any] = ["generations"]
+        if identity_id is not None:
+            conditions.append("json_extract(payload, '$.identity_id') = ?")
+            parameters.append(identity_id)
+        conditions.append(f"json_extract(payload, '$.status') IN ({status_placeholders})")
+        parameters.extend(statuses)
+
+        sql = f"""
+            SELECT COUNT(*) AS count
+            FROM records
+            WHERE {' AND '.join(conditions)}
+        """
+        with self._connect() as connection:
+            self._ensure_schema_sync(connection)
+            row = connection.execute(sql, parameters).fetchone()
+        return int(row["count"]) if row is not None else 0
+
+    def _mutate_generation_sync(
+        self,
+        job_id: str,
+        callback: Callable[[GenerationJob], bool],
+    ) -> GenerationJob | None:
+        with self._connect() as connection, connection:
+            self._ensure_schema_sync(connection)
+            row = connection.execute(
+                "SELECT payload FROM records WHERE collection = ? AND model_id = ?",
+                ("generations", job_id),
+            ).fetchone()
+            if row is None:
+                return None
+            current_job = GenerationJob.model_validate(_normalize_loaded_payload(row["payload"]))
+            updated_job = current_job.model_copy(deep=True)
+            if not callback(updated_job):
+                return None
+            payload = json.dumps(updated_job.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":"))
+            connection.execute(
+                """
+                UPDATE records
+                SET payload = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE collection = ? AND model_id = ?
+                """,
+                (payload, "generations", job_id),
+            )
+        return updated_job
+
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")
         rows: list[tuple[str, str, str]] = []
@@ -776,6 +922,40 @@ class PostgresStudioStateStore:
     async def list_models_fresh(self, collection: str, model_type: Type[ModelT]) -> list[ModelT]:
         async with self._lock:
             return await asyncio.to_thread(self._list_models_fresh_sync, collection, model_type)
+
+    async def count_generations_with_statuses(self, statuses: set[JobStatus]) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._count_generations_with_statuses_sync,
+                normalized_statuses,
+            )
+
+    async def count_generations_with_statuses_for_identity(
+        self,
+        identity_id: str,
+        statuses: set[JobStatus],
+    ) -> int:
+        normalized_statuses = _normalize_generation_status_values(statuses)
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._count_generations_with_statuses_sync,
+                normalized_statuses,
+                identity_id,
+            )
+
+    async def mutate_generation(
+        self,
+        job_id: str,
+        callback: Callable[[GenerationJob], bool],
+    ) -> GenerationJob | None:
+        async with self._lock:
+            updated_job = await asyncio.to_thread(self._mutate_generation_sync, job_id, callback)
+            if updated_job is None:
+                return None
+            self._state.generations[job_id] = updated_job
+            self._last_write_at = _utc_now_iso()
+            return updated_job.model_copy(deep=True)
 
     async def mutate(self, callback):
         async with self._lock:
@@ -1040,6 +1220,88 @@ class PostgresStudioStateStore:
         finally:
             self._release_connection(connection)
         return [model_type.model_validate(_normalize_loaded_payload(row[0])) for row in rows]
+
+    def _count_generations_with_statuses_sync(
+        self,
+        statuses: tuple[str, ...],
+        identity_id: str | None = None,
+    ) -> int:
+        if not statuses:
+            return 0
+
+        status_placeholders = ", ".join("%s" for _ in statuses)
+        conditions = ["collection = %s"]
+        parameters: list[Any] = ["generations"]
+        if identity_id is not None:
+            conditions.append("(payload ->> 'identity_id') = %s")
+            parameters.append(identity_id)
+        conditions.append(f"(payload ->> 'status') IN ({status_placeholders})")
+        parameters.extend(statuses)
+
+        connection = self._connect()
+        try:
+            self._ensure_schema_sync(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM {POSTGRES_RECORDS_TABLE}
+                    WHERE {' AND '.join(conditions)}
+                    """,
+                    tuple(parameters),
+                )
+                row = cursor.fetchone()
+        finally:
+            self._release_connection(connection)
+        return int(row[0]) if row is not None else 0
+
+    def _mutate_generation_sync(
+        self,
+        job_id: str,
+        callback: Callable[[GenerationJob], bool],
+    ) -> GenerationJob | None:
+        connection = self._connect()
+        try:
+            self._ensure_schema_sync(connection)
+            self._acquire_write_lock_sync(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT payload
+                    FROM {POSTGRES_RECORDS_TABLE}
+                    WHERE collection = %s AND model_id = %s
+                    FOR UPDATE
+                    """,
+                    ("generations", job_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    connection.rollback()
+                    return None
+                current_job = GenerationJob.model_validate(_normalize_loaded_payload(row[0]))
+                updated_job = current_job.model_copy(deep=True)
+                if not callback(updated_job):
+                    connection.rollback()
+                    return None
+                cursor.execute(
+                    f"""
+                    UPDATE {POSTGRES_RECORDS_TABLE}
+                    SET payload = %s::jsonb, updated_at = NOW()
+                    WHERE collection = %s AND model_id = %s
+                    """,
+                    (
+                        json.dumps(updated_job.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")),
+                        "generations",
+                        job_id,
+                    ),
+                )
+            connection.commit()
+            return updated_job
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            self._release_connection(connection)
 
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")

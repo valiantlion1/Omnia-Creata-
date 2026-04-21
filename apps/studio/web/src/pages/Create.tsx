@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, Dices, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react'
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { useToast } from '@/components/Toast'
+import { useLightbox } from '@/components/Lightbox'
 import {
   getCreativeProfileKey,
   describeGenerationLaneTrust,
@@ -26,9 +27,14 @@ import { usePageVisibility } from '@/lib/usePageVisibility'
 
 const LEGACY_PROMPT_HISTORY_KEY = 'omnia-prompt-history'
 const PROMPT_HISTORY_KEY_PREFIX = 'omnia-prompt-history:'
+const ACTIVE_CREATE_SESSION_KEY_PREFIX = 'omnia-create-active-session:'
 
 function buildPromptHistoryStorageKey(scope: string) {
   return `${PROMPT_HISTORY_KEY_PREFIX}${scope}`
+}
+
+function buildActiveCreateSessionStorageKey(scope: string) {
+  return `${ACTIVE_CREATE_SESSION_KEY_PREFIX}${scope}`
 }
 
 function readPromptHistory(storageKey: string, { allowLegacyFallback = false }: { allowLegacyFallback?: boolean } = {}) {
@@ -66,6 +72,18 @@ function usePromptHistory(storageKey: string, { allowLegacyFallback = false }: {
   }, [storageKey])
 
   return { history, push }
+}
+
+function writeStoredSessionId(storageKey: string, value: string | null) {
+  try {
+    if (value) {
+      localStorage.setItem(storageKey, value)
+      return
+    }
+    localStorage.removeItem(storageKey)
+  } catch {
+    /* noop */
+  }
 }
 
 /* ─── Prompt templates ─────────────────────────────── */
@@ -158,6 +176,7 @@ type GenerationToast = {
   outputCount: number
   projectId: string
   error: string | null
+  errorCode: string | null
   dismissed: boolean
   notice: string | null
 }
@@ -187,11 +206,47 @@ function getToastLabel(status: JobStatus) {
   }
 }
 
+function humanizeGenerationError(error: string | null, errorCode?: string | null) {
+  const normalizedCode = (errorCode ?? '').trim().toLowerCase()
+  const normalizedError = (error ?? '').trim().toLowerCase()
+
+  if (normalizedCode === 'provider_auth' || normalizedError.includes('returned 401') || normalizedError.includes('returned 403')) {
+    return 'This render lane is temporarily unavailable.'
+  }
+  if (normalizedCode === 'provider_timeout') {
+    return 'This render took too long to finish.'
+  }
+  if (normalizedCode === 'provider_network') {
+    return 'The render lane could not be reached.'
+  }
+  if (normalizedCode === 'provider_not_configured') {
+    return 'This render lane is not available right now.'
+  }
+  if (normalizedCode === 'safety_block') {
+    return 'This request could not be rendered under current safety rules.'
+  }
+  if (normalizedCode === 'provider_spend_guardrail') {
+    return 'This render lane is paused until billing is healthy again.'
+  }
+  if (normalizedCode === 'generation_timed_out' || normalizedCode === 'orphaned_job_timeout') {
+    return 'This render stalled before it could finish.'
+  }
+  if (normalizedCode === 'retry_budget_exhausted') {
+    return 'This render failed too many times to finish safely.'
+  }
+  if (normalizedError.includes('pollinations')) {
+    return 'The fallback image lane is unavailable right now.'
+  }
+
+  if (!error) return 'This image could not be created.'
+  return error
+}
+
 function getToastDescription(job: GenerationToast) {
   const normalized = normalizeJobStatus(job.status)
   if (normalized === 'succeeded') return 'Your image is ready! Check your Library.'
   if (normalized === 'running' || normalized === 'queued') return 'Creating your image…'
-  return job.error || 'This image could not be created. Try again?'
+  return humanizeGenerationError(job.error, job.errorCode)
 }
 
 function mapGenerationToToast(generation: Generation, projectId: string): GenerationToast {
@@ -202,6 +257,7 @@ function mapGenerationToToast(generation: Generation, projectId: string): Genera
     outputCount: generation.output_count,
     projectId,
     error: generation.error,
+    errorCode: generation.error_code ?? null,
     dismissed: false,
     notice: null,
   }
@@ -281,8 +337,8 @@ function parseBoundedFloat(value: string | null, fallback: number, min: number, 
 
 export default function CreatePage() {
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const { addToast } = useToast()
+  const { openLightbox } = useLightbox()
   const { projectId: routeProjectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
@@ -314,6 +370,13 @@ export default function CreatePage() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
   const [sharingToastId, setSharingToastId] = useState<string | null>(null)
+  const activeSessionStorageKey = useMemo(() => {
+    if (auth?.identity?.id) {
+      return buildActiveCreateSessionStorageKey(auth.identity.id)
+    }
+    return buildActiveCreateSessionStorageKey('guest-browser')
+  }, [auth?.identity?.id])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const promptHistoryStorageKey = useMemo(() => {
     if (auth?.identity?.id) {
       return buildPromptHistoryStorageKey(auth.identity.id)
@@ -348,6 +411,22 @@ export default function CreatePage() {
     queryFn: () => studioApi.getSettingsBootstrap(),
     enabled: canLoadPrivate,
   })
+  const recentSessionsQuery = useQuery({
+    queryKey: ['generations', 'create', 'history'],
+    queryFn: () => studioApi.listGenerations(undefined, { limit: 12, sort: 'newest' }),
+    enabled: canLoadPrivate,
+    refetchInterval: isPageVisible ? 5000 : false,
+  })
+  const activeSessionQuery = useQuery({
+    queryKey: ['generation', 'create', activeSessionId],
+    queryFn: () => studioApi.getGeneration(activeSessionId ?? ''),
+    enabled: canLoadPrivate && Boolean(activeSessionId),
+    refetchInterval: (query) => {
+      const session = query.state.data as Generation | undefined
+      if (!session || !isPageVisible) return false
+      return isTerminalJobStatus(session.status) ? false : 2500
+    },
+  })
 
   const models = useMemo(
     () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
@@ -357,6 +436,7 @@ export default function CreatePage() {
     () => models.filter((entry) => getCreativeProfileKey(entry.id) !== 'signature'),
     [models],
   )
+  const recentSessions = recentSessionsQuery.data?.generations ?? []
   const creditGuideByModelId = useMemo(
     () =>
       new Map(
@@ -383,6 +463,39 @@ export default function CreatePage() {
     [selectedModel, selectedModelCreditGuide],
   )
   const visibleToasts = useMemo(() => generationToasts.filter((job) => !job.dismissed), [generationToasts])
+  const activeSession = useMemo(() => {
+    if (activeSessionQuery.data) return activeSessionQuery.data
+    if (!activeSessionId) return null
+    return recentSessions.find((session) => session.job_id === activeSessionId) ?? null
+  }, [activeSessionId, activeSessionQuery.data, recentSessions])
+  const historyEntries = useMemo(() => {
+    const seen = new Set<string>()
+    const entries: Array<{ id: string; prompt: string; sessionId: string | null }> = []
+
+    recentSessions.forEach((session) => {
+      const sessionPrompt = session.prompt_snapshot.prompt.trim()
+      if (!sessionPrompt || seen.has(sessionPrompt)) return
+      seen.add(sessionPrompt)
+      entries.push({
+        id: `session:${session.job_id}`,
+        prompt: sessionPrompt,
+        sessionId: session.job_id,
+      })
+    })
+
+    promptHistory.forEach((entry, index) => {
+      const historyPrompt = entry.trim()
+      if (!historyPrompt || seen.has(historyPrompt)) return
+      seen.add(historyPrompt)
+      entries.push({
+        id: `prompt:${index}:${historyPrompt.slice(0, 18)}`,
+        prompt: historyPrompt,
+        sessionId: null,
+      })
+    })
+
+    return entries.slice(0, 12)
+  }, [promptHistory, recentSessions])
   const draftProjectId = settingsQuery.data?.draft_projects?.compose ?? null
   const runningJobs = useMemo(
     () => generationToasts.filter((job) => {
@@ -416,6 +529,16 @@ export default function CreatePage() {
   const requiresChatReference = prefillSource === 'chat' && prefillReferenceMode === 'required'
   const missingRequiredReference = requiresChatReference && !referenceAssetId
   const blockedByCurrentCredits = Boolean(selectedModelCreditGuide && !selectedModelCreditGuide.affordable_now)
+  const estimatedReserve = useMemo(
+    () => selectedModelCreditCost * Math.max(outputCount, 1),
+    [outputCount, selectedModelCreditCost],
+  )
+  const activeSessionSlots = useMemo(
+    () => activeSession?.slots ?? [],
+    [activeSession?.slots],
+  )
+  const hasPreviewSurface = activeSessionSlots.length > 0
+  const previewGridClass = activeSessionSlots.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
 
   /* ─── Effects ─────────────────────────────────── */
 
@@ -496,7 +619,7 @@ export default function CreatePage() {
     const ta = textareaRef.current
     if (!ta) return
     ta.style.height = 'auto'
-    ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
+    ta.style.height = `${Math.min(ta.scrollHeight, 420)}px`
   }, [prompt])
 
   /* ─── Poll running jobs for status ────────────── */
@@ -527,7 +650,12 @@ export default function CreatePage() {
             if (!snapshot) return job
             if (!isTerminalStatus(job.status) && isTerminalStatus(snapshot.status)) invalidate = true
 
-            if (job.status !== snapshot.status || job.outputCount !== snapshot.output_count || job.error !== snapshot.error) {
+            if (
+              job.status !== snapshot.status
+              || job.outputCount !== snapshot.output_count
+              || job.error !== snapshot.error
+              || job.errorCode !== (snapshot.error_code ?? null)
+            ) {
               hasChanges = true
               return {
                 ...job,
@@ -535,6 +663,7 @@ export default function CreatePage() {
                 status: snapshot.status,
                 outputCount: snapshot.output_count,
                 error: snapshot.error,
+                errorCode: snapshot.error_code ?? null,
               }
             }
             return job
@@ -580,6 +709,7 @@ export default function CreatePage() {
     setModelPickerDirection(spaceBelow < estimatedHeight && spaceAbove > spaceBelow ? 'up' : 'down')
   }, [modelPickerOpen, visibleModels])
 
+
   /* ─── Handlers ────────────────────────────────── */
 
   const ensureProjectId = useCallback(async () => {
@@ -600,6 +730,11 @@ export default function CreatePage() {
     return projectPromiseRef.current
   }, [draftProjectId, resolvedProjectId])
 
+  const rememberActiveSession = useCallback((sessionId: string | null) => {
+    setActiveSessionId(sessionId)
+    writeStoredSessionId(activeSessionStorageKey, sessionId)
+  }, [activeSessionStorageKey])
+
   const dismissToast = useCallback((jobId: string) => {
     setGenerationToasts((current) =>
       current
@@ -619,12 +754,8 @@ export default function CreatePage() {
   }, [])
 
   const openToastDestination = useCallback((job: GenerationToast) => {
-    if (job.projectId) {
-      navigate(`/projects/${job.projectId}`)
-      return
-    }
-    navigate('/library/images')
-  }, [navigate])
+    rememberActiveSession(job.id)
+  }, [rememberActiveSession])
 
   const handleCopyProjectShareLink = useCallback(async (job: GenerationToast) => {
     if (!job.projectId) return
@@ -721,6 +852,8 @@ export default function CreatePage() {
         aspect_ratio: aspectRatio,
         output_count: outputCount,
       })
+      queryClient.setQueryData(['generation', 'create', generation.job_id], generation)
+      rememberActiveSession(generation.job_id)
       setGenerationToasts((current) => [mapGenerationToToast(generation, generation.project_id || projectId), ...current.filter((job) => job.id !== generation.job_id)])
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
@@ -785,7 +918,9 @@ export default function CreatePage() {
 
   return (
     <>
-      <AppPage className="max-w-[860px] gap-0 py-6 md:py-10">
+      <AppPage className={`${hasPreviewSurface ? 'max-w-[1600px]' : 'max-w-[1100px]'} gap-0 py-6 md:py-10`}>
+        <div className={hasPreviewSurface ? 'grid gap-8 xl:grid-cols-[minmax(0,0.82fr)_minmax(460px,1.02fr)]' : 'mx-auto max-w-[1000px]'}>
+          <div className="min-w-0">
 
         {/* ── Header ─────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
@@ -807,18 +942,15 @@ export default function CreatePage() {
 
 
         {/* ── Prompt Area ────────────────────────── */}
-        <div className="glass-card overflow-visible p-[2px]">
+        <div className="overflow-visible">
           
           {/* Prompt Box */}
-          <div className="relative z-10 flex flex-col rounded-[18px] bg-[#0c0d12]/40 p-6 pb-14 transition-all duration-500 focus-within:bg-[#0c0d12]/80 focus-within:ring-1 focus-within:ring-white/[0.08] focus-within:shadow-[0_20px_80px_-20px_rgba(255,255,255,0.06)]">
-            
-            {/* Subtle bottom border line */}
-            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
+          <div className="relative z-10 flex flex-col rounded-[36px] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.035),transparent_52%),linear-gradient(180deg,rgba(16,18,25,0.84),rgba(10,12,17,0.76))] px-8 pt-8 pb-6 shadow-[0_28px_90px_rgba(0,0,0,0.24)] transition-all duration-500 focus-within:border-white/[0.12] focus-within:shadow-[0_34px_110px_rgba(0,0,0,0.3)] sm:px-10">
 
             <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
               <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-zinc-400" /> Your idea</span>
               <div className="flex items-center gap-2">
-                {promptHistory.length > 0 && (
+                {historyEntries.length > 0 && (
                   <div className="relative">
                     <button
                       onClick={() => { setShowHistory((v) => !v); setShowTemplates(false) }}
@@ -830,15 +962,28 @@ export default function CreatePage() {
                     </button>
                     {showHistory && (
                       <div className="absolute right-0 top-6 z-50 w-[min(420px,calc(100vw-48px))] overflow-hidden rounded-[18px] border border-white/[0.07] bg-[#0d0e14] shadow-[0_24px_80px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
-                        <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-600">Recent prompts</div>
-                        <div className="max-h-[280px] overflow-y-auto">
-                          {promptHistory.map((entry, i) => (
+                        <div className="max-h-[320px] overflow-y-auto py-2">
+                          {historyEntries.map((entry) => (
                             <button
-                              key={i}
-                              onClick={() => { setPrompt(entry); setShowHistory(false) }}
-                              className="block w-full px-4 py-2.5 text-left text-[13px] leading-5 text-zinc-300 transition hover:bg-white/[0.05] hover:text-white"
+                              key={entry.id}
+                              onClick={() => {
+                                setPrompt(entry.prompt)
+                                if (entry.sessionId) {
+                                  rememberActiveSession(entry.sessionId)
+                                } else {
+                                  rememberActiveSession(null)
+                                }
+                                setShowHistory(false)
+                              }}
+                              className={`block w-full px-4 py-3 text-left transition ${
+                                entry.sessionId && activeSession?.job_id === entry.sessionId
+                                  ? 'bg-white/[0.06]'
+                                  : 'hover:bg-white/[0.05]'
+                              }`}
                             >
-                              <span className="line-clamp-2">{entry}</span>
+                              <span className="line-clamp-2 text-[13px] leading-6 text-zinc-300 transition group-hover:text-white">
+                                {entry.prompt}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -902,12 +1047,12 @@ export default function CreatePage() {
               rows={1}
               disabled={runningJobs > 0}
               placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
-              className={`w-full resize-none bg-transparent text-[1.1rem] md:text-[1.25rem] font-normal leading-[1.6] tracking-[-0.01em] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              style={{ minHeight: '140px' }}
+              className={`w-full resize-none bg-transparent text-[1rem] font-normal leading-[1.68] tracking-[-0.012em] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white md:text-[1.08rem] ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              style={{ minHeight: '260px' }}
             />
 
             {/* ✨ Improve & Random buttons */}
-            <div className="absolute bottom-5 right-6 flex items-center gap-2">
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.05] pt-4">
               <button
                 onClick={() => saveStyleMutation.mutate()}
                 disabled={!prompt.trim() || saveStyleMutation.isPending}
@@ -924,7 +1069,7 @@ export default function CreatePage() {
                   if (improveState !== 'idle') setImproveState('idle')
                 }}
                 title="Random prompt"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.02] text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.02] text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white"
               >
                 <Dices className="h-3.5 w-3.5" />
               </button>
@@ -932,10 +1077,10 @@ export default function CreatePage() {
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
                 title="Refine prompt"
-                className="group flex h-9 items-center gap-1.5 rounded-full bg-[rgb(var(--primary-light)/0.05)] px-4 text-[12px] font-semibold tracking-wide text-[rgb(var(--primary-light))] ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_0_15px_rgba(var(--primary-light),0.1)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[rgb(var(--primary-light)/0.1)] hover:ring-[rgb(var(--primary-light)/0.4)] hover:shadow-[0_0_20px_rgba(var(--primary-light),0.2)] hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                className="group flex h-9 items-center gap-1.5 rounded-full bg-[rgb(var(--primary-light)/0.05)] px-4 text-[12px] font-semibold tracking-wide text-[rgb(var(--primary-light))] ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_0_15px_rgba(var(--primary-light),0.08)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[rgb(var(--primary-light)/0.1)] hover:ring-[rgb(var(--primary-light)/0.35)] hover:shadow-[0_0_20px_rgba(var(--primary-light),0.16)] hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
-                {improveState === 'done' ? 'Refined' : improveState === 'fallback' ? 'Refined' : 'Refine prompt'}
+                {improveState === 'done' ? 'Refined' : improveState === 'fallback' ? 'Polished' : 'Refine prompt'}
               </button>
             </div>
           </div>
@@ -1133,9 +1278,11 @@ export default function CreatePage() {
                 <div className="flex flex-col items-end mr-2">
                   <div className="text-[12px] font-bold text-white tracking-wide flex items-center gap-1.5">
                     <Sparkles className="h-3 w-3 text-[rgb(var(--baseline))]" style={{ color: 'rgb(var(--primary-light))' }} />
-                    {selectedModelCreditCost} Credits
+                    {estimatedReserve} Credits
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Per Image</div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+                    {outputCount} variation{outputCount === 1 ? '' : 's'} reserve
+                  </div>
                 </div>
               )}
               
@@ -1158,19 +1305,123 @@ export default function CreatePage() {
               <div className="text-sm text-amber-200/80">{createError}</div>
             </div>
           ) : null}
-          {improveState === 'done' ? (
-            <div className="border-t border-white/[0.04] px-5 py-3">
-              <div className="text-xs text-emerald-300">✓ Prompt improved</div>
-            </div>
-          ) : null}
         </div>
 
-        {/* ── Shortcut hint ──────────────────────── */}
+          </div>
+
+          {hasPreviewSurface ? (
+          <aside data-testid="create-preview-surface" className="min-w-0 xl:sticky xl:top-24 xl:self-start">
+            <section className="overflow-hidden rounded-[38px] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_48%),linear-gradient(180deg,rgba(17,19,27,0.97),rgba(10,12,17,0.94))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-5">
+              <div className={`grid gap-4 ${previewGridClass}`}>
+                {activeSessionSlots.map((slot) => {
+                  const previewUrl = slot.output?.thumbnail_url ?? slot.output?.url ?? null
+                  const canOpen = Boolean(previewUrl) && slot.slot_status === 'succeeded'
+                  const isSettling = slot.slot_status === 'queued' || slot.slot_status === 'claimed' || slot.slot_status === 'running'
+                  const slotErrorCode = slot.error_code ?? activeSession?.error_code ?? null
+                  const sessionAspectRatio =
+                    (activeSession?.prompt_snapshot.aspect_ratio as keyof typeof aspectPresets | undefined)
+                    ?? aspectRatio
+                  const previewAspectClass = aspectPresets[sessionAspectRatio]?.aspect ?? activeAspect.aspect
+                  const statusBadge =
+                    slot.slot_status === 'blocked'
+                      ? 'Blocked'
+                      : slot.slot_status === 'cancelled'
+                        ? 'Cancelled'
+                        : slot.slot_status === 'timed_out'
+                          ? 'Timed out'
+                          : slot.slot_status === 'failed'
+                            ? (slotErrorCode === 'provider_auth' || slotErrorCode === 'provider_not_configured' ? 'Unavailable' : 'Failed')
+                        : null
+
+                  return (
+                    <button
+                      key={`${activeSession?.job_id ?? 'draft'}:${slot.slot_index}`}
+                      type="button"
+                      disabled={!canOpen}
+                      onClick={() => {
+                        if (!canOpen || !previewUrl) return
+                        openLightbox(previewUrl, `Variation ${slot.slot_index + 1}`, {
+                          title: activeSession?.display_title || activeSession?.title || `Variation ${slot.slot_index + 1}`,
+                          prompt: activeSession?.prompt_snapshot.prompt ?? prompt,
+                          authorName: auth?.identity.display_name ?? 'You',
+                          authorUsername: auth?.identity.username ?? 'creator',
+                          aspectRatio: activeSession?.prompt_snapshot.aspect_ratio ?? aspectRatio,
+                          model: getStudioModelDisplayName(
+                            activeSession?.model ?? selectedModel?.id,
+                            activeSession?.display_model_label ?? selectedModel?.label,
+                          ),
+                        })
+                      }}
+                      className={`group relative overflow-hidden rounded-[30px] border border-white/[0.05] bg-[#0f1118] text-left transition-all duration-500 ${
+                        canOpen
+                          ? 'cursor-zoom-in hover:-translate-y-0.5 hover:border-white/[0.14]'
+                          : 'cursor-default'
+                      }`}
+                    >
+                      <div className={`relative ${previewAspectClass} overflow-hidden bg-[#11141c]`}>
+                        {previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt={`Variation ${slot.slot_index + 1}`}
+                            className={`h-full w-full object-cover transition duration-700 ${
+                              slot.slot_status === 'succeeded'
+                                ? 'animate-gen-reveal group-hover:scale-[1.025]'
+                                : 'scale-[1.04] blur-[18px] saturate-75 brightness-[0.72]'
+                            }`}
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.08),transparent_26%),linear-gradient(135deg,#171a23_0%,#202534_45%,#0f1219_100%)]" />
+                        )}
+
+                        <div className="absolute inset-0 create-preview-shell" />
+                        {isSettling ? (
+                          <>
+                            <div className="create-preview-cloud create-preview-cloud-a" />
+                            <div className="create-preview-cloud create-preview-cloud-b" />
+                            <div className="create-preview-sheen" />
+                            <div className="create-preview-orbit-ring" />
+                            <div className="create-preview-orbit-ring create-preview-orbit-ring-delayed" />
+                            <div className="create-preview-orbit">
+                              <div className="create-preview-orbit-dot" />
+                            </div>
+                            <div className="create-preview-core" />
+                          </>
+                        ) : null}
+                        {statusBadge && !previewUrl ? (
+                          <div className="absolute inset-0 create-preview-failure-veil" />
+                        ) : null}
+
+                        <div className="absolute left-3 top-3 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white/75 backdrop-blur-md">
+                          {String(slot.slot_index + 1).padStart(2, '0')}
+                        </div>
+
+                        {isSettling ? (
+                          <div className="absolute right-3 top-3 flex h-2.5 w-2.5 rounded-full bg-white/70 shadow-[0_0_14px_rgba(255,255,255,0.35)] animate-pulse" />
+                        ) : null}
+
+                        {statusBadge ? (
+                          <div className="absolute inset-x-0 bottom-3 flex justify-center">
+                            <span className="rounded-full bg-black/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70 backdrop-blur-md">
+                              {statusBadge}
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          </aside>
+          ) : null}
+        </div>
       </AppPage>
 
       {/* ── Toast stack ──────────────────────────── */}
       {visibleToasts.length ? (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[320px] max-w-[calc(100vw-20px)] flex-col gap-2.5">
+        <div className="pointer-events-none fixed bottom-4 right-4 z-50 hidden w-[320px] max-w-[calc(100vw-20px)] flex-col gap-2.5">
           {visibleToasts.slice(0, 5).map((job) => (
             <div
               key={job.id}
@@ -1222,7 +1473,7 @@ export default function CreatePage() {
                     }}
                     className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-white/[0.06] hover:text-white"
                   >
-                    {job.projectId ? 'Open project' : 'Open library'}
+                    View session
                   </button>
                   {normalizeJobStatus(job.status) === 'succeeded' && job.projectId && auth?.plan.share_links ? (
                     <button

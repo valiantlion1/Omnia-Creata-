@@ -27,12 +27,28 @@ class ProjectService:
         surface: Optional[Literal["compose", "chat"]] = None,
         *,
         include_system_managed: bool = False,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "updated",
     ) -> list[Project]:
-        return await self.service.store.list_projects_for_identity(
+        projects = await self.service.store.list_projects_for_identity(
             identity_id,
             surface=surface,
             include_system_managed=include_system_managed,
         )
+        normalized_sort = (sort or "updated").strip().lower()
+        if normalized_sort == "name":
+            projects = sorted(projects, key=lambda item: (item.title or "").strip().lower())
+        elif normalized_sort == "oldest":
+            projects = sorted(projects, key=lambda item: item.created_at)
+        elif normalized_sort == "newest":
+            projects = sorted(projects, key=lambda item: item.created_at, reverse=True)
+        else:
+            projects = sorted(projects, key=lambda item: item.updated_at, reverse=True)
+        start = max(int(offset or 0), 0)
+        if limit is None:
+            return projects[start:]
+        return projects[start : start + max(int(limit or 0), 0)]
 
     async def create_project(
         self,

@@ -12,7 +12,9 @@ from .identity import IdentityPlan
 
 class CreditEntryType(str, Enum):
     MONTHLY_GRANT = "monthly_grant"
+    GENERATION_RESERVE = "generation_reserve"
     GENERATION_SPEND = "generation_spend"
+    GENERATION_RELEASE = "generation_release"
     TOP_UP = "top_up"
     SUBSCRIPTION = "subscription"
     REFUND = "refund"
@@ -46,6 +48,12 @@ class CreditLedgerEntry(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     job_id: Optional[str] = None
     checkout_kind: Optional[CheckoutKind] = None
+    hold_amount: Optional[int] = None
+    final_credit_cost: Optional[int] = None
+    job_credit_status: Optional[str] = None
+    provider_name: Optional[str] = None
+    provider_cost_usd: Optional[float] = None
+    credit_charge_policy: Optional[str] = None
 
 
 class BillingWebhookReceipt(BaseModel):

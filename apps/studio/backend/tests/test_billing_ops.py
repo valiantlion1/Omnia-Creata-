@@ -12,7 +12,10 @@ from studio_platform.billing_ops import (
     checkout_catalog_kind_to_plan,
     resolve_billing_state,
 )
-from studio_platform.generation_ops import consume_credits_locked
+from studio_platform.generation_ops import (
+    apply_completed_generation_to_state,
+    consume_credits_locked,
+)
 from studio_platform.models import (
     CheckoutKind,
     CreditLedgerEntry,
@@ -25,6 +28,7 @@ from studio_platform.models import (
     OmniaIdentity,
     Project,
     PromptSnapshot,
+    StudioState,
     StudioWorkspace,
     SubscriptionStatus,
     utc_now,
@@ -350,6 +354,9 @@ async def test_billing_summary_reports_reserved_and_available_credits(
         assert draft_guide["creative_profile"]["id"] == "fast"
         assert draft_guide["creative_profile"]["badge"] == "Quick starts"
         assert draft_guide["render_experience"]["state"] == "fallback"
+        assert summary["refund_policy"]["request_window_days"] == 14
+        assert summary["refund_policy"]["automatic_credit_reversal_supported"] is True
+        assert summary["refund_policy"]["recent_cases"] == []
     finally:
         await service.shutdown()
 
@@ -713,8 +720,275 @@ async def test_failed_generation_releases_reservation_without_spend(
         assert updated_identity.monthly_credits_remaining == 0
         assert updated_identity.extra_credits == 60
         assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in snapshot.credit_ledger.values())
+        release_entries = [
+            entry
+            for entry in snapshot.credit_ledger.values()
+            if entry.entry_type == CreditEntryType.GENERATION_RELEASE
+        ]
+        assert len(release_entries) == 1
+        assert release_entries[0].amount == 0
+        assert release_entries[0].hold_amount == failed.reserved_credit_cost == 3
+        assert release_entries[0].job_id == failed.id
     finally:
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_billing_summary_surfaces_recent_automatic_credit_reversal_case(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(name="pollinations", rollout_tier="standard", billable=False),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=37,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        async def fail_execute_job(_: GenerationJob) -> ExecutedGenerationBatch:
+            raise RuntimeError("provider exploded")
+
+        service.generation_runtime.execute_job = fail_execute_job  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        summary = await service.billing_summary(identity.id)
+        refund_policy = summary["refund_policy"]
+
+        assert refund_policy["automatic_resolution_count"] == 1
+        assert refund_policy["manual_review_count"] == 0
+        recent_case = refund_policy["recent_cases"][0]
+        assert recent_case["kind"] == "generation_credit_reversal"
+        assert recent_case["status"] == "automatic_resolved"
+        assert recent_case["job_id"] == job.id
+        assert recent_case["hold_amount"] == 3
+    finally:
+        await service.shutdown()
+
+
+def test_apply_completed_generation_is_idempotent_for_duplicate_success_callbacks() -> None:
+    now = utc_now()
+    identity = OmniaIdentity(
+        id="user-idempotent",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=12,
+        monthly_credit_allowance=1200,
+        extra_credits=8,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    job = GenerationJob(
+        id="job-idempotent",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Managed run",
+        status=JobStatus.RUNNING,
+        provider="fal",
+        model="realvis-xl",
+        prompt_snapshot=_prompt_snapshot("luxury portrait"),
+        estimated_cost=0.04,
+        credit_cost=12,
+        reserved_credit_cost=12,
+        credit_status="reserved",
+        started_at=now,
+    )
+    asset = MediaAsset(
+        id="asset-job-idempotent",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title=job.title,
+        prompt=job.prompt_snapshot.prompt,
+        url="/media/job-idempotent.png",
+        thumbnail_url="/media/job-idempotent-thumb.jpg",
+        metadata={"provider": "fal"},
+    )
+    output = GenerationOutput(
+        asset_id=asset.id,
+        url=asset.url,
+        thumbnail_url=asset.thumbnail_url,
+        mime_type="image/png",
+        width=job.prompt_snapshot.width,
+        height=job.prompt_snapshot.height,
+        variation_index=0,
+    )
+    state = StudioState(
+        identities={identity.id: identity},
+        workspaces={workspace.id: workspace},
+        projects={project.id: project},
+        generations={job.id: job},
+    )
+
+    apply_completed_generation_to_state(
+        state=state,
+        job_id=job.id,
+        provider_name="fal",
+        provider_rollout_tier="primary",
+        provider_billable=True,
+        actual_cost_usd=1.0,
+        final_credit_cost=12,
+        credit_charge_policy="managed_full",
+        selected_quality_tier="premium",
+        degraded=False,
+        routing_reason="premium_intent_managed_preferred",
+        generated_outputs=[output],
+        created_assets=[asset],
+        style_tags=["luxury"],
+        now=now,
+    )
+    apply_completed_generation_to_state(
+        state=state,
+        job_id=job.id,
+        provider_name="fal",
+        provider_rollout_tier="primary",
+        provider_billable=True,
+        actual_cost_usd=1.0,
+        final_credit_cost=12,
+        credit_charge_policy="managed_full",
+        selected_quality_tier="premium",
+        degraded=False,
+        routing_reason="premium_intent_managed_preferred",
+        generated_outputs=[output],
+        created_assets=[asset],
+        style_tags=["luxury"],
+        now=now,
+    )
+
+    settled_identity = state.identities[identity.id]
+    spend_entries = [
+        entry
+        for entry in state.credit_ledger.values()
+        if entry.entry_type == CreditEntryType.GENERATION_SPEND
+    ]
+
+    assert settled_identity.monthly_credits_remaining == 0
+    assert settled_identity.extra_credits == 8
+    assert len(spend_entries) == 1
+    assert spend_entries[0].amount == -12
+    assert spend_entries[0].job_id == job.id
+
+
+def test_apply_completed_generation_records_release_when_final_charge_drops_to_zero() -> None:
+    now = utc_now()
+    identity = OmniaIdentity(
+        id="user-release",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.CREATOR,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=400,
+        extra_credits=20,
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    job = GenerationJob(
+        id="job-release",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Fallback run",
+        status=JobStatus.RUNNING,
+        provider="runware",
+        model="flux-schnell",
+        prompt_snapshot=_prompt_snapshot("editorial portrait"),
+        estimated_cost=0.04,
+        credit_cost=12,
+        reserved_credit_cost=12,
+        credit_status="reserved",
+        started_at=now,
+    )
+    asset = MediaAsset(
+        id="asset-job-release",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title=job.title,
+        prompt=job.prompt_snapshot.prompt,
+        url="/media/job-release.png",
+        thumbnail_url="/media/job-release-thumb.jpg",
+        metadata={"provider": "demo"},
+    )
+    output = GenerationOutput(
+        asset_id=asset.id,
+        url=asset.url,
+        thumbnail_url=asset.thumbnail_url,
+        mime_type="image/png",
+        width=job.prompt_snapshot.width,
+        height=job.prompt_snapshot.height,
+        variation_index=0,
+    )
+    state = StudioState(
+        identities={identity.id: identity},
+        workspaces={workspace.id: workspace},
+        projects={project.id: project},
+        generations={job.id: job},
+    )
+
+    apply_completed_generation_to_state(
+        state=state,
+        job_id=job.id,
+        provider_name="demo",
+        provider_rollout_tier="degraded",
+        provider_billable=False,
+        actual_cost_usd=0.0,
+        final_credit_cost=0,
+        credit_charge_policy="degraded_free",
+        selected_quality_tier="standard",
+        degraded=True,
+        routing_reason="degraded_demo_fallback",
+        generated_outputs=[output],
+        created_assets=[asset],
+        style_tags=["editorial"],
+        now=now,
+    )
+
+    settled_identity = state.identities[identity.id]
+    release_entries = [
+        entry
+        for entry in state.credit_ledger.values()
+        if entry.entry_type == CreditEntryType.GENERATION_RELEASE
+    ]
+
+    assert settled_identity.monthly_credits_remaining == 0
+    assert settled_identity.extra_credits == 20
+    assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in state.credit_ledger.values())
+    assert len(release_entries) == 1
+    assert release_entries[0].amount == 0
+    assert release_entries[0].hold_amount == 12
+    assert release_entries[0].job_id == job.id
 
 
 @pytest.mark.asyncio
@@ -802,7 +1076,7 @@ async def test_auth_failure_does_not_retry_and_updates_job_provider_to_last_actu
 
         assert failed.status == JobStatus.FAILED
         assert failed.provider == "huggingface"
-        assert failed.error == "huggingface expired token"
+        assert failed.error == "This render lane is temporarily unavailable."
         assert failed.error_code == "provider_auth"
     finally:
         await service.shutdown()
@@ -1294,6 +1568,52 @@ async def test_active_reservation_blocks_over_admission(
 
 
 @pytest.mark.asyncio
+async def test_generation_creation_records_reserve_audit_entry(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(name="pollinations", rollout_tier="standard", billable=False),
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(store)
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="editorial portrait one",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=51,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        snapshot = await store.snapshot()
+        reserve_entries = [
+            entry
+            for entry in snapshot.credit_ledger.values()
+            if entry.entry_type == CreditEntryType.GENERATION_RESERVE
+        ]
+
+        assert len(reserve_entries) == 1
+        reserve_entry = reserve_entries[0]
+        assert reserve_entry.amount == 0
+        assert reserve_entry.job_id == job.id
+        assert reserve_entry.hold_amount == job.reserved_credit_cost == 3
+        assert reserve_entry.job_credit_status == "reserved"
+        assert reserve_entry.provider_name == job.provider
+        assert reserve_entry.final_credit_cost is None
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_subscription_cancelled_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1429,6 +1749,52 @@ async def test_subscription_past_due_fails_closed_to_free_entitlements_but_prese
 
 
 @pytest.mark.asyncio
+async def test_subscription_paused_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    service, store, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        identity, _ = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.PRO,
+            monthly_remaining=700,
+            monthly_allowance=1200,
+            extra_credits=150,
+            subscription_status=SubscriptionStatus.ACTIVE,
+        )
+        await service.process_paddle_webhook(
+            {
+                "event_type": "subscription.updated",
+                "data": {
+                    "id": "sub-1",
+                    "type": "subscription",
+                    "status": "paused",
+                    "custom_data": {
+                        "identity_id": identity.id,
+                        "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
+                    },
+                },
+            }
+        )
+
+        summary = await service.billing_summary(identity.id)
+        snapshot = await store.snapshot()
+        updated_identity = snapshot.identities[identity.id]
+
+        assert updated_identity.plan == IdentityPlan.PRO
+        assert updated_identity.subscription_status == SubscriptionStatus.PAUSED
+        assert summary["plan"]["id"] == IdentityPlan.FREE.value
+        assert summary["account_tier"] == IdentityPlan.FREE.value
+        assert summary["subscription_tier"] is None
+        assert summary["entitlements"]["premium_chat"] is False
+        assert summary["credits"]["monthly_remaining"] == 0
+        assert summary["credits"]["extra_credits"] == 150
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_inactive_paid_subscription_cannot_start_pro_only_generation_lane(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1507,6 +1873,50 @@ async def test_subscription_renewal_resets_allowance_and_is_idempotent(
         assert updated_identity.extra_credits == 80
         assert len(snapshot.billing_webhook_receipts) == 1
         assert len(renewal_entries) == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_billing_summary_surfaces_recent_manual_refund_review_case_for_subscription_charge(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    service, store, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        identity, _ = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.FREE,
+            monthly_remaining=0,
+            monthly_allowance=0,
+            extra_credits=0,
+            subscription_status=SubscriptionStatus.NONE,
+        )
+        await service.process_paddle_webhook(
+            {
+                "event_type": "transaction.completed",
+                "data": {
+                    "id": "txn-sub-1",
+                    "type": "transaction",
+                    "custom_data": {
+                        "identity_id": identity.id,
+                        "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
+                    },
+                },
+            }
+        )
+
+        summary = await service.billing_summary(identity.id)
+        refund_policy = summary["refund_policy"]
+
+        assert refund_policy["automatic_resolution_count"] == 0
+        assert refund_policy["manual_review_count"] == 1
+        recent_case = refund_policy["recent_cases"][0]
+        assert recent_case["kind"] == "subscription_charge"
+        assert recent_case["status"] == "manual_review_possible"
+        assert recent_case["request_window_open"] is True
+        assert recent_case["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
+        assert recent_case["merchant_of_record"] == "paddle"
     finally:
         await service.shutdown()
 

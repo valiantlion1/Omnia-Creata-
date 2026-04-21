@@ -125,6 +125,8 @@ async def test_repository_exposes_generation_admission_and_receipt_queries(tmp_p
         )
     )
 
+    assert await repository.count_generations_with_statuses({JobStatus.QUEUED}) == 1
+    assert await repository.count_generations_with_statuses_for_identity("user-1", {JobStatus.QUEUED}) == 1
     assert await repository.count_incomplete_generations() == 1
     assert await repository.count_incomplete_generations_for_identity("user-1") == 1
     assert await repository.count_recent_generation_requests_for_identity(

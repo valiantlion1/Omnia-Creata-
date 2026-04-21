@@ -654,6 +654,10 @@ class LibraryService:
         identity_id: str,
         project_id: str | None = None,
         include_deleted: bool = False,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "newest",
     ) -> list[MediaAsset]:
         assets = await self.service.store.list_assets()
         filtered = [
@@ -663,7 +667,26 @@ class LibraryService:
         ]
         if project_id:
             filtered = [asset for asset in filtered if asset.project_id == project_id]
-        return sorted(filtered, key=lambda item: item.created_at, reverse=True)
+        normalized_sort = (sort or "newest").strip().lower()
+        if normalized_sort == "oldest":
+            filtered = sorted(filtered, key=lambda item: item.created_at)
+        elif normalized_sort == "name":
+            filtered = sorted(filtered, key=lambda item: (self.asset_display_title(item) or "").strip().lower())
+        elif normalized_sort == "model":
+            filtered = sorted(
+                filtered,
+                key=lambda item: (
+                    str(item.metadata.get("display_model_label") or item.metadata.get("model") or "").strip().lower(),
+                    item.created_at,
+                ),
+                reverse=True,
+            )
+        else:
+            filtered = sorted(filtered, key=lambda item: item.created_at, reverse=True)
+        start = max(int(offset or 0), 0)
+        if limit is None:
+            return filtered[start:]
+        return filtered[start : start + max(int(limit or 0), 0)]
 
     async def can_identity_clean_export(self, identity_id: str) -> bool:
         identity = await self.service.get_identity(identity_id)

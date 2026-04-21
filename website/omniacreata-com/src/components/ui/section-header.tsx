@@ -28,10 +28,10 @@ export function SectionHeader({
       <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
         {eyebrow}
       </p>
-      <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-5xl">
+      <h2 className="text-[2rem] font-semibold leading-[0.96] tracking-[-0.05em] text-foreground sm:text-[2.7rem]">
         {title}
       </h2>
-      <p className="text-base leading-8 text-foreground-soft sm:text-lg">
+      <p className="text-[15px] leading-7 text-foreground-soft sm:text-base sm:leading-8">
         {description}
       </p>
     </div>

@@ -145,8 +145,8 @@ export default function ProjectPage() {
         description={
           project.description ||
           (isChatSurface
-            ? 'Images created during this chat session.'
-            : 'Your project workspace for creating and organizing images.')
+            ? 'Images from this chat.'
+            : 'A focused space for this set.')
         }
         actions={
           <>
@@ -185,9 +185,9 @@ export default function ProjectPage() {
         <Panel>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Recent creations</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Images</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {isChatSurface ? 'Images from this chat' : 'Recent creations'}
+                {isChatSurface ? 'Chat images' : 'Project images'}
               </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
@@ -262,23 +262,23 @@ export default function ProjectPage() {
               })}
             </div>
           ) : (
-            <EmptyState
-              title="No images yet"
-              description={
-                isChatSurface
-                  ? 'Images created from this chat will appear here.'
-                  : 'Start creating and your images will appear here automatically.'
-              }
-            />
+              <EmptyState
+                title="No images yet"
+                description={
+                  isChatSurface
+                    ? 'New images from this chat will appear here.'
+                    : 'New images for this project will appear here.'
+                }
+              />
           )}
         </Panel>
 
         <Panel>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">History</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Timeline</div>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {isChatSurface ? 'What you\'ve created in this chat' : 'Your generation history'}
+                {isChatSurface ? 'Recent chat runs' : 'Recent project runs'}
               </h2>
             </div>
             <Link to="/library/images" className="text-sm text-zinc-300 transition hover:text-white">
@@ -313,14 +313,14 @@ export default function ProjectPage() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="No history yet"
-              description={
-                isChatSurface
-                  ? 'Your chat creations will show up here.'
-                  : 'Start creating and your history will appear here.'
-              }
-            />
+              <EmptyState
+                title="No runs yet"
+                description={
+                  isChatSurface
+                    ? 'This chat timeline will appear after the first run.'
+                    : 'This project timeline will appear after the first run.'
+                }
+              />
           )}
         </Panel>
       </div>

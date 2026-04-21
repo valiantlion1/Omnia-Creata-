@@ -102,7 +102,7 @@ export type Messages = {
 
 const english: Messages = {
   utility: {
-    globalSite: "Global site",
+    globalSite: "Public site",
     localeLabel: "Language / region",
     availability: "Worldwide access",
   },
@@ -122,7 +122,7 @@ const english: Messages = {
     supportCenter: "Support",
   },
   common: {
-    exploreEcosystem: "Explore products",
+    exploreEcosystem: "View product map",
     openStudio: "Open Studio",
     viewPricing: "View pricing",
     contactTeam: "Contact",
@@ -143,35 +143,34 @@ const english: Messages = {
     viewProduct: "View product",
     learnMore: "Learn more",
     globalRollout: "Global ready",
-    flagshipStudio: "Studio spotlight",
+    flagshipStudio: "Studio first",
     support: "Support",
     company: "Company",
     legal: "Legal",
   },
   home: {
-    heroEyebrow: "Studio-first public HQ",
-    heroTitle:
-      "Start in Studio. See Omnia in context.",
+    heroEyebrow: "Omnia Creata",
+    heroTitle: "Studio ships first.",
     heroDescription:
-      "A calmer public HQ for the flagship, the supporting products, and the next route into each one.",
+      "The public site explains the company and routes people into the live product without duplicating the Studio landing.",
     utilityDescription:
       "omniacreata.com",
     platformBandEyebrow: "Platform visibility",
-    platformBandTitle: "Availability should be visible before commitment.",
+    platformBandTitle: "Availability is visible before commitment.",
     platformBandDescription:
       "Web, iOS, Android, PWA, and desktop availability stay readable before someone opens a product.",
     ecosystemEyebrow: "Product directory",
-    ecosystemTitle: "The ecosystem is real, but Studio is the center of gravity.",
+    ecosystemTitle: "One live route, more direction around it.",
     ecosystemDescription:
-      "Use the flagship as the entry point, then move outward when a more specific product surface makes sense.",
+      "Start with the flagship, then move into the product built for the next specific job.",
     accessRailEyebrow: "Product access rail",
-    accessRailTitle: "Go from discovery to the right product in one step.",
+    accessRailTitle: "Move from discovery to the right product quickly.",
     accessRailDescription:
       "Every visible action should lead somewhere useful.",
     trustEyebrow: "Public HQ",
-    trustTitle: "A calmer front door for a growing product system.",
+    trustTitle: "A public site built to feel active, clear, and honest.",
     trustDescription:
-      "Direct routes, honest product framing, and restrained structure keep the site useful while the ecosystem matures.",
+      "Direct routes, product-first copy, and restrained structure keep the site useful as the system grows.",
   },
   sections: {
     overview: "Overview",
@@ -204,13 +203,13 @@ const english: Messages = {
     placeholderMessage: "Tell us what you want to build with Omnia Creata.",
     submit: "Send inquiry",
     sending: "Sending...",
-    helper: "Share a short note and our team will get back to you.",
+    helper: "Share a short note and we will send it to the right inbox.",
   },
 };
 
 const turkish: Messages = {
   utility: {
-    globalSite: "Global site",
+    globalSite: "Kamu sitesi",
     localeLabel: "Dil / bolge",
     availability: "Dunya capinda erisim",
   },
@@ -312,7 +311,7 @@ const turkish: Messages = {
     placeholderMessage: "Omnia Creata ile ne kurmak istediginizi yazin.",
     submit: "Mesaj gonder",
     sending: "Gonderiliyor...",
-    helper: "Kisa bir not birak, ekibimiz sana donsun.",
+    helper: "Kisa bir not birak, dogru ekibe iletelim.",
   },
 };
 

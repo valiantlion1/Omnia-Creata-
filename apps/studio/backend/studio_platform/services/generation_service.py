@@ -30,6 +30,8 @@ from ..generation_ops import (
     count_incomplete_generations,
     create_generation_job_record,
     infer_style_tags,
+    record_generation_release_locked,
+    record_generation_reservation_locked,
     refresh_generation_claim_locked,
     requeue_generation_job_locked,
 )
@@ -158,13 +160,7 @@ class GenerationService:
                 await self.service.generation_broker.complete(job_id)
             return
         if job.status != JobStatus.QUEUED:
-            await self.service.store.mutate(
-                lambda state: requeue_generation_job_locked(
-                    state=state,
-                    job_id=job_id,
-                    now=utc_now(),
-                )
-            )
+            await self._requeue_generation_job(job_id, now=utc_now())
         if self.service.generation_broker is not None:
             await self.service.generation_broker.complete(job_id)
             await self.service.generation_broker.enqueue(
@@ -295,60 +291,37 @@ class GenerationService:
                     retry_job_ids.append(job.id)
 
         if heartbeat_job_ids:
-            def heartbeat_mutation(state: StudioState) -> None:
-                for job_id in heartbeat_job_ids:
-                    claim_token = self.service._active_generation_claims.get(job_id)
-                    if claim_token:
-                        refreshed = refresh_generation_claim_locked(
-                            state=state,
-                            job_id=job_id,
-                            claim_token=claim_token,
-                            lease_seconds=self.service._generation_claim_lease_seconds,
-                            now=now,
-                        )
-                        if refreshed:
-                            continue
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.RUNNING,
-                        now=now,
+            for job_id in heartbeat_job_ids:
+                claim_token = self.service._active_generation_claims.get(job_id)
+                if claim_token:
+                    refreshed = await self._refresh_generation_claim(
+                        job_id,
+                        claim_token=claim_token,
                     )
-
-            await self.service.store.mutate(heartbeat_mutation)
+                    if refreshed:
+                        continue
+                await self._update_job_status(job_id, JobStatus.RUNNING, now=now)
             if self.service.generation_broker is not None:
                 for job_id in heartbeat_job_ids:
                     await self.service.generation_broker.heartbeat_claim(job_id)
 
         if retry_job_ids:
             retry_job_id_set = set(retry_job_ids)
-
-            def retry_mutation(state: StudioState) -> None:
-                for job_id in retry_job_ids:
-                    requeue_generation_job_locked(
-                        state=state,
-                        job_id=job_id,
-                        now=now,
-                    )
-
-            await self.service.store.mutate(retry_mutation)
+            for job_id in retry_job_ids:
+                await self._requeue_generation_job(job_id, now=now)
             for job in tracked_jobs:
                 if job.id in retry_job_id_set:
                     queue_entries.append((job.id, job.queue_priority))
 
         if timed_out_job_ids:
-            def timeout_mutation(state: StudioState) -> None:
-                for job_id in timed_out_job_ids:
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.TIMED_OUT,
-                        now=now,
-                        error="Generation timed out after losing its worker and exhausting retry budget.",
-                        error_code="generation_timed_out",
-                    )
-
-            await self.service.store.mutate(timeout_mutation)
+            for job_id in timed_out_job_ids:
+                await self._update_job_status(
+                    job_id,
+                    JobStatus.TIMED_OUT,
+                    error="Generation timed out after losing its worker and exhausting retry budget.",
+                    error_code="generation_timed_out",
+                    now=now,
+                )
             for job_id in timed_out_job_ids:
                 job = await self._get_generation_job_snapshot(job_id)
                 if job is None:
@@ -367,18 +340,14 @@ class GenerationService:
                     )
 
         if failed_job_ids:
-            def failed_mutation(state: StudioState) -> None:
-                for job_id in failed_job_ids:
-                    apply_generation_status_update(
-                        state=state,
-                        job_id=job_id,
-                        status=JobStatus.FAILED,
-                        now=now,
-                        error="Generation retry budget exhausted after repeated temporary failures.",
-                        error_code="retry_budget_exhausted",
-                    )
-
-            await self.service.store.mutate(failed_mutation)
+            for job_id in failed_job_ids:
+                await self._update_job_status(
+                    job_id,
+                    JobStatus.FAILED,
+                    error="Generation retry budget exhausted after repeated temporary failures.",
+                    error_code="retry_budget_exhausted",
+                    now=now,
+                )
             for job_id in failed_job_ids:
                 job = await self._get_generation_job_snapshot(job_id)
                 if job is None:
@@ -424,7 +393,9 @@ class GenerationService:
         claimed_holder = {"claimed": False}
         now = utc_now()
 
-        def mutation(state: StudioState) -> None:
+        def mutation(job: GenerationJob) -> bool:
+            state = StudioState()
+            state.generations[job.id] = job
             claimed_holder["claimed"] = claim_generation_job_locked(
                 state=state,
                 job_id=job_id,
@@ -434,8 +405,9 @@ class GenerationService:
                 now=now,
                 provider=provider,
             )
+            return bool(claimed_holder["claimed"])
 
-        await self.service.store.mutate(mutation)
+        await self.service.store.mutate_generation(job_id, mutation)
         if not claimed_holder["claimed"]:
             self.service._active_generation_claims.pop(job_id, None)
             return None
@@ -453,7 +425,9 @@ class GenerationService:
         refreshed_holder = {"refreshed": False}
         now = utc_now()
 
-        def mutation(state: StudioState) -> None:
+        def mutation(job: GenerationJob) -> bool:
+            state = StudioState()
+            state.generations[job.id] = job
             refreshed_holder["refreshed"] = refresh_generation_claim_locked(
                 state=state,
                 job_id=job_id,
@@ -462,8 +436,9 @@ class GenerationService:
                 now=now,
                 provider=provider,
             )
+            return bool(refreshed_holder["refreshed"])
 
-        await self.service.store.mutate(mutation)
+        await self.service.store.mutate_generation(job_id, mutation)
         if not refreshed_holder["refreshed"]:
             self.service._active_generation_claims.pop(job_id, None)
         return bool(refreshed_holder["refreshed"])
@@ -493,15 +468,7 @@ class GenerationService:
             enqueued = await self.service.generation_dispatcher.enqueue(job_id, priority=queue_priority or "standard")
             if not enqueued:
                 self.service._active_generation_claims.pop(job_id, None)
-
-                def mutation(state: StudioState) -> None:
-                    requeue_generation_job_locked(
-                        state=state,
-                        job_id=job_id,
-                        now=utc_now(),
-                    )
-
-                await self.service.store.mutate(mutation)
+                await self._requeue_generation_job(job_id, now=utc_now())
                 await self.service.generation_broker.complete(job_id)
                 await self._enqueue_generation_job(job_id, priority=queue_priority or "standard")
                 continue
@@ -589,18 +556,14 @@ class GenerationService:
 
         orphaned_job_ids = [job.id for job in orphaned_jobs]
 
-        def mutation(state: StudioState) -> None:
-            for job_id in orphaned_job_ids:
-                apply_generation_status_update(
-                    state=state,
-                    job_id=job_id,
-                    status=JobStatus.TIMED_OUT,
-                    now=now,
-                    error="Generation timed out during nightly orphan cleanup after exceeding the 24 hour safety window.",
-                    error_code="orphaned_job_timeout",
-                )
-
-        await self.service.store.mutate(mutation)
+        for job_id in orphaned_job_ids:
+            await self._update_job_status(
+                job_id,
+                JobStatus.TIMED_OUT,
+                error="Generation timed out during nightly orphan cleanup after exceeding the 24 hour safety window.",
+                error_code="orphaned_job_timeout",
+                now=now,
+            )
         for job in orphaned_jobs:
             updated_job = await self._get_generation_job_snapshot(job.id)
             self._log_generation_event(
@@ -631,8 +594,29 @@ class GenerationService:
 
 
 
-    async def list_generations(self, identity_id: str, project_id: Optional[str] = None) -> List[GenerationJob]:
-        return await self.service.store.list_generations_for_identity(identity_id, project_id=project_id)
+    async def list_generations(
+        self,
+        identity_id: str,
+        project_id: Optional[str] = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        sort: str = "newest",
+    ) -> List[GenerationJob]:
+        jobs = await self.service.store.list_generations_for_identity(identity_id, project_id=project_id)
+        normalized_sort = (sort or "newest").strip().lower()
+        if normalized_sort == "oldest":
+            jobs = sorted(jobs, key=lambda item: item.created_at)
+        elif normalized_sort == "updated":
+            jobs = sorted(jobs, key=lambda item: item.updated_at, reverse=True)
+        elif normalized_sort == "model":
+            jobs = sorted(jobs, key=lambda item: ((item.model or "").strip().lower(), item.created_at), reverse=True)
+        else:
+            jobs = sorted(jobs, key=lambda item: item.created_at, reverse=True)
+        start = max(int(offset or 0), 0)
+        if limit is None:
+            return jobs[start:]
+        return jobs[start : start + max(int(limit or 0), 0)]
 
 
     async def get_generation(self, identity_id: str, generation_id: str) -> GenerationJob:
@@ -647,10 +631,7 @@ class GenerationService:
         if job.outputs:
             raise ValueError("Generations with saved outputs cannot be removed from Processing.")
 
-        def mutation(state: StudioState) -> None:
-            state.generations.pop(generation_id, None)
-
-        await self.service.store.mutate(mutation)
+        await self.service.store.delete_model("generations", generation_id)
         return {"generation_id": generation_id, "status": "deleted"}
 
 
@@ -1043,6 +1024,11 @@ class GenerationService:
 
             state.identities[current_identity.id] = current_identity
             state.generations[job.id] = job
+            record_generation_reservation_locked(
+                state=state,
+                job=job,
+                now=utc_now(),
+            )
             holder["job"] = job.model_copy(deep=True)
 
         await self.service.store.mutate(mutation)
@@ -1359,6 +1345,32 @@ class GenerationService:
             self.service._active_generation_claims.pop(job_id, None)
 
 
+    async def _requeue_generation_job(
+        self,
+        job_id: str,
+        *,
+        now: datetime,
+    ) -> Optional[GenerationJob]:
+        holder: Dict[str, GenerationJob] = {}
+
+        def mutation(job: GenerationJob) -> bool:
+            state = StudioState()
+            state.generations[job.id] = job
+            changed = requeue_generation_job_locked(
+                state=state,
+                job_id=job_id,
+                now=now,
+            )
+            if changed:
+                updated_job = state.generations.get(job_id)
+                if updated_job is not None:
+                    holder["job"] = updated_job.model_copy(deep=True)
+            return bool(changed)
+
+        await self.service.store.mutate_generation(job_id, mutation)
+        return holder.get("job")
+
+
     async def _update_job_status(
         self,
         job_id: str,
@@ -1367,10 +1379,15 @@ class GenerationService:
         provider_billable: Optional[bool] = None,
         error: Optional[str] = None,
         error_code: Optional[str] = None,
+        now: Optional[datetime] = None,
     ) -> Optional[GenerationJob]:
         holder: Dict[str, GenerationJob] = {}
+        mutation_now = now or utc_now()
+        normalized_status = JobStatus.coerce(status)
 
-        def mutation(state: StudioState) -> None:
+        def mutation(job: GenerationJob) -> bool:
+            state = StudioState()
+            state.generations[job.id] = job
             apply_generation_status_update(
                 state=state,
                 job_id=job_id,
@@ -1379,14 +1396,40 @@ class GenerationService:
                 provider_billable=provider_billable,
                 error=error,
                 error_code=error_code,
-                now=utc_now(),
+                now=mutation_now,
             )
             updated_job = state.generations.get(job_id)
             if updated_job is not None:
                 holder["job"] = updated_job.model_copy(deep=True)
+                return True
+            return False
 
-        await self.service.store.mutate(mutation)
-        return holder.get("job")
+        await self.service.store.mutate_generation(job_id, mutation)
+        updated_job = holder.get("job")
+        if (
+            updated_job is not None
+            and normalized_status in JobStatus.terminal_statuses()
+            and normalized_status != JobStatus.SUCCEEDED
+            and updated_job.reserved_credit_cost > 0
+            and updated_job.credit_status == "released"
+        ):
+            def release_mutation(state: StudioState) -> None:
+                current_job = state.generations.get(job_id)
+                if current_job is None:
+                    return
+                record_generation_release_locked(
+                    state=state,
+                    job=current_job,
+                    now=mutation_now,
+                    description=(
+                        f"Released {current_job.reserved_credit_cost} reserved credits after "
+                        f"{normalized_status.value}."
+                    ),
+                    hold_amount=current_job.reserved_credit_cost,
+                )
+
+            await self.service.store.mutate(release_mutation)
+        return updated_job
 
 
     async def _get_generation_job_snapshot(self, job_id: str) -> Optional[GenerationJob]:
@@ -1395,6 +1438,21 @@ class GenerationService:
 
     def _normalize_generation_error_message(self, exc: Exception) -> str:
         message = " ".join(str(exc).split())
+        code = self._classify_generation_error_code(exc)
+        if code == "provider_auth":
+            return "This render lane is temporarily unavailable."
+        if code == "provider_timeout":
+            return "This render took too long to finish."
+        if code == "provider_network":
+            return "The render lane could not be reached."
+        if code == "provider_not_configured":
+            return "This render lane is not available right now."
+        if code == "safety_block":
+            return "This request could not be rendered under current safety rules."
+        if code == "provider_rejected":
+            return "This render could not be completed on the selected lane."
+        if code == "provider_temporary":
+            return "This render lane is unstable right now. Please try again."
         return message[:500] if message else exc.__class__.__name__
 
 
@@ -1498,7 +1556,7 @@ class GenerationService:
     ) -> None:
         if self.service._has_unlimited_generation_access(identity):
             return
-        queued_jobs = len(await self.service.store.list_generations_with_statuses({JobStatus.QUEUED}))
+        queued_jobs = await self.service.store.count_generations_with_statuses({JobStatus.QUEUED})
         queue_limit = min(self.service.settings.max_queue_size, 50)
         if queued_jobs >= queue_limit:
             raise self._generation_capacity_error(

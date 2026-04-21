@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.20.178",
+  "build": "2026.04.21.187",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-20",
-  "notes": "Studio backend public-surface hardening now keeps Explore feed, public profile, post payload, and publication checks on scoped repository reads instead of falling back to global collection scans, while username lookup also resolves without materializing the full identity/post catalog."
+  "releaseDate": "2026-04-21",
+  "notes": "Studio Create now opens with a calmer empty state, richer live preview motion, and friendlier render-lane failure language instead of a permanent rail plus raw provider errors."
 }

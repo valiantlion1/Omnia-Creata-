@@ -921,11 +921,34 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.get("/projects")
     async def get_projects(
         surface: Optional[Literal["compose", "chat"]] = Query(default=None),
+        include_system_managed: bool = Query(default=False),
+        limit: int = Query(default=60, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        sort: Literal["updated", "newest", "oldest", "name"] = Query(default="updated"),
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
-        projects = await service.list_projects(auth_user.id, surface=surface)
-        return {"projects": [project.model_dump(mode="json") for project in projects]}
+        projects = await service.list_projects(
+            auth_user.id,
+            surface=surface,
+            include_system_managed=include_system_managed,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        )
+        total = len(
+            await service.list_projects(
+                auth_user.id,
+                surface=surface,
+                include_system_managed=include_system_managed,
+            )
+        )
+        return {
+            "projects": [project.model_dump(mode="json") for project in projects],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     @router.post("/projects", status_code=status.HTTP_201_CREATED)
     async def post_project(
@@ -1006,20 +1029,31 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/public/posts")
     async def get_public_posts(
+        request: Request,
         sort: str = Query(default="trending", pattern="^(trending|newest|top|styles)$"),
+        limit: int = Query(default=60, ge=1, le=60),
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
+        await _consume_rate_limit(request, "public:posts:ip", limit=90, window_seconds=60)
         viewer_identity_id = current_user.id if current_user is not None else None
-        posts = await service.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id)
+        if viewer_identity_id is not None:
+            await _consume_rate_limit(
+                request,
+                "public:posts:user",
+                limit=240,
+                identifier=viewer_identity_id,
+                window_seconds=3600,
+            )
+        posts = await service.list_public_posts(sort=sort, viewer_identity_id=viewer_identity_id, limit=limit)
         return {"posts": posts}
 
     @router.get("/public/export")
     async def get_public_export(request: Request):
         await _consume_rate_limit(request, "public:export", limit=20, window_seconds=60)
         # Ecosystem Federation: Send public data for omniacreata.com main website
-        posts = await service.list_public_posts(sort="trending", viewer_identity_id=None)
+        posts = await service.list_public_posts(sort="trending", viewer_identity_id=None, limit=20)
         export_data = []
-        for p in posts[:20]: # Limit to top 20 for federation
+        for p in posts:
             cover_asset = p.get("cover_asset") if isinstance(p.get("cover_asset"), dict) else None
             preview_assets = p.get("preview_assets") if isinstance(p.get("preview_assets"), list) else []
             image_url = None
@@ -1059,6 +1093,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.get("/profiles/me/favorites")
     async def get_my_favorites(
         request: Request,
+        limit: int = Query(default=60, ge=1, le=100),
         current_user: Optional[AuthUser] = Depends(get_current_user),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
@@ -1069,7 +1104,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             identifier=auth_user.id,
             window_seconds=3600,
         )
-        return {"posts": await service.list_liked_posts(auth_user.id)}
+        return {"posts": await service.list_liked_posts(auth_user.id, limit=limit)}
 
     @router.get("/profiles/me/export")
     async def export_my_profile(
@@ -1121,10 +1156,28 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/profiles/{username}")
-    async def get_profile(username: str, current_user: Optional[AuthUser] = Depends(get_current_user)):
+    async def get_profile(
+        username: str,
+        request: Request,
+        limit: int = Query(default=60, ge=1, le=100),
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        await _consume_rate_limit(request, "profiles:public:ip", limit=90, window_seconds=60)
         viewer_identity_id = current_user.id if current_user is not None else None
+        if viewer_identity_id is not None:
+            await _consume_rate_limit(
+                request,
+                "profiles:public:user",
+                limit=240,
+                identifier=viewer_identity_id,
+                window_seconds=3600,
+            )
         try:
-            return await service.get_profile_payload(username=username, viewer_identity_id=viewer_identity_id)
+            return await service.get_profile_payload(
+                username=username,
+                viewer_identity_id=viewer_identity_id,
+                limit=limit,
+            )
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
@@ -1309,10 +1362,25 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def get_generations(
         current_user: Optional[AuthUser] = Depends(get_current_user),
         project_id: Optional[str] = Query(default=None),
+        limit: int = Query(default=40, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        sort: Literal["newest", "oldest", "updated", "model"] = Query(default="newest"),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
-        jobs = await service.list_generations(auth_user.id, project_id=project_id)
-        return {"generations": [_serialize_generation(job, auth_user.id) for job in jobs]}
+        jobs = await service.list_generations(
+            auth_user.id,
+            project_id=project_id,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        )
+        total = len(await service.list_generations(auth_user.id, project_id=project_id))
+        return {
+            "generations": [_serialize_generation(job, auth_user.id) for job in jobs],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     @router.post("/generations", status_code=status.HTTP_202_ACCEPTED)
     async def post_generations(
@@ -1443,11 +1511,33 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         current_user: Optional[AuthUser] = Depends(get_current_user),
         project_id: Optional[str] = Query(default=None),
         include_deleted: bool = Query(default=False),
+        limit: int = Query(default=80, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        sort: Literal["newest", "oldest", "name", "model"] = Query(default="newest"),
     ):
         auth_user = await _ensure_identity_for_auth_user(current_user)
-        assets = await service.list_assets(auth_user.id, project_id=project_id, include_deleted=include_deleted)
+        assets = await service.list_assets(
+            auth_user.id,
+            project_id=project_id,
+            include_deleted=include_deleted,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+        )
         allow_clean_export = await service.can_identity_clean_export(auth_user.id)
-        return {"assets": service.serialize_assets(assets, identity_id=auth_user.id, allow_clean_export=allow_clean_export)}
+        total = len(
+            await service.list_assets(
+                auth_user.id,
+                project_id=project_id,
+                include_deleted=include_deleted,
+            )
+        )
+        return {
+            "assets": service.serialize_assets(assets, identity_id=auth_user.id, allow_clean_export=allow_clean_export),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     @router.post("/assets/import", status_code=status.HTTP_201_CREATED)
     async def import_asset(
