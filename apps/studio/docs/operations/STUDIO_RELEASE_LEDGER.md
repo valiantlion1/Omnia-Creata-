@@ -18,6 +18,86 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.20.178`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.177` removed some secret-hygiene and token-comparison footguns, but the public-facing backend surfaces still had a quieter scale and abuse problem: Explore feed, public profile, single-post payloads, and publish-time validation were still willing to materialize whole asset, identity, or generation collections even when the request only needed one identity or a small post-linked slice. That is the kind of read path that stays invisible in happy-path testing and then starts hurting once public traffic or scraping ramps up.
+- What:
+  `.178` tightens those read paths without changing the public contract. The repository now exposes targeted helpers for identity, asset, and generation lookups by id set, plus scoped public-post and liked-post queries and username resolution without materializing the full identity/post catalog. `PublicService` now builds Explore feed, liked posts, single-post payloads, and publication checks from those targeted reads, while `IdentityService` now builds public profile payloads from identity-scoped posts/assets/generations instead of global list scans. New hardening regressions lock the no-global-scan contract for public feed, public profile, and public post payload paths.
+  Verification on `.178` is backend-only and current-build honest. From `apps/studio/backend`, `pytest tests/test_security_hardening.py -q` passes (`27 passed`), targeted service and router regressions for public-post and profile behavior pass, `python -m compileall .` passes, and the full backend suite passes end-to-end at `629 passed` on the current build. This wave does not claim refreshed frontend proof, local verify, provider smoke, deployment verification, or real load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.20.177`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.176` tightened split-runtime pool-budget startup truth, but one more backend-only hardening slice was still worth landing before any real deploy-scale closure. Secret hygiene still had two weak edges: launch-shaped runtimes could still accept the known development JWT fallback if someone copied it in explicitly, and log records only redacted message text/args while secret-like values in structured extra fields could still drift outward. Public share-token comparisons also still used plain equality checks, and one public asset-preview guard path was still doing full identity/generation collection scans that would age badly under bot or real traffic.
+- What:
+  `.177` closes those backend-only gaps without opening deploy/provider setup work. `Settings.validate_runtime()` and production-requirement validation now fail closed if staging/production try to boot with the known development JWT fallback. Runtime log redaction now sanitizes structured extra fields in addition to message text and args, and auth fallback debug logging uses a short token fingerprint instead of leaking a bearer prefix. Public share-token and legacy share-hash comparisons are now constant-time, and public asset-preview authorization now resolves only candidate post-linked identity/generation records instead of scanning the full identity and generation collections for every preview check.
+  Verification on `.177` is current-build backend proof. From `apps/studio/backend`, targeted runtime-logging, router-security, share-ops, and security-hardening regressions pass; `python -m compileall .` passes; and the full backend suite passes end-to-end at `626 passed` on the current build. This wave remains backend-only and does not claim refreshed frontend proof, local verify, provider smoke, deploy verification, or real load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.20.176`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.175` gave Studio runtime-aware Postgres pool budgets, but startup truth still let split `web` / `worker` runtimes drift quietly if those roles kept using the flat default pool budget or if someone configured an impossible min/max override. For scale-foundation work, that is too soft: the backend should at least warn when split runtime budgets are still untuned and fail fast when the role-specific pool contract is invalid.
+- What:
+  `.176` tightens that startup contract. `Settings.validate_runtime()` now validates role-specific Postgres pool budgets, rejects invalid min/max combinations, and emits an explicit startup warning when staging/production `web` or `worker` runtimes are still falling back to the default durable-store pool budget instead of using role-aware sizing. Focused runtime-logging regressions now lock both behaviors so future scale work can build on a stricter startup truth rather than terminal memory.
+  Verification on `.176` is still narrow and backend-only. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_runtime_logging.py` passes (`23 passed`), and `python -m pytest -q apps/studio/backend/tests/test_store.py apps/studio/backend/tests/test_runtime_logging.py` passes (`41 passed`). This wave does not claim refreshed frontend proof, local verify, provider smoke, deployment verification, or broader load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.20.175`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.174` made the durable store safer and more versioned, but it still treated Postgres pool sizing as one flat budget no matter whether Studio was running as the API/web submitter or the generation worker. The scale roadmap already calls out separate web/worker pool budgets as part of the path from alpha-safe behavior toward real concurrency, so one more narrow backend-only foundation pass made sense before chasing bigger launch-scale claims.
+- What:
+  `.175` adds runtime-aware Postgres state-store pool budgeting. `build_state_store(...)` now resolves optional web-specific and worker-specific connection budgets on top of the existing default pool settings, `PostgresStudioStateStore` records which runtime mode and pool-budget profile it is actually using, and durable-store/data-authority descriptions now expose that truth directly for operator and health surfaces. Focused store regressions now lock the runtime-specific pool selection contract plus the new descriptive metadata so Studio can keep moving toward separate web/worker scaling without pretending the rest of the 1K-concurrent platform work is already done.
+  Verification on `.175` is intentionally narrow and honest. From the repo root, `python -m pytest -q apps/studio/backend/tests/test_store.py` passes (`18 passed`) and `python -m pytest -q apps/studio/backend/tests/test_service_regressions.py -k "health_detail_exposes_data_authority_for_sqlite_store"` passes (`1 passed, 87 deselected`). This wave does not claim refreshed frontend proof, local verify, provider smoke, deployment verification, or broader load-test closure.
+
+### `0.6.0-alpha` / build `2026.04.20.174`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.173` re-locked the local frontend host contract, but one more backend-only deploy-hardening pass was still worth landing before touching real deploy/provider-account systems. Access-session and login-lockout writes were still using non-atomic read/modify/write paths, the Postgres durable-store schema still stopped at the earlier baseline revision, and the health/detail tests still had not been updated to the newer durable-store schema truth.
+- What:
+  `.174` is that follow-through backend wave. Access-session touch, sign-out-other-sessions, login-lockout reads, and login-attempt writes now run inside the store mutate boundary through the new repository-level `transactional(...)` helper, which keeps those server-authoritative security paths from racing across shared durable stores. The Postgres durable-store schema is now version `3` with a frozen baseline Alembic revision plus a second reversible revision that adds expression indexes for generation status/created-at, case-insensitive identity email lookup, project identity/update scans, and moderation-case status. Store/schema tests now assert the new contract directly, DSN redaction has an explicit test, and owner-health regression truth now expects the upgraded schema version instead of the stale `2`.
+  Verification on `.174` is backend-only and current-build honest. From `apps/studio/backend`, targeted access-session, store, migration-SQL, and health-detail regressions pass, offline Alembic upgrade and downgrade SQL renders both show the expected `20260420_01 -> 20260420_02` reversible path, and the full backend suite now passes end-to-end at `612 passed` on the current build. This wave intentionally does not claim refreshed frontend, local verify, provider smoke, or deployment proof; `.173` remains the last local-host/frontend operator proof entry underneath it.
+
+### `0.6.0-alpha` / build `2026.04.20.173`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.172` cleaned up the visible Studio shell and Explore composition, but the local frontend host contract was still drifting underneath. Repo startup scripts, backend docs, and local verify all treated `127.0.0.1:5173` as the canonical local frontend, while `vite.config.ts` still left preview on `4173`, which made it too easy to keep a second Studio frontend host alive by accident.
+- What:
+  `.173` locks that local frontend contract back down. Studio web dev and preview are now both pinned to `127.0.0.1:5173` with strict port binding, the Vite proxy defaults now align with `127.0.0.1:8000`, the lightweight local Playwright script also points at the canonical host, and `ops/start-studio-local.ps1` now actively shuts down the legacy `4173` listener before bringing Studio up so the local machine stops accumulating duplicate frontend hosts for the same app.
+  Verification on `.173` is repo-and-runtime honest. From `apps/studio/web`, `npm run type-check` and `npm run build` pass with the locked host config. On the live machine, port inspection after cleanup shows only the canonical Studio frontend listener on `127.0.0.1:5173` plus the backend on `127.0.0.1:8000`; the extra Studio preview listener on `127.0.0.1:4173` was removed as part of this wave.
+
+### `0.6.0-alpha` / build `2026.04.20.172`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.171` closed a real backend hardening slice, but the live Studio web shell still felt heavier and more cyber than the current product direction on the public Explore path. The sidebar, surface glow, and empty community state all made the route read darker, harsher, and less intentionally editorial than the calmer app-first direction we want Studio to hold.
+- What:
+  `.172` is a frontend-only polish wave on `apps/studio/web` focused on shell tone and Explore composition rather than a redesign. Theme and shared surface tokens now bias toward a softer graphite and mist palette instead of louder indigo-glow treatment, shell chrome and nav states are calmer, and Explore now has a better anchored community empty state with direct Create and curated-reference actions. The community header/search block also recomposes more cleanly on narrow screens, and the default mobile tab row no longer clips the third route label in the default viewport.
+  Verification on `.172` is frontend source proof plus live browser smoke. From `apps/studio/web`, `npm run type-check` and `npm run build` pass on the current build. A live Playwright pass on `http://127.0.0.1:4173/explore` also confirms the intended desktop and mobile shell/explore behavior with refreshed screenshots after the final patch. The only console errors in that browser pass are existing local backend CORS failures against `http://127.0.0.1:8000/v1/public/posts?sort=trending`, so this wave does not claim refreshed backend/runtime closure beyond the web surface it changed.
+
+### `0.6.0-alpha` / build `2026.04.20.171`
+- Date: `2026-04-20`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.170` made runtime topology easier to read, but the backend hardening handoff still had several follow-through gaps in the real runtime path. Request IDs were not bound into deep async log context, owner health still did not expose the promised feature-flag and breaker truth, Redis/Postgres resilience stayed only partially wired, and startup/shutdown recovery still left too much generation-state cleanup to best effort.
+- What:
+  `.171` closes that backend hardening slice without widening into provider-account or spend setup. Request middleware now binds and resets the request-context `ContextVar`, owner health and `/metrics` expose feature flags plus circuit-breaker state, Redis broker and Postgres pool resilience are wired into the live path, stricter email and prompt sanitization checks are active behind the intended contracts, startup validation plus `/healthz/ready` and `/healthz/startup` stay in place, route-auth coverage is enforced at startup, asset-token secondary-secret rotation is supported, and shutdown now drains/requeues unfinished generation claims while Postgres pool connections are retired on max-age and closed cleanly on shutdown.
+  Verification on `.171` is full backend proof, not just a spot check. From `apps/studio/backend`, `python -m compileall .` passes, targeted new regression slices for request-context binding, health/detail auth policy, broker/store hardening, shutdown recovery, and store connection max-age pass, and the full backend suite now passes end-to-end at `611 passed` on the current build. This wave remains backend-only; local verify, provider smoke, and protected staging were not rerun in this turn, so broader environment proof still belongs to the freshest non-backend-only artifact set.
+
 ### `0.6.0-alpha` / build `2026.04.20.170`
 - Date: `2026-04-20`
 - Codename: `Foundation`

@@ -2,9 +2,42 @@ from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from fastapi import Request
 import asyncio
 import logging
-from ..models import *
-from ..conversation_ops import *
-from ..chat_ops import *
+from ..models import (
+    ChatAttachment,
+    ChatConversation,
+    ChatFeedback,
+    ChatMessage,
+    ChatRole,
+    OmniaIdentity,
+    StudioState,
+    utc_now,
+)
+from ..conversation_ops import (
+    apply_chat_exchange_to_state,
+    apply_message_feedback_to_state,
+    apply_message_pair_edit_to_state,
+    build_chat_exchange_payload,
+    build_conversation_detail_payload,
+    build_message_action_payload,
+    create_conversation_record,
+    pop_message_revision,
+    push_message_revision,
+    remove_conversation_from_state,
+)
+from ..chat_ops import (
+    build_attachment_only_request,
+    build_chat_context,
+    build_chat_continuity_summary,
+    build_chat_generation_bridge,
+    build_chat_metadata,
+    build_chat_reply,
+    build_chat_suggested_actions,
+    conversation_seed_from_attachments,
+    count_user_turns,
+    detect_chat_intent,
+    resolve_chat_mode,
+    title_from_message,
+)
 from ..entitlement_ops import ensure_chat_request_allowed
 from ..experience_contract_ops import attach_chat_experience
 

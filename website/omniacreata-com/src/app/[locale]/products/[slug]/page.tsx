@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { FeatureCard } from "@/components/marketing/feature-card";
-import { PageHero } from "@/components/marketing/page-hero";
-import { PlatformBadge } from "@/components/marketing/platform-badge";
 import { PlatformMatrix } from "@/components/marketing/platform-matrix";
-import { ProductCard } from "@/components/marketing/product-card";
 import { ButtonLink } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -155,69 +151,49 @@ export default async function ProductPage({ params }: ProductPageProps) {
     )
     .filter((item): item is (typeof localizedProducts)[number] => Boolean(item));
   const highlights = conciseHighlights[product.slug];
+  const statusLabel =
+    product.status === "live"
+      ? messages.common.live
+      : product.status === "preview"
+        ? messages.common.preview
+        : messages.common.planned;
+  const statusClass =
+    product.status === "live"
+      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+      : product.status === "preview"
+        ? "border-sky-200/20 bg-sky-200/10 text-sky-100"
+        : "border-white/10 bg-white/[0.05] text-zinc-200";
+  const surfaceSummary = product.surfaceType
+    .map((surface) =>
+      surface === "ios"
+        ? "iOS"
+        : surface === "android"
+          ? "Android"
+          : surface === "web"
+            ? "Web"
+            : surface === "desktop"
+              ? "Desktop"
+              : "PWA",
+    )
+    .join(", ");
 
   return (
     <>
-      <PageHero
-        actions={[
-          {
-            href: withLocalePrefix(locale, product.primaryCTA.href),
-            label: product.primaryCTA.label,
-          },
-          {
-            href: withLocalePrefix(locale, "/contact"),
-            label: messages.common.contactTeam,
-            variant: "secondary",
-          },
-        ]}
-        description={product.shortDescription}
-        eyebrow={messages.nav.products}
-        meta={[
-          {
-            label: messages.common.productPlatforms,
-            value: product.surfaceType
-              .map((surface) =>
-                surface === "ios"
-                  ? "iOS"
-                  : surface === "android"
-                    ? "Android"
-                    : surface === "web"
-                      ? "Web"
-                      : surface === "desktop"
-                        ? "Desktop"
-                        : "PWA",
-              )
-              .join(", "),
-          },
-          {
-            label: "Access",
-            value: "Public product hub",
-          },
-          {
-            label: "Domain",
-            value: "omniacreata.com",
-          },
-        ]}
-        title={product.name}
-        locale={locale}
-      />
-
-      <section className="px-6 py-10 sm:px-8 lg:px-10" id="overview">
-        <div className="mx-auto max-w-7xl">
+      <section className="relative px-6 pb-12 pt-8 sm:px-8 lg:px-10">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
-            <SectionHeader
-              description={product.summary}
-              eyebrow={messages.sections.overview}
-              title={`${product.name}, at a glance.`}
-            />
-          </Reveal>
-
-          <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <Reveal>
-              <div className="luxury-panel gold-outline rounded-[34px] p-7 sm:p-9">
-                <p className="text-base leading-8 text-foreground-soft">
-                  {product.summary}
+            <div className="grid gap-10 xl:grid-cols-[0.84fr_1.16fr] xl:items-start">
+              <div className="max-w-[42rem]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
+                  {messages.nav.products}
                 </p>
+                <h1 className="mt-5 text-5xl font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-6xl lg:text-[4.8rem]">
+                  {product.name}
+                </h1>
+                <p className="mt-5 max-w-2xl text-lg leading-8 text-foreground-soft">
+                  {product.shortDescription}
+                </p>
+
                 <div className="mt-8 flex flex-wrap gap-3">
                   <ButtonLink
                     href={withLocalePrefix(locale, product.primaryCTA.href)}
@@ -227,45 +203,108 @@ export default async function ProductPage({ params }: ProductPageProps) {
                     {product.primaryCTA.label}
                   </ButtonLink>
                   <ButtonLink
-                    href={withLocalePrefix(locale, "/pricing")}
+                    href={withLocalePrefix(locale, "/contact")}
                     size="lg"
                     variant="secondary"
                   >
-                    {messages.common.viewPricing}
+                    {messages.common.contactTeam}
                   </ButtonLink>
                 </div>
-              </div>
-            </Reveal>
 
-            <div className="grid gap-5">
-              <Reveal delay={80}>
-                <FeatureCard
-                  description={product.shortDescription}
-                  title="What it does"
-                />
-              </Reveal>
-              <Reveal delay={140}>
-                <div className="soft-panel rounded-[30px] p-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
-                    Product surfaces
-                  </p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {product.platformMatrix.map((entry) => (
-                      <PlatformBadge
-                        key={`${product.slug}-${entry.platform}`}
-                        platform={entry.platform}
-                      />
-                    ))}
+                <div className="mt-8 grid gap-4 border-t border-white/[0.08] pt-6 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
+                      Status
+                    </p>
+                    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${statusClass}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
+                      Surfaces
+                    </p>
+                    <p className="text-base font-semibold text-foreground">{surfaceSummary}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
+                      Access
+                    </p>
+                    <p className="text-base font-semibold text-foreground">Public product hub</p>
                   </div>
                 </div>
-              </Reveal>
+              </div>
+
+              <div className="overflow-hidden rounded-[36px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,23,31,0.92),rgba(9,13,18,0.98))] p-7 shadow-[0_26px_80px_rgba(3,10,18,0.24)] sm:p-8">
+                <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+                      Product role
+                    </p>
+                    <p className="mt-2 text-sm text-foreground-soft">{product.roleTitle}</p>
+                  </div>
+                  <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${statusClass}`}>
+                    {statusLabel}
+                  </span>
+                </div>
+
+                <div className="mt-6 max-w-3xl">
+                  <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-[2.4rem]">
+                    {product.headline}
+                  </h2>
+                  <p className="mt-4 text-base leading-8 text-foreground-soft">
+                    {product.roleDescription}
+                  </p>
+                </div>
+
+                <div className="mt-8 grid gap-5 md:grid-cols-3">
+                  {highlights.map((feature, index) => (
+                    <article
+                      key={feature.title}
+                      className="border-t border-white/[0.08] pt-4"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+                        0{index + 1}
+                      </p>
+                      <h3 className="mt-3 text-lg font-semibold tracking-[-0.03em] text-foreground">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-7 text-foreground-soft">
+                        {feature.description}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="px-6 py-10 sm:px-8 lg:px-10" id="overview">
+        <div className="mx-auto max-w-[1320px]">
+          <Reveal>
+            <div className="grid gap-10 xl:grid-cols-[0.9fr_1.1fr]">
+              <SectionHeader
+                description={product.subheadline}
+                eyebrow={messages.sections.overview}
+                title="Why this product exists."
+              />
+              <div className="space-y-5">
+                <p className="text-base leading-8 text-foreground-soft">
+                  {product.summary}
+                </p>
+                <p className="text-base leading-8 text-foreground-soft">
+                  {product.roleDescription}
+                </p>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="px-6 py-10 sm:px-8 lg:px-10" id="access">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
             <SectionHeader
               description="Choose the platform you want to use and continue with a live route or an access fallback."
@@ -282,48 +321,105 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </section>
 
       <section className="px-6 py-10 sm:px-8 lg:px-10" id="capabilities">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
-            <SectionHeader
-              description="A short view of where this product adds value inside Omnia Creata."
-              eyebrow={messages.sections.capabilities}
-              title="Key highlights"
-            />
+            <div className="grid gap-10 xl:grid-cols-[0.88fr_1.12fr]">
+              <SectionHeader
+                description="A short view of where this product adds value inside Omnia Creata."
+                eyebrow={messages.sections.capabilities}
+                title="What it does best"
+              />
+              <div className="space-y-5">
+                {product.capabilityHighlights.map((feature, index) => (
+                  <article
+                    key={feature.title}
+                    className="border-t border-white/[0.08] pt-4 first:border-t-0 first:pt-0"
+                  >
+                    <div className="flex items-start gap-4">
+                      <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+                        0{index + 1}
+                      </span>
+                      <div>
+                        <h3 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                          {feature.title}
+                        </h3>
+                        <p className="mt-2 text-sm leading-7 text-foreground-soft">
+                          {feature.description}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
           </Reveal>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {highlights.map((feature, index) => (
-              <Reveal key={feature.title} delay={index * 70}>
-                <FeatureCard
-                  description={feature.description}
-                  index={`0${index + 1}`}
-                  title={feature.title}
-                />
-              </Reveal>
-            ))}
-          </div>
         </div>
       </section>
 
       <section className="px-6 py-10 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
-            <SectionHeader
-              description="Move to the products that connect most closely with this one."
-              eyebrow={messages.sections.relatedProducts}
-              title="Related products"
-            />
+            <div className="grid gap-10 xl:grid-cols-[0.88fr_1.12fr]">
+              <SectionHeader
+                description="Move to the products that connect most closely with this one."
+                eyebrow={messages.sections.ecosystemRole}
+                title="How it fits inside Omnia"
+              />
+              <div className="space-y-6">
+                <div className="space-y-5">
+                  {product.ecosystemPoints.map((point, index) => (
+                    <article
+                      key={point.title}
+                      className="border-t border-white/[0.08] pt-4 first:border-t-0 first:pt-0"
+                    >
+                      <div className="flex items-start gap-4">
+                        <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+                          0{index + 1}
+                        </span>
+                        <div>
+                          <h3 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                            {point.title}
+                          </h3>
+                          <p className="mt-2 text-sm leading-7 text-foreground-soft">
+                            {point.description}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="border-t border-white/[0.08] pt-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
+                    {messages.sections.relatedProducts}
+                  </p>
+                  <div className="mt-4">
+                    {companionProducts.map((companion) => (
+                      <ButtonLink
+                        key={companion.slug}
+                        className="mb-3 flex h-auto w-full items-center justify-between rounded-[24px] border border-white/[0.08] bg-white/[0.03] px-5 py-4 text-left text-foreground hover:bg-white/[0.05]"
+                        href={withLocalePrefix(locale, `/products/${companion.slug}`)}
+                        size="md"
+                        variant="ghost"
+                      >
+                        <span className="min-w-0 text-left">
+                          <span className="block text-base font-semibold tracking-[-0.03em] text-foreground">
+                            {companion.name}
+                          </span>
+                          <span className="mt-1 block text-sm leading-6 text-foreground-soft">
+                            {companion.shortDescription}
+                          </span>
+                        </span>
+                        <span className="ml-4 shrink-0 text-sm text-accent">
+                          {messages.common.viewProduct}
+                        </span>
+                      </ButtonLink>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </Reveal>
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {companionProducts.map((companion, index) => (
-              <Reveal key={companion.slug} delay={index * 70}>
-                <ProductCard
-                  locale={locale}
-                  messages={messages}
-                  product={companion}
-                />
-              </Reveal>
-            ))}
-          </div>
         </div>
       </section>
     </>

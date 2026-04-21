@@ -4,18 +4,25 @@ from types import SimpleNamespace
 import pytest
 from pydantic import SecretStr
 
+from config.feature_flags import FEATURE_FLAGS, FLAG_CIRCUIT_BREAKER_ENABLED
 from studio_platform.models import OmniaIdentity, StudioWorkspace
 from studio_platform.store import (
     PostgresStudioStateStore,
     SqliteStudioStateStore,
+    StoreUnavailable,
     StudioStateStore,
+    _redact_postgres_dsn,
     _load_state_from_rows,
     build_state_store,
 )
 from studio_platform.store_schema import (
     POSTGRES_COLLECTION_INDEX,
     POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX,
+    POSTGRES_GENERATIONS_STATUS_CREATED_AT_INDEX,
+    POSTGRES_IDENTITIES_EMAIL_CI_INDEX,
     POSTGRES_METADATA_TABLE,
+    POSTGRES_MODERATION_CASES_STATUS_INDEX,
+    POSTGRES_PROJECTS_IDENTITY_UPDATED_AT_INDEX,
     POSTGRES_RECORDS_TABLE,
     STORE_SCHEMA_VERSION,
 )
@@ -231,6 +238,8 @@ def test_build_state_store_selects_configured_backend(tmp_path: Path):
     assert postgres_store._pool_minconn == 4
     assert postgres_store._pool_maxconn == 12
     assert postgres_store._statement_timeout_ms == 45000
+    assert postgres_store._runtime_mode == "all"
+    assert postgres_store._pool_budget_profile == "default"
 
 
 def test_build_state_store_accepts_secretstr_database_url(tmp_path: Path):
@@ -252,7 +261,51 @@ def test_build_state_store_accepts_secretstr_database_url(tmp_path: Path):
     assert store.dsn == "postgresql://studio:secret@localhost:5432/studio"
 
 
-def test_postgres_store_prepares_statement_timeout_and_generation_index():
+@pytest.mark.parametrize(
+    ("runtime_mode", "expected_min", "expected_max", "expected_profile"),
+    [
+        ("web", 3, 6, "web"),
+        ("worker", 5, 14, "worker"),
+        ("all", 4, 12, "default"),
+        ("unexpected", 4, 12, "default"),
+    ],
+)
+def test_build_state_store_uses_runtime_specific_postgres_pool_budget(
+    tmp_path: Path,
+    runtime_mode: str,
+    expected_min: int,
+    expected_max: int,
+    expected_profile: str,
+):
+    settings = SimpleNamespace(
+        state_store_backend="postgres",
+        state_store_path=None,
+        legacy_state_store_path=None,
+        database_url="postgresql://studio:secret@localhost:5432/studio",
+        generation_runtime_mode=runtime_mode,
+        postgres_state_store_min_connections=4,
+        postgres_state_store_max_connections=12,
+        postgres_state_store_web_min_connections=3,
+        postgres_state_store_web_max_connections=6,
+        postgres_state_store_worker_min_connections=5,
+        postgres_state_store_worker_max_connections=14,
+    )
+
+    store = build_state_store(
+        settings,
+        default_json_path=tmp_path / "studio-state.json",
+        default_sqlite_path=tmp_path / "studio-state.sqlite3",
+        default_legacy_sqlite_path=tmp_path / "legacy-state.sqlite3",
+    )
+
+    assert isinstance(store, PostgresStudioStateStore)
+    assert store._pool_minconn == expected_min
+    assert store._pool_maxconn == expected_max
+    assert store._runtime_mode == runtime_mode
+    assert store._pool_budget_profile == expected_profile
+
+
+def test_postgres_store_prepares_statement_timeout_and_expression_indexes():
     store = PostgresStudioStateStore(
         "postgresql://studio:secret@localhost:5432/studio",
         pool_minconn=3,
@@ -267,8 +320,13 @@ def test_postgres_store_prepares_statement_timeout_and_generation_index():
     joined_sql = "\n".join(connection.statements)
     assert "SET statement_timeout = 45000" in joined_sql
     assert POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX in joined_sql
+    assert POSTGRES_GENERATIONS_STATUS_CREATED_AT_INDEX in joined_sql
+    assert POSTGRES_IDENTITIES_EMAIL_CI_INDEX in joined_sql
+    assert POSTGRES_PROJECTS_IDENTITY_UPDATED_AT_INDEX in joined_sql
+    assert POSTGRES_MODERATION_CASES_STATUS_INDEX in joined_sql
     assert POSTGRES_COLLECTION_INDEX in joined_sql
     assert "payload ->> 'identity_id'" in joined_sql
+    assert "LOWER((payload ->> 'email'))" in joined_sql
 
 
 def test_postgres_store_replace_rows_uses_advisory_lock():
@@ -323,9 +381,132 @@ def test_load_state_from_rows_skips_malformed_payloads(caplog: pytest.LogCapture
 def test_store_schema_contract_is_stable():
     assert POSTGRES_RECORDS_TABLE == "studio_state_records"
     assert POSTGRES_METADATA_TABLE == "studio_state_metadata"
-    assert STORE_SCHEMA_VERSION == "2"
+    assert STORE_SCHEMA_VERSION == "3"
     assert POSTGRES_COLLECTION_INDEX == "idx_studio_state_records_collection"
     assert (
         POSTGRES_GENERATIONS_IDENTITY_STATUS_CREATED_AT_INDEX
         == "idx_studio_state_records_generations_identity_status_created_at"
     )
+    assert (
+        POSTGRES_GENERATIONS_STATUS_CREATED_AT_INDEX
+        == "idx_studio_state_records_generations_status_created_at"
+    )
+    assert POSTGRES_IDENTITIES_EMAIL_CI_INDEX == "idx_studio_state_records_identities_email_ci"
+    assert (
+        POSTGRES_PROJECTS_IDENTITY_UPDATED_AT_INDEX
+        == "idx_studio_state_records_projects_identity_updated_at"
+    )
+    assert (
+        POSTGRES_MODERATION_CASES_STATUS_INDEX
+        == "idx_studio_state_records_moderation_cases_status"
+    )
+
+
+def test_redact_postgres_dsn_masks_password():
+    assert (
+        _redact_postgres_dsn("postgresql://user:supersecret@host:5432/db")
+        == "postgresql://user:***@host:5432/db"
+    )
+
+
+class _FailingPool:
+    def getconn(self):
+        raise RuntimeError("pool exhausted")
+
+    def putconn(self, connection, close=False):
+        return None
+
+
+class _PoolConnection:
+    def __init__(self, backend_pid: int, statements: list[str]) -> None:
+        self.info = SimpleNamespace(backend_pid=backend_pid)
+        self._statements = statements
+
+    def cursor(self):
+        return _FakeCursor(self._statements)
+
+    def commit(self):
+        return None
+
+    def rollback(self):
+        return None
+
+
+class _RefreshingPool:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+        self._next_backend_pid = 2
+        self._available = [_PoolConnection(1, self.statements)]
+        self.put_calls: list[tuple[int, bool]] = []
+
+    def getconn(self):
+        if self._available:
+            return self._available.pop(0)
+        connection = _PoolConnection(self._next_backend_pid, self.statements)
+        self._next_backend_pid += 1
+        return connection
+
+    def putconn(self, connection, close=False):
+        self.put_calls.append((connection.info.backend_pid, close))
+        if not close:
+            self._available.append(connection)
+
+
+def test_postgres_store_pool_breaker_opens_after_repeated_borrow_failures():
+    original_flag = FEATURE_FLAGS.is_enabled(FLAG_CIRCUIT_BREAKER_ENABLED)
+    FEATURE_FLAGS.override(FLAG_CIRCUIT_BREAKER_ENABLED, True)
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+
+    try:
+        store._ensure_pool = lambda: _FailingPool()  # type: ignore[method-assign]
+
+        for _ in range(5):
+            with pytest.raises(RuntimeError, match="pool exhausted"):
+                store._connect()
+
+        with pytest.raises(StoreUnavailable, match="postgres_pool_circuit_open"):
+            store._connect()
+
+        snapshot = store.describe_circuit_breaker()
+        assert snapshot is not None
+        assert snapshot["state"] == "open"
+    finally:
+        FEATURE_FLAGS.override(FLAG_CIRCUIT_BREAKER_ENABLED, original_flag)
+
+
+def test_postgres_store_retires_connections_older_than_max_age():
+    store = PostgresStudioStateStore(
+        "postgresql://studio:secret@localhost:5432/studio",
+        connection_max_age_seconds=1,
+    )
+    pool = _RefreshingPool()
+    store._ensure_pool = lambda: pool  # type: ignore[method-assign]
+
+    first_connection = store._connect()
+    store._release_connection(first_connection)
+    store._connection_born_monotonic[id(first_connection)] = 0.0
+
+    second_connection = store._connect()
+
+    assert first_connection.info.backend_pid == 1
+    assert second_connection.info.backend_pid == 2
+    assert (1, True) in pool.put_calls
+    assert any("SET statement_timeout" in statement for statement in pool.statements)
+
+
+@pytest.mark.asyncio
+async def test_postgres_store_describe_exposes_runtime_pool_budget_profile():
+    store = PostgresStudioStateStore(
+        "postgresql://studio:secret@localhost:5432/studio",
+        pool_minconn=5,
+        pool_maxconn=14,
+        runtime_mode="worker",
+        pool_budget_profile="worker",
+    )
+
+    description = await store.describe()
+
+    assert description["runtime_mode"] == "worker"
+    assert description["pool_budget_profile"] == "worker"
+    assert description["pool_min_connections"] == 5
+    assert description["pool_max_connections"] == 14

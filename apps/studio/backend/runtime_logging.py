@@ -9,6 +9,7 @@ from security.redaction import redact_sensitive_text
 
 
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_STANDARD_LOG_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__.keys())
 
 
 def _redact_log_arg(value):
@@ -30,6 +31,10 @@ class RedactingLogFilter(logging.Filter):
         record.msg = redact_sensitive_text(record.msg)
         if record.args:
             record.args = _redact_log_arg(record.args)
+        for key, value in list(record.__dict__.items()):
+            if key in _STANDARD_LOG_RECORD_FIELDS or key.startswith("_"):
+                continue
+            record.__dict__[key] = _redact_log_arg(value)
         return True
 
 

@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI, Request
 
 import studio_platform.router as router_module
+from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
 from security.moderation_engine import AgeAmbiguity, ContextType, PromptRiskLevel, SexualIntent
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter
@@ -219,6 +220,90 @@ async def test_generation_endpoint_returns_error_code_for_failed_jobs(
         assert payload["credit_status"] == "released"
         assert payload["final_credit_cost"] == 0
     finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_sanitizes_prompt_inputs_when_strict_flag_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_flag = FEATURE_FLAGS.is_enabled(FLAG_STRICT_INPUT_SANITIZATION)
+    FEATURE_FLAGS.override(FLAG_STRICT_INPUT_SANITIZATION, True)
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+    captured: dict[str, str] = {}
+
+    async def fake_create_generation(**kwargs: object) -> GenerationJob:
+        captured["prompt"] = str(kwargs["prompt"])
+        captured["negative_prompt"] = str(kwargs["negative_prompt"])
+        return _build_generation_job()
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "editorial\u200b portrait\x00",
+                "negative_prompt": "grainy\r\n\tbad\x7f",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 202
+        assert captured["prompt"] == "editorial portrait"
+        assert captured["negative_prompt"] == "grainy\n\tbad"
+    finally:
+        FEATURE_FLAGS.override(FLAG_STRICT_INPUT_SANITIZATION, original_flag)
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_generation_endpoint_rejects_excessive_character_repetition_when_strict_flag_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_flag = FEATURE_FLAGS.is_enabled(FLAG_STRICT_INPUT_SANITIZATION)
+    FEATURE_FLAGS.override(FLAG_STRICT_INPUT_SANITIZATION, True)
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "prompt": "a" * 2050,
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 422
+    finally:
+        FEATURE_FLAGS.override(FLAG_STRICT_INPUT_SANITIZATION, original_flag)
         await service.shutdown()
 
 

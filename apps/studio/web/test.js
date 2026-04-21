@@ -13,7 +13,7 @@ import { chromium } from 'playwright';
     });
 
     try {
-        await page.goto('http://localhost:5173', { waitUntil: 'networkidle', timeout: 5000 });
+        await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle', timeout: 5000 });
     } catch (e) {
         console.log("Navigation timeout or error:", e.message);
     }

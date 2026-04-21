@@ -43,9 +43,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from config.env import Environment, get_settings, reveal_secret
+from config.env import Environment, get_settings, reveal_secret_with_audit
+from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_STARTUP_VALIDATION
+from observability.context import bind_request_id, reset_request_id
 from observability.metrics import PrometheusMetricsCollector
 from security.auth import AuthConfig, setup_auth
+from security.auth_policy import validate_route_policy_coverage
 from security.ingress import IngressLimitMiddleware, resolve_request_id
 from security.maintenance import MaintenanceMiddleware, load_maintenance_config
 from security.rate_limit import build_rate_limiter
@@ -53,7 +56,7 @@ from runtime_logging import configure_runtime_logging
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import StudioService
-from studio_platform.store import build_state_store
+from studio_platform.store import StoreUnavailable, build_state_store
 from studio_platform.versioning import STUDIO_API_VERSION, build_runtime_version_payload, load_version_info
 
 
@@ -91,9 +94,19 @@ def _should_enforce_trusted_hosts(current_settings) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_route_policy_coverage(app)
+    try:
+        runtime_warnings = settings.validate_runtime()
+    except ValueError as exc:
+        if FEATURE_FLAGS.is_enabled(FLAG_STRICT_STARTUP_VALIDATION):
+            raise RuntimeError(f"Studio runtime validation failed: {exc}") from exc
+        logger.warning("Studio runtime validation warning: %s", exc)
+        runtime_warnings = []
+    for warning in runtime_warnings:
+        logger.warning("Studio runtime validation warning: %s", warning)
     setup_auth(
         AuthConfig(
-            secret_key=reveal_secret(settings.jwt_secret),
+            secret_key=reveal_secret_with_audit("JWT_SECRET", settings.jwt_secret),
             algorithm=settings.jwt_algorithm,
         )
     )
@@ -173,7 +186,12 @@ def _apply_security_headers(response: Response, *, request_path: str) -> None:
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
     response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "accelerometer=(), gyroscope=(), fullscreen=(self), "
+        "clipboard-read=(self), clipboard-write=(self)",
+    )
     if settings.environment in {Environment.STAGING, Environment.PRODUCTION}:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     if not settings.enable_api_docs:
@@ -239,10 +257,28 @@ def _build_internal_error_response(request: Request, exc: Exception) -> JSONResp
     return response
 
 
+def _collect_circuit_breaker_snapshots() -> dict[str, object]:
+    broker_breaker = None
+    if service.generation_broker is not None:
+        describe_generation_broker_breaker = getattr(
+            service.generation_broker,
+            "describe_circuit_breaker",
+            None,
+        )
+        if callable(describe_generation_broker_breaker):
+            broker_breaker = describe_generation_broker_breaker()
+    return {
+        "generation_broker": broker_breaker,
+        "providers": service.providers.describe_circuit_breakers(),
+        "postgres_pool": service.store.describe_circuit_breaker(),
+    }
+
+
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = resolve_request_id(request.headers.get("X-Request-ID"))
     request.state.request_id = request_id
+    request_id_token = bind_request_id(request_id)
     request.state.request_started_at = time.perf_counter()
     started_at = float(request.state.request_started_at)
     metrics_collector.request_started()
@@ -260,6 +296,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _build_internal_error_response(request, exc)
     finally:
         metrics_collector.request_finished()
+        reset_request_id(request_id_token)
     duration_seconds = time.perf_counter() - started_at
     path_label = _path_label_for_request(request)
     if path_label != "/metrics":
@@ -336,6 +373,7 @@ if settings.enable_metrics_endpoint:
                 build=version_payload["build"],
                 channel=version_payload["channel"],
                 status=version_payload["status"],
+                circuit_breakers=_collect_circuit_breaker_snapshots(),
             ),
             media_type="text/plain; version=0.0.4",
         )
@@ -348,6 +386,22 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     if request_id:
         payload["request_id"] = request_id
     response = JSONResponse(status_code=exc.status_code, content=payload)
+    _apply_request_context_headers(
+        response,
+        request_id=request_id,
+        duration_seconds=_request_duration_seconds(request),
+    )
+    _apply_security_headers(response, request_path=request.url.path)
+    return response
+
+
+@app.exception_handler(StoreUnavailable)
+async def store_unavailable_exception_handler(request: Request, exc: StoreUnavailable):
+    payload = {"error": str(exc)}
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        payload["request_id"] = request_id
+    response = JSONResponse(status_code=503, content=payload)
     _apply_request_context_headers(
         response,
         request_id=request_id,

@@ -4,10 +4,10 @@
   "version": "0.6.0-alpha",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "vite build",
     "type-check": "tsc --noEmit -p tsconfig.app.json",
-    "preview": "vite preview",
+    "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
     "test": "vitest",
     "test:ci": "vitest run"
   },

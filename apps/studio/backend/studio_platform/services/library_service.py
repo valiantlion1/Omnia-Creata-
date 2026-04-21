@@ -628,23 +628,25 @@ class LibraryService:
         if asset is None or not self.is_public_share_eligible_asset(asset):
             raise PermissionError("Public preview access denied")
         posts = await self.service.store.list_posts()
-        identities = await self.service.store.list_identities()
-        generations = await self.service.store.list_generations()
-        identities_by_id = {identity.id: identity for identity in identities}
-        generations_by_id = {generation.id: generation for generation in generations}
-        for post in posts:
-            if post.visibility != Visibility.PUBLIC:
-                continue
+        candidate_posts = [
+            post
+            for post in posts
+            if post.visibility == Visibility.PUBLIC
+            and (asset_id in post.asset_ids or asset_id == post.cover_asset_id)
+        ]
+        for post in candidate_posts:
+            identity = await self.service.store.get_model("identities", post.identity_id, OmniaIdentity)
+            generation = await self.service.store.get_model("generations", post.id, GenerationJob)
+            generations_by_id = {post.id: generation} if generation is not None else {}
             if self.service.public.should_hide_post_from_public(
                 post,
-                identity=identities_by_id.get(post.identity_id),
+                identity=identity,
                 generations_by_id=generations_by_id,
             ):
                 continue
             if not self.service.public.is_publicly_showcase_ready_post(post):
                 continue
-            if asset_id in post.asset_ids or asset_id == post.cover_asset_id:
-                return
+            return
         raise PermissionError("Public preview access denied")
 
     async def list_assets(

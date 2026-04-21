@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -31,6 +32,15 @@ logger = logging.getLogger(__name__)
 class PublicService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
+
+    @staticmethod
+    def _collect_post_asset_ids(posts: list[PublicPost]) -> set[str]:
+        asset_ids: set[str] = set()
+        for post in posts:
+            if post.cover_asset_id:
+                asset_ids.add(post.cover_asset_id)
+            asset_ids.update(asset_id for asset_id in post.asset_ids if asset_id)
+        return asset_ids
 
     def serialize_public_project(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         project = Project.model_validate(payload)
@@ -294,18 +304,15 @@ class PublicService:
         sort: str = "trending",
         viewer_identity_id: str | None = None,
     ) -> list[Dict[str, Any]]:
-        posts = await self.service.store.list_posts()
-        assets = await self.service.store.list_assets()
-        identities = await self.service.store.list_identities()
-        generations = await self.service.store.list_generations()
-        assets_by_id = {asset.id: asset for asset in assets}
-        identities_by_id = {identity.id: identity for identity in identities}
-        generations_by_id = {generation.id: generation for generation in generations}
+        posts = await self.service.store.list_public_posts()
+        assets_by_id, identities_by_id, generations_by_id = await asyncio.gather(
+            self.service.store.get_assets_for_ids(self._collect_post_asset_ids(posts)),
+            self.service.store.get_identities_for_ids({post.identity_id for post in posts}),
+            self.service.store.get_generations_for_ids({post.id for post in posts}),
+        )
 
         public_posts: list[PublicPost] = []
         for post in posts:
-            if post.visibility != Visibility.PUBLIC:
-                continue
             if self.should_hide_post_from_public(
                 post,
                 identity=identities_by_id.get(post.identity_id),
@@ -358,18 +365,15 @@ class PublicService:
 
     async def list_liked_posts(self, identity_id: str) -> list[Dict[str, Any]]:
         await self.service.get_identity(identity_id)
-        posts = await self.service.store.list_posts()
-        assets = await self.service.store.list_assets()
-        identities = await self.service.store.list_identities()
-        generations = await self.service.store.list_generations()
-        assets_by_id = {asset.id: asset for asset in assets}
-        identities_by_id = {identity.id: identity for identity in identities}
-        generations_by_id = {generation.id: generation for generation in generations}
+        posts = await self.service.store.list_posts_liked_by_identity(identity_id)
+        assets_by_id, identities_by_id, generations_by_id = await asyncio.gather(
+            self.service.store.get_assets_for_ids(self._collect_post_asset_ids(posts)),
+            self.service.store.get_identities_for_ids({post.identity_id for post in posts}),
+            self.service.store.get_generations_for_ids({post.id for post in posts}),
+        )
 
         liked_posts: list[PublicPost] = []
         for post in posts:
-            if identity_id not in post.liked_by:
-                continue
             if post.visibility != Visibility.PUBLIC:
                 continue
             if self.should_hide_post_from_public(
@@ -444,12 +448,13 @@ class PublicService:
         viewer_identity_id: str | None = None,
     ) -> Dict[str, Any]:
         post = await self.get_post(post_id)
-        assets = await self.service.store.list_assets()
-        identities = await self.service.store.list_identities()
-        generations = await self.service.store.list_generations()
-        assets_by_id = {asset.id: asset for asset in assets}
-        identities_by_id = {identity.id: identity for identity in identities}
-        generations_by_id = {generation.id: generation for generation in generations}
+        assets_by_id, identity, generation = await asyncio.gather(
+            self.service.store.get_assets_for_ids(self._collect_post_asset_ids([post])),
+            self.service.store.get_identity(post.identity_id),
+            self.service.store.get_generation(post.id),
+        )
+        identities_by_id = {identity.id: identity} if identity is not None else {}
+        generations_by_id = {generation.id: generation} if generation is not None else {}
         if post.visibility != Visibility.PUBLIC and viewer_identity_id != post.identity_id:
             raise PermissionError("Post is private")
         if (
@@ -497,8 +502,10 @@ class PublicService:
                 action_code="public_post",
                 action_label="making posts public",
             )
-            assets = await self.service.store.list_assets()
-            generations = await self.service.store.list_generations()
+            assets, generations = await asyncio.gather(
+                self.service.store.list_assets_for_identity(identity_id),
+                self.service.store.list_generations_for_identity(identity_id),
+            )
             assets_by_id = {asset.id: asset for asset in assets}
             generations_by_id = {generation.id: generation for generation in generations}
             blockers = self.post_publish_blockers(

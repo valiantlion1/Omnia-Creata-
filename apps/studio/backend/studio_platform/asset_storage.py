@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import httpx
 
-from config.env import Environment, Settings, reveal_secret
+from config.env import Environment, Settings, reveal_secret_with_audit
 
 
 logger = logging.getLogger(__name__)
@@ -190,7 +190,10 @@ def build_asset_storage_registry(settings: Settings, media_dir: Path) -> AssetSt
     if settings.supabase_url and settings.supabase_service_role_key:
         supabase_backend = SupabaseAssetStorageBackend(
             base_url=settings.supabase_url,
-            service_role_key=reveal_secret(settings.supabase_service_role_key),
+            service_role_key=reveal_secret_with_audit(
+                "SUPABASE_SERVICE_ROLE_KEY",
+                settings.supabase_service_role_key,
+            ),
             bucket=settings.supabase_storage_bucket,
             timeout_seconds=max(settings.default_timeout_seconds, 120),
         )

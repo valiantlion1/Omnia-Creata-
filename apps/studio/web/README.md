@@ -24,6 +24,9 @@ It is the React/Vite surface for:
 2. Development
    npm run dev
 
+   Canonical local frontend host is `http://127.0.0.1:5173`.
+   `npm run preview` is also pinned to the same host and port so Studio does not keep drifting onto extra local frontend hosts such as `4173`.
+
 3. Environment
 - Create a `.env` file in this folder based on `.env.example`
 - Main local values:

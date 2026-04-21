@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from starlette.requests import Request as StarletteRequest
 
 from config.env import Environment, get_settings
+import security.auth as auth_module
 import studio_platform.router as router_module
 from security.auth import (
     User,
@@ -1038,6 +1039,49 @@ async def test_get_current_user_includes_session_context_for_local_jwt_tokens() 
     assert user.metadata["session_expires_at"] is not None
 
 
+@pytest.mark.asyncio
+async def test_get_current_user_logs_token_fingerprint_without_bearer_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_auth()
+    captured: dict[str, object] = {}
+
+    class _RejectingSupabaseClient:
+        async def get_user(self, access_token: str) -> dict[str, str]:
+            raise SupabaseAuthError("invalid token")
+
+    def fake_debug(message: str, *args, **kwargs) -> None:
+        captured["message"] = message
+        captured["extra"] = kwargs.get("extra", {})
+
+    secret_token = "sk-or-v1-secret-token-1234567890"
+    monkeypatch.setattr(auth_module, "get_supabase_auth_client", lambda: _RejectingSupabaseClient())
+    monkeypatch.setattr(auth_module.logger, "debug", fake_debug)
+    request = StarletteRequest(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/auth/me",
+            "headers": [],
+            "query_string": b"",
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=secret_token)
+
+    user = await get_current_user(request, credentials)
+
+    assert user is None
+    assert captured["message"] == "auth_supabase_token_rejected"
+    extra = captured["extra"]
+    assert isinstance(extra, dict)
+    assert "token_preview" not in extra
+    assert extra["token_fingerprint"] == hashlib.sha256(secret_token.encode("utf-8")).hexdigest()[:16]
+    assert secret_token not in repr(extra)
+
+
 def test_create_user_tokens_share_one_session_family_across_access_and_refresh_tokens() -> None:
     setup_auth()
     token_payload = create_user_tokens(
@@ -1446,6 +1490,48 @@ async def test_healthz_detail_route_requires_owner_mode_and_returns_truth_payloa
         assert "truth_sync" in payload
         assert "runtime_topology" in payload
         assert "ai_control_plane" in payload
+        assert "feature_flags" in payload
+        assert "circuit_breakers" in payload
+        assert "providers" in payload["circuit_breakers"]
+        assert isinstance(payload["feature_flags"], dict)
+        assert isinstance(payload["circuit_breakers"]["providers"], dict)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_healthz_ready_and_startup_routes_report_initialized_runtime(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        ready_response = await client.get("/v1/healthz/ready")
+        startup_response = await client.get("/v1/healthz/startup")
+
+    try:
+        assert ready_response.status_code == 200
+        assert ready_response.json()["ready"] is True
+        assert startup_response.status_code == 200
+        assert startup_response.json()["started"] is True
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_healthz_ready_and_startup_routes_fail_when_service_is_not_initialized(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    service._initialized = False
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        ready_response = await client.get("/v1/healthz/ready")
+        startup_response = await client.get("/v1/healthz/startup")
+
+    try:
+        assert ready_response.status_code == 503
+        assert ready_response.json()["ready"] is False
+        assert startup_response.status_code == 503
+        assert startup_response.json()["started"] is False
     finally:
         await service.shutdown()
 
@@ -2563,6 +2649,26 @@ async def test_shares_route_lists_sanitized_records(
         assert response.status_code == 200
         assert response.json()["shares"][0]["token_preview"] == "abcd...1234"
         assert "token" not in response.json()["shares"][0]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_malformed_email_payload_with_422(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/auth/login",
+            json={
+                "email": "x@y",
+                "password": "Password123!",
+            },
+        )
+
+    try:
+        assert response.status_code == 422
     finally:
         await service.shutdown()
 

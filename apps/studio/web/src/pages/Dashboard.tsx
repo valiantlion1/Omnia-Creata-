@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Copy, Globe, Heart, Layers, Lock, Search, Sparkles, Star, Users, X, Zap } from 'lucide-react'
 
-import { AppPage, ButtonChip, SkeletonMasonry, StatusPill } from '@/components/StudioPrimitives'
+import { AppPage, ButtonChip, EmptyState, SkeletonMasonry, StatusPill } from '@/components/StudioPrimitives'
 import { useLightbox } from '@/components/Lightbox'
 import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -717,8 +717,11 @@ export default function DashboardPage() {
     <AppPage className="max-w-[1700px] gap-0 py-5 md:py-6">
 
       {/* ── Tab Bar ── */}
-      <section className="mb-4 flex flex-wrap items-center gap-3 pb-3">
-        <div className="flex items-center gap-1.5">
+      <section className="mb-5 rounded-[30px] border border-white/[0.05] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 py-4 shadow-[0_20px_60px_-30px_rgba(4,10,18,0.42)] backdrop-blur-xl md:px-5 md:py-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Explore</div>
+            <div className="mt-3 grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:overflow-x-auto sm:pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {galleryTabs.map((tab) => {
             const Icon = tab.icon
             const isActive = galleryTab === tab.id
@@ -726,59 +729,61 @@ export default function DashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-[13px] font-semibold transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-semibold transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] sm:w-auto sm:shrink-0 sm:gap-2 sm:px-5 sm:py-2.5 sm:text-[13px] ${
                   isActive
-                    ? 'text-white ring-1 ring-white/10 shadow-[0_0_20px_rgba(var(--primary-light),0.15)]'
-                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+                    ? 'text-white ring-1 ring-white/[0.08]'
+                    : 'text-zinc-400 hover:bg-white/[0.03] hover:text-zinc-100'
                 }`}
-                style={isActive ? { background: 'linear-gradient(135deg, rgb(var(--primary)/0.25), rgb(var(--primary)/0.08))' } : undefined}
+                style={isActive ? { background: 'linear-gradient(135deg, rgba(188,209,229,0.2), rgba(146,184,214,0.08))' } : undefined}
               >
                 <Icon className={`h-4 w-4 ${isActive ? 'text-[rgb(var(--primary-light))]' : ''}`} />
                 {tab.label}
               </button>
             )
           })}
-        </div>
+            </div>
+          </div>
 
         {/* Community sort + search */}
         {galleryTab === 'community' && (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1">
+          <div className="flex w-full flex-col gap-3 xl:max-w-[620px] xl:items-end">
+            <div className="flex w-full flex-wrap items-center gap-2 xl:justify-end">
               {sortOptions.map((option) => (
                 <button key={option.id} onClick={() => setSort(option.id)}>
-                  <ButtonChip active={sort === option.id} className="text-[12px] py-1.5 px-3 border-white/5 bg-white/[0.03] hover:bg-white/[0.07]">
+                  <ButtonChip active={sort === option.id} className="px-3 py-1.5 text-[12px]">
                     {option.label}
                   </ButtonChip>
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.02] px-3.5 py-2">
-              <Search className="h-3.5 w-3.5 text-zinc-600 shrink-0" />
+            <div className="flex w-full items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3.5 py-2.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search prompts, creators, styles..."
-                className="bg-transparent text-[13px] text-white placeholder:text-zinc-600 outline-none w-44 sm:w-52"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-white placeholder:text-zinc-600 outline-none"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-zinc-600 hover:text-white transition shrink-0">
+                <button onClick={() => setSearchQuery('')} className="shrink-0 text-zinc-500 transition hover:text-white">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
           </div>
         )}
+        </div>
       </section>
 
       {/* ── Community Tab ── */}
       {galleryTab === 'community' && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           {postsQuery.isLoading ? (
             <SkeletonMasonry count={18} />
           ) : filteredPosts.length > 0 ? (
             <>
-              <div className="text-[11px] text-zinc-600 font-medium px-0.5">
+              <div className="px-0.5 text-[11px] font-medium text-zinc-500">
                 {filteredPosts.length} {filteredPosts.length === 1 ? 'result' : 'results'}
                 {searchQuery ? ` for "${searchQuery}"` : ''}
                 {' · '}{sortOptions.find((o) => o.id === sort)?.label ?? 'Trending'}
@@ -789,30 +794,75 @@ export default function DashboardPage() {
                 ))}
               </div>
             </>
+          ) : searchQuery ? (
+            <div className="py-8">
+              <EmptyState
+                title={`No results for "${searchQuery}"`}
+                description="Try different prompt words, creator names, or style tags."
+              />
+            </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-28 text-center animate-in fade-in duration-500">
-              <div
-                className="flex h-20 w-20 items-center justify-center rounded-[24px] mb-8 ring-1 ring-white/[0.08] shadow-[0_0_40px_rgba(var(--primary-light),0.1)]"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--primary-light)/0.1), rgb(var(--accent)/0.1))' }}
-              >
-                <Users className="h-8 w-8 text-zinc-400" />
+            <div className="overflow-hidden rounded-[34px] border border-white/[0.05] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] shadow-[0_24px_80px_-36px_rgba(4,10,18,0.5)]">
+              <div className="grid gap-8 p-6 md:p-8 xl:grid-cols-[1.02fr_0.98fr] xl:items-center">
+                <div className="flex flex-col items-center text-center xl:items-start xl:text-left">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Community feed</div>
+                  <div className="mt-5 flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/[0.08] bg-[linear-gradient(135deg,rgba(188,209,229,0.16),rgba(146,184,214,0.06))]">
+                    <Users className="h-7 w-7 text-zinc-300" />
+                  </div>
+                  <h2 className="mt-6 text-3xl font-semibold tracking-[-0.035em] text-white md:text-[2.2rem]">
+                    Nothing is live here yet
+                  </h2>
+                  <p className="mt-3 max-w-xl text-sm leading-7 text-zinc-400 md:text-[15px]">
+                    Start in Create, publish the work you want the community to see, then come back here when you want the public shelf to feel alive.
+                  </p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3 xl:justify-start">
+                    <Link
+                      to={canUseAccount ? '/create' : '/signup'}
+                      className="inline-flex items-center gap-2 rounded-full bg-[rgba(232,239,246,0.95)] px-6 py-3 text-sm font-semibold text-[#0f1720] transition hover:opacity-92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                    >
+                      {canUseAccount ? 'Open Create' : 'Create account'}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setGalleryTab('showcase')}
+                      className="rounded-full border border-white/[0.08] px-6 py-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white"
+                    >
+                      See curated references
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-3">
+                    {showcaseReferences.slice(0, 3).map((item, index) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => openLightbox(item.src, item.label, {
+                          title: item.label,
+                          authorName: 'OmniaCreata',
+                          authorUsername: 'studio',
+                          prompt: item.prompt,
+                        })}
+                        className={`group relative overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#141922] text-left shadow-[0_18px_40px_-30px_rgba(4,10,18,0.42)] ${index === 0 ? 'sm:col-span-2 sm:aspect-[16/10]' : 'aspect-[4/5]'}`}
+                      >
+                        <img
+                          src={item.src}
+                          alt={item.label}
+                          loading="lazy"
+                          style={item.focus ? { objectPosition: item.focus } : undefined}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                        />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0f141b]/88 via-[#0f141b]/16 to-transparent" />
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-4">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-400">{item.tag}</div>
+                          <div className="mt-1 text-sm font-semibold text-white">{item.label}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="text-2xl font-semibold tracking-[-0.02em] text-zinc-200">
-                {searchQuery ? `No results for "${searchQuery}"` : 'Nothing is live here yet'}
-              </div>
-              <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
-                {searchQuery
-                  ? 'Try different prompt words, creator names, or style tags.'
-                  : 'Start in Create, then publish the work you want the community to see.'}
-              </p>
-              {!searchQuery && (
-                <Link
-                  to={canUseAccount ? '/create' : '/signup'}
-                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                >
-                  {canUseAccount ? 'Open Create' : 'Create account'}
-                </Link>
-              )}
             </div>
           )}
         </section>

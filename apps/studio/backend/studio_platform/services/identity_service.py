@@ -5,8 +5,25 @@ import logging
 import json
 import re
 from datetime import datetime, timedelta, timezone
-from config.env import get_settings, reveal_secret
-from ..models import *
+import httpx
+from config.env import get_settings, reveal_secret_with_audit
+from ..models import (
+    CreditEntryType,
+    CreditLedgerEntry,
+    DeletedIdentityTombstone,
+    GenerationJob,
+    IdentityPlan,
+    ManualReviewState,
+    MediaAsset,
+    OmniaIdentity,
+    PlanCatalogEntry,
+    PublicPost,
+    StudioState,
+    StudioWorkspace,
+    SubscriptionStatus,
+    Visibility,
+    utc_now,
+)
 from ..models.identity import (
     MARKETING_CONSENT_VERSION,
     PRIVACY_VERSION,
@@ -894,36 +911,40 @@ class IdentityService:
         else:
             raise KeyError("Profile not found")
 
-        posts = await self.service.store.list_posts()
-        assets = await self.service.store.list_assets()
-        generations = await self.service.store.list_generations()
+        posts, assets, generations = await asyncio.gather(
+            self.service.store.list_posts_for_identity(identity.id),
+            self.service.store.list_assets_for_identity(identity.id),
+            self.service.store.list_generations_for_identity(identity.id),
+        )
         assets_by_id = {asset.id: asset for asset in assets}
         generations_by_id = {generation.id: generation for generation in generations}
         own_profile = bool(viewer_identity_id and viewer_identity_id == identity.id)
 
         visible_posts = []
+        public_post_count = 0
         for post in posts:
-            if post.identity_id != identity.id:
-                continue
-            if not own_profile and post.visibility != Visibility.PUBLIC:
-                continue
-            if (
-                not own_profile
-                and self._should_hide_post_from_public(
-                    post,
-                    identity=identity,
-                    generations_by_id=generations_by_id,
-                )
-            ):
-                continue
-            if not own_profile and not self._is_publicly_showcase_ready_post(post):
-                continue
-            if not any(
+            has_truthful_assets = any(
                 asset_id in assets_by_id
                 and assets_by_id[asset_id].deleted_at is None
                 and self._is_truthful_surface_asset(assets_by_id[asset_id])
                 for asset_id in post.asset_ids
-            ):
+            )
+            if not has_truthful_assets:
+                continue
+
+            publicly_visible = (
+                post.visibility == Visibility.PUBLIC
+                and not self._should_hide_post_from_public(
+                    post,
+                    identity=identity,
+                    generations_by_id=generations_by_id,
+                )
+                and self._is_publicly_showcase_ready_post(post)
+            )
+            if publicly_visible:
+                public_post_count += 1
+
+            if not own_profile and not publicly_visible:
                 continue
             visible_posts.append(post)
 
@@ -970,27 +991,6 @@ class IdentityService:
                     continue
                 featured_asset = candidate
                 break
-
-        public_post_count = len(
-            [
-                post
-                for post in posts
-                if post.identity_id == identity.id
-                and post.visibility == Visibility.PUBLIC
-                and not self._should_hide_post_from_public(
-                    post,
-                    identity=identity,
-                    generations_by_id=generations_by_id,
-                )
-                and self._is_publicly_showcase_ready_post(post)
-                and any(
-                    asset_id in assets_by_id
-                    and assets_by_id[asset_id].deleted_at is None
-                    and self._is_truthful_surface_asset(assets_by_id[asset_id])
-                    for asset_id in post.asset_ids
-                )
-            ]
-        )
 
         billing_state = await self._resolve_billing_state_for_identity(identity) if own_profile else None
 
@@ -1120,18 +1120,9 @@ class IdentityService:
 
 
     async def get_identity_by_username(self, username: str) -> OmniaIdentity:
-        normalized = username.strip().lower()
-        identities = await self.service.store.list_identities()
-        for identity in identities:
-            if (identity.username or "").strip().lower() == normalized:
-                return identity
-        posts = await self.service.store.list_posts()
-        for post in posts:
-            if post.owner_username.strip().lower() != normalized:
-                continue
-            for identity in identities:
-                if identity.id == post.identity_id:
-                    return identity
+        identity = await self.service.store.find_identity_by_username(username)
+        if identity is not None:
+            return identity
         raise KeyError("Identity not found")
 
 
@@ -1179,10 +1170,12 @@ class IdentityService:
         await self.service.store.mutate(mutation)
 
         settings = get_settings()
-        service_role_key = reveal_secret(settings.supabase_service_role_key)
+        service_role_key = reveal_secret_with_audit(
+            "SUPABASE_SERVICE_ROLE_KEY",
+            settings.supabase_service_role_key,
+        )
         if settings.supabase_url and service_role_key:
             try:
-                import httpx
                 # Make admin delete request to auth db
                 url = f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{identity_id}"
                 headers = {
@@ -1191,7 +1184,7 @@ class IdentityService:
                 }
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     await client.delete(url, headers=headers)
-            except Exception as e:
+            except (ImportError, httpx.HTTPError) as e:
                 import logging
                 logging.getLogger(__name__).warning("Failed to delete user from Supabase auth: %s", e)
                 

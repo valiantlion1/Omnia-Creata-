@@ -21,14 +21,14 @@ export function SectionHeader({
     <div
       className={cn(
         "space-y-4",
-        centered ? "mx-auto max-w-3xl text-center" : "max-w-2xl text-left",
+        centered ? "mx-auto max-w-3xl text-center" : "max-w-[38rem] text-left",
         className,
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
         {eyebrow}
       </p>
-      <h2 className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
+      <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-5xl">
         {title}
       </h2>
       <p className="text-base leading-8 text-foreground-soft sm:text-lg">

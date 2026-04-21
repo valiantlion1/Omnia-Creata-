@@ -42,9 +42,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-from config.env import reveal_secret
+from config.env import reveal_secret_with_audit
+from config.feature_flags import FEATURE_FLAGS, FLAG_CIRCUIT_BREAKER_ENABLED
 
 from .models import StudioState
+from .resilience import CircuitBreaker, CircuitOpenError, describe_breaker
 from .store_schema import (
     POSTGRES_METADATA_TABLE,
     POSTGRES_RECORDS_TABLE,
@@ -65,6 +67,10 @@ POSTGRES_WRITE_LOCK_KEY = 902417531
 logger = logging.getLogger("omnia.studio.store")
 
 
+class StoreUnavailable(RuntimeError):
+    """Raised when the durable store is temporarily unavailable."""
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -72,6 +78,40 @@ def _utc_now_iso() -> str:
 def _count_state_records(state: StudioState) -> int:
     payload = state.model_dump(mode="json")
     return sum(len(payload.get(collection, {})) for collection in STATE_COLLECTIONS)
+
+
+def _coerce_pool_budget(value: Any, default: int) -> int:
+    if value in (None, ""):
+        return int(default)
+    return int(value)
+
+
+def _resolve_postgres_pool_budget(settings) -> tuple[int, int, str]:
+    default_min = _coerce_pool_budget(
+        getattr(settings, "postgres_state_store_min_connections", 2),
+        2,
+    )
+    default_max = _coerce_pool_budget(
+        getattr(settings, "postgres_state_store_max_connections", 10),
+        10,
+    )
+    runtime_mode = str(getattr(settings, "generation_runtime_mode", "all") or "all").strip().lower()
+
+    if runtime_mode == "web":
+        return (
+            _coerce_pool_budget(getattr(settings, "postgres_state_store_web_min_connections", None), default_min),
+            _coerce_pool_budget(getattr(settings, "postgres_state_store_web_max_connections", None), default_max),
+            "web",
+        )
+
+    if runtime_mode == "worker":
+        return (
+            _coerce_pool_budget(getattr(settings, "postgres_state_store_worker_min_connections", None), default_min),
+            _coerce_pool_budget(getattr(settings, "postgres_state_store_worker_max_connections", None), default_max),
+            "worker",
+        )
+
+    return (default_min, default_max, "default")
 
 
 def _normalize_bootstrap_paths(
@@ -294,6 +334,12 @@ class StudioStateStore:
                 "record_count": _count_state_records(self._state),
             }
 
+    async def shutdown(self) -> None:
+        return None
+
+    def describe_circuit_breaker(self) -> dict[str, Any] | None:
+        return None
+
     async def _save_locked(self) -> None:
         payload = self._state.model_dump(mode="json")
         text = json.dumps(payload, indent=2, ensure_ascii=True)
@@ -436,6 +482,12 @@ class SqliteStudioStateStore:
                 "last_write_at": self._last_write_at,
                 "record_count": _count_state_records(self._state),
             }
+
+    async def shutdown(self) -> None:
+        return None
+
+    def describe_circuit_breaker(self) -> dict[str, Any] | None:
+        return None
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)
@@ -622,6 +674,9 @@ class PostgresStudioStateStore:
         pool_minconn: int = 2,
         pool_maxconn: int = 10,
         statement_timeout_ms: int = 30000,
+        connection_max_age_seconds: int = 1800,
+        runtime_mode: str = "all",
+        pool_budget_profile: str = "default",
     ):
         self.dsn = dsn.strip()
         if not self.dsn:
@@ -638,10 +693,24 @@ class PostgresStudioStateStore:
         self._pool_minconn = max(1, int(pool_minconn))
         self._pool_maxconn = max(self._pool_minconn, int(pool_maxconn))
         self._statement_timeout_ms = max(1, int(statement_timeout_ms))
+        self._connection_max_age_seconds = max(0.0, float(connection_max_age_seconds))
+        self._runtime_mode = str(runtime_mode or "all").strip().lower() or "all"
+        self._pool_budget_profile = str(pool_budget_profile or "default").strip().lower() or "default"
+        self._connection_born_monotonic: dict[int, float] = {}
         self._bootstrap_source_path: Path | None = None
         self._bootstrap_source_kind: str | None = None
         self._last_loaded_at: str | None = None
         self._last_write_at: str | None = None
+        self._pool_breaker = (
+            CircuitBreaker[object](
+                name="postgres_pool",
+                fail_threshold=5,
+                cooldown_seconds=10.0,
+                half_open_max_probes=2,
+            )
+            if FEATURE_FLAGS.is_enabled(FLAG_CIRCUIT_BREAKER_ENABLED)
+            else None
+        )
 
     async def load(self) -> StudioState:
         async with self._lock:
@@ -725,15 +794,23 @@ class PostgresStudioStateStore:
                 "schema_version": STORE_SCHEMA_VERSION,
                 "path": None,
                 "connection_target": _redact_postgres_dsn(self.dsn),
+                "runtime_mode": self._runtime_mode,
+                "pool_budget_profile": self._pool_budget_profile,
                 "pool_min_connections": self._pool_minconn,
                 "pool_max_connections": self._pool_maxconn,
                 "statement_timeout_ms": self._statement_timeout_ms,
+                "connection_max_age_seconds": self._connection_max_age_seconds,
                 "bootstrap_source": str(self._bootstrap_source_path) if self._bootstrap_source_path else None,
                 "bootstrap_source_kind": self._bootstrap_source_kind,
                 "last_loaded_at": self._last_loaded_at,
                 "last_write_at": self._last_write_at,
                 "record_count": _count_state_records(self._state),
             }
+
+    def describe_circuit_breaker(self) -> dict[str, Any] | None:
+        if self._pool_breaker is None:
+            return None
+        return describe_breaker(self._pool_breaker)
 
     def _ensure_pool(self):
         try:
@@ -751,15 +828,55 @@ class PostgresStudioStateStore:
 
     def _connect(self):
         pool = self._ensure_pool()
-        connection = pool.getconn()
-        self._prepare_connection(connection)
-        return connection
+        connection = self._borrow_connection(pool)
+
+        try:
+            connection = self._refresh_expired_connection(pool, connection)
+            self._prepare_connection(connection)
+            return connection
+        except Exception:
+            self._release_connection(connection, discard=True)
+            raise
 
     def _release_connection(self, connection, *, discard: bool = False) -> None:
         if connection is None:
             return
         pool = self._ensure_pool()
+        if discard:
+            self._connection_born_monotonic.pop(id(connection), None)
         pool.putconn(connection, close=discard)
+
+    async def shutdown(self) -> None:
+        async with self._lock:
+            pool = self._pool
+            self._pool = None
+            self._connection_born_monotonic.clear()
+        if pool is not None:
+            await asyncio.to_thread(pool.closeall)
+
+    def _borrow_connection(self, pool):
+        try:
+            if self._pool_breaker is None:
+                return pool.getconn()
+            return self._pool_breaker.call_sync(pool.getconn)
+        except CircuitOpenError as exc:
+            raise StoreUnavailable("postgres_pool_circuit_open") from exc
+
+    def _refresh_expired_connection(self, pool, connection):
+        while self._connection_is_expired(connection):
+            self._release_connection(connection, discard=True)
+            connection = self._borrow_connection(pool)
+        self._connection_born_monotonic.setdefault(id(connection), time.monotonic())
+        return connection
+
+    def _connection_is_expired(self, connection) -> bool:
+        if self._connection_max_age_seconds <= 0:
+            return False
+        born_at = self._connection_born_monotonic.get(id(connection))
+        if born_at is None:
+            self._connection_born_monotonic[id(connection)] = time.monotonic()
+            return False
+        return (time.monotonic() - born_at) >= self._connection_max_age_seconds
 
     def _prepare_connection(self, connection) -> None:
         with connection.cursor() as cursor:
@@ -977,12 +1094,16 @@ def build_state_store(
         bootstrap_paths.append(default_legacy_sqlite_path)
     bootstrap_paths.append(bootstrap_json_path)
     if backend == "postgres":
+        pool_minconn, pool_maxconn, pool_budget_profile = _resolve_postgres_pool_budget(settings)
         return PostgresStudioStateStore(
-            reveal_secret(settings.database_url),
+            reveal_secret_with_audit("DATABASE_URL", settings.database_url),
             bootstrap_paths=bootstrap_paths,
-            pool_minconn=getattr(settings, "postgres_state_store_min_connections", 2),
-            pool_maxconn=getattr(settings, "postgres_state_store_max_connections", 10),
+            pool_minconn=pool_minconn,
+            pool_maxconn=pool_maxconn,
             statement_timeout_ms=getattr(settings, "postgres_state_store_statement_timeout_ms", 30000),
+            connection_max_age_seconds=getattr(settings, "studio_db_conn_max_age_seconds", 1800),
+            runtime_mode=getattr(settings, "generation_runtime_mode", "all"),
+            pool_budget_profile=pool_budget_profile,
         )
 
     sqlite_path = _resolve_store_path(settings.state_store_path, default_sqlite_path)

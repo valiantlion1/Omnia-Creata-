@@ -168,6 +168,6 @@ class SupabaseAuthClient:
             payload = response.json()
             if isinstance(payload, dict):
                 return payload
-        except Exception:
+        except ValueError:
             pass
         return {}

@@ -8,6 +8,9 @@ import { studioSeoPlugin } from './tools/studioSeoPlugin'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, fileURLToPath(new URL('..', import.meta.url)), '')
   const siteUrl = env.VITE_CANONICAL_SITE_URL || env.PUBLIC_WEB_BASE_URL || 'https://studio.omniacreata.com'
+  const localFrontendHost = '127.0.0.1'
+  const localFrontendPort = 5173
+  const localApiBaseUrl = env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
   return {
     envDir: '..',
     plugins: [react(), tsconfigPaths(), studioSeoPlugin({ siteUrl })],
@@ -17,33 +20,38 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5173,
+      host: localFrontendHost,
+      port: localFrontendPort,
+      strictPort: true,
+      allowedHosts: ['127.0.0.1', 'localhost'],
       open: false,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: localApiBaseUrl,
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/api/, '/v1'),
         },
         '/v1': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: localApiBaseUrl,
           changeOrigin: true,
           secure: false,
         },
       },
     },
     preview: {
-      port: 4173,
+      host: localFrontendHost,
+      port: localFrontendPort,
+      strictPort: true,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: localApiBaseUrl,
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/api/, '/v1'),
         },
         '/v1': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: localApiBaseUrl,
           changeOrigin: true,
           secure: false,
         },

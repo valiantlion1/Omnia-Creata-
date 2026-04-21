@@ -39,7 +39,7 @@ export default async function LocaleLayout({
       <IntroOverlay />
       <div className="relative z-10">
         <Navbar locale={locale} messages={messages} />
-        <main className="relative min-h-screen pt-32 lg:pt-36">{children}</main>
+        <main className="relative min-h-screen pt-24 lg:pt-28">{children}</main>
         <Footer locale={locale} messages={messages} />
       </div>
     </div>

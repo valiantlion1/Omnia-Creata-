@@ -10,8 +10,8 @@
 
 @layer components {
   /* Cards */
-  .card { @apply rounded-2xl border border-white/[0.04] bg-[#0d1016] backdrop-blur-lg shadow-sm transition duration-300; box-shadow: var(--border-glow), 0 10px 28px rgba(0,0,0,0.22); background-color: rgba(13, 16, 22, 0.72); }
-  .card:hover { @apply border-white/[0.08] shadow-[0_14px_34px_rgba(0,0,0,0.34)]; }
+  .card { @apply rounded-2xl border border-white/[0.05] bg-[#121821] backdrop-blur-lg shadow-sm transition duration-300; box-shadow: var(--border-glow), 0 16px 34px rgba(3,10,18,0.24); background-color: rgba(18, 24, 33, 0.76); }
+  .card:hover { @apply border-white/[0.09] shadow-[0_18px_40px_rgba(3,10,18,0.28)]; }
   .card-pad { @apply p-5 md:p-6; }
   
   /* Typography */
@@ -28,15 +28,15 @@
   .btn-primary { @apply btn bg-white text-black hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.1)]; }
   .btn-outline { @apply btn border border-white/[0.08] text-white hover:bg-white/[0.04] hover:border-white/[0.12]; }
   .btn-ghost { @apply btn text-zinc-400 hover:text-white hover:bg-white/[0.04]; }
-  .btn-glow { @apply btn text-white font-semibold; background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent))); box-shadow: 0 0 20px rgba(94,114,228,0.16), 0 12px 28px rgba(0,0,0,0.22); }
-  .btn-glow:hover { box-shadow: 0 0 28px rgba(118,195,255,0.18), 0 16px 34px rgba(0,0,0,0.28); transform: translateY(-1px); }
+  .btn-glow { @apply btn text-white font-semibold; background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent))); box-shadow: 0 12px 28px rgba(4,10,18,0.24), 0 0 0 1px rgba(255,255,255,0.06) inset; }
+  .btn-glow:hover { box-shadow: 0 16px 34px rgba(4,10,18,0.28), 0 0 0 1px rgba(255,255,255,0.1) inset; transform: translateY(-1px); }
   .btn-glow:active { transform: translateY(0); }
 
   /* Tags/Badges */
   .pill { @apply px-3 py-1.5 rounded-full border border-white/[0.06] text-xs md:text-sm text-zinc-300 hover:bg-white/[0.04] hover:text-white transition-colors bg-[#111216]/60 backdrop-blur-md; }
   .badge { @apply px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.06] text-white border border-white/[0.04]; }
   .signature-gold { color: rgb(var(--goldB)); }
-  .bg-vignette { background-image: radial-gradient(ellipse at center, rgba(124,58,237,0.08), transparent 60%); }
+  .bg-vignette { background-image: radial-gradient(ellipse at center, rgba(188,209,229,0.08), transparent 60%); }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -116,20 +116,29 @@
    Background FX Layer
    ═══════════════════════════════════════════════════ */
 
-.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; background: #080a0e; }
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(188, 209, 229, 0.06), transparent 18%),
+    linear-gradient(180deg, #0e131a 0%, #11171f 38%, #0f141b 100%);
+}
 
 /* Subdued background glows replacing loud gradients */
-.fx-glow { position: absolute; inset: 0; filter: blur(96px); opacity: 0.12; pointer-events: none; }
+.fx-glow { position: absolute; inset: 0; filter: blur(120px); opacity: 0.08; pointer-events: none; }
 .fx-glow-1 {
-  background: radial-gradient(circle at 18% 0%, rgba(94, 114, 228, 0.14), transparent 48%);
+  background: radial-gradient(circle at 18% 0%, rgba(146, 184, 214, 0.18), transparent 48%);
   animation: oc-ambientSway 20s ease-in-out infinite alternate;
 }
 .fx-glow-2 {
-  background: radial-gradient(circle at 82% 100%, rgba(118, 195, 255, 0.08), transparent 48%);
+  background: radial-gradient(circle at 82% 100%, rgba(111, 137, 165, 0.12), transparent 48%);
   animation: oc-ambientSway 25s ease-in-out infinite alternate-reverse;
 }
 .fx-glow-3 {
-  background: radial-gradient(circle at 50% 45%, rgba(136, 230, 215, 0.04), transparent 60%);
+  background: radial-gradient(circle at 50% 45%, rgba(224, 234, 244, 0.05), transparent 60%);
 }
 
 .noise-overlay {
@@ -137,8 +146,8 @@
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  opacity: 0.08;
-  mix-blend-mode: overlay;
+  opacity: 0.025;
+  mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
@@ -197,25 +206,25 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
    ═══════════════════════════════════════════════════ */
 
 .glass-card {
-  background: rgba(13, 16, 22, 0.76);
+  background: linear-gradient(180deg, rgba(20, 26, 34, 0.84) 0%, rgba(16, 21, 28, 0.9) 100%);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   -webkit-transform: translateZ(0);
   transform: translate3d(0, 0, 0);
   will-change: transform, backdrop-filter;
-  border: 1px solid rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 20px;
-  box-shadow: var(--border-glow), 0 18px 42px rgba(0,0,0,0.34);
+  box-shadow: var(--border-glow), 0 18px 42px rgba(4,10,18,0.28);
   transition: border-color .3s, box-shadow .3s;
 }
-.glass-card:hover { border-color: rgba(255,255,255,0.08); box-shadow: var(--border-glow), 0 22px 46px rgba(0,0,0,0.38); }
+.glass-card:hover { border-color: rgba(255,255,255,0.09); box-shadow: var(--border-glow), 0 22px 46px rgba(4,10,18,0.32); }
 
 .glass-sidebar {
-  background: linear-gradient(180deg, rgba(13,16,22,0.95) 0%, rgba(9,12,18,0.98) 100%);
-  backdrop-filter: blur(20px) saturate(1.35);
+  background: linear-gradient(180deg, rgba(17,22,29,0.94) 0%, rgba(14,19,26,0.97) 100%);
+  backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.35);
-  border-right: 1px solid rgba(255,255,255,0.05);
-  box-shadow: var(--border-glow), 4px 0 28px rgba(0,0,0,0.28);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.02), 10px 0 36px rgba(4,10,18,0.18);
 }
 
 /* Custom Scrollbar */

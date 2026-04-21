@@ -287,6 +287,15 @@ if ($restartBackend -or -not (Test-PortOpen -Port 8000)) {
   Write-Host "Studio backend already running on port 8000." -ForegroundColor Green
 }
 
+$legacyFrontendPorts = @(4173)
+foreach ($legacyFrontendPort in $legacyFrontendPorts) {
+  if (Test-PortOpen -Port $legacyFrontendPort) {
+    Write-Warning "Legacy Studio frontend port $legacyFrontendPort is occupied. Stopping it to keep 127.0.0.1:5173 as the only local frontend host."
+    Stop-ListeningProcesses -Port $legacyFrontendPort
+    Start-Sleep -Seconds 2
+  }
+}
+
 if ($HotReload) {
   if (-not (Test-PortOpen -Port 5173)) {
     Write-Host "Starting Studio frontend on http://127.0.0.1:5173 (hot-reload dev) ..." -ForegroundColor Yellow

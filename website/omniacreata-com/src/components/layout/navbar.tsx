@@ -27,6 +27,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
     () => [
       { id: "products", label: copy.nav.products, href: withLocalePrefix(locale, "/products") },
       { id: "pricing", label: copy.nav.pricing, href: withLocalePrefix(locale, "/pricing") },
+      { id: "about", label: copy.nav.about, href: withLocalePrefix(locale, "/about") },
       { id: "contact", label: copy.nav.contact, href: withLocalePrefix(locale, "/contact") },
     ],
     [copy, locale],
@@ -40,20 +41,20 @@ export function Navbar({ locale, messages }: NavbarProps) {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="luxury-panel overflow-hidden rounded-[30px] border border-[rgba(217,181,109,0.12)]">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+      <div className="mx-auto max-w-[1280px]">
+        <div className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-[rgba(8,12,18,0.78)] shadow-[0_22px_72px_rgba(3,10,18,0.28)] backdrop-blur-2xl">
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
             <div className="flex items-center gap-3">
               <BrandMark compact locale={locale} />
-              <div className="hidden xl:flex xl:flex-col">
+              <div className="hidden lg:flex lg:flex-col">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-accent">
                   {copy.utility.globalSite}
                 </span>
-                <span className="mt-1 text-xs text-muted">{copy.utility.availability}</span>
+                <span className="mt-1 text-xs text-muted">Studio at the center</span>
               </div>
             </div>
 
-            <nav className="hidden items-center gap-1 xl:flex">
+            <nav className="hidden items-center gap-1 lg:flex">
               {navigation.map((item) => {
                 const active =
                   pathname === item.href ||
@@ -66,7 +67,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
                       "rounded-full px-4 py-2.5 text-sm transition duration-300",
                       active
                         ? "bg-white/[0.08] text-foreground"
-                        : "text-foreground-soft hover:bg-white/[0.05] hover:text-foreground",
+                        : "text-foreground-soft hover:bg-white/[0.04] hover:text-foreground",
                     )}
                     href={item.href as Route}
                   >
@@ -76,10 +77,9 @@ export function Navbar({ locale, messages }: NavbarProps) {
               })}
             </nav>
 
-            <div className="hidden items-center gap-3 xl:flex">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-foreground-soft">
-                <span className="uppercase tracking-[0.2em] text-muted">{copy.utility.localeLabel}</span>
-                <span className="font-medium text-foreground">EN</span>
+            <div className="hidden items-center gap-3 lg:flex">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-muted">
+                EN
               </div>
               <ButtonLink
                 href={withLocalePrefix(locale, `/products/${studio.slug}`)}
@@ -94,29 +94,29 @@ export function Navbar({ locale, messages }: NavbarProps) {
               aria-controls="mobile-nav"
               aria-expanded={mobileOpen}
               aria-label="Toggle navigation"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-foreground transition hover:border-[rgba(217,181,109,0.24)] hover:bg-white/[0.06] xl:hidden"
+              className="inline-flex min-w-[84px] items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground transition hover:border-white/[0.16] hover:bg-white/[0.06] lg:hidden"
               onClick={() => setMobileOpen((value) => !value)}
               type="button"
             >
-              <span className="text-lg">{mobileOpen ? "x" : "+"}</span>
+              {mobileOpen ? "Close" : "Menu"}
             </button>
           </div>
 
           <div
             className={cn(
-              "overflow-hidden transition-[max-height,opacity,margin] duration-300 xl:hidden",
+              "overflow-hidden transition-[max-height,opacity,margin] duration-300 lg:hidden",
               mobileOpen ? "mb-4 mt-1 max-h-[960px] opacity-100" : "max-h-0 opacity-0",
             )}
             id="mobile-nav"
           >
             <div className="space-y-4 border-t border-white/8 px-4 pt-4 sm:px-5">
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {navigation.map((item) => {
                   return (
                     <Link
                       key={item.id}
                       className={cn(
-                        "rounded-[22px] border border-white/8 px-4 py-3 text-left text-sm transition",
+                        "rounded-[20px] border border-white/8 px-4 py-3 text-left text-sm transition",
                         pathname === item.href || pathname.startsWith(`${item.href}/`)
                           ? "bg-white/[0.08] text-foreground"
                           : "bg-white/[0.03] text-foreground-soft hover:bg-white/[0.05] hover:text-foreground",
@@ -130,9 +130,9 @@ export function Navbar({ locale, messages }: NavbarProps) {
                 })}
               </div>
 
-              <div className="rounded-[26px] border border-white/8 bg-white/[0.03] p-4">
+              <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
-                  {copy.nav.products}
+                  Studio-first routing
                 </p>
                 <div className="mt-3 space-y-2">
                   {products.map((product) => (
@@ -152,7 +152,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
                 {secondaryLinks.map((item) => (
                   <Link
                     key={item.href}
-                    className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-foreground-soft transition hover:bg-white/[0.05] hover:text-foreground"
+                    className="rounded-[20px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-foreground-soft transition hover:bg-white/[0.05] hover:text-foreground"
                     href={item.href as Route}
                     onClick={() => setMobileOpen(false)}
                   >

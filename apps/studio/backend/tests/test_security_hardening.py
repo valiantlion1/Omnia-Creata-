@@ -128,6 +128,42 @@ async def _seed_identity_project_asset(
     return identity, workspace, project, asset
 
 
+async def _seed_public_post(
+    store: StudioStateStore,
+    *,
+    identity: OmniaIdentity,
+    workspace: StudioWorkspace,
+    project: Project,
+    asset: MediaAsset,
+    render_path: Path,
+    post_id: str = "post-1",
+    title: str = "Editorial Portrait",
+    prompt: str = "cinematic editorial portrait with warm studio lighting",
+) -> PublicPost:
+    render_path.write_bytes(post_id.encode("utf-8"))
+    post = PublicPost(
+        id=post_id,
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        owner_username=identity.username or identity.id,
+        owner_display_name=identity.display_name,
+        title=title,
+        prompt=prompt,
+        cover_asset_id=asset.id,
+        asset_ids=[asset.id],
+        visibility=Visibility.PUBLIC,
+    )
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+            state.posts.__setitem__(post.id, post),
+        )
+    )
+    return post
+
+
 @pytest.mark.asyncio
 async def test_record_generation_moderation_block_escalates_temp_block_and_manual_review(tmp_path: Path) -> None:
     service, store = await _build_service(tmp_path)
@@ -445,6 +481,181 @@ async def test_legacy_secret_signed_asset_token_still_resolves_delivery(tmp_path
         delivery = await service.resolve_asset_delivery(asset.id, token, "content")
 
         assert delivery.local_path == render_path
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_secondary_secret_signed_asset_token_still_resolves_delivery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import studio_platform.service as service_module
+
+    secondary_secret = "secondary-asset-token-secret-0123456789abcdef"
+    custom_settings = Settings(
+        _env_file=None,
+        environment=Environment.DEVELOPMENT,
+        jwt_secret="x" * 32,
+        studio_asset_token_secondary_secret=secondary_secret,
+        studio_runtime_root=str(tmp_path / "runtime-root"),
+    )
+    monkeypatch.setattr(service_module, "get_settings", lambda: custom_settings)
+
+    store = StudioStateStore(tmp_path / "secondary-state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "secondary-media")
+    await service.initialize()
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "secondary-secret-signed-delivery.png"
+    render_path.write_bytes(b"secondary-secret-signed-delivery")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+        )
+    )
+
+    try:
+        token = jwt.encode(
+            {
+                "sub": "asset-delivery",
+                "asset_id": asset.id,
+                "variant": "content",
+                "identity_id": identity.id,
+                "share_id": None,
+                "public_preview": False,
+                "exp": utc_now() + timedelta(minutes=5),
+                "iat": utc_now(),
+            },
+            secondary_secret,
+            algorithm="HS256",
+        )
+
+        delivery = await service.resolve_asset_delivery(asset.id, token, "content")
+
+        assert delivery.local_path == render_path
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_asset_preview_access_avoids_full_identity_and_generation_scans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store)
+    await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-preview-asset.png",
+        post_id="post-public-preview",
+    )
+
+    def _unexpected_full_scan():
+        raise AssertionError("full collection scan should not run for public asset preview access")
+
+    monkeypatch.setattr(service.store, "list_identities", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_generations", _unexpected_full_scan)
+
+    try:
+        await service.library.assert_public_asset_preview_access(asset.id)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_feed_avoids_full_global_scans(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store)
+    post = await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-feed-asset.png",
+        post_id="post-public-feed",
+    )
+
+    async def _unexpected_full_scan(*args, **kwargs):
+        raise AssertionError("public feed should not fall back to global list scans")
+
+    monkeypatch.setattr(service.store, "list_posts", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_assets", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_identities", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_generations", _unexpected_full_scan)
+
+    try:
+        payload = await service.list_public_posts()
+        assert [item["id"] for item in payload] == [post.id]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_profile_payload_avoids_full_global_scans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store, identity_id="creatorone")
+    post = await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-profile-asset.png",
+        post_id="post-public-profile",
+    )
+
+    async def _unexpected_full_scan(*args, **kwargs):
+        raise AssertionError("public profile should stay on scoped repository reads")
+
+    monkeypatch.setattr(service.store, "list_posts", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_assets", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_identities", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_generations", _unexpected_full_scan)
+
+    try:
+        payload = await service.get_profile_payload(username=identity.username, viewer_identity_id=None)
+        assert payload["profile"]["username"] == identity.username
+        assert [item["id"] for item in payload["posts"]] == [post.id]
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_post_payload_avoids_full_global_scans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, workspace, project, asset = await _seed_identity_project_asset(store)
+    post = await _seed_public_post(
+        store,
+        identity=identity,
+        workspace=workspace,
+        project=project,
+        asset=asset,
+        render_path=tmp_path / "public-post-payload-asset.png",
+        post_id="post-payload",
+    )
+
+    async def _unexpected_full_scan(*args, **kwargs):
+        raise AssertionError("public post payload should use targeted lookups")
+
+    monkeypatch.setattr(service.store, "list_assets", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_identities", _unexpected_full_scan)
+    monkeypatch.setattr(service.store, "list_generations", _unexpected_full_scan)
+
+    try:
+        payload = await service.get_post_payload(post.id)
+        assert payload["id"] == post.id
     finally:
         await service.shutdown()
 

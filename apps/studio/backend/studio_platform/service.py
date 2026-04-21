@@ -1,44 +1,9 @@
-"""StudioService — the top-level orchestrator for the Studio backend.
+"""StudioService orchestrates the Studio backend.
 
-**Purpose:** Coordinate every cross-cutting operation that touches more than
-one domain (projects, generations, identity, billing, chat, moderation,
-assets). Route handlers in :mod:`studio_platform.router` delegate here; this
-module in turn delegates to feature-specific services in
-:mod:`studio_platform.services`.
-
-**Responsibilities owned here (don't move without replacing the caller):**
-    - Bootstrapping the store, providers, broker, asset storage
-    - Lifecycle: ``initialize`` / ``shutdown``, state recovery, orphan cleanup
-    - Provider dispatch for image/text generation
-    - Moderation decisions (combining case service + provider signals)
-    - Public-facing content safety rails (blocklists, low-signal filter)
-    - Asset token signing + secret rotation handoff
-
-**Responsibilities delegated to sub-services:**
-    - ``billing`` → :class:`BillingService` (entitlements, cost telemetry)
-    - ``chat`` → :class:`ChatService` (conversation + message lifecycle)
-    - ``generation`` → :class:`GenerationService` (job submission + pricing)
-    - ``identity`` → :class:`IdentityService` (accounts, sessions, deletions)
-    - ``library`` → :class:`LibraryService` (media library queries)
-    - ``projects`` → :class:`ProjectService` (project CRUD)
-    - ``public`` → :class:`PublicService` (anon/marketing endpoints)
-    - ``shell`` → :class:`ShellService` (UI shell bootstrap payloads)
-    - ``health_service`` → :class:`HealthService` (health probes)
-    - ``moderation_cases`` → :class:`ModerationCaseService`
-
-**Invariants:**
-    - ``initialize`` must be awaited exactly once before serving traffic.
-    - Most mutations go through :class:`StudioRepository` for transaction
-      scoping; direct store access is a smell.
-    - Circuit-broker fallback rules are enforced by
-      ``_requires_strict_shared_generation_broker`` — do not silently
-      downgrade to local mode in staging/production.
-
-**Extensibility note for AI maintainers:**
-    New feature areas should land as a new service class under
-    :mod:`studio_platform.services` with an attribute on ``StudioService``
-    (``self.my_service = MyService(self)``) rather than adding methods here.
-    Keep this file focused on orchestration.
+Route handlers delegate here for lifecycle, generation, billing, moderation,
+asset delivery, and public/share flows. Subdomain logic should stay in
+:mod:`studio_platform.services`; this module remains the bootstrap and
+cross-service coordination layer.
 """
 
 from __future__ import annotations
@@ -56,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
-from config.env import Environment, get_settings, reveal_secret
+from config.env import Environment, get_settings, reveal_secret_with_audit
 
 from .asset_import_ops import parse_data_url_image
 from .asset_delivery_auth import (
@@ -188,13 +153,17 @@ class StudioService:
         self._worker_id = (
             f"{socket.gethostname()}:{os.getpid()}:{self._generation_runtime_mode}:{uuid4().hex[:8]}"
         )
-        configured_asset_secret = reveal_secret(settings.jwt_secret).strip()
+        configured_asset_secret = reveal_secret_with_audit("JWT_SECRET", settings.jwt_secret).strip()
         if not configured_asset_secret and settings.environment != Environment.DEVELOPMENT:
             raise RuntimeError("JWT secret must be configured outside local development.")
         self._asset_token_secret, self._legacy_asset_token_secret = resolve_asset_delivery_secrets(
             settings=settings,
             configured_jwt_secret=configured_asset_secret,
         )
+        self._secondary_asset_token_secret = reveal_secret_with_audit(
+            "STUDIO_ASSET_TOKEN_SECONDARY_SECRET",
+            settings.studio_asset_token_secondary_secret,
+        ).strip()
         self._asset_token_ttl_seconds = 3600
         self.asset_protection = GeneratedAssetProtectionPipeline(
             secret=configured_asset_secret or _DEVELOPMENT_LEGACY_ASSET_SECRET
@@ -220,6 +189,7 @@ class StudioService:
         self._generation_maintenance_task: asyncio.Task[None] | None = None
         self._orphan_cleanup_task: asyncio.Task[None] | None = None
         self._last_orphan_cleanup_local_day: str | None = None
+        self._initialized = False
         self._public_safety_blocklist = (
             "nsfw",
             "nude",
@@ -295,6 +265,7 @@ class StudioService:
         )
 
     async def initialize(self) -> None:
+        self._initialized = False
         await self.store.load()
         strict_shared_broker_required = self._requires_strict_shared_generation_broker()
         if self.generation_broker is None and strict_shared_broker_required:
@@ -330,6 +301,10 @@ class StudioService:
             logger.warning(
                 "Generation broker is not configured for web runtime; falling back to local processing in degraded mode"
             )
+        if self.generation_broker is not None:
+            recovered_claims = await self.generation.recover_startup_stale_broker_claims()
+            if recovered_claims:
+                logger.warning("Recovered %s stale generation broker claims during startup", len(recovered_claims))
         recovered_jobs: list[tuple[str, str]] = []
 
         def mutation(state: StudioState) -> None:
@@ -349,6 +324,7 @@ class StudioService:
                 self._ensure_generation_maintenance_task()
         if self._can_process_generations() and os.getenv("PYTEST_CURRENT_TEST") is None:
             self._ensure_orphan_cleanup_task()
+        self._initialized = True
 
     async def shutdown(self) -> None:
         maintenance_task = self._generation_maintenance_task
@@ -363,10 +339,12 @@ class StudioService:
             with suppress(asyncio.CancelledError):
                 await orphan_cleanup_task
         self._orphan_cleanup_task = None
-        await self.generation_dispatcher.stop()
+        await self.generation.graceful_shutdown()
         self._active_generation_claims.clear()
         if self.generation_broker is not None and self._owns_generation_broker:
             await self.generation_broker.shutdown()
+        await self.store.shutdown()
+        self._initialized = False
 
     @property
     def _tasks(self):
@@ -484,39 +462,29 @@ class StudioService:
 
     def _resolve_privileged_email_flags(self, email: str) -> Dict[str, bool]:
         return self.identity._resolve_privileged_email_flags(email=email)
-
     def _apply_privileged_identity_overrides(self, identity: OmniaIdentity) -> None:
         return self.identity._apply_privileged_identity_overrides(identity=identity)
-
     def _has_unlimited_generation_access(self, identity: OmniaIdentity) -> bool:
         return identity.owner_mode or identity.root_admin or identity.local_access
-
     async def _resolve_billing_state_for_identity(self, identity: OmniaIdentity) -> BillingStateSnapshot:
         return await self.billing._resolve_billing_state_for_identity(identity=identity)
-
     def _resolve_billing_state_locked(self, state: StudioState, identity: OmniaIdentity) -> BillingStateSnapshot:
         return self.billing._resolve_billing_state_locked(state=state, identity=identity)
-
     def _serialize_credit_snapshot(self, billing_state: BillingStateSnapshot) -> Dict[str, Any]:
         return self.billing._serialize_credit_snapshot(billing_state=billing_state)
-
     def _serialize_identity_payload(self, identity: OmniaIdentity) -> Dict[str, Any]:
         return self.identity._serialize_identity_payload(identity=identity)
-
     def _serialize_guest_identity_payload(self) -> Dict[str, Any]:
         return self.identity._serialize_guest_identity_payload()
-
     def _normalize_reason_code(self, value: str | None, *, fallback: str) -> str:
         normalized = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
         return (normalized or fallback)[:64]
-
     def _normalize_moderation_reason(
         self,
         reason: str | None,
         moderation_result: ModerationResult,
     ) -> str:
         return self._normalize_reason_code(reason, fallback=moderation_result.value)
-
     def _log_security_event(
         self,
         event: str,
@@ -525,7 +493,6 @@ class StudioService:
         **fields: Any,
     ) -> None:
         return self.identity._log_security_event(event=event, level=level, **fields)
-
     def _apply_identity_moderation_flag_locked(
         self,
         identity: OmniaIdentity,
@@ -534,7 +501,6 @@ class StudioService:
         reason_code: str,
     ) -> Dict[str, Any]:
         return self.identity._apply_identity_moderation_flag_locked(identity=identity, moderation_result=moderation_result, reason_code=reason_code)
-
     async def record_generation_moderation_block(
         self,
         identity_id: str,
@@ -550,7 +516,6 @@ class StudioService:
             improved=False,
             flagged=True,
         )
-
     async def record_prompt_moderation_audit(
         self,
         *,
@@ -567,7 +532,6 @@ class StudioService:
             final_text=final_text,
             decision=decision,
         )
-
     def _assert_identity_action_allowed(
         self,
         identity: OmniaIdentity,
@@ -576,7 +540,6 @@ class StudioService:
         action_label: str,
     ) -> None:
         return self.identity._assert_identity_action_allowed(identity=identity, action_code=action_code, action_label=action_label)
-
     def serialize_identity(
         self,
         identity: OmniaIdentity,
@@ -584,7 +547,6 @@ class StudioService:
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
         return self.identity.serialize_identity(identity=identity, billing_state=billing_state)
-
     def serialize_entitlements(
         self,
         identity: OmniaIdentity,
@@ -592,7 +554,6 @@ class StudioService:
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
         return self.identity.serialize_entitlements(identity=identity, billing_state=billing_state)
-
     def serialize_usage_summary(
         self,
         identity: OmniaIdentity,
@@ -600,19 +561,14 @@ class StudioService:
         billing_state: BillingStateSnapshot | None = None,
     ) -> Dict[str, Any]:
         return self.identity.serialize_usage_summary(identity=identity, billing_state=billing_state)
-
     def _initialize_state_locked(self, state: StudioState) -> None:
         return self.identity._initialize_state_locked(state=state)
-
     def _migrate_identity_visibility_defaults_locked(self, state: StudioState) -> None:
         return self.identity._migrate_identity_visibility_defaults_locked(state=state)
-
     def _backfill_posts_locked(self, state: StudioState) -> None:
         return self.public.backfill_posts_locked(state)
-
     def _normalize_public_posts_locked(self, state: StudioState) -> None:
         return self.public.normalize_public_posts_locked(state)
-
     def get_public_plan_payload(self) -> Dict[str, Any]:
         return self.identity.get_public_plan_payload()
 
@@ -630,7 +586,6 @@ class StudioService:
             identity_id=identity_id,
             public_preview=public_preview,
         )
-
     def serialize_post(
         self,
         post: PublicPost,
@@ -647,7 +602,6 @@ class StudioService:
             viewer_identity_id=viewer_identity_id,
             public_preview=public_preview,
         )
-
     def serialize_asset(
         self,
         asset: MediaAsset,
@@ -666,7 +620,6 @@ class StudioService:
             public_preview=public_preview,
             allow_clean_export=allow_clean_export,
         )
-
     def serialize_assets(
         self,
         assets: List[MediaAsset],
@@ -685,28 +638,20 @@ class StudioService:
             public_preview=public_preview,
             allow_clean_export=allow_clean_export,
         )
-
     def _asset_display_title(self, asset: MediaAsset) -> str:
         return self.library.asset_display_title(asset)
-
     def _asset_derived_tags(self, asset: MediaAsset) -> list[str]:
         return self.library.asset_derived_tags(asset)
-
     def _asset_protection_state(self, asset: MediaAsset) -> str:
         return self.library.asset_protection_state(asset)
-
     def _asset_library_state(self, asset: MediaAsset) -> str:
         return self.library.asset_library_state(asset)
-
     def _generation_library_state(self, job: GenerationJob) -> str:
         return self.library.generation_library_state(job)
-
     def serialize_health_payload(self, payload: Dict[str, Any], detail: bool) -> Dict[str, Any]:
         return self.health_service.serialize_health_payload(payload, detail)
-
     def _generate_share_public_token(self) -> str:
         return f"{uuid4().hex}{uuid4().hex}"
-
     def _hash_share_public_token(self, raw_token: str) -> str:
         return hmac.new(
             self._asset_token_secret.encode("utf-8"),
@@ -716,27 +661,26 @@ class StudioService:
 
     @property
     def _asset_token_secrets(self) -> tuple[str, ...]:
-        if self._legacy_asset_token_secret and self._legacy_asset_token_secret != self._asset_token_secret:
-            return (self._asset_token_secret, self._legacy_asset_token_secret)
-        return (self._asset_token_secret,)
-
+        secrets: list[str] = [self._asset_token_secret]
+        for candidate in (self._secondary_asset_token_secret, self._legacy_asset_token_secret):
+            normalized = str(candidate or "").strip()
+            if normalized and normalized not in secrets:
+                secrets.append(normalized)
+        return tuple(secrets)
     async def _get_share_by_public_token(self, raw_token: str) -> ShareLink | None:
         for secret in self._asset_token_secrets:
             share = await self.store.get_share_by_public_token(raw_token, secret=secret)
             if share is not None:
                 return share
         return None
-
     async def _get_share_by_public_token_hash(self, token_hash: str) -> ShareLink | None:
         for secret in self._asset_token_secrets:
             share = await self.store.get_share_by_public_token_hash(token_hash, secret=secret)
             if share is not None:
                 return share
         return None
-
     def _serialize_share_record(self, share: ShareLink) -> Dict[str, Any]:
         return self.public.serialize_share_record(share)
-
     def serialize_public_share_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self.public.serialize_public_share_payload(payload)
 
@@ -982,7 +926,6 @@ class StudioService:
 
     async def _purge_asset_storage(self, asset: MediaAsset) -> None:
         await self.library.purge_asset_storage(asset)
-
     async def list_projects(
         self,
         identity_id: str,
@@ -995,7 +938,6 @@ class StudioService:
             surface=surface,
             include_system_managed=include_system_managed,
         )
-
     async def create_project(
         self,
         identity_id: str,
@@ -1012,10 +954,8 @@ class StudioService:
             surface,
             system_managed=system_managed,
         )
-
     async def _get_or_create_draft_project(self, identity_id: str, *, surface: str = "compose") -> Project:
         return await self.projects.get_or_create_draft_project(identity_id, surface=surface)
-
     async def _resolve_generation_project(
         self,
         *,
@@ -1028,25 +968,18 @@ class StudioService:
             requested_project_id=requested_project_id,
             reference_asset=reference_asset,
         )
-
     async def get_project(self, identity_id: str, project_id: str) -> Dict[str, Any]:
         return await self.projects.get_project(identity_id, project_id)
-
     async def list_conversations(self, identity_id: str) -> List[ChatConversation]:
         return await self.chat.list_conversations(identity_id=identity_id)
-
     async def create_conversation(self, identity_id: str, title: str = "", model: str = "studio-assist") -> ChatConversation:
         return await self.chat.create_conversation(identity_id=identity_id, title=title, model=model)
-
     async def get_conversation(self, identity_id: str, conversation_id: str) -> Dict[str, Any]:
         return await self.chat.get_conversation(identity_id=identity_id, conversation_id=conversation_id)
-
     async def list_conversation_messages(self, identity_id: str, conversation_id: str) -> List[ChatMessage]:
         return await self.chat.list_conversation_messages(identity_id=identity_id, conversation_id=conversation_id)
-
     async def delete_conversation(self, identity_id: str, conversation_id: str) -> None:
         return await self.chat.delete_conversation(identity_id=identity_id, conversation_id=conversation_id)
-
     async def set_chat_message_feedback(
         self,
         identity_id: str,
@@ -1055,7 +988,6 @@ class StudioService:
         feedback: ChatFeedback | None,
     ) -> ChatMessage:
         return await self.chat.set_chat_message_feedback(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id, feedback=feedback)
-
     async def edit_chat_message(
         self,
         identity_id: str,
@@ -1067,7 +999,6 @@ class StudioService:
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         return await self.chat.edit_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id, content=content)
-
     async def regenerate_chat_message(
         self,
         identity_id: str,
@@ -1075,7 +1006,6 @@ class StudioService:
         message_id: str,
     ) -> Dict[str, Any]:
         return await self.chat.regenerate_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id)
-
     async def revert_chat_message(
         self,
         identity_id: str,
@@ -1083,7 +1013,6 @@ class StudioService:
         message_id: str,
     ) -> Dict[str, Any]:
         return await self.chat.revert_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id)
-
     async def send_chat_message(
         self,
         identity_id: str,
@@ -1093,7 +1022,6 @@ class StudioService:
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         return await self.chat.send_chat_message(identity_id=identity_id, conversation_id=conversation_id, content=content, model=model, attachments=attachments)
-
     async def _build_assistant_message(
         self,
         *,
@@ -1116,10 +1044,8 @@ class StudioService:
             parent_message_id=parent_message_id,
             premium_chat=premium_chat,
         )
-
     def _messages_before_turn(self, messages: List[ChatMessage], user_message_id: str) -> List[ChatMessage]:
         return self.chat._messages_before_turn(messages=messages, user_message_id=user_message_id)
-
     def _find_assistant_reply_for_user(self, messages: List[ChatMessage], user_message_id: str) -> ChatMessage | None:
         return self.chat._find_assistant_reply_for_user(messages=messages, user_message_id=user_message_id)
 

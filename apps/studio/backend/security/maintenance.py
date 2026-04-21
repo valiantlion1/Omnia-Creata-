@@ -13,7 +13,14 @@ from starlette.types import ASGIApp
 DEFAULT_MAINTENANCE_MESSAGE = "OmniaCreata Studio is undergoing brief maintenance. Please retry shortly."
 DEFAULT_RETRY_AFTER_SECONDS = 120
 TRUTHY_VALUES = {"1", "true", "yes"}
-BYPASS_PATHS = {"/", "/v1/version", "/v1/healthz", "/v1/healthz/detail"}
+BYPASS_PATHS = {
+    "/",
+    "/v1/version",
+    "/v1/healthz",
+    "/v1/healthz/ready",
+    "/v1/healthz/startup",
+    "/v1/healthz/detail",
+}
 
 
 @dataclass(slots=True)

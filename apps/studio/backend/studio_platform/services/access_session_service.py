@@ -5,7 +5,10 @@ import hmac
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
+from jwt import PyJWTError, decode as jwt_decode
+
 from ..models import StudioAccessSession, StudioLoginAttemptRecord, utc_now
+from ..repository import transactional
 
 if TYPE_CHECKING:
     from ..service import StudioService
@@ -149,12 +152,59 @@ class AccessSessionService:
         sessions = await self.service.store.list_models_fresh("access_sessions", StudioAccessSession)
         return [session for session in sessions if session.identity_id == identity_id]
 
+    def _list_identity_sessions_locked(self, *, state, identity_id: str) -> list[StudioAccessSession]:
+        return [
+            session
+            for session in state.access_sessions.values()
+            if session.identity_id == identity_id
+        ]
+
     async def _persist_pruned_sessions(self, *, identity_id: str, current_time: datetime) -> None:
         sessions = await self._list_identity_sessions(identity_id)
         retained_ids = self._retained_session_ids(sessions=sessions, current_time=current_time)
         for session in sessions:
             if session.id not in retained_ids:
                 await self.service.store.delete_model("access_sessions", session.id)
+
+    def _prune_sessions_locked(self, *, state, identity_id: str, current_time: datetime) -> None:
+        sessions = self._list_identity_sessions_locked(state=state, identity_id=identity_id)
+        retained_ids = self._retained_session_ids(sessions=sessions, current_time=current_time)
+        for session in sessions:
+            if session.id not in retained_ids:
+                state.access_sessions.pop(session.id, None)
+
+    def _build_payload_locked(
+        self,
+        *,
+        state,
+        identity_id: str,
+        current_session_id: str | None,
+        current_time: datetime,
+    ) -> dict[str, Any]:
+        self._prune_sessions_locked(state=state, identity_id=identity_id, current_time=current_time)
+        sessions = [
+            session
+            for session in self._list_identity_sessions_locked(state=state, identity_id=identity_id)
+            if session.revoked_at is None
+        ]
+        sessions.sort(
+            key=lambda session: (
+                0 if current_session_id and session.session_id == current_session_id else 1,
+                -session.last_seen_at.timestamp(),
+            )
+        )
+        serialized = [
+            self._serialize_session(session=session, current_session_id=current_session_id)
+            for session in sessions
+        ]
+        other_count = sum(1 for item in serialized if item["current"] is not True)
+        return {
+            "current_session_id": current_session_id,
+            "sessions": serialized,
+            "session_count": len(serialized),
+            "other_session_count": other_count,
+            "can_sign_out_others": other_count > 0,
+        }
 
     def _retained_session_ids(
         self,
@@ -210,8 +260,42 @@ class AccessSessionService:
         normalized_host = _host_label(host_label)
         user_agent_hash = self._hash_value(normalized_user_agent, scope=_ACCESS_SESSION_HASH_SCOPE)
         ip_hash = self._hash_value(client_ip, scope=_ACCESS_SESSION_HASH_SCOPE)
+        await self._touch_session_locked(
+            identity_id=identity_id,
+            normalized_session_id=normalized_session_id,
+            auth_provider=auth_provider,
+            browser_label=browser_label,
+            os_label=os_label,
+            normalized_display_mode=normalized_display_mode,
+            masked_ip=masked_ip,
+            normalized_host=normalized_host,
+            user_agent_hash=user_agent_hash,
+            ip_hash=ip_hash,
+            issued_at=issued_at,
+            expires_at=expires_at,
+            now=now,
+        )
 
-        existing = await self._get_session(normalized_session_id)
+    @transactional
+    def _touch_session_locked(
+        self,
+        state,
+        *,
+        identity_id: str,
+        normalized_session_id: str,
+        auth_provider: str | None,
+        browser_label: str,
+        os_label: str,
+        normalized_display_mode: str,
+        masked_ip: str | None,
+        normalized_host: str | None,
+        user_agent_hash: str | None,
+        ip_hash: str | None,
+        issued_at: datetime | None,
+        expires_at: datetime | None,
+        now: datetime,
+    ) -> None:
+        existing = state.access_sessions.get(normalized_session_id)
         if existing is not None and existing.identity_id != identity_id:
             return
         if existing is not None and existing.revoked_at is not None:
@@ -262,9 +346,8 @@ class AccessSessionService:
         session.last_seen_at = now
         session.token_issued_at = issued_at or session.token_issued_at
         session.token_expires_at = expires_at or session.token_expires_at
-
-        await self.service.store.save_model("access_sessions", session)
-        await self._persist_pruned_sessions(identity_id=identity_id, current_time=now)
+        state.access_sessions[session.id] = session
+        self._prune_sessions_locked(state=state, identity_id=identity_id, current_time=now)
 
     def _serialize_session(
         self,
@@ -297,32 +380,27 @@ class AccessSessionService:
         identity_id: str,
         current_session_id: str | None,
     ) -> dict[str, Any]:
-        current_time = utc_now()
-        await self._persist_pruned_sessions(identity_id=identity_id, current_time=current_time)
-
-        sessions = [
-            session
-            for session in await self._list_identity_sessions(identity_id)
-            if session.revoked_at is None
-        ]
-        sessions.sort(
-            key=lambda session: (
-                0 if current_session_id and session.session_id == current_session_id else 1,
-                -session.last_seen_at.timestamp(),
-            )
+        return await self._build_payload_transactional(
+            identity_id=identity_id,
+            current_session_id=current_session_id,
+            current_time=utc_now(),
         )
-        serialized = [
-            self._serialize_session(session=session, current_session_id=current_session_id)
-            for session in sessions
-        ]
-        other_count = sum(1 for item in serialized if item["current"] is not True)
-        return {
-            "current_session_id": current_session_id,
-            "sessions": serialized,
-            "session_count": len(serialized),
-            "other_session_count": other_count,
-            "can_sign_out_others": other_count > 0,
-        }
+
+    @transactional
+    def _build_payload_transactional(
+        self,
+        state,
+        *,
+        identity_id: str,
+        current_session_id: str | None,
+        current_time: datetime,
+    ) -> dict[str, Any]:
+        return self._build_payload_locked(
+            state=state,
+            identity_id=identity_id,
+            current_session_id=current_session_id,
+            current_time=current_time,
+        )
 
     async def revoke_other_sessions(
         self,
@@ -331,18 +409,37 @@ class AccessSessionService:
         current_session_id: str | None,
         reason: str = "signed_out_elsewhere",
     ) -> dict[str, Any]:
-        current_time = utc_now()
-        sessions = await self._list_identity_sessions(identity_id)
-        for session in sessions:
+        return await self._revoke_other_sessions_locked(
+            identity_id=identity_id,
+            current_session_id=current_session_id,
+            reason=reason,
+            current_time=utc_now(),
+        )
+
+    @transactional
+    def _revoke_other_sessions_locked(
+        self,
+        state,
+        *,
+        identity_id: str,
+        current_session_id: str | None,
+        reason: str,
+        current_time: datetime,
+    ) -> dict[str, Any]:
+        for session in self._list_identity_sessions_locked(state=state, identity_id=identity_id):
             if current_session_id and session.session_id == current_session_id:
                 continue
             if session.revoked_at is None:
                 session.revoked_at = current_time
                 session.revoked_reason = reason
-                await self.service.store.save_model("access_sessions", session)
+                state.access_sessions[session.id] = session
 
-        await self._persist_pruned_sessions(identity_id=identity_id, current_time=current_time)
-        return await self.build_payload(identity_id=identity_id, current_session_id=current_session_id)
+        return self._build_payload_locked(
+            state=state,
+            identity_id=identity_id,
+            current_session_id=current_session_id,
+            current_time=current_time,
+        )
 
     async def is_session_active(self, *, identity_id: str, session_id: str | None) -> bool:
         normalized_session_id = str(session_id or "").strip()
@@ -365,11 +462,6 @@ class AccessSessionService:
                 "expires_at": None,
             }
         try:
-            header_b64, payload_b64, *_ = candidate.split(".")
-            _ = header_b64
-            _ = payload_b64
-            from jwt import decode as jwt_decode
-
             payload = jwt_decode(
                 candidate,
                 options={
@@ -379,7 +471,7 @@ class AccessSessionService:
                     "verify_iss": False,
                 },
             )
-        except Exception:
+        except (PyJWTError, TypeError, ValueError):
             payload = {}
 
         session_id = str(payload.get("session_id") or payload.get("jti") or "").strip()
@@ -433,26 +525,42 @@ class AccessSessionService:
     ) -> dict[str, Any] | None:
         if max_attempts <= 0 or lockout_window.total_seconds() <= 0:
             return None
+        return await self._get_login_lockout_status_locked(
+            identifier=identifier,
+            max_attempts=max_attempts,
+            lockout_window=lockout_window,
+            current_time=utc_now(),
+        )
 
-        current_time = utc_now()
-        record_id, record = await self._get_login_attempt_record(identifier)
+    @transactional
+    def _get_login_lockout_status_locked(
+        self,
+        state,
+        *,
+        identifier: str | None,
+        max_attempts: int,
+        lockout_window: timedelta,
+        current_time: datetime,
+    ) -> dict[str, Any] | None:
+        record_id = self._login_attempt_record_id(identifier)
+        if record_id is None:
+            return None
+
+        record = state.login_attempts.get(record_id)
         recent_failures = self._prune_recent_failures(
             record=record,
             current_time=current_time,
             lockout_window=lockout_window,
         )
-        if record_id is None:
-            return None
-
         if not recent_failures:
             if record is not None:
-                await self.service.store.delete_model("login_attempts", record_id)
+                state.login_attempts.pop(record_id, None)
             return None
 
         if record is not None and recent_failures != record.failed_attempts:
             record.failed_attempts = recent_failures
             record.last_failure_at = recent_failures[-1]
-            await self.service.store.save_model("login_attempts", record)
+            state.login_attempts[record_id] = record
 
         if len(recent_failures) < max_attempts:
             return None
@@ -472,14 +580,31 @@ class AccessSessionService:
         success: bool,
         lockout_window: timedelta,
     ) -> None:
-        record_id, record = await self._get_login_attempt_record(identifier)
+        await self._record_login_result_locked(
+            identifier=identifier,
+            success=success,
+            lockout_window=lockout_window,
+            current_time=utc_now(),
+        )
+
+    @transactional
+    def _record_login_result_locked(
+        self,
+        state,
+        *,
+        identifier: str | None,
+        success: bool,
+        lockout_window: timedelta,
+        current_time: datetime,
+    ) -> None:
+        record_id = self._login_attempt_record_id(identifier)
         if record_id is None:
             return
 
-        current_time = utc_now()
+        record = state.login_attempts.get(record_id)
         if success:
             if record is not None:
-                await self.service.store.delete_model("login_attempts", record_id)
+                state.login_attempts.pop(record_id, None)
             return
 
         recent_failures = self._prune_recent_failures(
@@ -488,11 +613,8 @@ class AccessSessionService:
             lockout_window=lockout_window,
         )
         recent_failures.append(current_time)
-        await self.service.store.save_model(
-            "login_attempts",
-            StudioLoginAttemptRecord(
-                id=record_id,
-                failed_attempts=recent_failures,
-                last_failure_at=current_time,
-            ),
+        state.login_attempts[record_id] = StudioLoginAttemptRecord(
+            id=record_id,
+            failed_attempts=recent_failures,
+            last_failure_at=current_time,
         )

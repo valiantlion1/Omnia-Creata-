@@ -149,29 +149,29 @@ const english: Messages = {
     legal: "Legal",
   },
   home: {
-    heroEyebrow: "Official public website",
+    heroEyebrow: "Studio-first public HQ",
     heroTitle:
-      "The Omnia Creata ecosystem, in one place.",
+      "Start in Studio. See Omnia in context.",
     heroDescription:
-      "Explore flagship products, see where each one lives, and move into the right Omnia Creata experience without clutter.",
+      "A calmer public HQ for the flagship, the supporting products, and the next route into each one.",
     utilityDescription:
       "omniacreata.com",
-    platformBandEyebrow: "Platform access",
-    platformBandTitle: "Platform access stays visible from the start.",
+    platformBandEyebrow: "Platform visibility",
+    platformBandTitle: "Availability should be visible before commitment.",
     platformBandDescription:
-      "Web, iOS, Android, PWA, and desktop access are easy to scan before you open a product.",
-    ecosystemEyebrow: "Products",
-    ecosystemTitle: "Five flagship products, organized with intent.",
+      "Web, iOS, Android, PWA, and desktop availability stay readable before someone opens a product.",
+    ecosystemEyebrow: "Product directory",
+    ecosystemTitle: "The ecosystem is real, but Studio is the center of gravity.",
     ecosystemDescription:
-      "Each product has a clear role, a clear surface, and a clear route from the main site.",
+      "Use the flagship as the entry point, then move outward when a more specific product surface makes sense.",
     accessRailEyebrow: "Product access rail",
     accessRailTitle: "Go from discovery to the right product in one step.",
     accessRailDescription:
       "Every visible action should lead somewhere useful.",
-    trustEyebrow: "Trust",
-    trustTitle: "Built like a long-term software company.",
+    trustEyebrow: "Public HQ",
+    trustTitle: "A calmer front door for a growing product system.",
     trustDescription:
-      "Clear navigation, restrained motion, and product-first structure keep the site useful as the ecosystem grows.",
+      "Direct routes, honest product framing, and restrained structure keep the site useful while the ecosystem matures.",
   },
   sections: {
     overview: "Overview",
@@ -257,29 +257,29 @@ const turkish: Messages = {
     legal: "Yasal",
   },
   home: {
-    heroEyebrow: "Resmi site",
+    heroEyebrow: "Studio merkezli public HQ",
     heroTitle:
-      "Guven veren yazilim deneyimleri uret.",
+      "Studio ile basla. Omnia'yi baglam icinde gor.",
     heroDescription:
-      "Omnia Creata ekosistemini kesfet ve dogru urune dogrudan gec.",
+      "Amiral urun, destek yuzeyleri ve her biri icin bir sonraki rota icin daha sakin bir public HQ.",
     utilityDescription:
       "omniacreata.com",
-    platformBandEyebrow: "Platform erisimi",
-    platformBandTitle: "Her amiral urun dogru yuzeyle eslestirilir.",
+    platformBandEyebrow: "Platform gorunurlugu",
+    platformBandTitle: "Erisim durumu karar vermeden once gorunmeli.",
     platformBandDescription:
-      "Web, mobil, PWA ve desktop erisimi ilk bakista gorunur.",
-    ecosystemEyebrow: "Ana ekosistem",
-    ecosystemTitle: "Bes amiral urun. Tek ekosistem.",
+      "Web, iOS, Android, PWA ve desktop erisimi urun acilmadan once okunabilir kalir.",
+    ecosystemEyebrow: "Urun dizini",
+    ecosystemTitle: "Ekosistem gercek, ama agirlik merkezi Studio.",
     ecosystemDescription:
-      "Her urunun rolu net, gecis yolu acik.",
+      "Amiral urunu giris noktasi yap, daha spesifik yuzey gerektiginde disari dogru ilerle.",
     accessRailEyebrow: "Urun erisim hatti",
     accessRailTitle: "Her sey tek tik uzakta.",
     accessRailDescription:
       "Her tik anlamli bir sonraki adima gider.",
-    trustEyebrow: "Guven ve kalite",
-    trustTitle: "Uzun vadeli urun disipliniyle insa edildi.",
+    trustEyebrow: "Public HQ",
+    trustTitle: "Buyuyen bir urun sistemi icin daha sakin bir on kapi.",
     trustDescription:
-      "Premium tasarim, net yapi ve cihazlar arasi tutarli deneyim.",
+      "Dogrudan rotalar, durust urun anlatimi ve kontrollu yapi ekosistem olgunlasirken siteyi faydali tutar.",
   },
   sections: {
     overview: "Genel bakis",

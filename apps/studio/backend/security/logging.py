@@ -39,6 +39,7 @@ class SecurityEventType(Enum):
     PASSWORD_CHANGE = "password_change"
     API_KEY_CREATED = "api_key_created"
     API_KEY_REVOKED = "api_key_revoked"
+    SECRET_REVEALED = "secret_revealed"
 
 
 @dataclass
@@ -317,6 +318,9 @@ class SecurityLogger:
         if isinstance(data, dict):
             masked = {}
             for key, value in data.items():
+                if key == "secret_name":
+                    masked[key] = str(value)
+                    continue
                 if any(sensitive in key.lower() for sensitive in self.config.sensitive_fields):
                     masked[key] = "***MASKED***"
                 else:
@@ -543,6 +547,41 @@ def log_api_request(
         error=error
     )
     logger.log_api_request(request_log)
+
+
+def audit_secret_revealed(secret_name: str) -> None:
+    """Emit a value-free audit event for secret lookups."""
+    normalized_name = str(secret_name or "").strip() or "unknown_secret"
+    try:
+        from observability.context import log_context
+
+        context = log_context()
+    except ImportError:
+        context = {}
+
+    details = {
+        "event": SecurityEventType.SECRET_REVEALED.value,
+        "secret_name": normalized_name,
+        **context,
+    }
+    event = SecurityEvent(
+        event_type=SecurityEventType.SECRET_REVEALED,
+        success=True,
+        details=details,
+    )
+    try:
+        logger = get_logger()
+    except RuntimeError:
+        logging.getLogger("security").info(
+            "Security event",
+            extra={
+                "event_type": SecurityEventType.SECRET_REVEALED.value,
+                "success": True,
+                "details": details,
+            },
+        )
+        return
+    logger.log_security_event(event)
 
 
 def log_error(

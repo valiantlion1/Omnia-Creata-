@@ -136,7 +136,7 @@ async def _call_openrouter(prompt: str, context: ContextAnalysis) -> LlmModerati
         content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
         data = json.loads(content)
         return _parse_llm_payload(data, model=model)
-    except Exception as exc:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
         logger.warning("OpenRouter moderation analysis failed: %s", exc)
         return None
 
@@ -187,7 +187,7 @@ async def _call_openai(prompt: str, context: ContextAnalysis) -> LlmModerationAn
         content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "{}")
         data = json.loads(content)
         return _parse_llm_payload(data, model=model)
-    except Exception as exc:
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
         logger.warning("OpenAI moderation analysis failed: %s", exc)
         return None
 

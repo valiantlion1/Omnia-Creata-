@@ -1,20 +1,53 @@
 from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from uuid import uuid4
+from dataclasses import replace
+from datetime import datetime, timedelta
 from fastapi import Request
 import asyncio
+import json
 import time
 import logging
+import math
 import re
-from ..models import *
-from ..generation_ops import *
-from ..generation_pricing_ops import *
-from ..generation_credit_forecast_ops import *
+from ..models import (
+    GenerationJob,
+    IdentityPlan,
+    JobStatus,
+    MediaAsset,
+    OmniaIdentity,
+    PlanCatalogEntry,
+    PromptSnapshot,
+    StudioState,
+    utc_now,
+)
+from ..generation_ops import (
+    apply_completed_generation_to_state,
+    apply_generation_status_update,
+    build_generated_asset_metadata,
+    build_generation_title,
+    build_prompt_snapshot,
+    claim_generation_job_locked,
+    count_incomplete_generations,
+    create_generation_job_record,
+    infer_style_tags,
+    refresh_generation_claim_locked,
+    requeue_generation_job_locked,
+)
+from ..generation_pricing_ops import build_generation_pricing_quote
+from ..generation_credit_forecast_ops import calculate_generation_final_charge
 from ..generation_admission_ops import (
     count_incomplete_generations_for_identity,
     count_recent_generation_requests_for_identity,
     has_duplicate_incomplete_generation,
 )
-from ..providers import *
+from ..providers import (
+    Environment,
+    GenerationRoutingDecision,
+    ProviderFatalError,
+    ProviderReferenceImage,
+    ProviderTemporaryError,
+    is_provider_auth_failure,
+)
 from ..asset_import_ops import parse_data_url_image
 from ..prompt_engineering import CompiledPrompt, compile_generation_request, improve_prompt_candidate
 from ..prompt_memory_ops import build_prompt_memory_context, derive_display_title, derive_prompt_tags
@@ -82,6 +115,61 @@ class GenerationService:
         if self.service._orphan_cleanup_task is None or self.service._orphan_cleanup_task.done():
             self.service._orphan_cleanup_task = asyncio.create_task(
                 self._orphan_cleanup_loop()
+            )
+
+    async def recover_startup_stale_broker_claims(self) -> list[tuple[str, str]]:
+        if self.service.generation_broker is None:
+            return []
+        return await self.service.generation_broker.requeue_stale_claims(
+            stale_after_seconds=max(1, int(self.service.settings.studio_job_stale_seconds)),
+        )
+
+    async def graceful_shutdown(self) -> None:
+        self.service.generation_dispatcher.stop_accepting()
+        drained = await self.service.generation_dispatcher.wait_for_idle(
+            timeout_seconds=max(0.0, float(self.service.settings.studio_shutdown_drain_seconds)),
+        )
+        pending_jobs = self.service.generation_dispatcher.snapshot_pending_jobs()
+        if not drained and (pending_jobs["queued"] or pending_jobs["running"]):
+            logger.warning(
+                "Graceful shutdown drained incompletely; recovering %s queued and %s running generation jobs",
+                len(pending_jobs["queued"]),
+                len(pending_jobs["running"]),
+            )
+
+        await self.service.generation_dispatcher.stop()
+
+        shutdown_job_ids = set(pending_jobs["queued"].keys())
+        shutdown_job_ids.update(pending_jobs["running"])
+        shutdown_job_ids.update(self.service._active_generation_claims.keys())
+        for job_id in shutdown_job_ids:
+            priority = pending_jobs["queued"].get(job_id)
+            await self._recover_shutdown_generation(job_id, priority=priority)
+        self.service._active_generation_claims.clear()
+
+    async def _recover_shutdown_generation(self, job_id: str, *, priority: str | None) -> None:
+        job = await self.service.store.get_generation(job_id)
+        if job is None:
+            if self.service.generation_broker is not None:
+                await self.service.generation_broker.complete(job_id)
+            return
+        if job.status not in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.RETRYABLE_FAILED}:
+            if self.service.generation_broker is not None:
+                await self.service.generation_broker.complete(job_id)
+            return
+        if job.status != JobStatus.QUEUED:
+            await self.service.store.mutate(
+                lambda state: requeue_generation_job_locked(
+                    state=state,
+                    job_id=job_id,
+                    now=utc_now(),
+                )
+            )
+        if self.service.generation_broker is not None:
+            await self.service.generation_broker.complete(job_id)
+            await self.service.generation_broker.enqueue(
+                job_id,
+                priority=(job.queue_priority or priority or "standard"),
             )
 
 

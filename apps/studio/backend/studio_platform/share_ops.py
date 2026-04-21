@@ -21,6 +21,14 @@ def build_share_token_preview(raw_token: str) -> str:
     return f"{raw_token[:8]}...{raw_token[-4:]}" if len(raw_token) > 12 else raw_token
 
 
+def _secure_compare(left: str | None, right: str | None) -> bool:
+    candidate_left = str(left or "")
+    candidate_right = str(right or "")
+    if not candidate_left or not candidate_right:
+        return False
+    return hmac.compare_digest(candidate_left, candidate_right)
+
+
 def create_share_record(
     *,
     identity_id: str,
@@ -51,9 +59,9 @@ def find_share_by_public_token(
 ) -> ShareLink | None:
     token_hash = hash_share_token(raw_token, secret=secret)
     for share in shares:
-        if share.token_hash and share.token_hash == token_hash:
+        if _secure_compare(share.token_hash, token_hash):
             return share
-        if not share.token_hash and share.token == raw_token:
+        if not share.token_hash and _secure_compare(share.token, raw_token):
             return share
     return None
 
@@ -65,9 +73,9 @@ def find_share_by_public_token_hash(
     secret: str,
 ) -> ShareLink | None:
     for share in shares:
-        if share.token_hash and share.token_hash == token_hash:
+        if _secure_compare(share.token_hash, token_hash):
             return share
-        if share.token and hash_share_token(share.token, secret=secret) == token_hash:
+        if share.token and _secure_compare(hash_share_token(share.token, secret=secret), token_hash):
             return share
     return None
 

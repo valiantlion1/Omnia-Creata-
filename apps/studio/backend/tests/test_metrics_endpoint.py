@@ -29,6 +29,7 @@ def test_metrics_endpoint_exposes_prometheus_text():
     assert "studio_backend_info{" in response.text
     assert "studio_http_requests_total" in response.text
     assert "studio_http_request_exceptions_total" in response.text
+    assert "studio_circuit_breaker_state" in response.text
 
 
 def test_metrics_endpoint_reports_version_route_counts():

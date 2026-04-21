@@ -29,9 +29,12 @@ class GenerationDispatcher:
         self._active_tasks: set[asyncio.Task[None]] = set()
         self._drain_task: asyncio.Task[None] | None = None
         self._stopped = False
+        self._accepting_jobs = True
         self._priority_streak = 0
 
     async def enqueue(self, job_id: str, *, priority: str = "standard") -> bool:
+        if not self._accepting_jobs:
+            return False
         if job_id in self._queued_ids or job_id in self._running_ids:
             return False
 
@@ -45,6 +48,7 @@ class GenerationDispatcher:
 
     async def stop(self) -> None:
         self._stopped = True
+        self._accepting_jobs = False
 
         drain_task = self._drain_task
         if drain_task and not drain_task.done():
@@ -67,6 +71,24 @@ class GenerationDispatcher:
         for queue in self._queues.values():
             queue.clear()
         self._priority_streak = 0
+
+    def stop_accepting(self) -> None:
+        self._accepting_jobs = False
+
+    async def wait_for_idle(self, *, timeout_seconds: float) -> bool:
+        deadline = asyncio.get_running_loop().time() + max(0.0, timeout_seconds)
+        while self._queued_ids or self._running_ids or any(not task.done() for task in self._active_tasks):
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return False
+            await asyncio.sleep(min(0.05, remaining))
+        return True
+
+    def snapshot_pending_jobs(self) -> dict[str, object]:
+        return {
+            "queued": dict(self._queued_priorities),
+            "running": set(self._running_ids),
+        }
 
     def metrics(self) -> dict[str, object]:
         return {

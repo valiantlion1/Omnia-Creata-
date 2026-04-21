@@ -3438,7 +3438,7 @@ async def test_health_detail_exposes_data_authority_for_sqlite_store(tmp_path: P
         assert health["data_authority"]["backend"] == "sqlite"
         assert health["data_authority"]["authority_mode"] == "durable_local"
         assert health["data_authority"]["durable"] is True
-        assert health["data_authority"]["schema_version"] == "2"
+        assert health["data_authority"]["schema_version"] == "3"
         assert health["data_authority"]["path"].endswith("studio-state.sqlite3")
         assert health["deployment_stack"]["canonical_stack"]["frontend"] == "vercel"
         assert health["deployment_stack"]["configured_stack"]["frontend"] == settings.frontend_deploy_platform
@@ -5022,6 +5022,178 @@ async def test_initialize_recovers_incomplete_generation_jobs(tmp_path: Path):
         assert "asset-recovered" in snapshot.assets
     finally:
         await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_initialize_recovers_stale_broker_claims_on_startup(tmp_path: Path):
+    settings = get_settings()
+    original_mode = settings.generation_runtime_mode
+    original_stale = settings.studio_job_stale_seconds
+    broker = InMemoryGenerationBroker()
+    await broker.initialize()
+
+    identity = OmniaIdentity(
+        id="user-stale-claim",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-stale-claim",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-stale-claim",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    running_job = GenerationJob(
+        id="job-stale-claim",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Recover Broker Claim",
+        model="flux-schnell",
+        queue_priority="priority",
+        status=JobStatus.RUNNING,
+        provider="worker-provider",
+        estimated_cost=0.0,
+        credit_cost=6,
+        output_count=1,
+        claim_token="claim-startup",
+        claimed_by="worker-a",
+        prompt_snapshot=PromptSnapshot(
+            prompt="recover stale broker claim",
+            negative_prompt="",
+            model="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=20,
+            cfg_scale=6.0,
+            seed=313,
+            aspect_ratio="1:1",
+        ),
+    )
+    store = StudioStateStore(tmp_path / "state.json")
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.generations.__setitem__(running_job.id, running_job),
+        )
+    )
+    await broker.enqueue(running_job.id, priority="priority")
+    job_id, _, _ = await broker.dequeue_next(
+        priority_streak=0,
+        priority_burst_limit=3,
+        priority_order=("priority", "standard", "browse-only"),
+    )
+    assert job_id == running_job.id
+    broker._claimed[running_job.id] = ("priority", 0.0)
+
+    settings.generation_runtime_mode = "web"
+    settings.studio_job_stale_seconds = 1
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media", generation_broker=broker)
+
+    try:
+        await service.initialize()
+
+        snapshot = await store.snapshot()
+        assert snapshot.generations[running_job.id].status == JobStatus.QUEUED
+
+        broker_snapshot = await broker.inspect()
+        assert broker_snapshot["claimed"] == {}
+        assert broker_snapshot["queued"]["priority"] == [running_job.id]
+    finally:
+        settings.generation_runtime_mode = original_mode
+        settings.studio_job_stale_seconds = original_stale
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_requeues_active_generation_claims_back_to_broker(tmp_path: Path):
+    settings = get_settings()
+    original_mode = settings.generation_runtime_mode
+    original_drain_seconds = settings.studio_shutdown_drain_seconds
+    broker = InMemoryGenerationBroker()
+    await broker.initialize()
+
+    settings.generation_runtime_mode = "web"
+    settings.studio_shutdown_drain_seconds = 0
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media", generation_broker=broker)
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-shutdown-claim",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-shutdown-claim",
+        plan=IdentityPlan.PRO,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-shutdown-claim",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    running_job = GenerationJob(
+        id="job-shutdown-claim",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Shutdown Recovery",
+        model="flux-schnell",
+        queue_priority="priority",
+        status=JobStatus.RUNNING,
+        provider="worker-provider",
+        estimated_cost=0.0,
+        credit_cost=6,
+        output_count=1,
+        claim_token="claim-shutdown",
+        claimed_by="worker-b",
+        prompt_snapshot=PromptSnapshot(
+            prompt="requeue claimed job on shutdown",
+            negative_prompt="",
+            model="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=20,
+            cfg_scale=6.0,
+            seed=419,
+            aspect_ratio="1:1",
+        ),
+    )
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.generations.__setitem__(running_job.id, running_job),
+        )
+    )
+    broker._claimed[running_job.id] = ("priority", 0.0)
+    service._active_generation_claims[running_job.id] = "claim-shutdown"
+
+    try:
+        await service.shutdown()
+
+        snapshot = await store.snapshot()
+        assert snapshot.generations[running_job.id].status == JobStatus.QUEUED
+
+        broker_snapshot = await broker.inspect()
+        assert broker_snapshot["claimed"] == {}
+        assert broker_snapshot["queued"]["priority"] == [running_job.id]
+    finally:
+        settings.generation_runtime_mode = original_mode
+        settings.studio_shutdown_drain_seconds = original_drain_seconds
 
 
 @pytest.mark.asyncio

@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050505;
-  --background-elevated: #0d0d0d;
-  --surface: rgba(15, 15, 15, 0.72);
-  --surface-strong: rgba(25, 25, 25, 0.92);
+  --background: #090d12;
+  --background-elevated: #101721;
+  --surface: rgba(16, 22, 31, 0.76);
+  --surface-strong: rgba(12, 17, 24, 0.94);
   --surface-soft: rgba(255, 255, 255, 0.035);
-  --foreground: #f8f4ec;
-  --foreground-soft: #d9d1c1;
-  --muted: #a09789;
+  --foreground: #f3f7fb;
+  --foreground-soft: #b5c1cf;
+  --muted: #7b8796;
   --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(217, 181, 109, 0.22);
-  --accent: #d9b56d;
-  --accent-strong: #f0d39a;
-  --accent-soft: rgba(217, 181, 109, 0.14);
-  --accent-glow: rgba(217, 181, 109, 0.28);
+  --line-strong: rgba(188, 209, 229, 0.18);
+  --accent: #bcd1e5;
+  --accent-strong: #edf4fb;
+  --accent-soft: rgba(188, 209, 229, 0.14);
+  --accent-glow: rgba(188, 209, 229, 0.24);
   --danger: #f97373;
-  --shadow-luxury: 0 24px 80px rgba(0, 0, 0, 0.5);
+  --shadow-luxury: 0 26px 90px rgba(3, 10, 18, 0.34);
   --font-sans:
     var(--font-display),
     var(--font-sans-fallback),
@@ -57,10 +57,10 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 10% 12%, rgba(217, 181, 109, 0.14), transparent 28%),
-    radial-gradient(circle at 82% 14%, rgba(142, 125, 88, 0.12), transparent 26%),
-    radial-gradient(circle at 50% 100%, rgba(217, 181, 109, 0.06), transparent 30%),
-    linear-gradient(180deg, #080808 0%, #040404 48%, #020202 100%);
+    radial-gradient(circle at 12% 10%, rgba(188, 209, 229, 0.12), transparent 30%),
+    radial-gradient(circle at 84% 14%, rgba(113, 137, 165, 0.14), transparent 28%),
+    radial-gradient(circle at 50% 100%, rgba(188, 209, 229, 0.08), transparent 34%),
+    linear-gradient(180deg, #0d141c 0%, #0a1118 34%, #070c12 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
@@ -80,73 +80,73 @@ body {
 
 .depth-layer-base {
   background:
-    radial-gradient(circle at 16% 18%, rgba(217, 181, 109, 0.15), transparent 38%),
-    radial-gradient(circle at 84% 12%, rgba(130, 117, 92, 0.11), transparent 36%),
-    linear-gradient(180deg, rgba(5, 5, 5, 0.34) 0%, rgba(2, 2, 2, 0.74) 80%);
-  transform: translate3d(calc(var(--depth-x) * -0.14), calc(var(--depth-y) * -0.14), 0);
+    radial-gradient(circle at 16% 18%, rgba(188, 209, 229, 0.1), transparent 40%),
+    radial-gradient(circle at 82% 14%, rgba(113, 137, 165, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(11, 16, 24, 0.18) 0%, rgba(7, 12, 18, 0.76) 78%);
+  transform: translate3d(calc(var(--depth-x) * -0.12), calc(var(--depth-y) * -0.12), 0);
 }
 
 .depth-layer-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 120px 120px;
-  mask-image: linear-gradient(180deg, transparent, black 16%, black 84%, transparent);
-  opacity: 0.4;
-  transform: translate3d(calc(var(--depth-x) * -0.05), calc((var(--depth-y) * -0.08) - (var(--depth-scroll) * 0.08)), 0);
+    linear-gradient(rgba(255, 255, 255, 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
+  background-size: 132px 132px;
+  mask-image: linear-gradient(180deg, transparent, black 18%, black 82%, transparent);
+  opacity: 0.28;
+  transform: translate3d(calc(var(--depth-x) * -0.04), calc((var(--depth-y) * -0.06) - (var(--depth-scroll) * 0.07)), 0);
 }
 
 .depth-layer-glow-a {
-  background: radial-gradient(circle at 32% 40%, rgba(217, 181, 109, 0.11), transparent 46%);
+  background: radial-gradient(circle at 32% 40%, rgba(188, 209, 229, 0.12), transparent 44%);
   mix-blend-mode: screen;
-  filter: blur(8px);
-  opacity: 0.72;
-  transform: translate3d(calc(var(--depth-x) * 0.28), calc((var(--depth-y) * 0.22) + (var(--depth-scroll) * 0.14)), 0);
+  filter: blur(14px);
+  opacity: 0.56;
+  transform: translate3d(calc(var(--depth-x) * 0.18), calc((var(--depth-y) * 0.18) + (var(--depth-scroll) * 0.12)), 0);
 }
 
 .depth-layer-glow-b {
-  background: radial-gradient(circle at 78% 26%, rgba(255, 255, 255, 0.1), transparent 42%);
+  background: radial-gradient(circle at 78% 26%, rgba(255, 255, 255, 0.08), transparent 40%);
   mix-blend-mode: screen;
-  filter: blur(14px);
-  opacity: 0.45;
-  transform: translate3d(calc(var(--depth-x) * -0.24), calc((var(--depth-y) * -0.16) + (var(--depth-scroll) * 0.18)), 0);
+  filter: blur(16px);
+  opacity: 0.34;
+  transform: translate3d(calc(var(--depth-x) * -0.16), calc((var(--depth-y) * -0.14) + (var(--depth-scroll) * 0.16)), 0);
 }
 
 .depth-layer-sweep {
   background: linear-gradient(
     112deg,
-    transparent 18%,
-    rgba(217, 181, 109, 0.04) 38%,
-    rgba(255, 255, 255, 0.03) 50%,
-    rgba(217, 181, 109, 0.05) 64%,
-    transparent 84%
+    transparent 16%,
+    rgba(188, 209, 229, 0.03) 38%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(188, 209, 229, 0.04) 64%,
+    transparent 86%
   );
-  opacity: 0.5;
-  animation: depthSweep 14s linear infinite;
-  transform: translate3d(calc(var(--depth-x) * 0.18), calc(var(--depth-y) * 0.16), 0);
+  opacity: 0.34;
+  animation: depthSweep 18s linear infinite;
+  transform: translate3d(calc(var(--depth-x) * 0.14), calc(var(--depth-y) * 0.12), 0);
 }
 
 .depth-layer-noise {
   background-image:
-    radial-gradient(circle at 20% 24%, rgba(255, 255, 255, 0.22) 0.8px, transparent 1px),
-    radial-gradient(circle at 72% 66%, rgba(255, 255, 255, 0.12) 0.8px, transparent 1px),
-    radial-gradient(circle at 42% 84%, rgba(217, 181, 109, 0.18) 0.8px, transparent 1px);
-  background-size: 90px 90px, 120px 120px, 140px 140px;
+    radial-gradient(circle at 20% 24%, rgba(255, 255, 255, 0.18) 0.8px, transparent 1px),
+    radial-gradient(circle at 72% 66%, rgba(255, 255, 255, 0.1) 0.8px, transparent 1px),
+    radial-gradient(circle at 42% 84%, rgba(188, 209, 229, 0.12) 0.8px, transparent 1px);
+  background-size: 100px 100px, 132px 132px, 146px 146px;
   mix-blend-mode: soft-light;
-  opacity: 0.2;
-  transform: translate3d(calc(var(--depth-x) * -0.1), calc((var(--depth-y) * -0.1) + (var(--depth-scroll) * 0.04)), 0);
+  opacity: 0.12;
+  transform: translate3d(calc(var(--depth-x) * -0.08), calc((var(--depth-y) * -0.08) + (var(--depth-scroll) * 0.04)), 0);
 }
 
 .depth-backdrop[data-motion="light"] .depth-layer-grid {
-  opacity: 0.28;
+  opacity: 0.18;
 }
 
 .depth-backdrop[data-motion="light"] .depth-layer-sweep {
-  opacity: 0.34;
+  opacity: 0.22;
 }
 
 .depth-backdrop[data-motion="light"] .depth-layer-noise {
-  opacity: 0.12;
+  opacity: 0.08;
 }
 
 .intro-overlay {
@@ -164,9 +164,9 @@ body {
 
 .intro-overlay__veil {
   background:
-    radial-gradient(circle at 50% 38%, rgba(217, 181, 109, 0.28), transparent 46%),
-    radial-gradient(circle at 20% 20%, rgba(217, 181, 109, 0.08), transparent 32%),
-    linear-gradient(180deg, #050505 0%, #000 100%);
+    radial-gradient(circle at 50% 36%, rgba(188, 209, 229, 0.16), transparent 42%),
+    radial-gradient(circle at 18% 18%, rgba(188, 209, 229, 0.05), transparent 30%),
+    linear-gradient(180deg, #090d12 0%, #06090d 100%);
 }
 
 .intro-overlay__core {
@@ -188,7 +188,7 @@ body {
 }
 
 ::selection {
-  background: rgba(217, 181, 109, 0.22);
+  background: rgba(188, 209, 229, 0.22);
   color: var(--foreground);
 }
 
@@ -230,11 +230,11 @@ li {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 120px 120px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), black 20%, black 80%, transparent);
-  opacity: 0.18;
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 136px 136px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.2), black 18%, black 82%, transparent);
+  opacity: 0.1;
 }
 
 .site-frame::after {
@@ -243,30 +243,30 @@ li {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 0%, rgba(217, 181, 109, 0.12), transparent 32%),
-    radial-gradient(circle at 50% 100%, rgba(217, 181, 109, 0.06), transparent 30%);
+    radial-gradient(circle at 50% 0%, rgba(188, 209, 229, 0.08), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(113, 137, 165, 0.08), transparent 30%);
   mix-blend-mode: screen;
-  opacity: 0.42;
+  opacity: 0.26;
 }
 
 .luxury-panel {
   border: 1px solid var(--line);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
-    rgba(10, 10, 10, 0.9);
-  backdrop-filter: blur(16px);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012)),
+    rgba(12, 17, 24, 0.86);
+  backdrop-filter: blur(18px);
   box-shadow: var(--shadow-luxury);
 }
 
 .gold-outline {
   border-color: var(--line-strong);
   box-shadow:
-    0 0 0 1px rgba(217, 181, 109, 0.08),
-    0 28px 80px rgba(0, 0, 0, 0.5);
+    0 0 0 1px rgba(188, 209, 229, 0.06),
+    0 28px 80px rgba(3, 10, 18, 0.3);
 }
 
 .gold-text {
-  background: linear-gradient(135deg, #f5dfb2 0%, #d9b56d 45%, #b28d4f 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #d8e6f4 46%, #9fb8d2 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -276,17 +276,17 @@ li {
   position: absolute;
   inset: auto;
   border-radius: 999px;
-  filter: blur(84px);
-  opacity: 0.28;
+  filter: blur(90px);
+  opacity: 0.24;
   pointer-events: none;
 }
 
 .soft-panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
-    rgba(12, 12, 12, 0.78);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.32);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.008)),
+    rgba(13, 18, 25, 0.84);
+  box-shadow: 0 20px 56px rgba(3, 10, 18, 0.2);
 }
 
 .ambient-drift {
@@ -358,10 +358,10 @@ li {
 @keyframes pulse {
   0%,
   100% {
-    opacity: 0.32;
+    opacity: 0.24;
   }
   50% {
-    opacity: 0.52;
+    opacity: 0.44;
   }
 }
 

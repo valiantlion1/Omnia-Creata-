@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from config.env import Environment, Settings
+from config.env import Environment, Settings, reveal_secret_with_audit
 from runtime_logging import RedactingLogFilter, configure_runtime_logging
 
 
@@ -76,6 +76,29 @@ def test_redacting_log_filter_masks_secret_like_message_content():
     assert "sk-or-v1-secret-token-1234567890" not in record.args[0]
 
 
+def test_redacting_log_filter_masks_secret_like_extra_fields():
+    record = logging.LogRecord(
+        name="omnia.test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="structured security event",
+        args=(),
+        exc_info=None,
+    )
+    record.token_preview = "Bearer sk-or-v1-secret-token-1234567890"
+    record.details = {
+        "authorization": "Bearer sk-or-v1-secret-token-1234567890",
+        "query": "?api_key=super-secret-value-1234567890",
+    }
+
+    assert RedactingLogFilter().filter(record) is True
+    assert "***REDACTED***" in record.token_preview
+    assert "sk-or-v1-secret-token-1234567890" not in record.token_preview
+    assert "***REDACTED***" in record.details["authorization"]
+    assert "super-secret-value-1234567890" not in record.details["query"]
+
+
 def test_settings_enable_demo_auth_defaults_to_development_only():
     development = Settings(_env_file=None, jwt_secret="x" * 32, environment=Environment.DEVELOPMENT)
     staging = Settings(
@@ -143,6 +166,7 @@ def test_validate_production_requirements_requires_launch_shaped_runtime_values(
         ({"enable_demo_auth": True}, "ENABLE_DEMO_AUTH"),
         ({"enable_demo_generation_fallback": True}, "ENABLE_DEMO_GENERATION_FALLBACK"),
         ({"enable_api_docs": True}, "ENABLE_API_DOCS"),
+        ({"jwt_secret": "dev-jwt-secret-0123456789abcdef0123456789abcdef"}, "JWT_SECRET"),
     ],
 )
 def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides, expected_message):
@@ -166,3 +190,120 @@ def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides,
 
     with pytest.raises(ValueError, match=expected_message):
         settings.validate_production_requirements()
+
+
+def test_validate_runtime_accepts_launch_shaped_runtime_values():
+    staging = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    warnings = staging.validate_runtime()
+
+    assert isinstance(warnings, list)
+
+
+def test_validate_runtime_rejects_too_small_request_body_limit():
+    settings = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.DEVELOPMENT,
+        max_request_body_bytes=512,
+    )
+
+    with pytest.raises(ValueError, match="MAX_REQUEST_BODY_BYTES"):
+        settings.validate_runtime()
+
+
+def test_validate_runtime_rejects_known_development_jwt_secret_in_staging():
+    settings = Settings(
+        _env_file=None,
+        environment=Environment.STAGING,
+        jwt_secret="dev-jwt-secret-0123456789abcdef0123456789abcdef",
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    with pytest.raises(ValueError, match="JWT_SECRET"):
+        settings.validate_runtime()
+
+
+def test_validate_runtime_warns_when_split_web_runtime_uses_default_postgres_pool_budget():
+    settings = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        generation_runtime_mode="web",
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    warnings = settings.validate_runtime()
+
+    assert any(
+        "POSTGRES_STATE_STORE_WEB_MIN_CONNECTIONS/POSTGRES_STATE_STORE_WEB_MAX_CONNECTIONS" in warning
+        for warning in warnings
+    )
+
+
+def test_validate_runtime_rejects_invalid_runtime_specific_postgres_pool_budget():
+    settings = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        generation_runtime_mode="worker",
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+        postgres_state_store_worker_min_connections=8,
+        postgres_state_store_worker_max_connections=4,
+    )
+
+    with pytest.raises(ValueError, match="POSTGRES_STATE_STORE_WORKER_MAX_CONNECTIONS"):
+        settings.validate_runtime()
+
+
+def test_reveal_secret_with_audit_reports_secret_name_without_value(monkeypatch):
+    import security.logging as security_logging
+
+    captured: list[str] = []
+
+    def fake_audit(secret_name: str) -> None:
+        captured.append(secret_name)
+
+    monkeypatch.setattr(security_logging, "audit_secret_revealed", fake_audit)
+
+    value = reveal_secret_with_audit("JWT_SECRET", "super-secret-value")
+
+    assert value == "super-secret-value"
+    assert captured == ["JWT_SECRET"]

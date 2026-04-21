@@ -32,6 +32,9 @@ import time
 
 from redis.asyncio import Redis
 
+from config.feature_flags import FEATURE_FLAGS, FLAG_CIRCUIT_BREAKER_ENABLED
+
+from ..resilience import CircuitBreaker, CircuitOpenError, describe_breaker
 
 logger = logging.getLogger("omnia.studio.generation_broker")
 
@@ -86,6 +89,9 @@ class GenerationBroker(ABC):
     @abstractmethod
     async def shutdown(self) -> None:
         raise NotImplementedError
+
+    def describe_circuit_breaker(self) -> dict[str, object] | None:
+        return None
 
 
 class InMemoryGenerationBroker(GenerationBroker):
@@ -205,20 +211,33 @@ class RedisGenerationBroker(GenerationBroker):
         self._queued_index_key = f"{self.prefix}:queued:index"
         self._claimed_scores_key = f"{self.prefix}:claimed:scores"
         self._claimed_priority_key = f"{self.prefix}:claimed:priority"
+        self._breaker = (
+            CircuitBreaker[object](
+                name="generation_broker",
+                fail_threshold=5,
+                cooldown_seconds=10.0,
+                half_open_max_probes=2,
+            )
+            if FEATURE_FLAGS.is_enabled(FLAG_CIRCUIT_BREAKER_ENABLED)
+            else None
+        )
 
     async def initialize(self) -> None:
         await self.redis.ping()
 
     async def enqueue(self, job_id: str, *, priority: str) -> bool:
-        normalized = _normalize_priority(priority)
-        queue_key = self._queue_key(normalized)
-        async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.sadd(self._queued_index_key, job_id)
-            pipe.rpush(queue_key, job_id)
-            results = await pipe.execute()
-        if int(results[0]) == 0:
-            return False
-        return True
+        async def operation() -> bool:
+            normalized = _normalize_priority(priority)
+            queue_key = self._queue_key(normalized)
+            async with self.redis.pipeline(transaction=True) as pipe:
+                pipe.sadd(self._queued_index_key, job_id)
+                pipe.rpush(queue_key, job_id)
+                results = await pipe.execute()
+            if int(results[0]) == 0:
+                return False
+            return True
+
+        return await self._call_with_breaker(operation)
 
     async def dequeue_next(
         self,
@@ -227,66 +246,146 @@ class RedisGenerationBroker(GenerationBroker):
         priority_burst_limit: int,
         priority_order: tuple[str, ...],
     ) -> tuple[str | None, str | None, int]:
-        queue_sizes = await self.metrics()
-        chosen_priority, next_streak = _choose_priority(
-            queue_sizes=queue_sizes,
-            priority_streak=priority_streak,
-            priority_burst_limit=priority_burst_limit,
-        )
-        if chosen_priority is None:
-            return None, None, next_streak
+        async def operation() -> tuple[str | None, str | None, int]:
+            queue_sizes = await self._metrics_raw()
+            chosen_priority, next_streak = _choose_priority(
+                queue_sizes=queue_sizes,
+                priority_streak=priority_streak,
+                priority_burst_limit=priority_burst_limit,
+            )
+            if chosen_priority is None:
+                return None, None, next_streak
 
-        queue_key = self._queue_key(chosen_priority)
-        now = time.time()
-        async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.lpop(queue_key)
-            results = await pipe.execute()
-        job_id = results[0]
-        if job_id is None:
-            return None, None, next_streak
-        async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.srem(self._queued_index_key, job_id)
-            pipe.zadd(self._claimed_scores_key, {str(job_id): now})
-            pipe.hset(self._claimed_priority_key, str(job_id), chosen_priority)
-            await pipe.execute()
-        return str(job_id), chosen_priority, next_streak
+            queue_key = self._queue_key(chosen_priority)
+            now = time.time()
+            async with self.redis.pipeline(transaction=True) as pipe:
+                pipe.lpop(queue_key)
+                results = await pipe.execute()
+            job_id = results[0]
+            if job_id is None:
+                return None, None, next_streak
+            async with self.redis.pipeline(transaction=True) as pipe:
+                pipe.srem(self._queued_index_key, job_id)
+                pipe.zadd(self._claimed_scores_key, {str(job_id): now})
+                pipe.hset(self._claimed_priority_key, str(job_id), chosen_priority)
+                await pipe.execute()
+            return str(job_id), chosen_priority, next_streak
+
+        return await self._call_with_breaker(operation)
 
     async def heartbeat_claim(self, job_id: str) -> None:
-        if not job_id:
-            return
-        await self.redis.zadd(self._claimed_scores_key, {str(job_id): time.time()})
+        async def operation() -> None:
+            if not job_id:
+                return
+            await self.redis.zadd(self._claimed_scores_key, {str(job_id): time.time()})
+
+        await self._call_with_breaker(operation)
 
     async def complete(self, job_id: str) -> None:
-        if not job_id:
-            return
-        async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.zrem(self._claimed_scores_key, str(job_id))
-            pipe.hdel(self._claimed_priority_key, str(job_id))
-            await pipe.execute()
-
-    async def requeue_stale_claims(self, *, stale_after_seconds: int) -> list[tuple[str, str]]:
-        cutoff = time.time() - max(1, stale_after_seconds)
-        stale_job_ids = await self.redis.zrangebyscore(self._claimed_scores_key, "-inf", cutoff)
-        if not stale_job_ids:
-            return []
-
-        recovered: list[tuple[str, str]] = []
-        for job_id in stale_job_ids:
-            priority = await self.redis.hget(self._claimed_priority_key, str(job_id))
-            normalized_priority = _normalize_priority(priority or "standard")
+        async def operation() -> None:
+            if not job_id:
+                return
             async with self.redis.pipeline(transaction=True) as pipe:
                 pipe.zrem(self._claimed_scores_key, str(job_id))
                 pipe.hdel(self._claimed_priority_key, str(job_id))
-                pipe.sadd(self._queued_index_key, str(job_id))
-                results = await pipe.execute()
-            removed = int(results[0])
-            if removed <= 0:
-                continue
-            await self.redis.rpush(self._queue_key(normalized_priority), str(job_id))
-            recovered.append((str(job_id), normalized_priority))
-        return recovered
+                await pipe.execute()
+
+        await self._call_with_breaker(operation)
+
+    async def requeue_stale_claims(self, *, stale_after_seconds: int) -> list[tuple[str, str]]:
+        async def operation() -> list[tuple[str, str]]:
+            cutoff = time.time() - max(1, stale_after_seconds)
+            stale_job_ids = await self.redis.zrangebyscore(self._claimed_scores_key, "-inf", cutoff)
+            if not stale_job_ids:
+                return []
+
+            recovered: list[tuple[str, str]] = []
+            for job_id in stale_job_ids:
+                priority = await self.redis.hget(self._claimed_priority_key, str(job_id))
+                normalized_priority = _normalize_priority(priority or "standard")
+                async with self.redis.pipeline(transaction=True) as pipe:
+                    pipe.zrem(self._claimed_scores_key, str(job_id))
+                    pipe.hdel(self._claimed_priority_key, str(job_id))
+                    pipe.sadd(self._queued_index_key, str(job_id))
+                    results = await pipe.execute()
+                removed = int(results[0])
+                if removed <= 0:
+                    continue
+                await self.redis.rpush(self._queue_key(normalized_priority), str(job_id))
+                recovered.append((str(job_id), normalized_priority))
+            return recovered
+
+        return await self._call_with_breaker(operation)
 
     async def metrics(self) -> dict[str, int]:
+        async def operation() -> dict[str, int]:
+            return await self._metrics_raw()
+        return await self._call_with_breaker(
+            operation,
+            open_fallback={"priority": 0, "standard": 0, "browse-only": 0},
+        )
+
+    async def claimed_count(self) -> int:
+        async def operation() -> int:
+            return int(await self.redis.zcard(self._claimed_scores_key))
+
+        return await self._call_with_breaker(operation, open_fallback=0)
+
+    async def inspect(self) -> dict[str, object]:
+        async def operation() -> dict[str, object]:
+            async with self.redis.pipeline(transaction=False) as pipe:
+                pipe.lrange(self._queue_key("priority"), 0, -1)
+                pipe.lrange(self._queue_key("standard"), 0, -1)
+                pipe.lrange(self._queue_key("browse-only"), 0, -1)
+                pipe.hgetall(self._claimed_priority_key)
+                priority_jobs, standard_jobs, browse_jobs, claimed = await pipe.execute()
+            return {
+                "queued": {
+                    "priority": [str(job_id) for job_id in priority_jobs],
+                    "standard": [str(job_id) for job_id in standard_jobs],
+                    "browse-only": [str(job_id) for job_id in browse_jobs],
+                },
+                "claimed": {
+                    str(job_id): _normalize_priority(str(priority))
+                    for job_id, priority in dict(claimed).items()
+                },
+            }
+
+        return await self._call_with_breaker(
+            operation,
+            open_fallback={
+                "queued": {"priority": [], "standard": [], "browse-only": []},
+                "claimed": {},
+            },
+        )
+
+    async def discard(self, job_id: str) -> None:
+        async def operation() -> None:
+            if not job_id:
+                return
+            async with self.redis.pipeline(transaction=True) as pipe:
+                pipe.srem(self._queued_index_key, str(job_id))
+                pipe.zrem(self._claimed_scores_key, str(job_id))
+                pipe.hdel(self._claimed_priority_key, str(job_id))
+                pipe.lrem(self._queue_key("priority"), 0, str(job_id))
+                pipe.lrem(self._queue_key("standard"), 0, str(job_id))
+                pipe.lrem(self._queue_key("browse-only"), 0, str(job_id))
+                await pipe.execute()
+
+        await self._call_with_breaker(operation)
+
+    async def shutdown(self) -> None:
+        await self.redis.aclose()
+
+    def _queue_key(self, priority: str) -> str:
+        return f"{self.prefix}:queued:{priority}"
+
+    def describe_circuit_breaker(self) -> dict[str, object] | None:
+        if self._breaker is None:
+            return None
+        return describe_breaker(self._breaker)
+
+    async def _metrics_raw(self) -> dict[str, int]:
         async with self.redis.pipeline(transaction=False) as pipe:
             pipe.llen(self._queue_key("priority"))
             pipe.llen(self._queue_key("standard"))
@@ -298,45 +397,20 @@ class RedisGenerationBroker(GenerationBroker):
             "browse-only": int(browse_count),
         }
 
-    async def claimed_count(self) -> int:
-        return int(await self.redis.zcard(self._claimed_scores_key))
-
-    async def inspect(self) -> dict[str, object]:
-        async with self.redis.pipeline(transaction=False) as pipe:
-            pipe.lrange(self._queue_key("priority"), 0, -1)
-            pipe.lrange(self._queue_key("standard"), 0, -1)
-            pipe.lrange(self._queue_key("browse-only"), 0, -1)
-            pipe.hgetall(self._claimed_priority_key)
-            priority_jobs, standard_jobs, browse_jobs, claimed = await pipe.execute()
-        return {
-            "queued": {
-                "priority": [str(job_id) for job_id in priority_jobs],
-                "standard": [str(job_id) for job_id in standard_jobs],
-                "browse-only": [str(job_id) for job_id in browse_jobs],
-            },
-            "claimed": {
-                str(job_id): _normalize_priority(str(priority))
-                for job_id, priority in dict(claimed).items()
-            },
-        }
-
-    async def discard(self, job_id: str) -> None:
-        if not job_id:
-            return
-        async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.srem(self._queued_index_key, str(job_id))
-            pipe.zrem(self._claimed_scores_key, str(job_id))
-            pipe.hdel(self._claimed_priority_key, str(job_id))
-            pipe.lrem(self._queue_key("priority"), 0, str(job_id))
-            pipe.lrem(self._queue_key("standard"), 0, str(job_id))
-            pipe.lrem(self._queue_key("browse-only"), 0, str(job_id))
-            await pipe.execute()
-
-    async def shutdown(self) -> None:
-        await self.redis.aclose()
-
-    def _queue_key(self, priority: str) -> str:
-        return f"{self.prefix}:queued:{priority}"
+    async def _call_with_breaker(
+        self,
+        operation,
+        *,
+        open_fallback=None,
+    ):
+        if self._breaker is None:
+            return await operation()
+        try:
+            return await self._breaker.call(operation)
+        except CircuitOpenError:
+            if open_fallback is not None:
+                return open_fallback
+            raise
 
 
 def build_generation_broker(*, redis_url: str | None) -> GenerationBroker | None:

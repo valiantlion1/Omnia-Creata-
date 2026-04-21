@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from config.env import Environment, Settings
 from main import _requires_no_store_headers, _should_enforce_trusted_hosts, app, settings
+from observability.context import current_request_id
 
 
 def _ensure_runtime_error_probe_route() -> None:
@@ -17,6 +18,18 @@ def _ensure_runtime_error_probe_route() -> None:
 
 
 _ensure_runtime_error_probe_route()
+
+
+def _ensure_request_context_probe_route() -> None:
+    if any(getattr(route, "path", None) == "/__tests/request-context" for route in app.routes):
+        return
+
+    @app.get("/__tests/request-context", include_in_schema=False)
+    async def _request_context_probe():
+        return {"request_id": current_request_id()}
+
+
+_ensure_request_context_probe_route()
 
 
 @pytest.fixture()
@@ -42,6 +55,8 @@ def test_api_responses_emit_locked_csp_when_docs_are_disabled(_restore_security_
         "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     )
     assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
+    assert "payment=()" in response.headers["Permissions-Policy"]
+    assert "fullscreen=(self)" in response.headers["Permissions-Policy"]
     assert response.headers["X-Request-ID"]
     assert response.headers["X-Response-Time"].endswith("s")
 
@@ -153,3 +168,18 @@ def test_unhandled_error_responses_keep_trace_and_security_headers(_restore_secu
     assert response.headers["Content-Security-Policy"] == (
         "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     )
+
+
+def test_request_context_middleware_binds_request_id_contextvar(_restore_security_header_settings):
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_api_docs = False
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/__tests/request-context",
+            headers={"X-Request-ID": "studio-context-test-1234"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["request_id"] == "studio-context-test-1234"
+    assert response.headers["X-Request-ID"] == "studio-context-test-1234"

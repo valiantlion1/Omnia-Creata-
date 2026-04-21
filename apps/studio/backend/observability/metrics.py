@@ -31,6 +31,15 @@ def _escape_label(value: str) -> str:
     )
 
 
+def _circuit_breaker_state_value(state: str | None) -> int:
+    normalized = str(state or "").strip().lower()
+    if normalized == "open":
+        return 1
+    if normalized == "half_open":
+        return 2
+    return 0
+
+
 class PrometheusMetricsCollector:
     def __init__(self, *, histogram_buckets: Iterable[float] = _DEFAULT_HISTOGRAM_BUCKETS) -> None:
         self._lock = Lock()
@@ -95,6 +104,7 @@ class PrometheusMetricsCollector:
         build: str,
         channel: str,
         status: str,
+        circuit_breakers: dict[str, object] | None = None,
     ) -> str:
         with self._lock:
             request_totals = dict(self._request_totals)
@@ -199,5 +209,36 @@ class PrometheusMetricsCollector:
                     duration_sum,
                 )
             )
+
+        lines.extend(
+            [
+                "# HELP studio_circuit_breaker_state Circuit breaker state (0=CLOSED, 1=OPEN, 2=HALF_OPEN).",
+                "# TYPE studio_circuit_breaker_state gauge",
+            ]
+        )
+        if circuit_breakers:
+            for subsystem, snapshot in sorted(circuit_breakers.items()):
+                if subsystem == "providers" and isinstance(snapshot, dict):
+                    for provider_name, provider_snapshot in sorted(snapshot.items()):
+                        if not isinstance(provider_snapshot, dict):
+                            continue
+                        lines.append(
+                            'studio_circuit_breaker_state{subsystem="%s",provider_name="%s"} %s'
+                            % (
+                                _escape_label("provider"),
+                                _escape_label(provider_name),
+                                _circuit_breaker_state_value(provider_snapshot.get("state")),
+                            )
+                        )
+                    continue
+                if not isinstance(snapshot, dict):
+                    continue
+                lines.append(
+                    'studio_circuit_breaker_state{subsystem="%s",provider_name=""} %s'
+                    % (
+                        _escape_label(str(subsystem)),
+                        _circuit_breaker_state_value(snapshot.get("state")),
+                    )
+                )
 
         return "\n".join(lines) + "\n"

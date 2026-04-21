@@ -83,6 +83,14 @@ def _build_test_app(
     async def healthz_detail():
         return {"status": "healthy", "detail": True}
 
+    @app.get("/v1/healthz/ready")
+    async def healthz_ready():
+        return {"status": "ready", "ready": True}
+
+    @app.get("/v1/healthz/startup")
+    async def healthz_startup():
+        return {"status": "started", "started": True}
+
     @app.post("/v1/auth/login")
     async def login():
         return JSONResponse(status_code=401, content={"detail": "Invalid login credentials"})
@@ -170,6 +178,21 @@ async def test_maintenance_middleware_enabled_bypasses_healthz(
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+@pytest.mark.asyncio
+async def test_maintenance_middleware_enabled_bypasses_healthz_ready_and_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, _ = _build_test_app(monkeypatch, enabled="true")
+
+    ready_response = await _request(app, "GET", "/v1/healthz/ready")
+    startup_response = await _request(app, "GET", "/v1/healthz/startup")
+
+    assert ready_response.status_code == 200
+    assert ready_response.json() == {"status": "ready", "ready": True}
+    assert startup_response.status_code == 200
+    assert startup_response.json() == {"status": "started", "started": True}
 
 
 @pytest.mark.asyncio

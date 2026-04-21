@@ -1802,6 +1802,37 @@ class ProviderRegistry:
             ),
         }
 
+    def describe_circuit_breakers(self) -> dict[str, dict[str, object]]:
+        payload: dict[str, dict[str, object]] = {}
+        now = time.monotonic()
+        for provider in self.providers:
+            state = self._provider_circuits.setdefault(provider.name, ProviderCircuitState())
+            self._prune_provider_observations(state, now=now)
+            breaker_state = "closed"
+            opened_seconds_remaining: float | None = None
+            if state.opened_until_monotonic is not None and now < state.opened_until_monotonic:
+                breaker_state = "open"
+                opened_seconds_remaining = round(
+                    max(0.0, state.opened_until_monotonic - now),
+                    3,
+                )
+            elif state.half_open or state.half_open_in_flight:
+                breaker_state = "half_open"
+
+            snapshot: dict[str, object] = {
+                "state": breaker_state,
+                "consecutive_failures": state.consecutive_failures,
+                "half_open_in_flight": state.half_open_in_flight,
+                "fail_threshold": self._CIRCUIT_FAILURE_THRESHOLD,
+                "cooldown_seconds": self._CIRCUIT_OPEN_SECONDS,
+            }
+            if opened_seconds_remaining is not None:
+                snapshot["opened_seconds_remaining"] = opened_seconds_remaining
+            if state.last_error:
+                snapshot["last_failure_reason"] = state.last_error
+            payload[provider.name] = snapshot
+        return payload
+
     def plan_generation_route(
         self,
         *,

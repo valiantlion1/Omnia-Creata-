@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict
 
+from config.feature_flags import FEATURE_FLAGS
+
 from ..owner_health_ops import (
     build_generation_broker_payload,
     build_owner_health_detail_extensions,
@@ -84,6 +86,22 @@ class HealthService:
                 build_public_plan_payload=self.service.get_public_plan_payload,
             )
 
+        broker_breaker = None
+        if self.service.generation_broker is not None:
+            describe_generation_broker_breaker = getattr(
+                self.service.generation_broker,
+                "describe_circuit_breaker",
+                None,
+            )
+            if callable(describe_generation_broker_breaker):
+                broker_breaker = describe_generation_broker_breaker()
+
+        circuit_breakers = {
+            "generation_broker": broker_breaker,
+            "providers": self.service.providers.describe_circuit_breakers(),
+            "postgres_pool": self.service.store.describe_circuit_breaker(),
+        }
+
         return build_owner_health_payload(
             overall_status=overall_status,
             provider_status=provider_status,
@@ -96,5 +114,7 @@ class HealthService:
             generation_routing=generation_routing_summary,
             chat_routing=chat_routing_summary,
             data_authority=data_authority,
+            feature_flags=FEATURE_FLAGS.snapshot(),
+            circuit_breakers=circuit_breakers,
             **detail_extensions,
         )

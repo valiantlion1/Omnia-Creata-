@@ -50,58 +50,72 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
   const supportingProducts = products.slice(1);
   const trustSignals = [
     {
-      title: "Direct product routes",
-      description: "Every main action leads to a real destination instead of a dead-end showcase.",
+      title: "Direct routes beat decorative marketing",
+      description: "Every primary action should move someone into a real surface instead of a dead-end brand moment.",
     },
     {
-      title: "Clear platform visibility",
-      description: "Platform access stays visible before users commit to a product.",
+      title: "Studio-first is more honest",
+      description: "The flagship should lead because it has the strongest public story today, not because every product must look equally mature.",
     },
     {
-      title: "Premium brand presence",
-      description: "The site is structured like a long-term software company, not a temporary campaign page.",
+      title: "Context stays visible",
+      description: "Platform availability, product roles, and next-step decisions remain readable before commitment.",
     },
     {
-      title: "Scalable HQ structure",
-      description: "The main website can grow with new surfaces, pricing, and product access without losing clarity.",
+      title: "The shell should stay calm",
+      description: "A quieter HQ survives growth better than a louder campaign page trying to impress every second.",
     },
   ];
   const studioHighlights = [
     {
-      title: "One flagship workspace",
-      description: "Plan, review, and release work from the product that anchors the ecosystem.",
+      title: "One flagship entry",
+      description: "Studio is the public route that can carry the most weight right now, so the homepage should lead there without apology.",
     },
     {
-      title: "Shared product flow",
-      description: "Keep prompts, visuals, operations, and monitoring closer to one central starting point.",
+      title: "Connected product surfaces",
+      description: "The rest of Omnia stays visible as linked product lanes with honest roles, availability, and direct routes.",
     },
     {
-      title: "Clear public access",
-      description: "Use Studio when users need the strongest first entry into Omnia Creata.",
+      title: "Proof over theater",
+      description: "Real routes, product roles, and clear access context matter more than luxury styling trying to sell maturity.",
     },
   ];
   const heroStats = [
-    { label: "Flagship products", value: "5" },
-    { label: "Access model", value: "Direct product hubs" },
-    { label: "Platform surfaces", value: "Web, iOS, Android, PWA, desktop" },
+    { label: "Flagship now", value: "Studio" },
+    { label: "Public products", value: "5" },
+    { label: "HQ job", value: "Access, routing, contact" },
+  ];
+  const operatingPrinciples = [
+    {
+      title: "Let the flagship carry the first impression",
+      description: "Studio is the clearest public entry today, so the site should make that obvious instead of flattening every surface into the same weight.",
+    },
+    {
+      title: "Keep the ecosystem visible without pretending it is finished",
+      description: "The other products still matter, but they should read as connected lanes around Studio rather than identical headline products.",
+    },
+    {
+      title: "Make the next move effortless",
+      description: "A good HQ page should help people orient, choose a route, and move, not linger inside decorative marketing structure.",
+    },
   ];
 
   return (
     <>
       <section className="relative overflow-hidden px-6 pb-20 pt-8 sm:px-8 lg:px-10 lg:pb-24">
-        <div className="mx-auto grid max-w-7xl gap-14 xl:grid-cols-[0.98fr_1.02fr] xl:items-center">
+        <div className="mx-auto grid max-w-[1320px] gap-14 xl:grid-cols-[0.84fr_1.16fr] xl:items-center">
           <Reveal className="relative">
-            <div className="max-w-[42rem] space-y-9">
-              <div className="inline-flex flex-wrap items-center gap-3 rounded-full border border-[rgba(217,181,109,0.16)] bg-white/[0.03] px-4 py-2.5">
+            <div className="max-w-[42rem] space-y-8">
+              <div className="inline-flex flex-wrap items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
                   {messages.home.heroEyebrow}
                 </span>
-                <span className="h-1 w-1 rounded-full bg-accent/80" />
-                <span className="text-sm text-foreground-soft">{messages.home.utilityDescription}</span>
+                <span className="h-1 w-1 rounded-full bg-white/30" />
+                <span className="text-sm text-foreground-soft">omniacreata.com</span>
               </div>
 
-              <div className="space-y-6">
-                <h1 className="max-w-4xl text-5xl font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-6xl lg:text-7xl xl:text-[5.9rem]">
+              <div className="space-y-5">
+                <h1 className="max-w-4xl text-5xl font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-6xl lg:text-[4.6rem] xl:text-[5rem]">
                   {messages.home.heroTitle}
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
@@ -133,7 +147,7 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
                 </ButtonLink>
               </div>
 
-              <div className="grid gap-4 border-t border-white/8 pt-6 sm:grid-cols-3">
+              <div className="grid gap-4 border-t border-white/[0.08] pt-6 sm:grid-cols-3">
                 {heroStats.map((item) => (
                   <div key={item.label} className="space-y-2">
                     <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
@@ -149,21 +163,39 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
           </Reveal>
 
           <Reveal delay={120}>
-            <HQHeroScene locale={locale} products={products} />
+            <HQHeroScene locale={locale} messages={messages} products={products} />
           </Reveal>
         </div>
       </section>
 
       <section className="px-6 py-12 sm:px-8 lg:px-10" id="ecosystem">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto grid max-w-[1320px] gap-10 xl:grid-cols-[0.74fr_1.26fr]">
           <Reveal>
-            <SectionHeader
-              description={messages.home.ecosystemDescription}
-              eyebrow={messages.home.ecosystemEyebrow}
-              title={messages.home.ecosystemTitle}
-            />
+            <div className="max-w-[36rem]">
+              <SectionHeader
+                description={messages.home.ecosystemDescription}
+                eyebrow={messages.home.ecosystemEyebrow}
+                title={messages.home.ecosystemTitle}
+              />
+              <div className="mt-8 space-y-5">
+                {operatingPrinciples.map((item) => (
+                  <article
+                    key={item.title}
+                    className="border-t border-white/[0.08] pt-4"
+                  >
+                    <h3 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-7 text-foreground-soft">
+                      {item.description}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
           </Reveal>
-          <div className="mt-12 grid gap-6 xl:grid-cols-[1.06fr_0.94fr]">
+
+          <div className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
             <Reveal>
               <ProductCard
                 featured
@@ -188,7 +220,7 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
       </section>
 
       <section className="px-6 py-12 sm:px-8 lg:px-10" id="platforms">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
             <PlatformAccessBand locale={locale} messages={messages} />
           </Reveal>
@@ -196,95 +228,70 @@ export default async function LocaleHomePage({ params }: HomePageProps) {
       </section>
 
       <section className="px-6 py-12 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
-            <div className="luxury-panel gold-outline overflow-hidden rounded-[38px] p-7 sm:p-10">
-              <div className="grid gap-8 xl:grid-cols-[0.96fr_1.04fr] xl:items-start">
-                <div className="space-y-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
-                    {messages.common.flagshipStudio}
-                  </p>
-                  <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-5xl">
-                    {studio.name}
-                  </h2>
-                  <p className="max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
-                    {studio.summary}
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    <ButtonLink
-                      href={withLocalePrefix(locale, `/products/${studio.slug}`)}
-                      size="lg"
-                      variant="primary"
-                    >
-                      {messages.common.openStudio}
-                    </ButtonLink>
-                    <ButtonLink
-                      href={withLocalePrefix(locale, "/pricing")}
-                      size="lg"
-                      variant="secondary"
-                    >
-                      {messages.common.viewPricing}
-                    </ButtonLink>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {studioHighlights.map((feature, index) => (
-                    <FeatureCard
-                      key={feature.title}
-                      description={feature.description}
-                      index={`0${index + 1}`}
-                      title={feature.title}
-                    />
-                  ))}
-                </div>
-              </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {studioHighlights.map((feature, index) => (
+                <FeatureCard
+                  key={feature.title}
+                  description={feature.description}
+                  index={`0${index + 1}`}
+                  title={feature.title}
+                />
+              ))}
             </div>
           </Reveal>
         </div>
       </section>
 
       <section className="px-6 py-12 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-[1320px]">
           <Reveal>
-            <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-              <div className="luxury-panel gold-outline rounded-[36px] p-7 sm:p-9">
-                <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
-                  {messages.home.trustEyebrow}
-                </p>
-                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
-                  {messages.home.trustTitle}
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-8 text-foreground-soft">
-                  {messages.home.trustDescription}
-                </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <ButtonLink
-                    href={withLocalePrefix(locale, "/products")}
-                    size="lg"
-                    variant="primary"
-                  >
-                    {messages.common.exploreEcosystem}
-                  </ButtonLink>
-                  <ButtonLink
-                    href={withLocalePrefix(locale, "/contact")}
-                    size="lg"
-                    variant="secondary"
-                  >
-                    {messages.common.contactTeam}
-                  </ButtonLink>
+            <div className="overflow-hidden rounded-[36px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,23,31,0.92),rgba(9,13,18,0.98))] p-7 shadow-[0_26px_80px_rgba(3,10,18,0.24)] sm:p-9">
+              <div className="grid gap-8 xl:grid-cols-[0.92fr_1.08fr]">
+                <div className="space-y-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent">
+                    {messages.home.trustEyebrow}
+                  </p>
+                  <h2 className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
+                    {messages.home.trustTitle}
+                  </h2>
+                  <p className="max-w-2xl text-base leading-8 text-foreground-soft">
+                    {messages.home.trustDescription}
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <ButtonLink
+                      href={withLocalePrefix(locale, "/products")}
+                      size="lg"
+                      variant="primary"
+                    >
+                      {messages.common.exploreEcosystem}
+                    </ButtonLink>
+                    <ButtonLink
+                      href={withLocalePrefix(locale, "/contact")}
+                      size="lg"
+                      variant="secondary"
+                    >
+                      {messages.common.contactTeam}
+                    </ButtonLink>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                {trustSignals.map((signal, index) => (
-                  <Reveal key={signal.title} delay={index * 70}>
-                    <FeatureCard
-                      description={signal.description}
-                      title={signal.title}
-                    />
-                  </Reveal>
-                ))}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {trustSignals.map((signal) => (
+                    <article
+                      key={signal.title}
+                      className="border-t border-white/[0.08] pt-4"
+                    >
+                      <h3 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+                        {signal.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-7 text-foreground-soft">
+                        {signal.description}
+                      </p>
+                    </article>
+                  ))}
+                </div>
               </div>
             </div>
           </Reveal>

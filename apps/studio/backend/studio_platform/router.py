@@ -6,13 +6,14 @@ import hashlib
 import ipaddress
 import json
 import time
-from typing import Any, Dict, Literal, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from config.env import Environment, get_settings, reveal_secret
+from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
+from config.env import Environment, get_settings, reveal_secret_with_audit
 from security.auth import (
     User,
     UserRole,
@@ -31,6 +32,7 @@ from security.captcha import (
     verify_captcha_token,
 )
 from security.rate_limit import RateLimiter
+from security.sanitize import sanitize_prompt
 from security.supabase_auth import SupabaseAuthError, SupabaseAuthUnavailableError
 from security.moderation import ModerationAction, PromptModerationDecision, check_prompt_safety, ModerationResult
 
@@ -57,9 +59,18 @@ from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATAL
 from .studio_model_contract import STUDIO_FAST_MODEL_ID
 
 
+ValidatedEmail = Annotated[EmailStr, Field(max_length=320)]
+
+
+def _sanitize_prompt_field(value: str | None) -> str | None:
+    if value is None or not FEATURE_FLAGS.is_enabled(FLAG_STRICT_INPUT_SANITIZATION):
+        return value
+    return sanitize_prompt(value)
+
+
 class DemoLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(default="creator@omnia.local")
+    email: ValidatedEmail = "creator@omnia.local"
     display_name: str = Field(default="Creator")
     plan: IdentityPlan = Field(default=IdentityPlan.FREE)
 
@@ -95,6 +106,8 @@ class StyleSaveRequest(BaseModel):
     source_style_id: Optional[str] = Field(default=None, max_length=80)
     favorite: bool = False
 
+    _sanitize_prompt_fields = field_validator("negative_prompt")(_sanitize_prompt_field)
+
 
 class StyleUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -112,6 +125,8 @@ class StyleUpdateRequest(BaseModel):
     preferred_cfg_scale: Optional[float] = Field(default=None, ge=1, le=20)
     preferred_output_count: Optional[int] = Field(default=None, ge=1, le=4)
 
+    _sanitize_prompt_fields = field_validator("negative_prompt")(_sanitize_prompt_field)
+
 
 class StyleFromPromptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -126,10 +141,12 @@ class StyleFromPromptRequest(BaseModel):
     preferred_output_count: Optional[int] = Field(default=None, ge=1, le=4)
     preview_image_url: Optional[str] = None
 
+    _sanitize_prompt_fields = field_validator("prompt", "negative_prompt")(_sanitize_prompt_field)
+
 
 class SupabaseSignupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(min_length=5, max_length=320)
+    email: ValidatedEmail
     password: str = Field(min_length=8, max_length=256)
     display_name: str = Field(default="Omnia User", max_length=120)
     username: str = Field(min_length=3, max_length=32)
@@ -142,7 +159,7 @@ class SupabaseSignupRequest(BaseModel):
 
 class SupabaseLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(min_length=5, max_length=320)
+    email: ValidatedEmail
     password: str = Field(min_length=8, max_length=256)
     captcha_token: Optional[str] = Field(default=None, max_length=4096)
 
@@ -150,6 +167,8 @@ class SupabaseLoginRequest(BaseModel):
 class PromptImproveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1, max_length=1600)
+
+    _sanitize_prompt_fields = field_validator("prompt")(_sanitize_prompt_field)
 
 
 class GenerationCreateRequest(BaseModel):
@@ -166,6 +185,8 @@ class GenerationCreateRequest(BaseModel):
     seed: int = Field(default=20260316, ge=0, le=2**32 - 1)
     aspect_ratio: str = "1:1"
     output_count: int = Field(default=1, ge=1, le=4)
+
+    _sanitize_prompt_fields = field_validator("prompt", "negative_prompt")(_sanitize_prompt_field)
 
 
 class ShareCreateRequest(BaseModel):
@@ -263,6 +284,8 @@ class PersonaCreateRequest(BaseModel):
     description: str = Field(default="", max_length=500)
     system_prompt: str = Field(min_length=1, max_length=12000)
     avatar_url: Optional[str] = Field(default=None, max_length=1000)
+
+    _sanitize_prompt_fields = field_validator("system_prompt")(_sanitize_prompt_field)
 
 
 def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRouter:
@@ -766,10 +789,55 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             ),
         }
 
+    def _startup_probe_payload() -> dict[str, object]:
+        started = bool(getattr(service, "_initialized", False))
+        return {
+            "status": "started" if started else "starting",
+            "started": started,
+        }
+
+    def _readiness_probe_payload() -> dict[str, object]:
+        service_started = bool(getattr(service, "_initialized", False))
+        limiter_ready = rate_limiter.is_initialized() if hasattr(rate_limiter, "is_initialized") else True
+        store_breaker = service.store.describe_circuit_breaker()
+        store_ready = not (
+            isinstance(store_breaker, dict) and str(store_breaker.get("state")) == "open"
+        )
+        broker_required = service._requires_strict_shared_generation_broker()
+        broker_ready = True
+        if broker_required:
+            broker_ready = (
+                service.generation_broker is not None
+                and service._generation_broker_degraded_reason is None
+            )
+        ready = service_started and limiter_ready and store_ready and broker_ready
+        return {
+            "status": "ready" if ready else "not_ready",
+            "ready": ready,
+            "checks": {
+                "service_initialized": service_started,
+                "rate_limiter_initialized": limiter_ready,
+                "store_available": store_ready,
+                "generation_broker_ready": broker_ready,
+            },
+        }
+
     @router.get("/healthz")
     async def healthz():
         payload = await service.health(detail=False)
         return service.serialize_health_payload(payload, detail=False)
+
+    @router.get("/healthz/ready")
+    async def healthz_ready():
+        payload = _readiness_probe_payload()
+        status_code = status.HTTP_200_OK if payload["ready"] else status.HTTP_503_SERVICE_UNAVAILABLE
+        return JSONResponse(status_code=status_code, content=payload)
+
+    @router.get("/healthz/startup")
+    async def healthz_startup():
+        payload = _startup_probe_payload()
+        status_code = status.HTTP_200_OK if payload["started"] else status.HTTP_503_SERVICE_UNAVAILABLE
+        return JSONResponse(status_code=status_code, content=payload)
 
     @router.get("/healthz/detail")
     async def healthz_detail(current_user: Optional[AuthUser] = Depends(get_current_user)):
@@ -1995,7 +2063,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     @router.post("/webhooks/paddle")
     async def post_paddle_webhook(request: Request):
         settings = get_settings()
-        secret = reveal_secret(settings.paddle_webhook_secret).strip()
+        secret = reveal_secret_with_audit("PADDLE_WEBHOOK_SECRET", settings.paddle_webhook_secret).strip()
         if not secret:
             return Response("Webhook secret not configured", status_code=500)
 

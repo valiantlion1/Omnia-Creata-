@@ -1,206 +1,144 @@
-"use client";
-
 import type { Route } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
-import type { CSSProperties } from "react";
-import type { ProductRecord } from "@/content/products";
+import type { ProductRecord, ProductSlug } from "@/content/products";
 import type { LocaleCode } from "@/i18n/config";
+import type { Messages } from "@/i18n/messages";
 import { withLocalePrefix } from "@/lib/utils";
+import { ProductGlyph } from "@/components/ui/product-glyph";
+import { PlatformBadge } from "./platform-badge";
 
 type HQHeroSceneProps = {
   products: ProductRecord[];
   locale: LocaleCode;
+  messages: Messages;
 };
 
-export function HQHeroScene({ products, locale }: HQHeroSceneProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
+const productRoles: Record<ProductSlug, string> = {
+  "omnia-creata-studio": "Flagship workspace",
+  omniapixels: "Visual product",
+  omniaorganizer: "Operational layer",
+  "prompt-vault": "Prompt system",
+  "omnia-watch": "Monitoring layer",
+};
+
+function statusLabel(messages: Messages, status: ProductRecord["status"]) {
+  if (status === "live") return messages.common.live;
+  if (status === "preview") return messages.common.preview;
+  return messages.common.planned;
+}
+
+function statusClass(status: ProductRecord["status"]) {
+  if (status === "live") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+  if (status === "preview") return "border-sky-200/20 bg-sky-200/10 text-sky-100";
+  return "border-white/10 bg-white/[0.05] text-zinc-200";
+}
+
+export function HQHeroScene({ products, locale, messages }: HQHeroSceneProps) {
   const studio = products[0];
   const sideProducts = products.slice(1);
-  const labels: Record<string, string> = {
-    "omnia-creata-studio": "Flagship workspace",
-    omniapixels: "Visual product",
-    omniaorganizer: "Operations",
-    "prompt-vault": "Prompt library",
-    "omnia-watch": "Monitoring",
-  };
-
-  useEffect(() => {
-    const node = ref.current;
-
-    if (!node || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-
-    const scene = node;
-
-    function update(event: MouseEvent) {
-      const bounds = scene.getBoundingClientRect();
-      const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-      const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-      scene.style.setProperty("--scene-x", `${x * 12}px`);
-      scene.style.setProperty("--scene-y", `${y * 12}px`);
-    }
-
-    function reset() {
-      scene.style.setProperty("--scene-x", "0px");
-      scene.style.setProperty("--scene-y", "0px");
-    }
-
-    scene.addEventListener("mousemove", update);
-    scene.addEventListener("mouseleave", reset);
-
-    return () => {
-      scene.removeEventListener("mousemove", update);
-      scene.removeEventListener("mouseleave", reset);
-    };
-  }, []);
 
   return (
-    <div
-      ref={ref}
-      className="relative h-full min-h-[620px] overflow-hidden rounded-[40px] border border-[rgba(217,181,109,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)),rgba(8,8,8,0.92)] [perspective:1400px]"
-      style={
-        {
-          "--scene-x": "0px",
-          "--scene-y": "0px",
-        } as CSSProperties
-      }
-    >
-      <div className="hero-haze ambient-pulse left-[-5%] top-[6%] h-56 w-56 bg-[rgba(217,181,109,0.22)]" />
-      <div className="hero-haze ambient-drift bottom-[-6%] right-[-4%] h-64 w-64 bg-[rgba(255,255,255,0.08)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[url('/brand/hero-texture.png')] bg-cover bg-center opacity-[0.05] mix-blend-screen" />
-      <div className="pointer-events-none absolute inset-[6%] rounded-[32px] border border-white/8" />
-      <div
-        className="pointer-events-none absolute left-[10%] top-[12%] h-[44%] w-[56%] rounded-[34px] border border-[rgba(217,181,109,0.14)]"
-        style={{
-          transform:
-            "translate3d(calc(var(--scene-x) * -0.2), calc(var(--scene-y) * -0.2), 0) rotate(-7deg)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute right-[8%] top-[14%] h-[38%] w-[34%] rounded-[30px] border border-white/8"
-        style={{
-          transform:
-            "translate3d(calc(var(--scene-x) * 0.18), calc(var(--scene-y) * 0.18), 0) rotate(8deg)",
-        }}
-      />
+    <div className="relative overflow-hidden rounded-[36px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(18,25,34,0.96),rgba(10,14,20,0.98))] p-5 shadow-[0_30px_90px_rgba(3,10,18,0.32)] sm:p-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(188,209,229,0.14),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(113,137,165,0.12),transparent_34%)]" />
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(217,181,109,0.14),transparent_42%)]" />
-
-      <div className="relative z-10 grid h-full gap-5 p-6 sm:p-8">
-        <div
-          className="ml-auto w-fit rounded-full border border-white/10 bg-black/30 px-3 py-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
-          style={{
-            transform:
-              "translate3d(calc(var(--scene-x) * -0.18), calc(var(--scene-y) * -0.18), 0)",
-          }}
-        >
-          <Image
-            alt="Omnia Creata emblem"
-            className="h-auto w-[62px] object-contain opacity-90"
-            height={34}
-            priority
-            src="/brand/logo-transparent.png"
-            width={62}
-          />
+      <div className="relative">
+        <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+              Omnia HQ
+            </p>
+            <p className="mt-2 text-sm text-foreground-soft">
+              Studio-first public entry with direct product routing.
+            </p>
+          </div>
+          <div className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-foreground-soft">
+            {products.length} products
+          </div>
         </div>
 
-        <div
-          className="grid flex-1 gap-5 xl:grid-cols-[1.12fr_0.88fr]"
-          style={{
-            transform:
-              "translate3d(calc(var(--scene-x) * 0.18), calc(var(--scene-y) * 0.14), 0)",
-          }}
-        >
+        <div className="mt-5 grid gap-4 xl:grid-cols-[1.04fr_0.96fr]">
           <Link
-            className="flex min-h-[380px] flex-col justify-between rounded-[34px] border border-[rgba(217,181,109,0.16)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)),rgba(10,10,10,0.84)] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.42)] transition duration-300 hover:-translate-y-1 hover:border-[rgba(217,181,109,0.24)] sm:p-7"
+            className="group rounded-[28px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(24,33,44,0.92),rgba(15,21,29,0.96))] p-6 transition duration-300 hover:-translate-y-1 hover:border-white/[0.14]"
             href={withLocalePrefix(locale, `/products/${studio.slug}`) as Route}
-            style={{
-              transform:
-                "translate3d(calc(var(--scene-x) * -0.28), calc(var(--scene-y) * -0.24), 0)",
-            }}
           >
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-[rgba(217,181,109,0.18)] bg-[rgba(217,181,109,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
-                  Central access
-                </span>
-                <span className="text-[11px] uppercase tracking-[0.24em] text-muted">
-                  Web, PWA, desktop
-                </span>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/[0.08] bg-[rgba(188,209,229,0.08)] text-accent">
+                <ProductGlyph className="stroke-current" slug={studio.slug} />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-accent">
-                  {labels[studio.slug]}
-                </p>
-                <h3 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-[2.4rem]">
-                  {studio.name}
-                </h3>
-                <p className="mt-4 max-w-xl text-sm leading-7 text-foreground-soft sm:text-[15px]">
-                  {studio.shortDescription}
-                </p>
-              </div>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${statusClass(studio.status)}`}>
+                {statusLabel(messages, studio.status)}
+              </span>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.22em] text-muted">
-                  Five flagship products
-                </div>
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.22em] text-muted">
-                  Direct public routes
-                </div>
+            <div className="mt-8">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
+                {productRoles[studio.slug]}
+              </p>
+              <h3 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-foreground sm:text-[2.5rem]">
+                {studio.name}
+              </h3>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-foreground-soft sm:text-[15px]">
+                {studio.summary}
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {studio.platformMatrix.slice(0, 4).map((entry) => (
+                <PlatformBadge key={`${studio.slug}-${entry.platform}`} platform={entry.platform} />
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-foreground-soft">
+                Flagship route with the clearest public story right now.
               </div>
-              <div className="flex items-center justify-between border-t border-white/8 pt-4 text-sm">
-                <span className="text-foreground-soft">Open the flagship workspace</span>
-                <span className="text-accent">View Studio</span>
+              <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-foreground-soft">
+                Studio stays the center of gravity while the rest of Omnia expands.
               </div>
             </div>
           </Link>
 
-          <div className="flex flex-col justify-end gap-3">
-            {sideProducts.map((product, index) => (
+          <div className="grid gap-3">
+            {sideProducts.map((product) => (
               <Link
                 key={product.slug}
-                className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01)),rgba(10,10,10,0.74)] px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-[rgba(217,181,109,0.2)]"
+                className="group flex items-start justify-between gap-4 rounded-[24px] border border-white/[0.08] bg-white/[0.03] px-5 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-white/[0.05]"
                 href={withLocalePrefix(locale, `/products/${product.slug}`) as Route}
-                style={{
-                  transform: `translate3d(calc(var(--scene-x) * ${0.12 + index * 0.04}), calc(var(--scene-y) * ${0.1 + index * 0.03}), 0)`,
-                }}
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
-                      {labels[product.slug]}
-                    </p>
-                    <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-foreground">
-                      {product.name}
-                    </p>
-                  </div>
-                  <span className="text-sm text-foreground-soft">+</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-accent">
+                    {productRoles[product.slug]}
+                  </p>
+                  <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-foreground">
+                    {product.name}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-foreground-soft">
+                    {product.shortDescription}
+                  </p>
                 </div>
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${statusClass(product.status)}`}>
+                  {statusLabel(messages, product.status)}
+                </span>
               </Link>
             ))}
           </div>
         </div>
 
-        <div
-          className="grid gap-3 md:grid-cols-[1fr_auto]"
-          style={{
-            transform:
-              "translate3d(calc(var(--scene-x) * 0.14), calc(var(--scene-y) * 0.14), 0)",
-          }}
-        >
-          <div className="rounded-[24px] border border-white/8 bg-black/28 px-5 py-4 text-sm leading-7 text-foreground-soft">
-            One public website for products, platform access, pricing, and company contact.
+        <div className="mt-4 grid gap-3 md:grid-cols-[1.15fr_0.85fr_0.85fr]">
+          <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.03] px-5 py-4 text-sm leading-7 text-foreground-soft">
+            One public HQ for Studio access, product routes, pricing, and company contact.
           </div>
           <Link
-            className="inline-flex items-center justify-center rounded-[24px] border border-[rgba(217,181,109,0.18)] bg-[rgba(217,181,109,0.08)] px-5 py-4 text-xs font-semibold uppercase tracking-[0.24em] text-accent transition hover:border-[rgba(217,181,109,0.28)] hover:bg-[rgba(217,181,109,0.12)]"
-            href={withLocalePrefix(locale, "/products") as Route}
+            className="inline-flex items-center justify-center rounded-[22px] border border-white/[0.08] bg-white/[0.04] px-5 py-4 text-xs font-semibold uppercase tracking-[0.24em] text-foreground transition hover:bg-white/[0.07]"
+            href={withLocalePrefix(locale, "/pricing") as Route}
           >
-            Explore products
+            {messages.common.viewPricing}
+          </Link>
+          <Link
+            className="inline-flex items-center justify-center rounded-[22px] border border-white/[0.08] bg-white/[0.04] px-5 py-4 text-xs font-semibold uppercase tracking-[0.24em] text-foreground transition hover:bg-white/[0.07]"
+            href={withLocalePrefix(locale, "/contact") as Route}
+          >
+            {messages.common.contactTeam}
           </Link>
         </div>
       </div>

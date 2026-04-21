@@ -1,5 +1,6 @@
 """Environment configuration with validation using Pydantic v2."""
 
+import logging
 import os
 from enum import Enum
 from pathlib import Path
@@ -13,6 +14,8 @@ from pydantic_settings import BaseSettings
 _BACKEND_DIR = Path(__file__).parent.parent
 _STUDIO_ROOT = _BACKEND_DIR.parent
 _ENV_FILE = str(_STUDIO_ROOT / ".env")
+logger = logging.getLogger("omnia.studio.env")
+_DEVELOPMENT_JWT_FALLBACK = "dev-jwt-secret-0123456789abcdef0123456789abcdef"
 
 
 def reveal_secret(value: SecretStr | str | None) -> str:
@@ -22,6 +25,14 @@ def reveal_secret(value: SecretStr | str | None) -> str:
     if isinstance(value, SecretStr):
         return value.get_secret_value()
     return str(value)
+
+
+def reveal_secret_with_audit(secret_name: str, value: SecretStr | str | None) -> str:
+    """Return a secret value and emit a value-free audit trail for the lookup."""
+    from security.logging import audit_secret_revealed
+
+    audit_secret_revealed(secret_name)
+    return reveal_secret(value)
 
 
 def is_placeholder_secret_value(value: SecretStr | str | None) -> bool:
@@ -86,6 +97,13 @@ def configured_secret_value(value: SecretStr | str | None) -> str:
     if not normalized or is_placeholder_secret_value(normalized):
         return ""
     return normalized
+
+
+def is_known_development_secret_value(value: SecretStr | str | None) -> bool:
+    normalized = reveal_secret(value).strip()
+    if not normalized:
+        return False
+    return normalized == _DEVELOPMENT_JWT_FALLBACK
 
 
 def is_launch_safe_public_url(value: str | None) -> bool:
@@ -206,7 +224,12 @@ class Settings(BaseSettings):
     studio_log_directory: Optional[str] = None
     postgres_state_store_min_connections: int = 2
     postgres_state_store_max_connections: int = 10
+    postgres_state_store_web_min_connections: Optional[int] = None
+    postgres_state_store_web_max_connections: Optional[int] = None
+    postgres_state_store_worker_min_connections: Optional[int] = None
+    postgres_state_store_worker_max_connections: Optional[int] = None
     postgres_state_store_statement_timeout_ms: int = 30000
+    studio_db_conn_max_age_seconds: int = 1800
 
     # Asset Storage
     asset_storage_backend: str = "local"
@@ -241,6 +264,7 @@ class Settings(BaseSettings):
 
     # Security
     jwt_secret: Optional[SecretStr] = None  # Optional in dev
+    studio_asset_token_secondary_secret: Optional[SecretStr] = None
     jwt_algorithm: str = "HS256"
     jwt_expiration: str = "24h"
     captcha_provider: str = "turnstile"
@@ -284,6 +308,8 @@ class Settings(BaseSettings):
     generation_stale_running_seconds: int = 600
     generation_claim_lease_seconds: int = 60
     generation_maintenance_interval_seconds: int = 10
+    studio_job_stale_seconds: int = 300
+    studio_shutdown_drain_seconds: int = 30
     generation_runtime_mode: str = "all"
     enable_pollinations: bool = True
     enable_demo_generation_fallback: bool = False
@@ -603,7 +629,7 @@ class Settings(BaseSettings):
         if not self.jwt_secret:
             # Provide a stable development fallback
             if self.environment == Environment.DEVELOPMENT:
-                self.jwt_secret = "dev-jwt-secret-0123456789abcdef0123456789abcdef"
+                self.jwt_secret = _DEVELOPMENT_JWT_FALLBACK
             else:
                 raise ValueError("JWT_SECRET must be set in non-development environments")
         if len(self.jwt_secret) < 32:
@@ -662,6 +688,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"Missing required production settings: {', '.join(missing_fields)}"
                 )
+            if is_known_development_secret_value(self.jwt_secret):
+                raise ValueError(
+                    "JWT_SECRET must not use the known development fallback value in staging and production environments"
+                )
             if self.state_store_backend != "postgres":
                 raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
             if self.asset_storage_backend != "supabase":
@@ -682,6 +712,89 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "PUBLIC_API_BASE_URL must be a configured HTTPS non-local URL in staging and production environments"
                 )
+
+    def validate_runtime(self) -> list[str]:
+        """Validate startup-critical runtime settings and return soft warnings."""
+        issues: list[str] = []
+        warnings: list[str] = []
+        runtime_mode = str(self.generation_runtime_mode or "all").strip().lower() or "all"
+
+        if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
+            if not has_configured_string(self.redis_url):
+                issues.append("REDIS_URL must be configured in staging/production")
+            if not has_configured_secret(self.database_url):
+                issues.append("DATABASE_URL must be configured in staging/production")
+            if not has_configured_secret(self.jwt_secret):
+                issues.append("JWT_SECRET must be configured in staging/production")
+            elif is_known_development_secret_value(self.jwt_secret):
+                issues.append("JWT_SECRET must not use the known development fallback value in staging/production")
+
+        if self.environment == Environment.PRODUCTION and not self.cors_origins_list:
+            issues.append("CORS_ORIGINS must not be empty in production")
+
+        if self.max_request_body_bytes < 1024:
+            issues.append("MAX_REQUEST_BODY_BYTES must be at least 1024 bytes")
+
+        pool_budget_specs = (
+            (
+                "POSTGRES_STATE_STORE_MIN_CONNECTIONS",
+                self.postgres_state_store_min_connections,
+                "POSTGRES_STATE_STORE_MAX_CONNECTIONS",
+                self.postgres_state_store_max_connections,
+            ),
+            (
+                "POSTGRES_STATE_STORE_WEB_MIN_CONNECTIONS",
+                self.postgres_state_store_web_min_connections,
+                "POSTGRES_STATE_STORE_WEB_MAX_CONNECTIONS",
+                self.postgres_state_store_web_max_connections,
+            ),
+            (
+                "POSTGRES_STATE_STORE_WORKER_MIN_CONNECTIONS",
+                self.postgres_state_store_worker_min_connections,
+                "POSTGRES_STATE_STORE_WORKER_MAX_CONNECTIONS",
+                self.postgres_state_store_worker_max_connections,
+            ),
+        )
+        for min_label, min_value, max_label, max_value in pool_budget_specs:
+            if min_value is None and max_value is None:
+                continue
+            resolved_min = int(min_value if min_value is not None else self.postgres_state_store_min_connections)
+            resolved_max = int(max_value if max_value is not None else self.postgres_state_store_max_connections)
+            if resolved_min < 1:
+                issues.append(f"{min_label} must be at least 1")
+            if resolved_max < resolved_min:
+                issues.append(f"{max_label} must be greater than or equal to {min_label}")
+
+        if self.environment in {Environment.STAGING, Environment.PRODUCTION} and runtime_mode == "web":
+            if self.postgres_state_store_web_min_connections is None and self.postgres_state_store_web_max_connections is None:
+                warnings.append(
+                    "POSTGRES_STATE_STORE_WEB_MIN_CONNECTIONS/POSTGRES_STATE_STORE_WEB_MAX_CONNECTIONS are not configured; web runtime is using the default Postgres pool budget"
+                )
+        if self.environment in {Environment.STAGING, Environment.PRODUCTION} and runtime_mode == "worker":
+            if (
+                self.postgres_state_store_worker_min_connections is None
+                and self.postgres_state_store_worker_max_connections is None
+            ):
+                warnings.append(
+                    "POSTGRES_STATE_STORE_WORKER_MIN_CONNECTIONS/POSTGRES_STATE_STORE_WORKER_MAX_CONNECTIONS are not configured; worker runtime is using the default Postgres pool budget"
+                )
+
+        provider_secret_fields = (
+            ("OPENAI_API_KEY", self.openai_api_key),
+            ("GEMINI_API_KEY", self.gemini_api_key),
+            ("HUGGINGFACE_TOKEN", self.huggingface_token),
+            ("OPENROUTER_API_KEY", self.openrouter_api_key),
+            ("FAL_API_KEY", self.fal_api_key),
+            ("RUNWARE_API_KEY", self.runware_api_key),
+        )
+        for env_var, field_value in provider_secret_fields:
+            if not has_configured_secret(field_value):
+                warnings.append(f"{env_var} is not configured for the current runtime")
+
+        if issues:
+            raise ValueError("; ".join(issues))
+
+        return warnings
 
     model_config = {
         "env_file": _ENV_FILE,

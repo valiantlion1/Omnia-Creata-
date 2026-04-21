@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import io
@@ -9,7 +10,7 @@ import zlib
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps, PngImagePlugin
+from PIL import Image, ImageDraw, ImageFont, ImageOps, PngImagePlugin, UnidentifiedImageError
 
 
 PROVENANCE_MARKER = "oc-proof-v1"
@@ -103,7 +104,7 @@ class GeneratedAssetProtectionPipeline:
             image = Image.open(io.BytesIO(image_bytes))
             image.load()
             return image
-        except Exception as exc:
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise AssetProtectionError("Could not open generated image for protection") from exc
 
     def _resolve_output_format(self, mime_type: str, image_format: Optional[str]) -> tuple[str, str]:
@@ -161,7 +162,7 @@ class GeneratedAssetProtectionPipeline:
             compressed = base64.urlsafe_b64decode(padded.encode("ascii"))
             raw = zlib.decompress(compressed)
             payload = json.loads(raw.decode("utf-8"))
-        except Exception as exc:
+        except (binascii.Error, UnicodeDecodeError, ValueError, zlib.error, json.JSONDecodeError) as exc:
             raise AssetProtectionError("Could not decode embedded provenance payload") from exc
         if payload.get("marker") != PROVENANCE_MARKER:
             raise AssetProtectionError("Embedded provenance marker is invalid")
@@ -237,7 +238,7 @@ class GeneratedAssetProtectionPipeline:
             overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
             overlay.paste(logo, (box_left, box_top), logo)
             return Image.alpha_composite(image, overlay)
-        except Exception:
+        except (FileNotFoundError, OSError, ValueError):
             # Fallback to the original text pill
             overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(overlay)
@@ -281,7 +282,7 @@ class GeneratedAssetProtectionPipeline:
         ):
             try:
                 return ImageFont.truetype(candidate, font_size)
-            except Exception:
+            except OSError:
                 continue
         return ImageFont.load_default()
 
@@ -326,7 +327,7 @@ class GeneratedAssetProtectionPipeline:
 
         try:
             exif = image.getexif()
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             exif = None
         if exif:
             user_comment = exif.get(EXIF_TAG_USER_COMMENT)

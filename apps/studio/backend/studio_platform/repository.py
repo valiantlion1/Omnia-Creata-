@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol, Type, TypeVar
+from functools import wraps
+from typing import Any, Callable, Concatenate, Iterable, ParamSpec, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -31,11 +32,44 @@ from .models import (
     StudioStyle,
     StudioState,
     StudioWorkspace,
+    Visibility,
 )
 from .project_ops import filter_projects
 from .share_ops import find_share_by_public_token, find_share_by_public_token_hash, find_share_by_token
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+TransactionalReturnT = TypeVar("TransactionalReturnT")
+TransactionalParams = ParamSpec("TransactionalParams")
+
+
+def transactional(
+    fn: Callable[Concatenate[Any, StudioState, TransactionalParams], TransactionalReturnT],
+) -> Callable[..., Any]:
+    """Run a synchronous state mutation inside the store mutate boundary.
+
+    The decorated method receives the current :class:`StudioState` as its first
+    argument after ``self`` and may return a value captured across the mutate
+    callback boundary.
+    """
+
+    @wraps(fn)
+    async def wrapper(self, *args: TransactionalParams.args, **kwargs: TransactionalParams.kwargs):
+        store = getattr(self, "store", None)
+        if store is None:
+            service = getattr(self, "service", None)
+            store = getattr(service, "store", None)
+        if store is None:
+            raise AttributeError("transactional methods require a .store or .service.store attribute")
+
+        holder: dict[str, TransactionalReturnT] = {}
+
+        def mutation(state: StudioState) -> None:
+            holder["value"] = fn(self, state, *args, **kwargs)
+
+        await store.mutate(mutation)
+        return holder["value"]
+
+    return wrapper
 
 
 class StudioPersistence(Protocol):
@@ -99,11 +133,36 @@ class StudioRepository:
     async def describe_persistence(self) -> dict[str, Any]:
         return await self._persistence.describe()
 
+    async def shutdown(self) -> None:
+        shutdown = getattr(self._persistence, "shutdown", None)
+        if callable(shutdown):
+            await shutdown()
+
+    def describe_circuit_breaker(self) -> dict[str, Any] | None:
+        describe = getattr(self._persistence, "describe_circuit_breaker", None)
+        if callable(describe):
+            return describe()
+        return None
+
     async def get_identity(self, identity_id: str) -> OmniaIdentity | None:
         return await self.get_model("identities", identity_id, OmniaIdentity)
 
     async def list_identities(self) -> list[OmniaIdentity]:
         return await self.list_models("identities", OmniaIdentity)
+
+    async def get_identities_for_ids(self, identity_ids: Iterable[str]) -> dict[str, OmniaIdentity]:
+        normalized_ids = {identity_id for identity_id in identity_ids if identity_id}
+        if not normalized_ids:
+            return {}
+
+        def query(state: StudioState) -> dict[str, OmniaIdentity]:
+            return {
+                identity_id: state.identities[identity_id].model_copy(deep=True)
+                for identity_id in normalized_ids
+                if identity_id in state.identities
+            }
+
+        return await self.read(query)
 
     async def get_deleted_identity_tombstone(self, identity_id: str) -> DeletedIdentityTombstone | None:
         return await self.get_model("deleted_identity_tombstones", identity_id, DeletedIdentityTombstone)
@@ -183,6 +242,20 @@ class StudioRepository:
     async def list_generations(self) -> list[GenerationJob]:
         return await self.list_models("generations", GenerationJob)
 
+    async def get_generations_for_ids(self, generation_ids: Iterable[str]) -> dict[str, GenerationJob]:
+        normalized_ids = {generation_id for generation_id in generation_ids if generation_id}
+        if not normalized_ids:
+            return {}
+
+        def query(state: StudioState) -> dict[str, GenerationJob]:
+            return {
+                generation_id: state.generations[generation_id].model_copy(deep=True)
+                for generation_id in normalized_ids
+                if generation_id in state.generations
+            }
+
+        return await self.read(query)
+
     async def list_generations_for_identity(self, identity_id: str, *, project_id: str | None = None) -> list[GenerationJob]:
         def query(state: StudioState) -> list[GenerationJob]:
             filtered = [
@@ -213,6 +286,20 @@ class StudioRepository:
     async def list_assets(self) -> list[MediaAsset]:
         return await self.list_models("assets", MediaAsset)
 
+    async def get_assets_for_ids(self, asset_ids: Iterable[str]) -> dict[str, MediaAsset]:
+        normalized_ids = {asset_id for asset_id in asset_ids if asset_id}
+        if not normalized_ids:
+            return {}
+
+        def query(state: StudioState) -> dict[str, MediaAsset]:
+            return {
+                asset_id: state.assets[asset_id].model_copy(deep=True)
+                for asset_id in normalized_ids
+                if asset_id in state.assets
+            }
+
+        return await self.read(query)
+
     async def list_assets_for_identity(self, identity_id: str) -> list[MediaAsset]:
         def query(state: StudioState) -> list[MediaAsset]:
             return [
@@ -229,6 +316,16 @@ class StudioRepository:
     async def list_posts(self) -> list[PublicPost]:
         return await self.list_models("posts", PublicPost)
 
+    async def list_public_posts(self) -> list[PublicPost]:
+        def query(state: StudioState) -> list[PublicPost]:
+            return [
+                post.model_copy(deep=True)
+                for post in state.posts.values()
+                if post.visibility == Visibility.PUBLIC
+            ]
+
+        return await self.read(query)
+
     async def list_posts_for_identity(self, identity_id: str) -> list[PublicPost]:
         def query(state: StudioState) -> list[PublicPost]:
             return [
@@ -236,6 +333,35 @@ class StudioRepository:
                 for post in state.posts.values()
                 if post.identity_id == identity_id
             ]
+
+        return await self.read(query)
+
+    async def list_posts_liked_by_identity(self, identity_id: str) -> list[PublicPost]:
+        def query(state: StudioState) -> list[PublicPost]:
+            return [
+                post.model_copy(deep=True)
+                for post in state.posts.values()
+                if identity_id in post.liked_by
+            ]
+
+        return await self.read(query)
+
+    async def find_identity_by_username(self, username: str) -> OmniaIdentity | None:
+        normalized = username.strip().lower()
+        if not normalized:
+            return None
+
+        def query(state: StudioState) -> OmniaIdentity | None:
+            for identity in state.identities.values():
+                if (identity.username or "").strip().lower() == normalized:
+                    return identity.model_copy(deep=True)
+            for post in state.posts.values():
+                if post.owner_username.strip().lower() != normalized:
+                    continue
+                identity = state.identities.get(post.identity_id)
+                if identity is not None:
+                    return identity.model_copy(deep=True)
+            return None
 
         return await self.read(query)
 

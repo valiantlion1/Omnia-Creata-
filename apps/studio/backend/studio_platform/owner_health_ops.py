@@ -608,6 +608,8 @@ def build_owner_health_payload(
     ai_control_plane: Mapping[str, Any] | None = None,
     launch_readiness: Mapping[str, Any] | None = None,
     runtime_topology: Mapping[str, Any] | None = None,
+    feature_flags: Mapping[str, Any] | None = None,
+    circuit_breakers: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "status": overall_status,
@@ -648,6 +650,10 @@ def build_owner_health_payload(
         payload["ai_control_plane"] = dict(ai_control_plane)
     if runtime_topology is not None:
         payload["runtime_topology"] = dict(runtime_topology)
+    if feature_flags is not None:
+        payload["feature_flags"] = dict(feature_flags)
+    if circuit_breakers is not None:
+        payload["circuit_breakers"] = dict(circuit_breakers)
     if launch_readiness is not None:
         payload["launch_readiness"] = dict(launch_readiness)
         launch_gate = launch_readiness.get("launch_gate")

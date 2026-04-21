@@ -32,8 +32,8 @@ export function PageHeader({
   return (
     <div className={clsx('grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-end', className)}>
       <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-600">{eyebrow}</div>
-        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] font-display md:text-4xl" style={{ background: 'linear-gradient(135deg, #fff 0%, rgb(var(--primary-light)) 60%, rgb(var(--accent)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</h1>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">{eyebrow}</div>
+        <h1 className="mt-2 max-w-4xl text-3xl font-semibold tracking-[-0.035em] font-display md:text-4xl" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgb(var(--primary-light)) 56%, rgb(var(--accent-light)) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{title}</h1>
         {description ? <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">{description}</p> : null}
         {actions ? <div className="mt-5 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
       </div>
@@ -53,8 +53,8 @@ export function Surface({
 }) {
   const toneMap = {
     default: 'glass-card',
-    muted: 'border-white/[0.04] bg-[#0c0d12]/40 backdrop-blur-md',
-    raised: 'glass-card shadow-[0_32px_90px_rgba(0,0,0,0.4)]',
+    muted: 'border-white/[0.05] bg-[rgba(28,35,45,0.68)] backdrop-blur-md',
+    raised: 'glass-card shadow-[0_28px_72px_rgba(4,10,18,0.3)]',
   }
 
   return (
@@ -108,7 +108,7 @@ export function ButtonChip({
     <span
       className={clsx(
         'inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-all duration-300 ease-out active:scale-[0.97]',
-        active ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'bg-white/[0.04] text-zinc-300 ring-1 ring-white/10 hover:bg-white/[0.08] hover:text-white hover:ring-white/[0.15]',
+        active ? 'bg-[rgba(232,239,246,0.95)] text-[#0f1720] ring-1 ring-white/[0.16]' : 'bg-white/[0.03] text-zinc-300 ring-1 ring-white/[0.06] hover:bg-white/[0.06] hover:text-white hover:ring-white/[0.1]',
         className,
       )}
     >
@@ -169,13 +169,13 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <section className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.04] bg-[#0c0d12] px-8 py-16 text-center transition-all duration-700 hover:border-white/[0.08] hover:bg-[#101116] hover:shadow-[0_0_80px_rgba(0,0,0,0.5)]">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02),transparent_50%)] transition-opacity duration-700 group-hover:opacity-100 opacity-0" />
-      <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.02] text-xl font-light text-zinc-400 ring-1 ring-white/10 shadow-[0_0_30px_-5px_rgba(255,255,255,0.05)] transition-transform duration-700 group-hover:scale-110 group-hover:text-white group-hover:ring-white/20">
-        <div className="relative h-4 w-4 rounded-full bg-current shadow-[0_0_15px_currentColor] opacity-60 transition-opacity duration-500 group-hover:opacity-100" />
+    <section className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.05] bg-[linear-gradient(180deg,rgba(23,30,39,0.9),rgba(16,21,28,0.96))] px-8 py-16 text-center transition-all duration-500 hover:border-white/[0.09] hover:shadow-[0_24px_60px_rgba(4,10,18,0.22)]">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(224,234,244,0.08),transparent_56%)] opacity-70" />
+      <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-[rgba(232,239,246,0.08)] text-xl font-light text-zinc-300 ring-1 ring-white/10 shadow-[0_18px_38px_rgba(4,10,18,0.16)]">
+        <div className="relative h-4 w-4 rounded-full bg-current opacity-70" />
       </div>
-      <h3 className="relative text-xl font-semibold tracking-tight text-white transition-colors group-hover:text-white/90">{title}</h3>
-      <p className="relative mx-auto mt-3 max-w-sm text-sm leading-6 text-zinc-500 transition-colors group-hover:text-zinc-400">{description}</p>
+      <h3 className="relative text-xl font-semibold tracking-tight text-white">{title}</h3>
+      <p className="relative mx-auto mt-3 max-w-sm text-sm leading-6 text-zinc-400">{description}</p>
       {action ? <div className="relative mt-8 flex justify-center">{action}</div> : null}
     </section>
   )
@@ -195,7 +195,7 @@ export function StatusPill({
     success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200',
     warning: 'border-amber-300/20 bg-amber-300/10 text-amber-100',
     danger: 'border-rose-400/20 bg-rose-400/10 text-rose-200',
-    brand: 'border-violet-300/20 bg-violet-300/10 text-violet-100',
+    brand: 'border-sky-200/20 bg-sky-200/10 text-sky-100',
   }
 
   return <span className={clsx('inline-flex rounded-full border px-2 py-1 text-[10px] font-medium', toneMap[tone], className)}>{children}</span>

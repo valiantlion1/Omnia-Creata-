@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.20.170",
+  "build": "2026.04.20.178",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-04-20",
-  "notes": "Studio runtime topology now exposes a delivery contract for owner health, so backend truth can say whether jobs run all-in-one locally, enqueue to a shared worker, or are stuck in a split-runtime fallback or broker-missing posture."
+  "notes": "Studio backend public-surface hardening now keeps Explore feed, public profile, post payload, and publication checks on scoped repository reads instead of falling back to global collection scans, while username lookup also resolves without materializing the full identity/post catalog."
 }

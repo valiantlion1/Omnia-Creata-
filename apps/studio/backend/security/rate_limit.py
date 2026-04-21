@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from threading import Lock
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from config.env import Environment, Settings
 
@@ -59,6 +60,9 @@ class RateLimiter(ABC):
     async def check(self, key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
         raise NotImplementedError
 
+    def is_initialized(self) -> bool:
+        return False
+
 
 class InMemoryRateLimiter(RateLimiter):
     """Development-safe in-memory limiter."""
@@ -66,8 +70,10 @@ class InMemoryRateLimiter(RateLimiter):
     def __init__(self) -> None:
         self._lock = Lock()
         self._buckets: dict[str, deque[float]] = defaultdict(deque)
+        self._initialized = False
 
     async def initialize(self) -> None:
+        self._initialized = True
         return None
 
     async def check(self, key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
@@ -95,6 +101,9 @@ class InMemoryRateLimiter(RateLimiter):
                 retry_after=0,
             )
 
+    def is_initialized(self) -> bool:
+        return self._initialized
+
 
 class RedisRateLimiter(RateLimiter):
     def __init__(
@@ -108,20 +117,23 @@ class RedisRateLimiter(RateLimiter):
         self.prefix = prefix
         self.fallback = fallback
         self._use_fallback = False
+        self._initialized = False
 
     async def initialize(self) -> None:
         if self._use_fallback:
             if self.fallback is not None:
                 await self.fallback.initialize()
+            self._initialized = True
             return
         try:
             await self.redis.ping()
-        except Exception:
+        except (RedisError, OSError):
             if self.fallback is None:
                 raise
             logger.warning("Redis unavailable in development; falling back to in-memory rate limiter")
             self._use_fallback = True
             await self.fallback.initialize()
+        self._initialized = True
 
     async def check(self, key: str, limit: int, window_seconds: int = 60) -> RateLimitDecision:
         if self._use_fallback:
@@ -162,6 +174,9 @@ class RedisRateLimiter(RateLimiter):
             remaining=remaining,
             retry_after=0,
         )
+
+    def is_initialized(self) -> bool:
+        return self._initialized
 
 
 def build_rate_limiter(settings: Settings) -> RateLimiter:

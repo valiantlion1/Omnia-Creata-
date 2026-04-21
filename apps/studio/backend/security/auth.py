@@ -11,7 +11,7 @@ from passlib.hash import bcrypt
 import secrets
 import time
 from enum import Enum
-from config.env import get_settings, reveal_secret
+from config.env import get_settings, reveal_secret_with_audit
 from .supabase_auth import SupabaseAuthClient, SupabaseAuthError
 
 logger = logging.getLogger(__name__)
@@ -349,7 +349,7 @@ _supabase_auth_client: Optional[SupabaseAuthClient] = None
 
 def _build_supabase_auth_client_from_settings() -> Optional[SupabaseAuthClient]:
     settings = get_settings()
-    anon_key = reveal_secret(settings.supabase_anon_key)
+    anon_key = reveal_secret_with_audit("SUPABASE_ANON_KEY", settings.supabase_anon_key)
     if settings.supabase_url and anon_key:
         return SupabaseAuthClient(settings.supabase_url, anon_key)
     return None
@@ -486,7 +486,7 @@ def extract_unverified_session_context(token: str | None) -> Dict[str, Any]:
                 "verify_iss": False,
             },
         )
-    except Exception:
+    except jwt.PyJWTError:
         payload = {}
 
     if not isinstance(payload, dict):
@@ -502,6 +502,13 @@ def extract_unverified_session_context(token: str | None) -> Dict[str, Any]:
         "session_expires_at": payload.get("exp"),
         "claims": payload,
     }
+
+
+def _token_fingerprint(token: str | None) -> str | None:
+    candidate = str(token or "").strip()
+    if not candidate:
+        return None
+    return hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:16]
 
 
 def _get_studio_service_from_request(request: Request):
@@ -615,14 +622,13 @@ async def get_current_user(
                 metadata=metadata,
             )
         except SupabaseAuthError as supabase_exc:
-            token_preview = f"{token[:12]}..." if token else "missing"
             logger.debug(
                 "auth_supabase_token_rejected",
                 extra={
                     "path": str(request.url.path),
                     "jwt_rejection": exc.detail,
                     "supabase_rejection": str(supabase_exc),
-                    "token_preview": token_preview,
+                    "token_fingerprint": _token_fingerprint(token),
                 },
             )
             return None
