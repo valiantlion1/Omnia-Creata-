@@ -31,6 +31,7 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { usePageMeta } from '@/lib/usePageMeta'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
 /* ─── UI Primitives ──────────────────────────────────────────────────────── */
@@ -373,7 +374,7 @@ function ProfileEditorDialog({
       })
       onClose()
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Profile changes could not be saved right now.')
+      setProfileError(toUserFacingErrorMessage(error, 'Profile changes could not be saved right now.'))
     }
   }
 
@@ -579,7 +580,7 @@ function CredentialsDialog({
       setNextPassword('')
       setConfirmPassword('')
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : 'Password could not be updated right now.')
+      setPasswordError(toUserFacingErrorMessage(error, 'Password could not be updated right now.'))
     }
   }
 
@@ -757,7 +758,7 @@ export default function SettingsPage() {
       setNotice({
         tone: 'warning',
         title: 'Could not update visibility',
-        body: error instanceof Error ? error.message : 'Try again in a moment.',
+        body: toUserFacingErrorMessage(error, 'Try again in a moment.'),
       })
     },
   })
@@ -788,7 +789,7 @@ export default function SettingsPage() {
       setNotice({
         tone: 'warning',
         title: 'Could not sign out other devices',
-        body: error instanceof Error ? error.message : 'Try again in a moment.',
+        body: toUserFacingErrorMessage(error, 'Try again in a moment.'),
       })
     },
   })
@@ -840,7 +841,7 @@ export default function SettingsPage() {
       setNotice({
         tone: 'warning',
         title: 'Diagnostics refresh failed',
-        body: result.error instanceof Error ? result.error.message : 'Studio could not refresh diagnostics right now.',
+        body: toUserFacingErrorMessage(result.error, 'Studio could not refresh diagnostics right now.'),
       })
       return
     }

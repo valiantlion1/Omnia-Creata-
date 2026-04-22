@@ -277,4 +277,37 @@ describe('MediaLibraryPage final image library', () => {
       expect(mockState.unlikePost).toHaveBeenCalledWith('post-favorite-1')
     })
   })
+
+  it('keeps the empty Favorites state quiet and focused on Explore', async () => {
+    mockState.listFavoritePosts.mockResolvedValueOnce({ posts: [] })
+
+    renderWithProviders(<MediaLibraryPage />, { route: '/library/likes' })
+
+    expect(await screen.findByText(/Nothing saved yet/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open Explore/i })).toHaveAttribute('href', '/explore')
+    expect(screen.queryByPlaceholderText(/Search library/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Saved references from Explore/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps Projects focused on real project content and project actions', async () => {
+    renderWithProviders(<MediaLibraryPage />, { route: '/library/projects' })
+
+    expect(await screen.findByText(/^Projects$/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Portraits/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /New project/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Create here/i })).toBeInTheDocument()
+    expect(screen.getByDisplayValue(/Updated/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Search projects/i)).toBeInTheDocument()
+    expect(screen.queryByText(/kept together/i)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/With work/i)).toHaveLength(1)
+  })
+
+  it('uses softer naming for removed items', async () => {
+    renderWithProviders(<MediaLibraryPage />, { route: '/library/trash' })
+
+    expect(await screen.findByText(/Removed items/i)).toBeInTheDocument()
+    expect(screen.getByText(/Nothing removed\./i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Trash$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Trash is empty\./i)).not.toBeInTheDocument()
+  })
 })

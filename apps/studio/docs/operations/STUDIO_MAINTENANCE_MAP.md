@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-21
+Last updated: 2026-04-22
 
 ## Current baseline
 
@@ -12,12 +12,45 @@ Last updated: 2026-04-21
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.21.187`. This wave keeps the `.186` empty-state honesty fix, then adds a more premium Create follow-up: the prompt composer gets a calmer footer action row, the live stage gets real ambient motion instead of a dead placeholder pulse, the floating Create toast rail is hidden from the main surface, and provider-auth failures now normalize to product-safe language.
-- Current proof on `.187` is still targeted, but broader than `.186`: from `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Create.test.tsx` passes (`1 passed`), and `npm run build` passes; from the repo root, `python -m pytest -q apps/studio/backend/tests/test_billing_ops.py -k auth_failure_does_not_retry_and_updates_job_provider_to_last_actual_attempt` passes (`1 passed`). A live desktop screenshot also confirms the empty Create route no longer shows the permanent right preview rail. This wave does not claim a full automated running-session browser proof, provider smoke, deployment verification, or load-test closure.
-- The backend hardening stack from `.171` through `.184` remains underneath the current build, `.185` remains the broader Create / Library / Projects contract pass, `.186` is the empty-state/layout honesty follow-up, and `.187` is the motion plus failure-language refinement on top of that foundation.
+- Current implementation build is `2026.04.22.198`. This follow-up keeps the `.197` local proof fallback, but removes the biggest remaining honesty gap: protected Studio routes can now be verified in a fresh signed-in browser session instead of only as guest redirects.
+- Current proof on `.198` is stronger and genuinely route-matrix based. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, `guest-core` passes on desktop and mobile, `auth-core` passes on desktop and mobile, `auth-library` passes on mobile, and `auth-full` passes on desktop with a seeded real project-detail route. Fresh manifest-backed artifacts live under `apps/studio/web/output/playwright/studio-proof/`, so both guest and signed-in route truth now have current browser evidence in this lane.
+- The backend hardening stack from `.171` through `.184` remains underneath the current build, `.185` remains the broader Create / Library / Projects contract pass, `.186` is the empty-state/layout honesty follow-up, `.187` is the motion plus failure-language refinement, `.188` is the draft/session-preview consistency and layout-protection fix, `.189` is the Projects composition/detail cleanup, `.190` is the tighter Projects index proportion/copy cleanup, `.191` is the project-detail de-verbosity pass, `.192` is the stale-project recovery pass, `.193` is the shell/library language-plus-density cleanup, `.194` is the lazy-chunk recovery plus subscription-language consistency pass, `.195` is the prod-safe error-surface and source-map hardening pass, `.196` is the tighter mobile library proportion and project-utility pass, `.197` is the local browser-proof fallback and Windows shell-hardening pass, and `.198` is the signed-in proof bridge plus full route-matrix verification pass on top of that foundation.
 - Studio's moderation contract from `.168`, provider-truth readability from `.169`, runtime-topology clarity from `.170`, backend hardening from `.171`, shell/explore polish from `.172`, local-host discipline from `.173`, the `.174` atomic session plus schema-versioning work, the `.175` runtime-aware durable-store pool budgeting, the `.176` stricter startup pool-budget truth, the `.177` secret/log/token hardening, the `.178` scoped public-surface reads, the `.179` public-route throttles, the `.180` targeted generation-status counts, the `.181` row-level generation hot writes, the `.182` reserve/spend/release audit truth, the `.183` paused-subscription state truth, and the `.184` refund-policy assessment all remain active. `.185` is the corresponding frontend IA and workspace wave on top of that stack.
 
 ## Recent stabilization wins
+
+- `.198` removes the biggest remaining gap between local proof and real user behavior. Studio can now verify protected routes with a real demo-authenticated browser session instead of pretending guest redirects are enough evidence for signed-in pages.
+- The same wave also closes the concrete auth blocker that surfaced during proof. Demo login was generating `@omnia.local` addresses, which the backend correctly rejected as reserved-domain emails; local proof now uses a valid demo email format and can seed a real project detail route inside the full bundle.
+
+- `.197` removes one more false-negative failure mode from Studio workflow. Browser proof no longer depends entirely on flaky MCP browser transport, so UI verification can still continue when the transport drops or only exposes `about:blank`.
+- The same wave also hardens the Windows proof path itself. The local helper now writes proof artifacts into the Studio web app's own output folder, closes proof sessions after capture, and avoids shell-quoting mistakes that previously leaked eval strings into stray files.
+
+- `.196` removes one more fake-dashboard habit from Studio's signed-in library. `My Images` now reads more like a dense gallery on mobile instead of a wall of oversized covers.
+- The same wave also makes Projects explain themselves through layout instead of copy. Project previews are shorter, grouped-work metadata is cleaner, and the main action now tells the user they can keep creating inside that collection.
+
+- `.195` removes one more unshippable developer smell from Studio. Full-page crashes, inline errors, and toast notifications now strip technical browser/runtime strings before they reach the user.
+- The same wave also makes the production bundle less chatty by contract. ErrorBoundary no longer claims the team was notified when it was not, and the build now explicitly avoids shipping source maps.
+
+- `.194` removes one of the more embarrassing local-runtime failures from Studio. If a user keeps a tab open while hashed frontend chunks are replaced, lazy routes now get a real recovery attempt instead of immediately collapsing into a raw dynamic-import crash.
+- The same wave also makes the failure surface less technical when recovery is still needed. The boundary now explains that Studio updated instead of leading with a chunk URL, and the Subscription page language is more consistent with the shell.
+
+- `.193` removes one more generic-software habit from Studio's library side. Project detail no longer spends a whole rail explaining old runs, so the page can stay image-first instead of reading like a run log.
+- The same wave also softens some of the harsher shell language. `Subscription` and `Removed` fit the product tone better, and Favorites no longer shows a big empty search/view workbench before the user has saved anything.
+
+- `.192` removes one more cheap-looking failure state from Projects. Opening a stale or inaccessible project route no longer dumps the user onto a raw error line; the page now recovers with a cleaner full-surface state and real next actions.
+- The same wave also keeps the route quiet instead of explanatory. Recovery stays short and direct, which fits the image-product feel better than developer-ish dead-end text.
+
+- `.191` removes one more document-like habit from Projects. The detail page no longer spends so much space explaining itself in paragraphs; the screen now leans harder on title, image wall, and short run context.
+- The same wave also keeps the image surface cleaner. Project images no longer repeat prompt blocks under every frame, so the page reads more like a visual workspace and less like a logged report.
+
+- `.190` removes one more fake-product line from the Projects index. Single-project cards now stay in a tighter envelope and the tile copy no longer repeats vague system filler like `kept together`.
+- The same wave also makes project tiles quieter. If there is no real user-written description, the card now simply relies on the image, title, and useful metadata instead of inventing an explanatory sentence.
+
+- `.189` removes one of the uglier remaining generic-app feelings from Studio's library side. The Projects index no longer wastes half the page when there are only one or two projects, and the toolbar now keeps search, sort, and project creation closer to a real work surface.
+- The same wave also makes project detail feel less boxed in. Images now own the page as aspect-aware media frames, while recent runs move into a quieter supporting rail instead of fighting the gallery with another full-weight panel.
+
+- `.188` removes one of the more annoying Create persistence glitches. Old variation tiles no longer keep haunting the right preview surface after the user changes the draft's structural settings, so the page stops lying about which session is actually being worked on.
+- The same wave also makes recall feel more intentional. History now restores the real session setup and the layout gives the left prompt lane more breathing room instead of letting the preview side crush the composer.
 
 - `.187` makes Create feel less like a frozen prototype. The prompt tools are no longer crammed inside the text area, the split layout gives the preview stage more authority when it exists, and the live stage finally has ambient motion that feels intentional instead of generic.
 - The same wave also removes one more ugly launch-grade leak. Raw provider-auth failure text now normalizes into calm product language, and the old floating Create toast rail is hidden so session state lives on the page instead of fighting the composition.

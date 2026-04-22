@@ -1,6 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertCircle, RefreshCw, Home } from 'lucide-react'
 
+import { isRecoverableChunkError, reloadStudioWindow } from '@/lib/chunkRecovery'
+
 interface Props {
   children?: ReactNode
 }
@@ -21,39 +23,39 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo)
+    if (import.meta.env.DEV) {
+      console.error('Uncaught error:', error, errorInfo)
+    }
   }
 
   public render() {
     if (this.state.hasError) {
+      const isChunkError = isRecoverableChunkError(this.state.error)
+      const title = isChunkError ? 'Studio was updated' : 'This page hit a problem'
+      const description = isChunkError
+        ? 'Reload to reopen this page.'
+        : 'Reload and try again. If it keeps happening, head back home.'
+
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] p-6 text-white text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 mb-6 ring-1 ring-rose-500/20">
             <AlertCircle className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl w-full max-w-sm font-semibold mb-2">Something went wrong</h1>
+          <h1 className="text-2xl w-full max-w-sm font-semibold mb-2">{title}</h1>
           <p className="text-zinc-400 max-w-md w-full leading-relaxed mb-8">
-            A critical error occurred preventing this page from rendering correctly. Our team has been notified.
+            {description}
           </p>
           
-          {this.state.error && (
-            <div className="w-full max-w-lg bg-white/[0.02] border border-white/[0.05] rounded-xl p-4 mb-8 overflow-auto text-left">
-              <code className="text-xs text-rose-300 font-mono">
-                {this.state.error.toString()}
-              </code>
-            </div>
-          )}
-
           <div className="flex items-center gap-4">
             <button
               onClick={() => {
                 this.setState({ hasError: false, error: null })
-                window.location.reload()
+                reloadStudioWindow()
               }}
               className="px-5 py-2.5 rounded-full bg-white text-black font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition"
             >
               <RefreshCw className="h-4 w-4" />
-              Reload Page
+              {isChunkError ? 'Reload Studio' : 'Reload Page'}
             </button>
             
             <button

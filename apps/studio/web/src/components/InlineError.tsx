@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
+import { toUserFacingErrorMessage } from '@/lib/uiError'
+
 export function InlineError({
   title,
   message,
@@ -21,6 +23,7 @@ export function InlineError({
   className?: string
   action?: ReactNode
 }) {
+  const safeMessage = toUserFacingErrorMessage(message, 'Please try again in a moment.')
   const toneClasses =
     tone === 'warning'
       ? 'border-amber-400/20 bg-amber-400/[0.08] text-amber-100'
@@ -39,7 +42,7 @@ export function InlineError({
       <AlertTriangle className={clsx('mt-0.5 h-4 w-4 shrink-0', iconClasses)} />
       <div className="min-w-0 flex-1">
         {title ? <div className="text-sm font-semibold">{title}</div> : null}
-        <p className={clsx('text-sm leading-6 opacity-90', title ? 'mt-1' : '')}>{message}</p>
+        <p className={clsx('text-sm leading-6 opacity-90', title ? 'mt-1' : '')}>{safeMessage}</p>
         {onRetry || action ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {onRetry ? (

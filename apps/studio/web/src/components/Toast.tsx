@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 
+import { toUserFacingErrorMessage } from '@/lib/uiError'
+
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 type Toast = {
@@ -50,7 +52,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const addToast = useCallback((type: ToastType, message: string, duration = 4000) => {
     const id = `toast-${++toastCounter}-${Date.now()}`
-    setToasts((prev) => [...prev, { id, type, message, duration }])
+    const safeMessage =
+      type === 'success'
+        ? message
+        : toUserFacingErrorMessage(message, 'Please try again in a moment.')
+    setToasts((prev) => [...prev, { id, type, message: safeMessage, duration }])
     if (duration > 0) {
       setTimeout(() => removeToast(id), duration)
     }

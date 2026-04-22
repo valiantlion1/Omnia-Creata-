@@ -27,7 +27,31 @@ It is the React/Vite surface for:
    Canonical local frontend host is `http://127.0.0.1:5173`.
    `npm run preview` is also pinned to the same host and port so Studio does not keep drifting onto extra local frontend hosts such as `4173`.
 
-3. Environment
+3. Browser proof fallback
+   When MCP browser transport is unavailable, use the local Playwright CLI fallback:
+
+   `npm run proof:route -- --route /subscription --viewport desktop`
+
+   Or for a narrow pass:
+
+   `npm run proof:route -- --route /subscription --viewport mobile`
+
+   Bundle verification is also supported:
+
+   `npm run proof:route -- --bundle guest-core --viewport desktop`
+
+   `npm run proof:route -- --bundle auth-core --viewport mobile --auth demo --plan free`
+
+   `npm run proof:route -- --bundle auth-full --viewport desktop --label full-proof`
+
+   Proof output lands in `apps/studio/web/output/playwright/studio-proof/` as:
+   - route screenshots
+   - per-route JSON summaries
+   - one manifest JSON per proof run
+
+   Local signed-in proof uses a dev-only browser bridge that reuses Studio's real demo-login flow. It is only exposed on local hosts such as `127.0.0.1` / `localhost` and is not part of the production app contract.
+
+4. Environment
 - Create a `.env` file in this folder based on `.env.example`
 - Main local values:
   - `VITE_API_BASE_URL=http://127.0.0.1:8000`

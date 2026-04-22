@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { CookieConsentBanner, CookiePreferencesDialog } from '@/components/CookiePreferences'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LightboxProvider } from '@/components/Lightbox'
+import { StudioProofBridge } from '@/components/StudioProofBridge'
 
 import StudioShell from '@/components/StudioShell'
 import { ToastProvider } from '@/components/Toast'
@@ -11,6 +12,7 @@ import {
   useStudioCookiePreferences,
 } from '@/lib/studioCookiePreferences'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { lazyWithChunkRecovery } from '@/lib/chunkRecovery'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
@@ -20,29 +22,35 @@ let posthogBootstrapPromise: Promise<{
   client: unknown
 }> | null = null
 
-const AccountPage = lazy(() => import('@/pages/Account'))
-const BillingPage = lazy(() => import('@/pages/Billing'))
-const ChatPage = lazy(() => import('@/pages/Chat'))
-const CreatePage = lazy(() => import('@/pages/Create'))
-const DashboardPage = lazy(() => import('@/pages/Dashboard'))
-const DocumentationPage = lazy(() => import('@/pages/Documentation'))
-const ElementsPage = lazy(() => import('@/pages/Elements'))
-const LandingPage = lazy(() => import('@/pages/Landing'))
-const LoginPage = lazy(() => import('@/pages/Login'))
-const MediaLibraryPage = lazy(() => import('@/pages/MediaLibrary'))
-const ProjectPage = lazy(() => import('@/pages/Project'))
-const SettingsPage = lazy(() => import('@/pages/Settings'))
-const SharedPage = lazy(() => import('@/pages/Shared'))
-const SignupPage = lazy(() => import('@/pages/Signup'))
-const CommunityPage = lazy(() => import('@/pages/Community'))
-const AnalyticsPage = lazy(() => import('@/pages/Analytics'))
-const LegalTermsPage = lazy(() => import('@/pages/legal/Terms'))
-const LegalPrivacyPage = lazy(() => import('@/pages/legal/Privacy'))
-const LegalRefundsPage = lazy(() => import('@/pages/legal/Refunds'))
-const LegalAcceptableUsePage = lazy(() => import('@/pages/legal/AcceptableUse'))
-const LegalCookiesPage = lazy(() => import('@/pages/legal/Cookies'))
-const CommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
-const ShortcutModal = lazy(() => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })))
+const AccountPage = lazyWithChunkRecovery(() => import('@/pages/Account'), 'account-page')
+const BillingPage = lazyWithChunkRecovery(() => import('@/pages/Billing'), 'billing-page')
+const ChatPage = lazyWithChunkRecovery(() => import('@/pages/Chat'), 'chat-page')
+const CreatePage = lazyWithChunkRecovery(() => import('@/pages/Create'), 'create-page')
+const DashboardPage = lazyWithChunkRecovery(() => import('@/pages/Dashboard'), 'dashboard-page')
+const DocumentationPage = lazyWithChunkRecovery(() => import('@/pages/Documentation'), 'documentation-page')
+const ElementsPage = lazyWithChunkRecovery(() => import('@/pages/Elements'), 'elements-page')
+const LandingPage = lazyWithChunkRecovery(() => import('@/pages/Landing'), 'landing-page')
+const LoginPage = lazyWithChunkRecovery(() => import('@/pages/Login'), 'login-page')
+const MediaLibraryPage = lazyWithChunkRecovery(() => import('@/pages/MediaLibrary'), 'media-library-page')
+const ProjectPage = lazyWithChunkRecovery(() => import('@/pages/Project'), 'project-page')
+const SettingsPage = lazyWithChunkRecovery(() => import('@/pages/Settings'), 'settings-page')
+const SharedPage = lazyWithChunkRecovery(() => import('@/pages/Shared'), 'shared-page')
+const SignupPage = lazyWithChunkRecovery(() => import('@/pages/Signup'), 'signup-page')
+const CommunityPage = lazyWithChunkRecovery(() => import('@/pages/Community'), 'community-page')
+const AnalyticsPage = lazyWithChunkRecovery(() => import('@/pages/Analytics'), 'analytics-page')
+const LegalTermsPage = lazyWithChunkRecovery(() => import('@/pages/legal/Terms'), 'legal-terms-page')
+const LegalPrivacyPage = lazyWithChunkRecovery(() => import('@/pages/legal/Privacy'), 'legal-privacy-page')
+const LegalRefundsPage = lazyWithChunkRecovery(() => import('@/pages/legal/Refunds'), 'legal-refunds-page')
+const LegalAcceptableUsePage = lazyWithChunkRecovery(() => import('@/pages/legal/AcceptableUse'), 'legal-acceptable-use-page')
+const LegalCookiesPage = lazyWithChunkRecovery(() => import('@/pages/legal/Cookies'), 'legal-cookies-page')
+const CommandPalette = lazyWithChunkRecovery(
+  () => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })),
+  'command-palette',
+)
+const ShortcutModal = lazyWithChunkRecovery(
+  () => import('@/components/ShortcutModal').then((module) => ({ default: module.ShortcutModal })),
+  'shortcut-modal',
+)
 
 function ShellFriendlyPageChrome({ children }: { children: ReactNode }) {
   return <div className="[&>header]:hidden [&>div>footer]:hidden">{children}</div>
@@ -351,6 +359,7 @@ export default function App() {
                   <ShortcutModal />
                   <CommandPalette />
                 </Suspense>
+                <StudioProofBridge />
                 <AppFrame />
               </Router>
             </LightboxProvider>

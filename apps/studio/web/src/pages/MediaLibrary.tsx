@@ -36,6 +36,7 @@ import {
   type Project,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 
 type LibrarySection = 'images' | 'collections' | 'likes' | 'trash'
 type ViewMode = 'grid' | 'list'
@@ -221,6 +222,28 @@ function favoritePostTitle(post: PublicPost) {
   )
 }
 
+function cleanedProjectDescription(project: Project) {
+  const description = project.description?.trim()
+  if (!description) return null
+  if (/^created from studio /i.test(description)) return null
+  if (/^images from this chat\.?$/i.test(description)) return null
+  if (/^a focused space for this set\.?$/i.test(description)) return null
+  return description
+}
+
+function isGenericProjectTitle(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase() ?? ''
+  return !normalized || normalized === 'new image set' || normalized === 'untitled project'
+}
+
+function imageGroupProjectContext(group: AssetGroup) {
+  const projectTitle = group.projectTitle.trim()
+  if (!projectTitle) return null
+  if (isGenericProjectTitle(projectTitle)) return null
+  if (projectTitle.toLowerCase() === group.title.trim().toLowerCase()) return null
+  return projectTitle
+}
+
 function matchesQuery(
   query: string,
   ...parts: Array<string | null | undefined>
@@ -232,6 +255,15 @@ function matchesQuery(
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString()
+}
+
+function formatCardTimestamp(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function formatRelativeDate(value: string) {
@@ -305,7 +337,7 @@ function ConfirmDialog({
 
   const body =
     state.kind === 'empty-trash'
-      ? `This will permanently remove ${state.count} item${state.count > 1 ? 's' : ''} from Trash. This cannot be undone.`
+      ? `This will permanently remove ${state.count} item${state.count > 1 ? 's' : ''} from Removed items. This cannot be undone.`
       : state.kind === 'delete-project'
         ? `Delete "${state.title}" permanently? Empty projects can be removed and this cannot be undone.`
         : `"${state.asset.title}" will be removed permanently. This cannot be undone.`
@@ -1305,6 +1337,9 @@ function Toolbar({
   onViewChange,
   filters,
   actions,
+  searchPlaceholder = 'Search library...',
+  hideSearch = false,
+  hideViewToggle = false,
 }: {
   title: string
   description: string
@@ -1314,6 +1349,9 @@ function Toolbar({
   onViewChange: (value: ViewMode) => void
   filters?: ReactNode
   actions?: ReactNode
+  searchPlaceholder?: string
+  hideSearch?: boolean
+  hideViewToggle?: boolean
 }) {
   const searchRef = useState<HTMLInputElement | null>(null)
   const setInputRef = searchRef[1]
@@ -1332,35 +1370,55 @@ function Toolbar({
 
   return (
     <section className="pb-4 pt-2">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
+          <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold tracking-tight text-white md:text-[22px]">
             {title}
           </h1>
           {description ? (
             <p className="mt-1 max-w-xl text-[12px] leading-5 text-zinc-500">{description}</p>
           ) : null}
-          {filters ? <div className="mt-3">{filters}</div> : null}
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2.5">
-          <label className="group/search relative flex min-w-[220px] items-center gap-2.5 rounded-2xl bg-white/[0.03] px-3.5 py-2 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 focus-within:ring-white/[0.15] focus-within:bg-white/[0.05] focus-within:shadow-[0_0_20px_rgba(255,255,255,0.03)]">
-            <Search className="h-3.5 w-3.5 text-zinc-500 transition-colors group-focus-within/search:text-zinc-300" />
-            <input
-              id="studio-library-search"
-              name="search"
-              ref={(el) => setInputRef(el)}
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search library…"
-              className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-600"
-            />
-            <div className="flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] text-[9px] font-semibold text-zinc-600 group-focus-within/search:opacity-0 transition-opacity">
-              /
+          </div>
+          {!hideSearch || !hideViewToggle || actions ? (
+            <div className="flex w-full flex-col gap-2 2xl:max-w-[760px] 2xl:items-end">
+              {!hideSearch ? (
+                <div className="flex w-full items-center">
+                  <label className="group/search flex min-w-[220px] flex-1 items-center gap-2.5 rounded-2xl bg-white/[0.03] px-3.5 py-2 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 focus-within:bg-white/[0.05] focus-within:ring-white/[0.15] focus-within:shadow-[0_0_20px_rgba(255,255,255,0.03)] 2xl:max-w-[320px] 2xl:flex-none">
+                    <Search className="h-3.5 w-3.5 text-zinc-500 transition-colors group-focus-within/search:text-zinc-300" />
+                    <input
+                      id="studio-library-search"
+                      name="search"
+                      ref={(el) => setInputRef(el)}
+                      value={search}
+                      onChange={(event) => onSearchChange(event.target.value)}
+                      placeholder={searchPlaceholder}
+                      className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-zinc-600"
+                    />
+                    <div className="flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] text-[9px] font-semibold text-zinc-600 transition-opacity group-focus-within/search:opacity-0">
+                      /
+                    </div>
+                  </label>
+                </div>
+              ) : null}
+              {actions || !hideViewToggle ? (
+                <div className="flex w-full flex-wrap items-center justify-start gap-2.5 2xl:justify-end">
+                  {actions ? (
+                    <div className="flex flex-wrap items-center justify-start gap-2 2xl:justify-end">
+                      {actions}
+                    </div>
+                  ) : null}
+                  {!hideViewToggle ? (
+                    <div>
+                      <ViewToggle value={view} onChange={onViewChange} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-          </label>
-          <ViewToggle value={view} onChange={onViewChange} />
-          {actions}
+          ) : null}
         </div>
+        {filters ? <div className="flex flex-wrap items-center gap-2">{filters}</div> : null}
       </div>
     </section>
   )
@@ -1782,7 +1840,7 @@ export default function MediaLibraryPage() {
     onSuccess: async () => {
       setConfirmState(null)
       setNoticeState({
-        title: 'Trash emptied',
+        title: 'Removed items cleared',
         body: 'All deleted assets were permanently removed.',
       })
       await invalidateLibrary()
@@ -2171,14 +2229,20 @@ export default function MediaLibraryPage() {
       ),
     [projectPage, sortedProjects],
   )
+  const projectGridLayoutClass =
+    pagedProjects.length <= 1
+      ? 'max-w-[520px] grid-cols-1'
+      : pagedProjects.length === 2
+        ? 'max-w-[860px] sm:grid-cols-2'
+        : 'sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
   const imageViewDescription =
     activeView === 'grid'
       ? `${totalImageCount} finished image${totalImageCount === 1 ? '' : 's'} across ${sortedImageGroups.length} set${sortedImageGroups.length === 1 ? '' : 's'}.`
       : `${totalImageCount} finished image${totalImageCount === 1 ? '' : 's'} in a quieter list view.`
   const favoriteViewDescription =
     activeView === 'grid'
-      ? 'Saved references from Explore.'
-      : 'Saved references with the full prompt and creator details.'
+      ? 'Saved from Explore.'
+      : 'Saved references.'
   const isBusy =
     permanentDeleteMutation.isPending || emptyTrashMutation.isPending
 
@@ -2260,10 +2324,7 @@ export default function MediaLibraryPage() {
   const handleMenuError = (error: unknown) => {
     setNoticeState({
       title: 'Action unavailable',
-      body:
-        error instanceof Error
-          ? error.message
-          : 'That action could not be completed.',
+      body: toUserFacingErrorMessage(error, 'That action could not be completed.'),
     })
   }
 
@@ -2300,8 +2361,8 @@ export default function MediaLibraryPage() {
     try {
       await trashPostMutation.mutateAsync(postId)
       setNoticeState({
-        title: 'Moved to Trash',
-        body: `"${title}" was moved to Trash.`,
+        title: 'Moved to Removed items',
+        body: `"${title}" was moved to Removed items.`,
       })
     } catch (error) {
       handleMenuError(error)
@@ -2498,8 +2559,8 @@ export default function MediaLibraryPage() {
     }
     if (ids.length) {
       setNoticeState({
-        title: 'Moved to Trash',
-        body: `${ids.length} image set${ids.length > 1 ? 's were' : ' was'} moved to Trash.`,
+        title: 'Moved to Removed items',
+        body: `${ids.length} image set${ids.length > 1 ? 's were' : ' was'} moved to Removed items.`,
       })
     }
     setSelectedGroups(new Set())
@@ -2701,24 +2762,25 @@ export default function MediaLibraryPage() {
               )
             ) : sortedImageGroups.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {pagedImageGroups.map((group) => {
                     const leadAsset = group.items[0]
                     const isSelected = selectedGroups.has(group.id)
                     const menuId = `post:${group.id}`
+                    const projectContext = imageGroupProjectContext(group)
 
                     return (
                       <article
                         key={group.id}
-                        className={`group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:420px] ${
+                        className={`group relative overflow-hidden rounded-[22px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:340px] ${
                           isSelected
-                            ? 'ring-white/[0.16] shadow-[0_24px_60px_rgba(0,0,0,0.38)]'
-                            : 'ring-white/[0.06] shadow-[0_18px_50px_rgba(0,0,0,0.28)] hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_24px_60px_rgba(0,0,0,0.36)]'
+                            ? 'ring-white/[0.16] shadow-[0_22px_50px_rgba(0,0,0,0.32)]'
+                            : 'ring-white/[0.06] shadow-[0_16px_38px_rgba(0,0,0,0.24)] hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_22px_50px_rgba(0,0,0,0.3)]'
                         }`}
                         style={{
                           boxShadow: isSelected
-                            ? 'var(--border-glow), 0 24px 60px rgba(0,0,0,0.38)'
-                            : '0 18px 50px rgba(0,0,0,0.28)',
+                            ? 'var(--border-glow), 0 22px 50px rgba(0,0,0,0.32)'
+                            : '0 16px 38px rgba(0,0,0,0.24)',
                         }}
                       >
                         <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
@@ -2876,7 +2938,7 @@ export default function MediaLibraryPage() {
                           onClick={() => openPreview(group, 0)}
                           className="block w-full text-left"
                         >
-                          <div className="relative aspect-[0.96] overflow-hidden bg-[#0c0d12]">
+                          <div className="relative aspect-[1.08] overflow-hidden rounded-[22px] bg-[#0c0d12] md:aspect-[1.02] xl:aspect-[0.96]">
                             <ProtectedAssetImage
                               sources={assetPreviewSources(leadAsset)}
                               alt={assetDisplayTitle(leadAsset)}
@@ -2885,31 +2947,35 @@ export default function MediaLibraryPage() {
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[rgba(7,9,13,0.96)] via-[rgba(7,9,13,0.08)] to-transparent" />
 
-                            <div className="absolute inset-x-0 bottom-0 p-4">
+                            <div className="absolute inset-x-0 bottom-0 p-3 md:p-4">
                               <div className="flex items-end justify-between gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <div className="line-clamp-2 text-[15px] font-semibold tracking-tight text-white">
+                                  <div className="line-clamp-2 text-[13px] font-semibold tracking-tight text-white md:text-[15px]">
                                     {group.title}
                                   </div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-300/80">
-                                    <span>{formatDate(group.createdAt)}</span>
-                                    <span
-                                      className="h-1 w-1 rounded-full bg-zinc-600"
-                                      aria-hidden="true"
-                                    />
-                                    <span>{group.projectTitle}</span>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-300/80 md:text-[11px]">
+                                    <span>{formatCardTimestamp(group.createdAt)}</span>
+                                    {projectContext ? (
+                                      <>
+                                        <span
+                                          className="h-1 w-1 rounded-full bg-zinc-600"
+                                          aria-hidden="true"
+                                        />
+                                        <span className="truncate">{projectContext}</span>
+                                      </>
+                                    ) : null}
                                   </div>
                                 </div>
                                 {group.items.length > 1 ? (
                                   <div className="rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-medium text-white/85 backdrop-blur-md ring-1 ring-white/[0.12]">
-                                    Set of {group.items.length}
+                                    {group.items.length} set
                                   </div>
                                 ) : null}
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-start gap-3 px-4 py-3.5">
+                          <div className="hidden items-start gap-3 px-4 pb-3.5 pt-3 lg:flex">
                             <div className="min-w-0 flex-1">
                               <BrowseBadgeRow group={group} />
                             </div>
@@ -2930,6 +2996,7 @@ export default function MediaLibraryPage() {
                       0,
                       group.items.length - listPreviewAssets.length,
                     )
+                    const projectContext = imageGroupProjectContext(group)
 
                     return (
                       <section
@@ -2984,9 +3051,13 @@ export default function MediaLibraryPage() {
                                 </div>
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium text-zinc-500">
-                                <span>{formatDate(group.createdAt)}</span>
-                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
-                                <span>{group.projectTitle}</span>
+                                <span>{formatCardTimestamp(group.createdAt)}</span>
+                                {projectContext ? (
+                                  <>
+                                    <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                    <span>{projectContext}</span>
+                                  </>
+                                ) : null}
                                 {group.items.length > 1 ? (
                                   <>
                                     <span className="h-1 w-1 rounded-full bg-zinc-700" />
@@ -3248,6 +3319,7 @@ export default function MediaLibraryPage() {
               description={`${composeProjects.length} project${composeProjects.length === 1 ? '' : 's'} for your campaigns, characters, and directions.`}
               search={search}
               onSearchChange={setSearch}
+              searchPlaceholder="Search projects..."
               view={activeView}
               onViewChange={(view) =>
                 setViews((current) => ({ ...current, collections: view }))
@@ -3284,7 +3356,7 @@ export default function MediaLibraryPage() {
 
             {sortedProjects.length ? (
               activeView === 'grid' ? (
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <section className={`grid items-start gap-x-4 gap-y-6 md:gap-x-6 md:gap-y-8 ${projectGridLayoutClass}`}>
                   {pagedProjects.map((project) => {
                     const projectAssets = assetsByProject.get(project.id) ?? []
                     const cover = projectAssets[0] ?? null
@@ -3292,45 +3364,46 @@ export default function MediaLibraryPage() {
                     const previewAssets = projectAssets.slice(1, 3)
                     const hasAssets = projectAssets.length > 0
                     const latestActivity = cover?.created_at ?? project.updated_at
+                    const projectDescription = cleanedProjectDescription(project)
                     return (
                       <article
                         key={project.id}
-                        className="group flex h-full flex-col rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] p-3 transition-all duration-400 hover:-translate-y-1 hover:ring-white/[0.14] hover:shadow-[0_24px_50px_rgba(0,0,0,0.5)] hover:bg-[#13151c]"
+                        className="group flex h-full flex-col gap-3"
                       >
                         <div className="relative" data-library-menu-root="true">
-                          <div className="rounded-[18px] bg-white/[0.02] p-2 ring-1 ring-white/[0.04]">
+                          <div className="overflow-hidden rounded-[22px] bg-[#0c0d12] p-1 ring-1 ring-white/[0.05] transition-all duration-500 group-hover:ring-white/[0.12] group-hover:shadow-[0_18px_34px_rgba(0,0,0,0.3)] md:p-1.5">
                             {cover ? (
                               <Link
                                 to={`/projects/${project.id}`}
-                                className="grid gap-2 sm:grid-cols-[minmax(0,1.35fr)_104px]"
+                                className="grid grid-cols-[minmax(0,1fr)_64px] gap-1 sm:grid-cols-[minmax(0,1.16fr)_76px]"
                               >
-                                  <div className="overflow-hidden rounded-[16px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
+                                  <div className="overflow-hidden rounded-[14px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
                                     <ProtectedAssetImage
                                       sources={assetPreviewSources(cover)}
                                       alt={project.title}
-                                      className="aspect-[4/3] w-full object-cover transition-transform duration-700 group-hover:scale-[1.08] group-hover:rotate-1"
-                                      fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                      className="aspect-[16/9] w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
+                                      fallbackClassName="flex aspect-[16/9] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                     />
                                   </div>
-                                <div className="grid grid-rows-2 gap-2">
+                                <div className="grid grid-rows-2 gap-1">
                                   {Array.from({ length: 2 }, (_, index) => {
                                     const asset = previewAssets[index] ?? null
                                     return asset ? (
                                       <div
                                         key={asset.id}
-                                        className="overflow-hidden rounded-[14px] bg-[#111216]"
+                                        className="overflow-hidden rounded-[12px] bg-[#111216]"
                                       >
                                         <ProtectedAssetImage
                                           sources={assetPreviewSources(asset)}
                                           alt={assetDisplayTitle(asset)}
-                                          className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                                          fallbackClassName="flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                          className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                                          fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                         />
                                       </div>
                                     ) : (
                                       <div
                                         key={`${project.id}-placeholder-${index}`}
-                                        className="flex aspect-[4/3] items-center justify-center rounded-[14px] bg-[#111216] text-zinc-700"
+                                        className="flex aspect-square items-center justify-center rounded-[12px] bg-[#111216] text-zinc-700"
                                       >
                                         <Folder className="h-4 w-4" />
                                       </div>
@@ -3341,7 +3414,7 @@ export default function MediaLibraryPage() {
                             ) : (
                               <Link
                                 to={`/projects/${project.id}`}
-                                className="flex aspect-[4/3] flex-col items-center justify-center rounded-[16px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
+                                className="flex aspect-[16/10] flex-col items-center justify-center rounded-[18px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
                               >
                                 <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-transform duration-500 group-hover:scale-110">
                                   <Folder className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
@@ -3350,7 +3423,7 @@ export default function MediaLibraryPage() {
                                   Empty project
                                 </div>
                                 <div className="mt-1.5 max-w-[14rem] text-[11px] leading-5 text-zinc-500">
-                                  Waiting for the first image set.
+                                  Ready for the first set.
                                 </div>
                               </Link>
                             )}
@@ -3370,35 +3443,31 @@ export default function MediaLibraryPage() {
                           </button>
                           {renderProjectMenu(project, projectAssets)}
                         </div>
-                        <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-zinc-300">
-                            {hasAssets ? 'With work' : 'Empty'}
-                          </span>
-                          <span>
-                            {setCount} set{setCount === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                        <div className="min-w-0 pt-3">
-                          <div className="truncate text-[15px] font-semibold text-white transition-colors group-hover:text-[rgb(var(--primary-light))]">
+                        <div className="min-w-0 space-y-1.5 px-1">
+                          <div className="truncate text-[14.5px] font-semibold text-white transition-colors group-hover:text-[rgb(var(--primary-light))]">
                             {project.title}
                           </div>
-                          <div className="mt-1 line-clamp-2 text-[12.5px] leading-6 text-zinc-500">
-                            {project.description?.trim() ||
-                              (hasAssets
-                                ? 'Keep related selects together.'
-                                : 'A fresh space for a new direction.')}
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                            <span>{setCount} set{setCount === 1 ? '' : 's'}</span>
+                            {hasAssets ? (
+                              <>
+                                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                                <span>
+                                  {projectAssets.length} image
+                                  {projectAssets.length === 1 ? '' : 's'}
+                                </span>
+                              </>
+                            ) : null}
+                            <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                            <span>{formatCardTimestamp(latestActivity)}</span>
                           </div>
+                          {projectDescription ? (
+                            <div className="line-clamp-1 text-[12px] leading-5 text-zinc-500">
+                              {projectDescription}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="mt-4 flex items-end justify-between gap-3">
-                          <div className="min-w-0 text-[11.5px] leading-5 text-zinc-500">
-                            <div>
-                              {projectAssets.length} image
-                              {projectAssets.length === 1 ? '' : 's'} kept together
-                            </div>
-                            <div className="truncate">
-                              Updated {formatRelativeDate(latestActivity)}
-                            </div>
-                          </div>
+                        <div className="mt-auto flex items-end justify-between gap-3 px-1">
                           <div className="flex items-center gap-2">
                             <Link
                               to={`/projects/${project.id}`}
@@ -3410,7 +3479,7 @@ export default function MediaLibraryPage() {
                               onClick={() => openProjectComposer(project.id)}
                               className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
                             >
-                              Continue
+                              Create here
                             </button>
                           </div>
                         </div>
@@ -3426,6 +3495,7 @@ export default function MediaLibraryPage() {
                     const setCount = projectGroupCounts.get(project.id) ?? 0
                     const hasAssets = projectAssets.length > 0
                     const latestActivity = cover?.created_at ?? project.updated_at
+                    const projectDescription = cleanedProjectDescription(project)
 
                     return (
                       <article
@@ -3464,12 +3534,11 @@ export default function MediaLibraryPage() {
                           <div className="mt-2 truncate text-[14px] font-bold text-white tracking-wide transition-colors duration-300 group-hover:text-[rgb(var(--primary-light))]">
                             {project.title}
                           </div>
-                          <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-zinc-500">
-                            {project.description?.trim() ||
-                              (hasAssets
-                                ? 'Keep related selects together.'
-                                : 'A fresh space for a new direction.')}
-                          </div>
+                          {projectDescription ? (
+                            <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-zinc-500">
+                              {projectDescription}
+                            </div>
+                          ) : null}
                           <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-600">
                             <span>
                               {projectAssets.length} image
@@ -3490,7 +3559,7 @@ export default function MediaLibraryPage() {
                               onClick={() => openProjectComposer(project.id)}
                               className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
                             >
-                              Continue
+                              Create here
                             </button>
                           </div>
                           <div
@@ -3567,13 +3636,15 @@ export default function MediaLibraryPage() {
           <>
             <Toolbar
               title="Favorites"
-              description={favoriteViewDescription}
+              description={filteredFavoritePosts.length ? favoriteViewDescription : ''}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
               onViewChange={(view) =>
                 setViews((current) => ({ ...current, likes: view }))
               }
+              hideSearch={!favoritePosts.length && !search.trim()}
+              hideViewToggle={!favoritePosts.length}
             />
 
             {favoritePostsQuery.isLoading ? (
@@ -3885,12 +3956,23 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <EmptyInline
-                compact
-                icon={<Heart className="h-4 w-4" />}
-                title="No favorites yet."
-                description="Like public work in Explore or Community and it will show up here as a reusable reference shelf."
-              />
+              <section className="flex min-h-[46vh] flex-col items-center justify-center px-4 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-zinc-300">
+                  <Heart className="h-5 w-5" />
+                </div>
+                <h2 className="mt-5 text-[26px] font-semibold tracking-[-0.04em] text-white">
+                  Nothing saved yet
+                </h2>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
+                  Save work from Explore and it will show up here.
+                </p>
+                <Link
+                  to="/explore"
+                  className="mt-6 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-zinc-200 transition hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white"
+                >
+                  Open Explore
+                </Link>
+              </section>
             )}
           </>
         ) : null}
@@ -3898,8 +3980,8 @@ export default function MediaLibraryPage() {
         {section === 'trash' ? (
           <>
             <Toolbar
-              title="Trash"
-              description={filteredTrash.length ? `${filteredTrash.length} item${filteredTrash.length === 1 ? '' : 's'} awaiting permanent deletion. Restore anything you still need.` : 'Nothing in the trash right now.'}
+              title="Removed items"
+              description={filteredTrash.length ? `${filteredTrash.length} item${filteredTrash.length === 1 ? '' : 's'} waiting here. Restore anything you still need.` : 'Nothing removed right now.'}
               search={search}
               onSearchChange={setSearch}
               view={activeView}
@@ -3924,7 +4006,7 @@ export default function MediaLibraryPage() {
                     }
                     className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-white/[0.08]"
                   >
-                    Empty trash
+                    Clear all
                   </button>
                 ) : null
               }
@@ -4078,8 +4160,8 @@ export default function MediaLibraryPage() {
               <EmptyInline
                 compact
                 icon={<Trash2 className="h-4 w-4" />}
-                title="Trash is empty."
-                description="Restore or permanently delete work here when you need to clean up."
+                title="Nothing removed."
+                description="Restore anything you still need or clear it for good."
               />
             )}
           </>

@@ -58,7 +58,7 @@ const libraryNav: NavItem[] = [
   { to: '/library/images', label: 'My images', icon: ImageIcon, aliases: ['/media', '/history'], exactAliases: ['/library'] },
   { to: '/library/projects', label: 'Projects', icon: Folder, aliases: ['/library/collections', '/projects'] },
   { to: '/library/likes', label: 'Favorites', icon: Heart },
-  { to: '/library/trash', label: 'Trash', icon: Trash2 },
+  { to: '/library/trash', label: 'Removed', icon: Trash2 },
 ]
 
 const elementsNav: NavItem[] = [
@@ -67,7 +67,7 @@ const elementsNav: NavItem[] = [
 
 const utilityNav: NavItem[] = [
   { to: '/help', label: 'Help', icon: BookOpen, openInNewTab: true, aliases: ['/docs', '/faq', '/terms', '/privacy', '/refunds', '/refund-policy', '/usage-policy', '/cookies', '/learn', '/legal/terms', '/legal/privacy', '/legal/refunds', '/legal/acceptable-use', '/legal/cookies'] },
-  { to: '/subscription', label: 'Billing', icon: CreditCard, aliases: ['/billing', '/plan'] },
+  { to: '/subscription', label: 'Subscription', icon: CreditCard, aliases: ['/billing', '/plan'] },
   { to: '/settings', label: 'Settings', icon: Settings, aliases: ['/profile'] },
 ]
 
@@ -468,34 +468,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               ) : null}
             </Link>
 
-            {!collapsed && !isGuestShell ? (
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-[42px] text-[10px] leading-4 text-zinc-500">
-                {auth?.identity.owner_mode || auth?.identity.root_admin ? (
-                  <span className="font-medium text-zinc-400">Owner access</span>
-                ) : null}
-                <Link
-                  to="/account"
-                  className="transition hover:text-white"
-                  aria-label="Open account from profile footer"
-                >
-                  Account
-                </Link>
-                <Link
-                  to="/subscription"
-                  className="transition hover:text-white"
-                  aria-label="Open billing from profile footer"
-                >
-                  Billing
-                </Link>
-                <Link
-                  to="/help#faq"
-                  className="transition hover:text-white"
-                  aria-label="Open FAQ from profile footer"
-                >
-                  FAQ
-                </Link>
-              </div>
-            ) : null}
           </div>
 
           {/* Log out — directly visible, no ... menu needed */}

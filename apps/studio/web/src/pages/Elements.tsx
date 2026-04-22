@@ -13,6 +13,7 @@ import {
   type StyleCatalogEntry,
 } from '@/lib/studioApi'
 import { usePageMeta } from '@/lib/usePageMeta'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 
 const categories = [
   { key: 'all', label: 'All Styles', icon: Layers },
@@ -477,7 +478,7 @@ function StyleEditorDialog({
       })
       onClose()
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Style changes could not be saved.')
+      setError(toUserFacingErrorMessage(saveError, 'Style changes could not be saved.'))
     }
   }
 
@@ -487,7 +488,7 @@ function StyleEditorDialog({
       await onDelete()
       onClose()
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Style could not be removed.')
+      setError(toUserFacingErrorMessage(deleteError, 'Style could not be removed.'))
     }
   }
 
@@ -840,7 +841,7 @@ export default function ElementsPage() {
       addToast('success', `"${variables.entry.title}" saved to My Styles.`)
     },
     onError: (error) => {
-      addToast('error', error instanceof Error ? error.message : 'Style could not be saved.')
+      addToast('error', toUserFacingErrorMessage(error, 'Style could not be saved.'))
     },
   })
 
@@ -861,7 +862,7 @@ export default function ElementsPage() {
       }
     },
     onError: (error) => {
-      addToast('error', error instanceof Error ? error.message : 'Style could not be updated.')
+      addToast('error', toUserFacingErrorMessage(error, 'Style could not be updated.'))
     },
   })
 
@@ -875,7 +876,7 @@ export default function ElementsPage() {
       addToast('success', 'Style removed from My Styles.')
     },
     onError: (error) => {
-      addToast('error', error instanceof Error ? error.message : 'Style could not be removed.')
+      addToast('error', toUserFacingErrorMessage(error, 'Style could not be removed.'))
     },
   })
 

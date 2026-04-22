@@ -18,6 +18,116 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.22.198`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.197` gave Studio a repo-local proof fallback, but it still had one major blind spot: auth-gated routes could only be verified as guests. Because Studio keeps the access token in memory instead of browser storage, fresh proof sessions could not stay signed in, so route truth for Account, Settings, Create, Library, and Project detail still depended on source confidence more than real browser evidence.
+- What:
+  `.198` turns that fallback into a full local verification lane. `apps/studio/web/tools/browserProof.mjs` now supports `--auth guest|demo`, `--plan free|creator|pro`, and `--bundle guest-core|auth-core|auth-library|auth-full`, writes one manifest JSON per run in addition to per-route screenshots and JSON summaries, and closes proof sessions after each run. A new local-only `StudioProofBridge` now reuses the real `/v1/auth/demo-login` flow plus app navigation, so signed-in proof can exercise actual protected Studio routes without changing the public API or faking token storage. The same wave also fixes the concrete blocker that showed up during proof: demo login was generating `@omnia.local` emails, which the backend correctly rejected as reserved-domain addresses, so the helper now uses a valid demo email format and `auth-full` can seed and verify a real project detail route.
+  Verification on `.198` is frontend plus browser-proof focused. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, `npm run proof:route -- --bundle guest-core --viewport desktop --label guest-core` passes, `npm run proof:route -- --bundle guest-core --viewport mobile --label guest-core` passes, `npm run proof:route -- --bundle auth-core --viewport desktop --label auth-core` passes, `npm run proof:route -- --bundle auth-core --viewport mobile --label auth-core` passes, `npm run proof:route -- --bundle auth-library --viewport mobile --label auth-library` passes, and `npm run proof:route -- --bundle auth-full --viewport desktop --label auth-full` passes. Fresh artifacts now live under `apps/studio/web/output/playwright/studio-proof/`, including `guest-core-desktop-manifest.json`, `guest-core-mobile-manifest.json`, `auth-core-desktop-manifest.json`, `auth-core-mobile-manifest.json`, `auth-library-mobile-manifest.json`, and `auth-full-desktop-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.22.197`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.196` improved the mobile library composition, but Studio proof still had an operational blind spot. Browser verification kept failing for reasons that looked like app regressions even when the real issue was broken MCP browser transport (`Transport closed`, `about:blank`, stale attach state), which meant UI work could be blocked by the proof tool itself.
+- What:
+  `.197` closes that verification gap with a local Playwright CLI fallback inside `apps/studio/web`. A new `npm run proof:route -- --route ... --viewport desktop|mobile --label ...` path now opens the route in a fresh browser session, captures a snapshot, records console errors/warnings, writes a screenshot plus JSON summary under `apps/studio/web/output/playwright/studio-proof/`, and closes the proof session afterward. The helper was hardened for Windows shell behavior so `eval` no longer leaks into stray files such as `window.location.href`, and the local proof output now stays scoped to the Studio web app instead of bleeding into ad-hoc root paths. This does not fake signed-in proof: auth-gated routes still honestly resolve to login when the fallback browser session is not authenticated.
+  Verification on `.197` is frontend/process-only and focused on the new proof path. From `apps/studio/web`, `node .\\tools\\browserProof.mjs --route /subscription --viewport desktop --label subscription-proof` passes, `node .\\tools\\browserProof.mjs --route /subscription --viewport mobile --label subscription-proof` passes, `node .\\tools\\browserProof.mjs --route /library/images --viewport mobile --label library-images-proof` passes and correctly resolves to `/login?next=%2Flibrary%2Fimages`, `npm run type-check` passes, and `npm run build` passes. Fresh proof artifacts were written under `apps/studio/web/output/playwright/studio-proof/`.
+
+### `0.6.0-alpha` / build `2026.04.22.196`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.195` made Studio's failures safer and calmer, but the signed-in mobile library still felt too heavy. `My Images` preview tiles were oversized for a gallery surface, and `Projects` cards still behaved more like giant showcase covers than useful grouped workspaces.
+- What:
+  `.196` is a narrow frontend-only library proportion pass. On `My Images`, grid density increases earlier and preview frames use shorter ratios so the surface feels like a gallery instead of a stack of posters. Generic project labels such as `New image set` are now suppressed inside image cards when they do not add meaning, and the secondary badge rail stays out of the way on smaller breakpoints. On `Projects`, single-card layouts stay in a tighter width, preview covers are shorter, the right-side preview rail is lighter, redundant `With work` card chrome is removed, and the primary action now reads `Create here` so the workspace benefit is clearer without adding more explanatory copy.
+  Verification on `.196` is frontend-only and limited to the touched library surface. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/MediaLibrary.test.tsx` passes (`5 passed`), and `npm run build` passes. Fresh browser proof was attempted again, but the Playwright MCP transport was closed and Chrome DevTools still only exposed `about:blank`, so `.196` does not claim new signed-session live screenshots.
+
+### `0.6.0-alpha` / build `2026.04.22.195`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.194` fixed the stale lazy-chunk paper cut, but Studio still had one launch-shaped honesty problem: several UI paths could still surface raw browser or backend-flavored error strings directly to the user. That is acceptable for local debugging, but not for a live product surface.
+- What:
+  `.195` hardens the user-facing error contract instead of only the route recovery path. The global error boundary no longer prints raw exception text or chunk URLs into the page, inline error banners and toast notifications now sanitize technical messages before rendering them, and several direct error states in Create, Settings, Projects, Styles, Billing, and Library actions now fall back to calm product copy when the underlying message is too technical. The frontend build also now states `sourcemap: false` explicitly so production artifacts do not ship debug maps by accident.
+  Verification on `.195` is frontend-only and focused on the touched error-handling surface. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/components/__tests__/ErrorBoundary.test.tsx src/lib/__tests__/uiError.test.ts src/pages/__tests__/Billing.test.tsx src/pages/__tests__/Create.test.tsx src/pages/__tests__/Elements.test.tsx src/pages/__tests__/MediaLibrary.test.tsx src/pages/__tests__/Project.test.tsx src/pages/__tests__/Settings.test.tsx` passes (`25 passed`), and `npm run build` passes. A post-build check also confirms no `.map` files were emitted under `dist/`. Fresh signed-session browser proof was attempted again, but Playwright transport remained unavailable and Chrome DevTools still only exposed `about:blank`, so `.195` does not claim fresh authenticated live-browser evidence.
+
+### `0.6.0-alpha` / build `2026.04.22.194`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.193` cleaned up the shell and library language, but one ugly local-runtime failure still leaked through in real use. If a tab stayed open while a new frontend build replaced hashed route chunks, navigating into a lazy page such as `MediaLibrary` could fail with `Failed to fetch dynamically imported module`, dropping the user onto a raw technical error surface.
+- What:
+  `.194` adds a route-chunk recovery layer instead of treating that as a normal crash. Lazy routes now get one automatic reload attempt when they hit a stale dynamic-import/chunk error, which is the common local-build mismatch path. If the page still cannot recover, the error boundary now shows a calmer “Studio was updated” recovery surface instead of dumping raw chunk mechanics as the main explanation. The subscription surface also got one more language pass so the shell label and the page metadata/header are more consistent with `Subscription` instead of splitting between `Billing` and `Plans & Billing`.
+  Verification on `.194` is frontend-only and focused on the touched lazy-route recovery plus shell/library surfaces. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/components/__tests__/ErrorBoundary.test.tsx src/lib/__tests__/chunkRecovery.test.ts src/components/__tests__/StudioShell.test.tsx src/pages/__tests__/Project.test.tsx src/pages/__tests__/MediaLibrary.test.tsx src/pages/__tests__/Billing.test.tsx` passes (`17 passed`), and `npm run build` passes. This wave does not claim a fresh signed-session browser proof because the Playwright transport remained unavailable in this turn.
+
+### `0.6.0-alpha` / build `2026.04.22.193`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.192` fixed the ugly broken-project route, but the surrounding library shell still talked too much and used rough naming. Project detail still spent too much visual weight on meta furniture, Favorites looked empty in a clumsy way, and sidebar/footer language like `Billing` and `Trash` felt harsher and less product-shaped than the rest of Studio.
+- What:
+  `.193` tightens those surfaces without reopening the whole IA. Project detail now behaves more like a visual wall: the side run rail is gone, the gallery is denser, and image metadata sits inside the frame instead of dragging the page into a text-heavy layout. Favorites now drops the empty search/toggle chrome when there is nothing saved and uses a calmer Explore-first empty state, while the shell removes the footer micro-links and renames `Billing` to `Subscription` plus `Trash` to `Removed`. The Removed-items surface also follows that softer language instead of snapping back to `Trash` copy inside the page.
+  Verification on `.193` is frontend-only and focused on the touched shell, project-detail, and library routes. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/components/__tests__/StudioShell.test.tsx src/pages/__tests__/Project.test.tsx src/pages/__tests__/MediaLibrary.test.tsx` passes (`9 passed`), and `npm run build` passes. Live authenticated browser proof was attempted, but the current Playwright transport was unavailable in this turn, so this wave does not claim fresh auth-session screenshots for the exact IAB routes.
+
+### `0.6.0-alpha` / build `2026.04.22.192`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.191` made the project detail route quieter, but its broken-state behavior was still crude. If a user opened a stale or inaccessible project URL, the page collapsed into a bare `Project not found.` line instead of recovering like a live product.
+- What:
+  `.192` turns that failure into a proper product recovery surface. The raw error line is gone; project detail now classifies unavailable/offline/session-expired cases into a minimal full-page state with direct actions back to Projects or Create, and a retry path when the backend is only temporarily unavailable. A frontend regression test now also locks the absence of the raw `Project not found.` copy so this route cannot drift back into a developer-ish dead end.
+  Verification on `.192` is frontend-only and focused on the touched project-detail route. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Project.test.tsx src/pages/__tests__/MediaLibrary.test.tsx` passes, and `npm run build` passes. The exact user-shared route should now render the recovery surface instead of collapsing into plain red text.
+
+### `0.6.0-alpha` / build `2026.04.22.191`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.190` improved the Projects index, but the project detail page still talked too much for a visual product. The route carried a big intro block, explanatory helper copy, prompt paragraphs under image cards, and a verbose side rail, so the screen read closer to a mini document than a visual workspace.
+- What:
+  `.191` trims that route back to product-shaped essentials. The project header now keeps only the title, real optional description, and key actions; the image wall drops prompt paragraphs so the pictures carry the screen; and the right rail is reduced to short run context instead of a blog-like explanation block. The old workspace-note copy is gone, the empty states are shorter, and the project test now locks the absence of the prompt wall so the screen does not drift back toward verbose UI.
+  Verification on `.191` is frontend-only and focused on the touched project-detail surface. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Project.test.tsx src/pages/__tests__/MediaLibrary.test.tsx` passes (`4 passed`), and `npm run build` passes. Live signed-in browser proof for the exact user-shared project route was attempted, but the route currently resolves to `Project not found`, so this wave does not claim a successful live content proof on that specific detail URL.
+
+### `0.6.0-alpha` / build `2026.04.22.190`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.189` gave Projects a real composition pass, but one lingering problem still made the index route feel clumsy in live use. When there was only a single project, the card still felt oversized, and the remaining helper copy on the tile said things like `3 images kept together`, which read more like generated filler than product language.
+- What:
+  `.190` tightens the Projects index around that live complaint instead of reopening the whole route. Single-project tiles now sit in a smaller width envelope, the preview strip uses a shorter media ratio so the page stops feeling swallowed by one card, and low-value system/helper copy is stripped from both grid and list tiles unless the project has a real user-written description. The meaningless `kept together` phrasing is gone, and the Projects frontend test now also locks that absence so future polish waves do not slide back into filler language.
+  Verification on `.190` is frontend-only and focused on the touched Projects index surface. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/MediaLibrary.test.tsx src/pages/__tests__/Project.test.tsx` passes (`4 passed`), and `npm run build` passes. This wave does not claim backend changes, provider smoke, deployment verification, or full mobile/sign-in browser automation.
+
+### `0.6.0-alpha` / build `2026.04.22.189`
+- Date: `2026-04-22`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.188` made Create more honest, but the Projects surface still felt assembled instead of designed. The index route could leave a giant dead zone when there were only one or two projects, the toolbar composition was weak, and the project detail route still read like two equally heavy panels instead of one visual workspace with supporting context.
+- What:
+  `.189` turns Projects into a calmer, more product-shaped workspace pass. `/library/projects` now uses a project-specific search contract, a cleaner toolbar composition, and a content-first grid that stops one lonely project from floating inside a giant placeholder card. `/projects/:projectId` also drops the old twin-panel weight in favor of an image wall with aspect-aware media frames and a quieter timeline rail, so the pictures carry the page instead of card chrome. A frontend regression test now also locks the basic Projects toolbar and action surface so search, sort, and `New project` stay visible in future passes.
+  Verification on `.189` is frontend-only and focused on the touched Projects routes. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/MediaLibrary.test.tsx` passes (`3 passed`), and `npm run build` passes. A fresh local browser screenshot also confirms the calmer Projects index composition on desktop. This wave does not claim mobile QA, backend changes, provider smoke, deployment verification, or full end-to-end project detail interaction automation.
+
+### `0.6.0-alpha` / build `2026.04.21.188`
+- Date: `2026-04-21`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.187` improved Create's mood and error language, but a real interaction bug still made the page feel flimsy. If a user ran a 4-variation set and then changed the draft to 3, 2, or 1 without leaving the page, the old session tiles could keep hanging around in the preview rail. At the same time, the left prompt composer could still feel squeezed beside the shell sidebar whenever the right preview was open.
+- What:
+  `.188` turns that sticky-session bug into a cleaner Create contract. The right preview surface now only stays open when the active session still matches the current structural draft settings, so changing variation count or format no longer leaves stale tiles stuck on the page. Picking a real session from `History` now restores its generation setup instead of only pasting the old prompt, and the two-column layout protects the left prompt composer with a stronger minimum width so it stops collapsing so aggressively beside the main shell.
+  Verification on `.188` is frontend-only and focused on the touched Create interaction. From `apps/studio/web`, `npm run type-check` passes, `npm run test:ci -- src/pages/__tests__/Create.test.tsx` passes (`2 passed`), and `npm run build` passes. A fresh live browser screenshot also confirms the Create surface now drops back to a single wide composer when no compatible active session is being shown. This wave does not claim a full browser-reproduced multi-run session proof, mobile QA, backend changes, provider smoke, or deployment verification.
+
 ### `0.6.0-alpha` / build `2026.04.21.187`
 - Date: `2026-04-21`
 - Codename: `Foundation`

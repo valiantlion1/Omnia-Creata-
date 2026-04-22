@@ -1080,7 +1080,7 @@ export const studioApi = {
     apiFetch<DemoLoginResponse>('/auth/demo-login', {
       method: 'POST',
       body: JSON.stringify({
-        email: `${displayName.replace(/\s+/g, '.').toLowerCase() || 'creator'}@omnia.local`,
+        email: `${displayName.replace(/\s+/g, '.').toLowerCase() || 'creator'}@example.com`,
         display_name: displayName,
         plan,
       }),

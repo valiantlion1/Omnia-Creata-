@@ -9,14 +9,13 @@ import {
   type PublicPlansPayload,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { InlineError } from '@/components/InlineError'
 import { useToast } from '@/components/Toast'
 
 function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message
-  if (typeof error === 'string' && error.trim()) return error
-  return fallback
+  return toUserFacingErrorMessage(error, fallback)
 }
 
 function formatBillingStatusLabel(summary: BillingSummary) {
@@ -61,8 +60,8 @@ export default function BillingPage() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
 
   usePageMeta(
-    'Plans & Billing',
-    'Review Studio plans, credits, and checkout availability.',
+    'Subscription',
+    'Review your Studio subscription, credits, and checkout availability.',
   )
 
   const loadPublicPlans = useCallback(async () => {
@@ -179,7 +178,7 @@ export default function BillingPage() {
       <section className="flex flex-col items-center text-center space-y-4">
         <div className="flex items-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/[0.06] px-3.5 py-1 text-xs font-semibold text-[rgb(var(--primary))] uppercase tracking-wider">
           <CreditCard className="h-3.5 w-3.5" />
-          <span>Plans & billing</span>
+          <span>Subscription</span>
         </div>
         <h1 className="font-[family-name:var(--font-display)] text-4xl md:text-5xl font-bold tracking-tight text-white">
           Your subscription
@@ -200,7 +199,7 @@ export default function BillingPage() {
         <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-zinc-300">
           <ShieldCheck className="h-5 w-5 text-zinc-200" />
           <p className="font-semibold text-sm">
-            Owner access mirrors the public billing surface without charging this account like a customer account.
+            Owner access mirrors the public subscription surface without charging this account like a customer account.
           </p>
         </div>
       )}

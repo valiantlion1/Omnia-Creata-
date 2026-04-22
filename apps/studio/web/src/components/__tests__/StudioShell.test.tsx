@@ -85,7 +85,7 @@ describe('StudioShell', () => {
     }
   })
 
-  it('keeps signed-in account shortcuts inline in the footer profile area instead of a floating panel', async () => {
+  it('keeps the signed-in footer minimal and uses calmer sidebar labels', async () => {
     mockState.isAuthenticated = true
     mockState.auth = {
       guest: false,
@@ -114,10 +114,13 @@ describe('StudioShell', () => {
       { route: '/account' },
     )
 
-    expect(await screen.findByLabelText('Open account from profile footer')).toHaveAttribute('href', '/account')
-    expect(screen.getByLabelText('Open billing from profile footer')).toHaveAttribute('href', '/subscription')
-    expect(screen.getByLabelText('Open FAQ from profile footer')).toHaveAttribute('href', '/help#faq')
-    expect(screen.getByText('Owner access')).toBeInTheDocument()
-    expect(screen.queryByText(/faq and policy/i)).not.toBeInTheDocument()
+    expect(await screen.findByText('Subscription')).toBeInTheDocument()
+    expect(screen.getByText('Removed')).toBeInTheDocument()
+    expect(screen.queryByText(/^Billing$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Trash$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Owner access')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Open account from profile footer')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Open billing from profile footer')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Open FAQ from profile footer')).not.toBeInTheDocument()
   })
 })

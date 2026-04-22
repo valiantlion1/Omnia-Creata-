@@ -21,6 +21,7 @@ import {
   type ModelCatalogEntry,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { usePageVisibility } from '@/lib/usePageVisibility'
 
 /* ─── Prompt history ──────────────────────────────── */
@@ -468,6 +469,10 @@ export default function CreatePage() {
     if (!activeSessionId) return null
     return recentSessions.find((session) => session.job_id === activeSessionId) ?? null
   }, [activeSessionId, activeSessionQuery.data, recentSessions])
+  const recentSessionById = useMemo(
+    () => new Map(recentSessions.map((session) => [session.job_id, session] as const)),
+    [recentSessions],
+  )
   const historyEntries = useMemo(() => {
     const seen = new Set<string>()
     const entries: Array<{ id: string; prompt: string; sessionId: string | null }> = []
@@ -533,12 +538,22 @@ export default function CreatePage() {
     () => selectedModelCreditCost * Math.max(outputCount, 1),
     [outputCount, selectedModelCreditCost],
   )
-  const activeSessionSlots = useMemo(
-    () => activeSession?.slots ?? [],
-    [activeSession?.slots],
+  const activeSessionAspectRatio = useMemo(() => {
+    const ratio = activeSession?.prompt_snapshot.aspect_ratio
+    return ratio && ratio in aspectPresets ? (ratio as keyof typeof aspectPresets) : null
+  }, [activeSession?.prompt_snapshot.aspect_ratio])
+  const previewMatchesDraft = Boolean(
+    activeSession
+    && (activeSession.output_count ?? activeSession.slots?.length ?? 0) === outputCount
+    && (!activeSessionAspectRatio || activeSessionAspectRatio === aspectRatio),
   )
-  const hasPreviewSurface = activeSessionSlots.length > 0
-  const previewGridClass = activeSessionSlots.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+  const previewSession = previewMatchesDraft ? activeSession : null
+  const previewSessionSlots = useMemo(
+    () => previewSession?.slots ?? [],
+    [previewSession?.slots],
+  )
+  const hasPreviewSurface = previewSessionSlots.length > 0
+  const previewGridClass = previewSessionSlots.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
 
   /* ─── Effects ─────────────────────────────────── */
 
@@ -735,6 +750,22 @@ export default function CreatePage() {
     writeStoredSessionId(activeSessionStorageKey, sessionId)
   }, [activeSessionStorageKey])
 
+  const applySessionToDraft = useCallback((session: Generation | null) => {
+    if (!session) return
+    setPrompt(session.prompt_snapshot.prompt ?? '')
+    setNegativePrompt(session.prompt_snapshot.negative_prompt ?? '')
+    setSelectedModelId(session.prompt_snapshot.model ?? session.model)
+    const nextAspect = session.prompt_snapshot.aspect_ratio
+    if (nextAspect && nextAspect in aspectPresets) {
+      setAspectRatio(nextAspect as keyof typeof aspectPresets)
+    }
+    setReferenceAssetId(session.prompt_snapshot.reference_asset_id ?? null)
+    setSteps(parseBoundedInt(String(session.prompt_snapshot.steps ?? DEFAULT_CREATE_STEPS), DEFAULT_CREATE_STEPS, 1, 50))
+    setCfgScale(parseBoundedFloat(String(session.prompt_snapshot.cfg_scale ?? DEFAULT_CFG_SCALE), DEFAULT_CFG_SCALE, 1, 20))
+    setOutputCount(parseBoundedInt(String(session.output_count ?? DEFAULT_OUTPUT_COUNT), DEFAULT_OUTPUT_COUNT, 1, 4))
+    setImproveState('idle')
+  }, [])
+
   const dismissToast = useCallback((jobId: string) => {
     setGenerationToasts((current) =>
       current
@@ -767,7 +798,7 @@ export default function CreatePage() {
       await navigator.clipboard.writeText(shareUrl)
       setToastNotice(job.id, 'Project share link copied.')
     } catch (error) {
-      setToastNotice(job.id, error instanceof Error ? error.message : 'Unable to copy project share link.')
+      setToastNotice(job.id, toUserFacingErrorMessage(error, 'Unable to copy project share link.'))
     } finally {
       setSharingToastId((current) => (current === job.id ? null : current))
     }
@@ -794,7 +825,7 @@ export default function CreatePage() {
       setPrompt(response.prompt)
       setImproveState(response.used_llm ? 'done' : 'fallback')
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : 'Prompt could not be improved.')
+      setCreateError(toUserFacingErrorMessage(error, 'Prompt could not be improved.'))
       setImproveState('idle')
     }
   }, [prompt])
@@ -818,7 +849,7 @@ export default function CreatePage() {
       addToast('success', `"${style.title}" saved to My Styles.`)
     },
     onError: (error) => {
-      addToast('error', error instanceof Error ? error.message : 'Style could not be saved.')
+      addToast('error', toUserFacingErrorMessage(error, 'Style could not be saved.'))
     },
   })
 
@@ -859,7 +890,7 @@ export default function CreatePage() {
       await queryClient.invalidateQueries({ queryKey: ['generations'] })
       await queryClient.invalidateQueries({ queryKey: ['assets'] })
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : 'Generation could not be started.')
+      setCreateError(toUserFacingErrorMessage(error, 'Generation could not be started.'))
     } finally {
       setSubmittingCount((value) => Math.max(0, value - 1))
     }
@@ -918,8 +949,8 @@ export default function CreatePage() {
 
   return (
     <>
-      <AppPage className={`${hasPreviewSurface ? 'max-w-[1600px]' : 'max-w-[1100px]'} gap-0 py-6 md:py-10`}>
-        <div className={hasPreviewSurface ? 'grid gap-8 xl:grid-cols-[minmax(0,0.82fr)_minmax(460px,1.02fr)]' : 'mx-auto max-w-[1000px]'}>
+      <AppPage className={`${hasPreviewSurface ? 'max-w-[1680px]' : 'max-w-[1140px]'} gap-0 py-6 md:py-10`}>
+        <div className={hasPreviewSurface ? 'grid gap-8 xl:grid-cols-[minmax(620px,1.06fr)_minmax(420px,0.94fr)] 2xl:grid-cols-[minmax(700px,1fr)_minmax(500px,0.92fr)]' : 'mx-auto max-w-[1020px]'}>
           <div className="min-w-0">
 
         {/* ── Header ─────────────────────────────── */}
@@ -967,10 +998,16 @@ export default function CreatePage() {
                             <button
                               key={entry.id}
                               onClick={() => {
-                                setPrompt(entry.prompt)
                                 if (entry.sessionId) {
+                                  const session = recentSessionById.get(entry.sessionId) ?? null
+                                  if (session) {
+                                    applySessionToDraft(session)
+                                  } else {
+                                    setPrompt(entry.prompt)
+                                  }
                                   rememberActiveSession(entry.sessionId)
                                 } else {
+                                  setPrompt(entry.prompt)
                                   rememberActiveSession(null)
                                 }
                                 setShowHistory(false)
@@ -1125,6 +1162,7 @@ export default function CreatePage() {
                       <span className="tabular-nums text-zinc-300">{cfgScale}</span>
                     </label>
                     <input
+                      aria-label="Guidance"
                       type="range"
                       min={1}
                       max={15}
@@ -1142,6 +1180,7 @@ export default function CreatePage() {
                       <span className="tabular-nums text-zinc-300">{outputCount}</span>
                     </label>
                     <input
+                      aria-label="Variations"
                       type="range"
                       min={1}
                       max={4}
@@ -1313,13 +1352,13 @@ export default function CreatePage() {
           <aside data-testid="create-preview-surface" className="min-w-0 xl:sticky xl:top-24 xl:self-start">
             <section className="overflow-hidden rounded-[38px] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_48%),linear-gradient(180deg,rgba(17,19,27,0.97),rgba(10,12,17,0.94))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-5">
               <div className={`grid gap-4 ${previewGridClass}`}>
-                {activeSessionSlots.map((slot) => {
+                {previewSessionSlots.map((slot) => {
                   const previewUrl = slot.output?.thumbnail_url ?? slot.output?.url ?? null
                   const canOpen = Boolean(previewUrl) && slot.slot_status === 'succeeded'
                   const isSettling = slot.slot_status === 'queued' || slot.slot_status === 'claimed' || slot.slot_status === 'running'
-                  const slotErrorCode = slot.error_code ?? activeSession?.error_code ?? null
+                  const slotErrorCode = slot.error_code ?? previewSession?.error_code ?? null
                   const sessionAspectRatio =
-                    (activeSession?.prompt_snapshot.aspect_ratio as keyof typeof aspectPresets | undefined)
+                    (previewSession?.prompt_snapshot.aspect_ratio as keyof typeof aspectPresets | undefined)
                     ?? aspectRatio
                   const previewAspectClass = aspectPresets[sessionAspectRatio]?.aspect ?? activeAspect.aspect
                   const statusBadge =
@@ -1335,20 +1374,20 @@ export default function CreatePage() {
 
                   return (
                     <button
-                      key={`${activeSession?.job_id ?? 'draft'}:${slot.slot_index}`}
+                      key={`${previewSession?.job_id ?? 'draft'}:${slot.slot_index}`}
                       type="button"
                       disabled={!canOpen}
                       onClick={() => {
                         if (!canOpen || !previewUrl) return
                         openLightbox(previewUrl, `Variation ${slot.slot_index + 1}`, {
-                          title: activeSession?.display_title || activeSession?.title || `Variation ${slot.slot_index + 1}`,
-                          prompt: activeSession?.prompt_snapshot.prompt ?? prompt,
+                          title: previewSession?.display_title || previewSession?.title || `Variation ${slot.slot_index + 1}`,
+                          prompt: previewSession?.prompt_snapshot.prompt ?? prompt,
                           authorName: auth?.identity.display_name ?? 'You',
                           authorUsername: auth?.identity.username ?? 'creator',
-                          aspectRatio: activeSession?.prompt_snapshot.aspect_ratio ?? aspectRatio,
+                          aspectRatio: previewSession?.prompt_snapshot.aspect_ratio ?? aspectRatio,
                           model: getStudioModelDisplayName(
-                            activeSession?.model ?? selectedModel?.id,
-                            activeSession?.display_model_label ?? selectedModel?.label,
+                            previewSession?.model ?? selectedModel?.id,
+                            previewSession?.display_model_label ?? selectedModel?.label,
                           ),
                         })
                       }}
