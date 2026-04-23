@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from starlette.requests import Request as StarletteRequest
 
 from config.env import Environment, get_settings
+from observability.context import current_identity_id
 import security.auth as auth_module
 import studio_platform.router as router_module
 from security.auth import (
@@ -788,7 +789,7 @@ async def test_assets_route_bootstraps_identity_and_returns_empty_payload(tmp_pa
     try:
         assert response.status_code == 200
         payload = response.json()
-        assert payload == {"assets": []}
+        assert payload == {"assets": [], "total": 0, "offset": 0, "limit": 80}
         identity = await service.get_identity("fresh-user")
         assert identity.email == "fresh-user@example.com"
     finally:
@@ -1037,6 +1038,8 @@ async def test_get_current_user_includes_session_context_for_local_jwt_tokens() 
     assert user.metadata["session_id"]
     assert user.metadata["session_issued_at"] is not None
     assert user.metadata["session_expires_at"] is not None
+    assert current_identity_id() == "session-user"
+    assert request.state.identity_id == "session-user"
 
 
 @pytest.mark.asyncio

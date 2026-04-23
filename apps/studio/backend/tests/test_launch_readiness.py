@@ -43,6 +43,18 @@ def _enable_captcha_for_existing_launch_readiness_expectations():
         settings.turnstile_secret_key = original_secret_key
 
 
+@pytest.fixture(autouse=True)
+def _restore_launch_readiness_runtime_baseline():
+    settings = get_settings()
+    original_environment = settings.environment
+    original_runtime_mode = settings.generation_runtime_mode
+    try:
+        yield
+    finally:
+        settings.environment = original_environment
+        settings.generation_runtime_mode = original_runtime_mode
+
+
 def _seed_operator_runtime_artifacts(settings, runtime_root: Path) -> tuple[dict[str, object], dict[str, object]]:
     logs_root = runtime_root / "logs"
     logs_root.mkdir(parents=True, exist_ok=True)
@@ -1116,6 +1128,51 @@ def test_launch_readiness_keeps_local_alpha_when_development_uses_demo_auth(tmp_
         auth_check = next(check for check in readiness["checks"] if check["key"] == "auth_configuration")
         assert auth_check["status"] == "warning"
         assert readiness["platform_readiness"]["current_stage"] == "local_alpha"
+    finally:
+        settings.studio_runtime_root = original_runtime_root
+        settings.environment = original_environment
+        settings.enable_demo_auth = original_enable_demo_auth
+        settings.supabase_url = original_supabase_url
+        settings.supabase_anon_key = original_supabase_anon_key
+        settings.supabase_service_role_key = original_supabase_service_role_key
+
+
+def test_launch_readiness_blocks_all_in_one_runtime_outside_local_development(tmp_path: Path) -> None:
+    settings = get_settings()
+    original_runtime_root = settings.studio_runtime_root
+    original_environment = settings.environment
+    original_enable_demo_auth = settings.enable_demo_auth
+    original_supabase_url = settings.supabase_url
+    original_supabase_anon_key = settings.supabase_anon_key
+    original_supabase_service_role_key = settings.supabase_service_role_key
+
+    settings.studio_runtime_root = str(tmp_path / "runtime-root")
+    settings.environment = Environment.STAGING
+    settings.enable_demo_auth = False
+    settings.supabase_url = "https://example.supabase.co"
+    settings.supabase_anon_key = "anon-key"
+    settings.supabase_service_role_key = "x" * 32
+    try:
+        startup_report, runtime_logs = _seed_operator_runtime_artifacts(
+            settings,
+            (tmp_path / "runtime-root").resolve(),
+        )
+        readiness = build_launch_readiness_report(
+            settings=settings,
+            provider_status=[],
+            data_authority={"backend": "postgres", "durable": True},
+            generation_runtime_mode="all",
+            generation_broker={"enabled": False, "configured": False},
+            chat_routing={"providers": {}},
+            provider_smoke_report=None,
+            startup_verification_report=startup_report,
+            deployment_verification_report=None,
+            runtime_logs=runtime_logs,
+        )
+
+        runtime_check = next(check for check in readiness["checks"] if check["key"] == "runtime_topology")
+        assert runtime_check["status"] == "blocked"
+        assert "development-only" in runtime_check["detail"]
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.environment = original_environment

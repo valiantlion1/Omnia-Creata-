@@ -544,14 +544,21 @@ async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
 async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Path):
     settings = get_settings()
     original_environment = settings.environment
+    original_mode = settings.generation_runtime_mode
     original_checkout_url = settings.paddle_checkout_base_url
     settings.environment = Environment.STAGING
+    settings.generation_runtime_mode = "web"
     settings.paddle_checkout_base_url = None
     service: StudioService | None = None
 
     try:
         store = StudioStateStore(tmp_path / "state.json")
-        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        service = StudioService(
+            store,
+            ProviderRegistry(),
+            tmp_path / "media",
+            generation_broker=InMemoryGenerationBroker(),
+        )
         await service.initialize()
 
         identity = OmniaIdentity(
@@ -577,6 +584,7 @@ async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Pa
         if service is not None:
             await service.shutdown()
         settings.environment = original_environment
+        settings.generation_runtime_mode = original_mode
         settings.paddle_checkout_base_url = original_checkout_url
 
 
@@ -3945,6 +3953,7 @@ async def test_create_generation_web_runtime_mode_without_broker_falls_back_to_l
         assert health["generation_broker"]["enabled"] is False
         assert health["generation_broker"]["advisory"] is True
         assert health["generation_broker"]["degraded"] is False
+        assert health["generation_broker"]["topology_class"] == "split_advisory_fallback"
         assert (
             health["generation_broker"]["detail"]
             == "web_runtime_local_fallback_no_shared_broker"
@@ -4000,6 +4009,7 @@ async def test_service_health_treats_dev_redis_fallback_as_advisory_when_local_q
         assert health["generation_broker"]["enabled"] is False
         assert health["generation_broker"]["degraded"] is False
         assert health["generation_broker"]["advisory"] is True
+        assert health["generation_broker"]["topology_class"] == "all_in_one"
         assert health["generation_broker"]["detail"] == "redis_unavailable_fallback_local_queue"
     finally:
         settings.environment = original_environment
@@ -4026,6 +4036,30 @@ async def test_split_runtime_requires_shared_broker_when_web_runtime_starts_outs
         with pytest.raises(
             RuntimeError,
             match="Shared generation broker is required for split runtime outside local development.",
+        ):
+            await service.initialize()
+    finally:
+        settings.environment = original_environment
+        settings.generation_runtime_mode = original_mode
+        settings.redis_url = original_redis_url
+
+
+@pytest.mark.asyncio
+async def test_all_in_one_runtime_is_rejected_outside_development(tmp_path: Path):
+    settings = get_settings()
+    original_environment = settings.environment
+    original_mode = settings.generation_runtime_mode
+    original_redis_url = settings.redis_url
+
+    try:
+        settings.environment = Environment.STAGING
+        settings.generation_runtime_mode = "all"
+        settings.redis_url = "redis://127.0.0.1:6399/0"
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        with pytest.raises(
+            RuntimeError,
+            match="All-in-one generation runtime is development-only",
         ):
             await service.initialize()
     finally:

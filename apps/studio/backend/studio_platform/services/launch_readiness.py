@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from config.env import Environment, Settings, has_configured_secret, has_configured_string
+from config.runtime_topology import build_runtime_topology_check
 
 from ..versioning import load_version_info
 from .provider_truth import (
@@ -476,29 +477,18 @@ def build_launch_readiness_report(
             f"Current authority backend is {backend or 'unknown'}.",
         )
 
-    broker_enabled = generation_broker.get("enabled") is True
-    broker_configured = generation_broker.get("configured") is True
-    if generation_runtime_mode == "all":
-        add_check(
-            "runtime_topology",
-            "warning",
-            "Generation still runs in all-in-one local convenience mode.",
-            "Launch readiness is stronger with explicit web/worker topology.",
-        )
-    elif generation_runtime_mode in {"web", "worker"} and not (broker_enabled or broker_configured):
-        add_check(
-            "runtime_topology",
-            "blocked",
-            "Split runtime is missing its shared broker.",
-            "Web/worker launch topology should not run without a configured shared queue.",
-        )
-    else:
-        add_check(
-            "runtime_topology",
-            "pass",
-            "Generation runtime topology is coherent.",
-            f"Runtime mode is {generation_runtime_mode}.",
-        )
+    runtime_topology = build_runtime_topology_check(
+        settings.environment,
+        generation_runtime_mode,
+        broker_enabled=generation_broker.get("enabled") is True,
+        broker_configured=generation_broker.get("configured") is True,
+    )
+    add_check(
+        "runtime_topology",
+        runtime_topology.status,
+        runtime_topology.summary,
+        runtime_topology.detail,
+    )
 
     provider_truth = _build_provider_truth_report(
         settings=settings,

@@ -4,6 +4,19 @@ import logging
 from typing import Any, Callable, Mapping
 
 from config.env import Environment, Settings
+from config.runtime_topology import (
+    RUNTIME_TOPOLOGY_CLASS_ALL_IN_ONE,
+    RUNTIME_TOPOLOGY_CLASS_CUSTOM,
+    RUNTIME_TOPOLOGY_CLASS_SPLIT_ADVISORY_FALLBACK,
+    RUNTIME_TOPOLOGY_CLASS_SPLIT_BROKER_MISSING,
+    RUNTIME_TOPOLOGY_CLASS_SPLIT_SHARED_BROKER,
+    build_generation_broker_state,
+    build_runtime_topology_check,
+    is_expected_local_generation_broker_fallback,
+    launch_shaped_runtime_expects_shared_broker,
+    normalize_generation_runtime_mode,
+    resolve_generation_runtime_topology_class,
+)
 
 from .deployment_stack_ops import build_deployment_stack_summary
 from .contract_catalog import build_contract_freeze_summary
@@ -172,14 +185,11 @@ def _is_expected_local_generation_broker_fallback(
     generation_runtime_mode: str,
     generation_broker_degraded_reason: str | None,
 ) -> bool:
-    if settings.environment != Environment.DEVELOPMENT:
-        return False
-    if generation_runtime_mode not in {"all", "web"}:
-        return False
-    return generation_broker_degraded_reason in {
-        "redis_unavailable_fallback_local_queue",
-        "web_runtime_local_fallback_no_shared_broker",
-    }
+    return is_expected_local_generation_broker_fallback(
+        settings.environment,
+        generation_runtime_mode,
+        generation_broker_degraded_reason,
+    )
 
 
 def _find_launch_readiness_check(launch_readiness: Mapping[str, Any] | None, key: str) -> Mapping[str, Any] | None:
@@ -206,28 +216,33 @@ def _build_runtime_delivery_contract(
 
     if generation_runtime_mode == "all":
         delivery_mode = "local_all_in_one"
-        operator_posture = "local_alpha_safe"
-        summary = "This runtime accepts generation requests and executes them on the same local process."
         if settings.environment == Environment.DEVELOPMENT:
+            operator_posture = "local_alpha_safe"
+            summary = "This runtime accepts generation requests and executes them on the same local process."
             action_items.append("Keep this all-in-one mode for low-cost local alpha work.")
-        action_items.append("Switch to split web/worker plus a shared broker when you want protected-launch topology.")
-    elif topology_class == "split_shared_broker" and generation_runtime_mode == "web":
+            action_items.append("Switch to split web/worker plus a shared broker when you want protected-launch topology.")
+        else:
+            operator_posture = "launch_blocked"
+            summary = "This runtime is still trying to accept and execute generation jobs in one non-development process."
+            action_items.append("Switch to split web/worker plus a shared broker before staging or production startup.")
+            action_items.append("Do not treat all-in-one mode as launch-shaped runtime outside local development.")
+    elif topology_class == RUNTIME_TOPOLOGY_CLASS_SPLIT_SHARED_BROKER and generation_runtime_mode == "web":
         delivery_mode = "web_enqueue_shared_worker"
         operator_posture = "split_submission_surface"
         summary = "This web runtime accepts generation jobs and leaves execution to workers on the shared broker."
         action_items.append("Keep at least one worker runtime attached to the same shared broker.")
-    elif topology_class == "split_shared_broker" and generation_runtime_mode == "worker":
+    elif topology_class == RUNTIME_TOPOLOGY_CLASS_SPLIT_SHARED_BROKER and generation_runtime_mode == "worker":
         delivery_mode = "worker_claim_shared_broker"
         operator_posture = "split_worker_surface"
         summary = "This worker runtime claims queued jobs from the shared broker and executes them."
         action_items.append("Keep at least one web runtime attached to the same shared broker for submissions.")
-    elif topology_class == "split_advisory_fallback" or advisory:
+    elif topology_class == RUNTIME_TOPOLOGY_CLASS_SPLIT_ADVISORY_FALLBACK or advisory:
         delivery_mode = "local_web_fallback"
         operator_posture = "local_alpha_only"
         summary = "This split-shaped runtime is still processing jobs locally because the shared broker is unavailable."
         action_items.append("Safe for local alpha only; do not treat this fallback as protected-launch topology.")
         action_items.append("Restore the shared broker if you want real web/worker separation.")
-    elif topology_class == "split_broker_missing":
+    elif topology_class == RUNTIME_TOPOLOGY_CLASS_SPLIT_BROKER_MISSING:
         delivery_mode = "split_runtime_blocked"
         operator_posture = "launch_blocked"
         summary = "This split runtime cannot reliably move jobs because the shared broker is missing."
@@ -254,48 +269,41 @@ def build_runtime_topology_summary(
     launch_readiness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     runtime_check = _find_launch_readiness_check(launch_readiness, "runtime_topology")
+    normalized_runtime_mode = normalize_generation_runtime_mode(generation_runtime_mode)
     shared_broker_configured = generation_broker_payload.get("configured") is True
     shared_broker_active = generation_broker_payload.get("enabled") is True
     advisory = generation_broker_payload.get("advisory") is True
     degraded = generation_broker_payload.get("degraded") is True
     broker_detail = str(generation_broker_payload.get("detail") or "").strip() or None
-    shared_broker_required = (
-        settings.environment != Environment.DEVELOPMENT
-        and generation_runtime_mode in {"web", "worker"}
-    )
-    local_processing_enabled = generation_runtime_mode in {"all", "worker"}
+    shared_broker_required = launch_shaped_runtime_expects_shared_broker(settings.environment)
+    local_processing_enabled = normalized_runtime_mode in {"all", "worker"}
 
     if isinstance(runtime_check, Mapping):
         status = str(runtime_check.get("status") or "unknown").strip().lower() or "unknown"
         summary = str(runtime_check.get("summary") or "Runtime topology status is unavailable.").strip()
         detail = str(runtime_check.get("detail") or "").strip() or None
-    elif generation_runtime_mode == "all":
-        status = "warning"
-        summary = "Generation is running in all-in-one local convenience mode."
-        detail = "This is fine for local alpha work, but protected launch wants split web/worker topology."
-    elif generation_runtime_mode in {"web", "worker"} and not (shared_broker_active or shared_broker_configured):
-        status = "blocked"
-        summary = "Split runtime is missing its shared broker."
-        detail = "Web/worker topology is not coherent until the shared queue is configured."
     else:
-        status = "pass"
-        summary = "Generation runtime topology is coherent."
-        detail = broker_detail or f"Runtime mode is {generation_runtime_mode}."
+        derived_runtime_check = build_runtime_topology_check(
+            settings.environment,
+            normalized_runtime_mode,
+            broker_enabled=shared_broker_active,
+            broker_configured=shared_broker_configured,
+        )
+        status = derived_runtime_check.status
+        summary = derived_runtime_check.summary
+        detail = broker_detail or derived_runtime_check.detail
 
-    if generation_runtime_mode == "all":
-        topology_class = "all_in_one"
-    elif shared_broker_active:
-        topology_class = "split_shared_broker"
-    elif advisory:
-        topology_class = "split_advisory_fallback"
-    elif generation_runtime_mode in {"web", "worker"}:
-        topology_class = "split_broker_missing"
-    else:
-        topology_class = "custom"
+    topology_class = str(generation_broker_payload.get("topology_class") or "").strip() or (
+        resolve_generation_runtime_topology_class(
+            normalized_runtime_mode,
+            broker_enabled=shared_broker_active,
+            advisory_fallback=advisory,
+        )
+    )
 
     delivery_contract = _build_runtime_delivery_contract(
         settings=settings,
-        generation_runtime_mode=generation_runtime_mode,
+        generation_runtime_mode=normalized_runtime_mode,
         topology_class=topology_class,
         advisory=advisory,
         broker_detail=broker_detail,
@@ -318,7 +326,7 @@ def build_runtime_topology_summary(
         "status": status,
         "summary": summary,
         "detail": detail,
-        "mode": generation_runtime_mode,
+        "mode": normalized_runtime_mode,
         "topology_class": topology_class,
         "shared_broker_required": shared_broker_required,
         "shared_broker_configured": shared_broker_configured,
@@ -564,21 +572,25 @@ def build_generation_broker_payload(
     broker_metrics: dict[str, Any] | None,
     claimed_count: int,
 ) -> dict[str, Any]:
-    advisory_fallback = _is_expected_local_generation_broker_fallback(
-        settings=settings,
-        generation_runtime_mode=generation_runtime_mode,
-        generation_broker_degraded_reason=generation_broker_degraded_reason,
+    state = build_generation_broker_state(
+        settings.environment,
+        generation_runtime_mode,
+        generation_broker=generation_broker,
+        shared_queue_configured=shared_queue_configured,
+        degraded_reason=generation_broker_degraded_reason,
+        broker_metrics=broker_metrics,
+        claimed_count=claimed_count,
     )
     return {
-        "enabled": generation_broker is not None,
-        "configured": shared_queue_configured,
-        "degraded": generation_broker_degraded_reason is not None and not advisory_fallback,
-        "advisory": advisory_fallback,
-        "detail": generation_broker_degraded_reason
-        or ("shared_queue_active" if generation_broker is not None else "local_queue_only"),
-        "kind": generation_broker.__class__.__name__ if generation_broker is not None else None,
-        "queued_by_priority": broker_metrics,
-        "claimed": claimed_count,
+        "enabled": state.enabled,
+        "configured": state.configured,
+        "degraded": state.degraded,
+        "advisory": state.advisory,
+        "detail": state.detail,
+        "kind": state.kind,
+        "queued_by_priority": state.queued_by_priority,
+        "claimed": state.claimed,
+        "topology_class": state.topology_class,
     }
 
 

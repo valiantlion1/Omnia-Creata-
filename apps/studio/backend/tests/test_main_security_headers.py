@@ -4,8 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from config.env import Environment, Settings
-from main import _requires_no_store_headers, _should_enforce_trusted_hosts, app, settings
-from observability.context import current_request_id
+from main import _requires_no_store_headers, _should_enforce_trusted_hosts, app, service as main_service, settings
+from observability.context import current_identity_id, current_request_id
+from studio_platform.services.generation_broker import InMemoryGenerationBroker
 
 
 def _ensure_runtime_error_probe_route() -> None:
@@ -26,7 +27,7 @@ def _ensure_request_context_probe_route() -> None:
 
     @app.get("/__tests/request-context", include_in_schema=False)
     async def _request_context_probe():
-        return {"request_id": current_request_id()}
+        return {"request_id": current_request_id(), "identity_id": current_identity_id()}
 
 
 _ensure_request_context_probe_route()
@@ -36,11 +37,19 @@ _ensure_request_context_probe_route()
 def _restore_security_header_settings():
     original_environment = settings.environment
     original_enable_api_docs = settings.enable_api_docs
+    original_runtime_mode = settings.generation_runtime_mode
+    original_service_runtime_mode = main_service._generation_runtime_mode
+    original_generation_broker = main_service.generation_broker
+    original_owns_generation_broker = main_service._owns_generation_broker
     try:
         yield
     finally:
         settings.environment = original_environment
         settings.enable_api_docs = original_enable_api_docs
+        settings.generation_runtime_mode = original_runtime_mode
+        main_service._generation_runtime_mode = original_service_runtime_mode
+        main_service.generation_broker = original_generation_broker
+        main_service._owns_generation_broker = original_owns_generation_broker
 
 
 def test_api_responses_emit_locked_csp_when_docs_are_disabled(_restore_security_header_settings):
@@ -64,6 +73,10 @@ def test_api_responses_emit_locked_csp_when_docs_are_disabled(_restore_security_
 def test_api_responses_emit_hsts_for_staging(_restore_security_header_settings):
     settings.environment = Environment.STAGING
     settings.enable_api_docs = False
+    settings.generation_runtime_mode = "web"
+    main_service._generation_runtime_mode = "web"
+    main_service.generation_broker = InMemoryGenerationBroker()
+    main_service._owns_generation_broker = False
 
     with TestClient(app) as client:
         response = client.get("/v1/version")
@@ -182,6 +195,7 @@ def test_request_context_middleware_binds_request_id_contextvar(_restore_securit
 
     assert response.status_code == 200
     assert response.json()["request_id"] == "studio-context-test-1234"
+    assert response.json()["identity_id"] == ""
     assert response.headers["X-Request-ID"] == "studio-context-test-1234"
 
 

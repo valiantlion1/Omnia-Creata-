@@ -730,3 +730,117 @@ def test_postgres_store_mutate_generation_uses_row_level_update():
     assert "FOR UPDATE" in executed_sql
     assert f"UPDATE {POSTGRES_RECORDS_TABLE}" in executed_sql
     assert f"DELETE FROM {POSTGRES_RECORDS_TABLE}" not in executed_sql
+
+
+def test_postgres_store_load_preserves_original_error_when_rollback_fails(
+    caplog: pytest.LogCaptureFixture,
+):
+    class _Connection:
+        def rollback(self) -> None:
+            raise RuntimeError("rollback boom")
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _Connection()
+    released: dict[str, bool] = {}
+    store._connect = lambda: connection  # type: ignore[method-assign]
+    store._ensure_schema_sync = lambda connection: None  # type: ignore[method-assign]
+    store._has_records_sync = lambda connection: True  # type: ignore[method-assign]
+    store._read_state_from_connection = lambda connection: (_ for _ in ()).throw(RuntimeError("read boom"))  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: released.update({"discard": discard})  # type: ignore[method-assign]
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(RuntimeError, match="read boom"):
+            store._load_sync()
+
+    assert released == {"discard": True}
+    assert any("rollback failed during load state" in record.message for record in caplog.records)
+
+
+def test_postgres_store_connect_preserves_original_error_when_release_fails(
+    caplog: pytest.LogCaptureFixture,
+):
+    class _Connection:
+        pass
+
+    class _Pool:
+        def getconn(self):
+            return _Connection()
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    store._ensure_pool = lambda: _Pool()  # type: ignore[method-assign]
+    store._refresh_expired_connection = lambda pool, connection: connection  # type: ignore[method-assign]
+    store._prepare_connection = lambda connection: (_ for _ in ()).throw(RuntimeError("prepare boom"))  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: (_ for _ in ()).throw(RuntimeError("release boom"))  # type: ignore[method-assign]
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(RuntimeError, match="prepare boom"):
+            store._connect()
+
+    assert any("connection release failed during connect cleanup" in record.message for record in caplog.records)
+
+
+def test_postgres_store_load_preserves_original_error_when_release_fails_after_rollback(
+    caplog: pytest.LogCaptureFixture,
+):
+    class _Connection:
+        def rollback(self) -> None:
+            return None
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _Connection()
+    store._connect = lambda: connection  # type: ignore[method-assign]
+    store._ensure_schema_sync = lambda connection: None  # type: ignore[method-assign]
+    store._has_records_sync = lambda connection: True  # type: ignore[method-assign]
+    store._read_state_from_connection = lambda connection: (_ for _ in ()).throw(RuntimeError("read boom"))  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: (_ for _ in ()).throw(RuntimeError("release boom"))  # type: ignore[method-assign]
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(RuntimeError, match="read boom"):
+            store._load_sync()
+
+    assert any("connection release failed during load state cleanup" in record.message for record in caplog.records)
+
+
+def test_postgres_store_mutate_generation_discards_connection_when_rollback_fails_on_missing_row(
+    caplog: pytest.LogCaptureFixture,
+):
+    class _MissingRowCursor:
+        def execute(self, sql: str, params=None):
+            return None
+
+        def fetchone(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _Connection:
+        def __init__(self) -> None:
+            self.cursor_instance = _MissingRowCursor()
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self) -> None:
+            return None
+
+        def rollback(self) -> None:
+            raise RuntimeError("rollback boom")
+
+    store = PostgresStudioStateStore("postgresql://studio:secret@localhost:5432/studio")
+    connection = _Connection()
+    released: dict[str, bool] = {}
+    store._connect = lambda: connection  # type: ignore[method-assign]
+    store._ensure_schema_sync = lambda connection: None  # type: ignore[method-assign]
+    store._acquire_write_lock_sync = lambda connection: None  # type: ignore[method-assign]
+    store._release_connection = lambda connection, discard=False: released.update({"discard": discard})  # type: ignore[method-assign]
+
+    with caplog.at_level("WARNING"):
+        updated_job = store._mutate_generation_sync("missing-job", lambda job: True)
+
+    assert updated_job is None
+    assert released == {"discard": True}
+    assert any("rollback failed during mutate generation missing row" in record.message for record in caplog.records)

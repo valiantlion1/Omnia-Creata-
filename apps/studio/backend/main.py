@@ -45,7 +45,12 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from config.env import Environment, get_settings, reveal_secret_with_audit
 from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_STARTUP_VALIDATION
-from observability.context import bind_request_id, reset_request_id
+from observability.context import (
+    bind_identity_id,
+    bind_request_id,
+    reset_identity_id,
+    reset_request_id,
+)
 from observability.metrics import PrometheusMetricsCollector
 from security.auth import AuthConfig, setup_auth
 from security.auth_policy import validate_route_policy_coverage
@@ -279,6 +284,7 @@ async def request_context_middleware(request: Request, call_next):
     request_id = resolve_request_id(request.headers.get("X-Request-ID"))
     request.state.request_id = request_id
     request_id_token = bind_request_id(request_id)
+    identity_id_token = bind_identity_id("")
     request.state.request_started_at = time.perf_counter()
     started_at = float(request.state.request_started_at)
     metrics_collector.request_started()
@@ -296,6 +302,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _build_internal_error_response(request, exc)
     finally:
         metrics_collector.request_finished()
+        reset_identity_id(identity_id_token)
         reset_request_id(request_id_token)
     duration_seconds = time.perf_counter() - started_at
     path_label = _path_label_for_request(request)

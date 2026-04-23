@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.22.198",
+  "build": "2026.04.23.205",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-22",
-  "notes": "Studio now has a signed-in local route-proof matrix instead of a guest-only fallback. The browser proof helper supports guest and demo auth bundles, writes manifest-backed screenshots and JSON summaries per route, seeds a real project detail route during auth-full proof, and reuses the existing demo-login flow through a dev-only Studio proof bridge without changing the public API."
+  "releaseDate": "2026-04-23",
+  "notes": "Studio backend now also protects the original Postgres failure when connection release cleanup goes wrong, instead of letting a second pool-return problem hide the real issue. That makes the core store layer calmer under bad runtime conditions and safer to maintain."
 }

@@ -1015,7 +1015,7 @@ class PostgresStudioStateStore:
             self._prepare_connection(connection)
             return connection
         except Exception:
-            self._release_connection(connection, discard=True)
+            self._release_connection_quietly(connection, discard=True, operation="connect cleanup")
             raise
 
     def _release_connection(self, connection, *, discard: bool = False) -> None:
@@ -1025,6 +1025,28 @@ class PostgresStudioStateStore:
         if discard:
             self._connection_born_monotonic.pop(id(connection), None)
         pool.putconn(connection, close=discard)
+
+    def _release_connection_quietly(self, connection, *, discard: bool, operation: str) -> None:
+        try:
+            self._release_connection(connection, discard=discard)
+        except Exception as release_exc:
+            logger.warning(
+                "Postgres state store connection release failed during %s: %s",
+                operation,
+                release_exc,
+            )
+
+    def _rollback_connection_quietly(self, connection, *, operation: str) -> bool:
+        try:
+            connection.rollback()
+            return True
+        except Exception as rollback_exc:
+            logger.warning(
+                "Postgres state store rollback failed during %s: %s",
+                operation,
+                rollback_exc,
+            )
+            return False
 
     async def shutdown(self) -> None:
         async with self._lock:
@@ -1065,6 +1087,8 @@ class PostgresStudioStateStore:
 
     def _load_sync(self) -> StudioState:
         connection = self._connect()
+        discard_connection = False
+        release_quietly = False
         try:
             self._ensure_schema_sync(connection)
             if not self._has_records_sync(connection):
@@ -1073,10 +1097,18 @@ class PostgresStudioStateStore:
                 return state
             return self._read_state_from_connection(connection)
         except Exception:
-            connection.rollback()
+            discard_connection = not self._rollback_connection_quietly(connection, operation="load state")
+            release_quietly = True
             raise
         finally:
-            self._release_connection(connection)
+            if release_quietly:
+                self._release_connection_quietly(
+                    connection,
+                    discard=discard_connection,
+                    operation="load state cleanup",
+                )
+            else:
+                self._release_connection(connection, discard=discard_connection)
 
     def _bootstrap_or_empty_state_sync(self) -> StudioState:
         self._bootstrap_source_path = None
@@ -1131,20 +1163,33 @@ class PostgresStudioStateStore:
         owns_connection = connection is None
         if connection is None:
             connection = self._connect()
+        discard_connection = False
+        release_quietly = False
         try:
             self._ensure_schema_sync(connection)
             rows = self._serialize_state_rows(state)
             self._replace_rows_sync(connection, rows)
         except Exception:
-            connection.rollback()
+            if owns_connection:
+                discard_connection = not self._rollback_connection_quietly(connection, operation="replace state")
+                release_quietly = True
             raise
         finally:
             if owns_connection:
-                self._release_connection(connection)
+                if release_quietly:
+                    self._release_connection_quietly(
+                        connection,
+                        discard=discard_connection,
+                        operation="replace state cleanup",
+                    )
+                else:
+                    self._release_connection(connection, discard=discard_connection)
 
     def _save_model_sync(self, collection: str, model: BaseModel) -> None:
         payload = json.dumps(model.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":"))
         connection = self._connect()
+        discard_connection = False
+        release_quietly = False
         try:
             self._ensure_schema_sync(connection)
             self._acquire_write_lock_sync(connection)
@@ -1160,13 +1205,23 @@ class PostgresStudioStateStore:
                 )
             connection.commit()
         except Exception:
-            connection.rollback()
+            discard_connection = not self._rollback_connection_quietly(connection, operation=f"save model {collection}")
+            release_quietly = True
             raise
         finally:
-            self._release_connection(connection)
+            if release_quietly:
+                self._release_connection_quietly(
+                    connection,
+                    discard=discard_connection,
+                    operation=f"save model {collection} cleanup",
+                )
+            else:
+                self._release_connection(connection, discard=discard_connection)
 
     def _delete_model_sync(self, collection: str, model_id: str) -> None:
         connection = self._connect()
+        discard_connection = False
+        release_quietly = False
         try:
             self._ensure_schema_sync(connection)
             self._acquire_write_lock_sync(connection)
@@ -1177,10 +1232,21 @@ class PostgresStudioStateStore:
                 )
             connection.commit()
         except Exception:
-            connection.rollback()
+            discard_connection = not self._rollback_connection_quietly(
+                connection,
+                operation=f"delete model {collection}",
+            )
+            release_quietly = True
             raise
         finally:
-            self._release_connection(connection)
+            if release_quietly:
+                self._release_connection_quietly(
+                    connection,
+                    discard=discard_connection,
+                    operation=f"delete model {collection} cleanup",
+                )
+            else:
+                self._release_connection(connection, discard=discard_connection)
 
     def _get_model_fresh_sync(self, collection: str, model_id: str, model_type: Type[ModelT]) -> ModelT | None:
         connection = self._connect()
@@ -1261,6 +1327,8 @@ class PostgresStudioStateStore:
         callback: Callable[[GenerationJob], bool],
     ) -> GenerationJob | None:
         connection = self._connect()
+        discard_connection = False
+        release_quietly = False
         try:
             self._ensure_schema_sync(connection)
             self._acquire_write_lock_sync(connection)
@@ -1276,12 +1344,20 @@ class PostgresStudioStateStore:
                 )
                 row = cursor.fetchone()
                 if row is None:
-                    connection.rollback()
+                    discard_connection = not self._rollback_connection_quietly(
+                        connection,
+                        operation="mutate generation missing row",
+                    )
+                    release_quietly = True
                     return None
                 current_job = GenerationJob.model_validate(_normalize_loaded_payload(row[0]))
                 updated_job = current_job.model_copy(deep=True)
                 if not callback(updated_job):
-                    connection.rollback()
+                    discard_connection = not self._rollback_connection_quietly(
+                        connection,
+                        operation="mutate generation skipped update",
+                    )
+                    release_quietly = True
                     return None
                 cursor.execute(
                     f"""
@@ -1298,10 +1374,21 @@ class PostgresStudioStateStore:
             connection.commit()
             return updated_job
         except Exception:
-            connection.rollback()
+            discard_connection = not self._rollback_connection_quietly(
+                connection,
+                operation="mutate generation",
+            )
+            release_quietly = True
             raise
         finally:
-            self._release_connection(connection)
+            if release_quietly:
+                self._release_connection_quietly(
+                    connection,
+                    discard=discard_connection,
+                    operation="mutate generation cleanup",
+                )
+            else:
+                self._release_connection(connection, discard=discard_connection)
 
     def _serialize_state_rows(self, state: StudioState) -> list[tuple[str, str, str]]:
         payload = state.model_dump(mode="json")

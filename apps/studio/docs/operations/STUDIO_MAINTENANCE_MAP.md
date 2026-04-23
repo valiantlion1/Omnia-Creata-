@@ -1,6 +1,6 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-22
+Last updated: 2026-04-23
 
 ## Current baseline
 
@@ -12,12 +12,33 @@ Last updated: 2026-04-22
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.22.198`. This follow-up keeps the `.197` local proof fallback, but removes the biggest remaining honesty gap: protected Studio routes can now be verified in a fresh signed-in browser session instead of only as guest redirects.
-- Current proof on `.198` is stronger and genuinely route-matrix based. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, `guest-core` passes on desktop and mobile, `auth-core` passes on desktop and mobile, `auth-library` passes on mobile, and `auth-full` passes on desktop with a seeded real project-detail route. Fresh manifest-backed artifacts live under `apps/studio/web/output/playwright/studio-proof/`, so both guest and signed-in route truth now have current browser evidence in this lane.
+- Current implementation build is `2026.04.23.205`. The frontend route-proof matrix from `.198` stays intact, `.199` still holds the fail-closed launch-runtime rule, `.200` still centralizes the top-level topology contract, `.201` still keeps broker fallback truth under that shared runtime contract, `.202` still carries authenticated identity through request-scoped context, `.203` still pushes that context into runtime logging, `.204` still hardens rollback-side Postgres cleanup, and the newest backend follow-up now prevents connection-release cleanup from masking the original database failure.
+- Current backend truth on `.205` is even calmer under bad database conditions. When the store is already failing, a second problem while returning the connection to the pool is now logged without replacing the main error, which keeps incident debugging much more honest.
 - The backend hardening stack from `.171` through `.184` remains underneath the current build, `.185` remains the broader Create / Library / Projects contract pass, `.186` is the empty-state/layout honesty follow-up, `.187` is the motion plus failure-language refinement, `.188` is the draft/session-preview consistency and layout-protection fix, `.189` is the Projects composition/detail cleanup, `.190` is the tighter Projects index proportion/copy cleanup, `.191` is the project-detail de-verbosity pass, `.192` is the stale-project recovery pass, `.193` is the shell/library language-plus-density cleanup, `.194` is the lazy-chunk recovery plus subscription-language consistency pass, `.195` is the prod-safe error-surface and source-map hardening pass, `.196` is the tighter mobile library proportion and project-utility pass, `.197` is the local browser-proof fallback and Windows shell-hardening pass, and `.198` is the signed-in proof bridge plus full route-matrix verification pass on top of that foundation.
 - Studio's moderation contract from `.168`, provider-truth readability from `.169`, runtime-topology clarity from `.170`, backend hardening from `.171`, shell/explore polish from `.172`, local-host discipline from `.173`, the `.174` atomic session plus schema-versioning work, the `.175` runtime-aware durable-store pool budgeting, the `.176` stricter startup pool-budget truth, the `.177` secret/log/token hardening, the `.178` scoped public-surface reads, the `.179` public-route throttles, the `.180` targeted generation-status counts, the `.181` row-level generation hot writes, the `.182` reserve/spend/release audit truth, the `.183` paused-subscription state truth, and the `.184` refund-policy assessment all remain active. `.185` is the corresponding frontend IA and workspace wave on top of that stack.
 
 ## Recent stabilization wins
+
+- `.205` removes one more ugly failure-masking edge from Studio backend. A connection-return problem can no longer steal the spotlight from the real Postgres error that started the failure.
+- The same wave also makes database incidents easier to read. Cleanup trouble is still visible in logs, but it now stays secondary instead of rewriting the main failure story.
+
+- `.204` removes one more nasty debug trap from Studio backend. When a Postgres operation fails, a second cleanup failure no longer hides the real problem behind a misleading rollback exception.
+- The same wave also protects later requests. Connections that cannot cleanly roll back are now treated as broken and dropped instead of being recycled back into the pool.
+
+- `.203` removes one more quiet maintenance footgun from Studio backend. Request and signed-in identity context no longer depend on each log call site remembering to pass them manually.
+- The same wave also keeps the logging surface calm. Background logs stay uncluttered when there is no active request, while request-bound logs automatically carry the useful trace fields.
+
+- `.202` removes one more easy-to-miss observability gap from Studio backend. Signed-in request handling no longer depends on downstream code remembering to pass user identity around just to keep logs or follow-on checks honest.
+- The same wave also makes future backend maintenance safer. Request and identity context are now explicitly reset in tests and unauthenticated requests, which lowers the chance of subtle cross-request or cross-test identity leakage.
+
+- `.201` removes one more subtle split-brain risk from Studio's backend. Broker fallback and readiness truth are no longer hand-assembled from repeated string checks in multiple places.
+- The same wave also makes operator/runtime reporting more trustworthy. Service boot, readiness, health, and owner truth now classify broker state with the same shared rules, so future backend changes are less likely to create contradictory degraded-vs-advisory answers.
+
+- `.200` removes one more easy future-regression path from Studio. Runtime topology is no longer a set of duplicated checks that can silently drift apart after later backend updates.
+- The same wave also hardens backend maintainability. Tests now automatically put global settings and runtime state back where they found them, so one new test is less likely to poison the next one.
+
+- `.199` removes one more dangerous “it technically boots” path from Studio. Staging and production can no longer come up in all-in-one generation mode and quietly pretend that a warning is enough.
+- The same wave also lines up the operator story. Startup rules, owner health, and launch readiness now say the same thing about runtime topology, and the backend spine file is back under its guardrail instead of growing unchecked.
 
 - `.198` removes the biggest remaining gap between local proof and real user behavior. Studio can now verify protected routes with a real demo-authenticated browser session instead of pretending guest redirects are enough evidence for signed-in pages.
 - The same wave also closes the concrete auth blocker that surfaced during proof. Demo login was generating `@omnia.local` addresses, which the backend correctly rejected as reserved-domain emails; local proof now uses a valid demo email format and can seed a real project detail route inside the full bundle.

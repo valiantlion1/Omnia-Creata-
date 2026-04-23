@@ -257,6 +257,43 @@ def test_build_runtime_topology_summary_marks_local_all_in_one_as_alpha_ready_bu
     assert any("split web/worker" in item.lower() for item in summary["action_items"])
 
 
+def test_build_runtime_topology_summary_marks_non_dev_all_in_one_as_launch_blocked() -> None:
+    settings = get_settings()
+    original_environment = settings.environment
+    settings.environment = owner_health_ops.Environment.STAGING
+    launch_readiness = {
+        "checks": [
+            {
+                "key": "runtime_topology",
+                "status": "blocked",
+                "summary": "Generation runtime is still configured as all-in-one outside local development.",
+                "detail": "All-in-one mode is development-only; staging and production must run split web/worker topology with a shared broker.",
+            }
+        ],
+        "launch_gate": {"ready_for_protected_launch": False},
+        "platform_readiness": {"current_stage": "protected_beta", "next_stage": "public_paid_platform"},
+    }
+
+    try:
+        summary = build_runtime_topology_summary(
+            settings=settings,
+            generation_runtime_mode="all",
+            generation_broker_payload={"enabled": False, "configured": False, "advisory": False, "degraded": False},
+            launch_readiness=launch_readiness,
+        )
+    finally:
+        settings.environment = original_environment
+
+    assert summary["status"] == "blocked"
+    assert summary["mode"] == "all"
+    assert summary["topology_class"] == "all_in_one"
+    assert summary["generation_delivery_mode"] == "local_all_in_one"
+    assert summary["operator_posture"] == "launch_blocked"
+    assert summary["shared_broker_required"] is True
+    assert summary["topology_ready_for_protected_launch"] is False
+    assert any("staging or production startup" in item.lower() for item in summary["action_items"])
+
+
 def test_build_runtime_topology_summary_marks_split_broker_as_launch_shaped() -> None:
     settings = get_settings()
     launch_readiness = {
@@ -411,7 +448,8 @@ def test_studio_service_remains_under_backend_spine_size_target() -> None:
 
 def test_studio_service_delegates_shell_bootstrap_and_model_catalog() -> None:
     service_path = Path(__file__).resolve().parents[1] / "studio_platform" / "service.py"
-    source = service_path.read_text(encoding="utf-8")
+    delegates_path = Path(__file__).resolve().parents[1] / "studio_platform" / "service_delegates.py"
+    source = service_path.read_text(encoding="utf-8") + delegates_path.read_text(encoding="utf-8")
 
     assert "return await self.shell.get_settings_payload(identity_id, current_session_id=current_session_id)" in source
     assert "return await self.shell.list_models_for_identity(identity)" in source

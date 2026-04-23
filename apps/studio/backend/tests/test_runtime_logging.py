@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from config.env import Environment, Settings, reveal_secret_with_audit
-from runtime_logging import RedactingLogFilter, configure_runtime_logging
+from observability.context import bind_identity_id, bind_request_id
+from runtime_logging import RedactingLogFilter, RequestContextLogFilter, configure_runtime_logging
 
 
 def test_settings_runtime_root_prefers_localappdata(monkeypatch):
@@ -58,6 +59,10 @@ def test_runtime_logging_creates_external_log_directory(tmp_path):
         any(isinstance(log_filter, RedactingLogFilter) for log_filter in handler.filters)
         for handler in logging.getLogger().handlers
     )
+    assert any(
+        any(isinstance(log_filter, RequestContextLogFilter) for log_filter in handler.filters)
+        for handler in logging.getLogger().handlers
+    )
 
 
 def test_redacting_log_filter_masks_secret_like_message_content():
@@ -97,6 +102,46 @@ def test_redacting_log_filter_masks_secret_like_extra_fields():
     assert "sk-or-v1-secret-token-1234567890" not in record.token_preview
     assert "***REDACTED***" in record.details["authorization"]
     assert "super-secret-value-1234567890" not in record.details["query"]
+
+
+def test_request_context_log_filter_appends_bound_request_and_identity_ids():
+    bind_request_id("req-123")
+    bind_identity_id("user-456")
+    record = logging.LogRecord(
+        name="omnia.test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="runtime event",
+        args=(),
+        exc_info=None,
+    )
+
+    assert RequestContextLogFilter().filter(record) is True
+    assert record.request_id == "req-123"
+    assert record.identity_id == "user-456"
+    assert record.context_suffix == " | request_id=req-123 identity_id=user-456"
+
+
+def test_request_context_log_filter_respects_explicit_record_context():
+    bind_request_id("req-context")
+    bind_identity_id("user-context")
+    record = logging.LogRecord(
+        name="omnia.test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="runtime event",
+        args=(),
+        exc_info=None,
+    )
+    record.request_id = "req-explicit"
+    record.identity_id = "user-explicit"
+
+    assert RequestContextLogFilter().filter(record) is True
+    assert record.request_id == "req-explicit"
+    assert record.identity_id == "user-explicit"
+    assert record.context_suffix == " | request_id=req-explicit identity_id=user-explicit"
 
 
 def test_settings_enable_demo_auth_defaults_to_development_only():
@@ -141,6 +186,7 @@ def test_validate_production_requirements_requires_launch_shaped_runtime_values(
         _env_file=None,
         jwt_secret="x" * 32,
         environment=Environment.STAGING,
+        generation_runtime_mode="web",
         database_url="postgresql://user:pass@db.example.com:5432/studio",
         supabase_url="https://example.supabase.co",
         supabase_anon_key="anon-key",
@@ -161,6 +207,7 @@ def test_validate_production_requirements_requires_launch_shaped_runtime_values(
         ({"supabase_anon_key": None}, "supabase_anon_key"),
         ({"redis_url": None}, "redis_url"),
         ({"asset_storage_backend": "local"}, "ASSET_STORAGE_BACKEND"),
+        ({"generation_runtime_mode": "all"}, "GENERATION_RUNTIME_MODE"),
         ({"public_web_base_url": "http://localhost:5173"}, "PUBLIC_WEB_BASE_URL"),
         ({"public_api_base_url": "http://127.0.0.1:8000"}, "PUBLIC_API_BASE_URL"),
         ({"enable_demo_auth": True}, "ENABLE_DEMO_AUTH"),
@@ -174,6 +221,7 @@ def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides,
         "_env_file": None,
         "jwt_secret": "x" * 32,
         "environment": Environment.STAGING,
+        "generation_runtime_mode": "web",
         "database_url": "postgresql://user:pass@db.example.com:5432/studio",
         "supabase_url": "https://example.supabase.co",
         "supabase_anon_key": "anon-key",
@@ -197,6 +245,7 @@ def test_validate_runtime_accepts_launch_shaped_runtime_values():
         _env_file=None,
         jwt_secret="x" * 32,
         environment=Environment.STAGING,
+        generation_runtime_mode="web",
         database_url="postgresql://user:pass@db.example.com:5432/studio",
         supabase_url="https://example.supabase.co",
         supabase_anon_key="anon-key",
@@ -268,6 +317,27 @@ def test_validate_runtime_warns_when_split_web_runtime_uses_default_postgres_poo
         "POSTGRES_STATE_STORE_WEB_MIN_CONNECTIONS/POSTGRES_STATE_STORE_WEB_MAX_CONNECTIONS" in warning
         for warning in warnings
     )
+
+
+def test_validate_runtime_rejects_all_in_one_runtime_outside_development():
+    settings = Settings(
+        _env_file=None,
+        jwt_secret="x" * 32,
+        environment=Environment.STAGING,
+        generation_runtime_mode="all",
+        database_url="postgresql://user:pass@db.example.com:5432/studio",
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="anon-key",
+        supabase_service_role_key="x" * 32,
+        redis_url="redis://cache.example.com:6379/0",
+        state_store_backend="postgres",
+        asset_storage_backend="supabase",
+        public_web_base_url="https://studio.example.com",
+        public_api_base_url="https://api.example.com",
+    )
+
+    with pytest.raises(ValueError, match="GENERATION_RUNTIME_MODE"):
+        settings.validate_runtime()
 
 
 def test_validate_runtime_rejects_invalid_runtime_specific_postgres_pool_budget():

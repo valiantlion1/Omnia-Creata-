@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
 from config.env import Environment, get_settings, reveal_secret_with_audit
+from config.runtime_topology import generation_broker_ready_for_runtime
 from security.auth import (
     User,
     UserRole,
@@ -803,13 +804,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         store_ready = not (
             isinstance(store_breaker, dict) and str(store_breaker.get("state")) == "open"
         )
-        broker_required = service._requires_strict_shared_generation_broker()
-        broker_ready = True
-        if broker_required:
-            broker_ready = (
-                service.generation_broker is not None
-                and service._generation_broker_degraded_reason is None
-            )
+        broker_ready = generation_broker_ready_for_runtime(
+            service.settings.environment,
+            service._generation_runtime_mode,
+            broker_enabled=service.generation_broker is not None,
+            degraded_reason=service._generation_broker_degraded_reason,
+        )
         ready = service_started and limiter_ready and store_ready and broker_ready
         return {
             "status": "ready" if ready else "not_ready",

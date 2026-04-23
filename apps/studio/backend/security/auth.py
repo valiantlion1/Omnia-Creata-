@@ -12,6 +12,7 @@ import secrets
 import time
 from enum import Enum
 from config.env import get_settings, reveal_secret_with_audit
+from observability.context import bind_identity_id
 from .supabase_auth import SupabaseAuthClient, SupabaseAuthError
 
 logger = logging.getLogger(__name__)
@@ -517,6 +518,12 @@ def _get_studio_service_from_request(request: Request):
     return getattr(state, "studio_service", None)
 
 
+def _bind_authenticated_identity_context(request: Request, identity_id: str) -> None:
+    normalized_identity_id = str(identity_id or "").strip()
+    bind_identity_id(normalized_identity_id)
+    request.state.identity_id = normalized_identity_id
+
+
 async def _enforce_persistent_session(
     request: Request,
     *,
@@ -612,6 +619,7 @@ async def get_current_user(
                 identity_id=payload["id"],
                 session_metadata=metadata,
             )
+            _bind_authenticated_identity_context(request, payload["id"])
             return User(
                 id=payload["id"],
                 email=email,
@@ -645,6 +653,7 @@ async def get_current_user(
             identity_id=payload["sub"],
             session_metadata=metadata,
         )
+        _bind_authenticated_identity_context(request, payload["sub"])
 
         return User(
             id=payload["sub"],

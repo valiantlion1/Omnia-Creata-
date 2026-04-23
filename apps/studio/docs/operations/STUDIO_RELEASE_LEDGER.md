@@ -18,6 +18,76 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.23.205`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.204` fixed rollback-side masking in the Postgres store, but one close cousin remained. If the store hit a real database error and then failed while returning the connection to the pool, that second cleanup problem could still overshadow the original reason the operation failed.
+- What:
+  `.205` closes that second cleanup gap. Error paths in the Postgres store now release connections quietly when the code is already unwinding from a real failure, so the original exception stays visible and the extra pool-return problem is logged as supporting evidence instead of becoming the main story. This keeps the storage spine more truthful in bad conditions and makes future database incidents easier to diagnose without turning one fault into a confusing stack of misleading follow-up errors.
+  Verification on `.205` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_store.py -q` passes (`26 passed`), `pytest apps/studio/backend/tests/test_service_regressions.py -q -k "generation_broker or fallback or shared_broker or runtime_mode_starts_maintenance"` passes (`15 passed`), `pytest apps/studio/backend/tests -q` passes (`664 passed`), and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.204`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.203` improved request-aware backend logging, but the durable Postgres store still had one ugly failure mode. If a query or write failed and the follow-up rollback also failed, the cleanup problem could hide the original database error and make debugging much more confusing than it should be.
+- What:
+  `.204` hardens that core store behavior. The Postgres store now uses one quiet rollback helper for its main load/write/mutate paths so the original failure stays visible even if rollback also breaks, and connections that cannot roll back cleanly are discarded instead of being handed back to the pool as if nothing happened. That keeps the storage spine more honest under bad runtime conditions and reduces the chance that a poisoned connection leaks back into later requests.
+  Verification on `.204` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_store.py -q` passes (`24 passed`), `pytest apps/studio/backend/tests/test_service_regressions.py -q -k "generation_broker or fallback or shared_broker or runtime_mode_starts_maintenance"` passes (`15 passed`), `pytest apps/studio/backend/tests -q` passes (`662 passed`), and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.203`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.202` started carrying authenticated identity through request-scoped context, but the logging layer still mostly relied on individual call sites to remember passing that context manually. That meant the backend had the truth, but not every runtime log would automatically benefit from it.
+- What:
+  `.203` finishes that follow-through at the logging boundary. Runtime log handlers now attach a shared context filter that automatically carries `request_id` and `identity_id` from the current async request context into emitted log lines, while still respecting explicit per-record values when a caller sets them on purpose. The log format stays compact when no request context exists, so background startup/shutdown logs do not become noisy, but signed-in request handling now leaves a clearer backend trace without every service needing to re-plumb the same metadata by hand.
+  Verification on `.203` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_runtime_logging.py -q` passes (`27 passed`), `pytest apps/studio/backend/tests/test_router_security.py -q -k "get_current_user or auth_me"` passes (`8 passed`), `pytest apps/studio/backend/tests/test_main_security_headers.py -q` passes (`24 passed`), `pytest apps/studio/backend/tests -q` passes (`660 passed`), and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.202`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.201` made broker/runtime truth more modular, but one observability seam was still only half-finished. Studio already bound `request_id` through async context, yet the authenticated identity still depended on whatever individual call sites remembered to pass around, which makes later logging, auditing, and maintenance harder than it needs to be.
+- What:
+  `.202` finishes that backend-only observability follow-through. Successful auth resolution now binds the authenticated identity into the shared request context and mirrors it onto `request.state`, while the request middleware explicitly clears identity context for unauthenticated requests and test setup now resets both request and identity context between tests so direct auth/unit paths cannot leak user identity across runs. The result is a cleaner backend spine for future hardening waves: request-scoped truth now carries both "which request was this" and "which signed-in user was this" without requiring each downstream service call to remember another manual argument.
+  Verification on `.202` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_router_security.py -q -k "get_current_user or auth_me"` passes (`8 passed`), `pytest apps/studio/backend/tests/test_main_security_headers.py -q` passes (`24 passed`), `pytest apps/studio/backend/tests -q` passes (`658 passed`), and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.201`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.200` centralized the top-level runtime topology rule, but broker fallback meaning was still too string-driven. The same backend could still describe broker state, readiness, advisory fallback, and topology class through repeated one-off checks, which is exactly the kind of small drift that shows up later as contradictory health or launch truth.
+- What:
+  `.201` turns broker fallback truth into shared backend infrastructure too. `config/runtime_topology.py` now owns the canonical broker detail codes, advisory fallback reasons, broker-readiness rule, and runtime topology-class resolution used by service boot, readiness probes, health payloads, and owner-health runtime summaries. `StudioService` now writes shared degraded-reason constants instead of raw string literals, router readiness follows the same broker-ready contract, owner health builds broker payloads from one helper instead of hand-assembling them, and regression tests now lock that contract directly so later backend changes are less likely to create subtle split-brain runtime reporting.
+  Verification on `.201` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_runtime_topology.py -q` passes (`7 passed`), `pytest apps/studio/backend/tests/test_service_regressions.py -q -k "generation_broker or fallback or shared_broker or runtime_mode_starts_maintenance"` passes (`15 passed`), `pytest apps/studio/backend/tests/test_backend_spine_ops.py -q` passes (`18 passed`), `pytest apps/studio/backend/tests/test_launch_readiness.py -q` passes (`26 passed`), `pytest apps/studio/backend/tests/test_main_security_headers.py -q` passes (`24 passed`), `pytest apps/studio/backend/tests -q` passes (`655 passed`), and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.200`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.199` made the launch runtime stricter, but the same topology rule still lived in too many places. Startup validation, service boot, launch readiness, and owner health were aligned today, yet the contract was still duplicated enough that a future update could easily make one surface drift again or reintroduce order-dependent test failures.
+- What:
+  `.200` turns that launch-runtime rule into shared backend infrastructure. A new `config/runtime_topology.py` now owns the normalized runtime-mode helpers, launch-environment checks, shared-broker requirements, and the canonical runtime-topology status text used by validation, service boot, readiness reporting, and owner-health fallback logic. The same wave also adds a global backend test restore fixture so mutable `settings` and `main.service` runtime state are automatically reset after each test, which makes backend hardening safer to extend without hidden cross-test leakage. A small dedicated runtime-topology test file now protects the shared contract directly.
+  Verification on `.200` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_runtime_topology.py -q` passes (`4 passed`), `pytest apps/studio/backend/tests/test_launch_readiness.py -q` passes (`26 passed`), `pytest apps/studio/backend/tests/test_backend_spine_ops.py -q` passes (`18 passed`), `pytest apps/studio/backend/tests/test_main_security_headers.py -q` passes (`24 passed`), `pytest apps/studio/backend/tests/test_service_regressions.py -q` passes (`90 passed`), `pytest apps/studio/backend/tests -q` passes, and `python -m compileall apps/studio/backend` passes.
+
+### `0.6.0-alpha` / build `2026.04.23.199`
+- Date: `2026-04-23`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.198` strengthened local signed-in route proof, but one backend launch contract was still too soft. In staging or production, Studio could still boot generation in `all` mode, which meant an unsafe one-process topology could survive as a warning instead of being rejected before traffic hit it.
+- What:
+  `.199` closes that gap with a real fail-closed backend rule. `GENERATION_RUNTIME_MODE=all` is now treated as development-only in startup validation, production-requirements validation, runtime launch-readiness reporting, and live `StudioService.initialize()` boot logic. The same wave also keeps operator truth aligned instead of contradictory: owner-health runtime topology now marks non-development all-in-one mode as launch-blocked, and the one-line delegation tail in `service.py` was moved into `studio_platform/service_delegates.py` so the backend spine stays under its size guardrail while preserving behavior.
+  Verification on `.199` is backend-focused. From repo root, `pytest apps/studio/backend/tests/test_runtime_logging.py -q` passes (`25 passed`), `pytest apps/studio/backend/tests/test_backend_spine_ops.py -q` passes (`18 passed`), `pytest apps/studio/backend/tests/test_launch_readiness.py -q` passes (`26 passed`), `pytest apps/studio/backend/tests/test_deployment_preflight.py -q` passes (`6 passed`), `pytest apps/studio/backend/tests/test_service_regressions.py -q` passes (`90 passed`), and `python -m compileall apps/studio/backend` passes.
+
 ### `0.6.0-alpha` / build `2026.04.22.198`
 - Date: `2026-04-22`
 - Codename: `Foundation`

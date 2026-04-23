@@ -44,7 +44,7 @@ Studio generation now supports three explicit runtime modes:
   - keep `REDIS_URL` configured
   - treat `all` mode as development-only convenience
 
-In local development, `REDIS_URL` can still be optional and `all` mode can fall back to the local dispatcher. Outside development, split `web` / `worker` runtime is now fail-closed: if the shared Redis broker is missing or unavailable, startup should stop instead of silently degrading onto local queue behavior. Inspect `/v1/healthz` to confirm whether the shared broker is active.
+In local development, `REDIS_URL` can still be optional and `all` mode can fall back to the local dispatcher. Outside development, `all` mode is rejected at startup and split `web` / `worker` runtime is fail-closed: if the shared Redis broker is missing or unavailable, startup should stop instead of silently degrading onto local queue behavior. Inspect `/v1/healthz` to confirm whether the shared broker is active.
 Broker/state reconciliation also runs during generation maintenance, so terminal, missing, or duplicate running jobs that reappear in the broker are discarded instead of being processed twice.
 `GENERATION_CLAIM_LEASE_SECONDS` controls how long a worker claim remains valid before recovery logic can recycle the job. Keep it comfortably above `GENERATION_MAINTENANCE_INTERVAL_SECONDS`; Studio normalizes unsafe values automatically.
 When a worker task is cancelled during shutdown or crash-like interruption, Studio intentionally keeps the shared broker claim alive until it goes stale, so another worker can recover it through normal stale-claim recycling instead of treating it as successfully completed.

@@ -10,6 +10,13 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator, model_validator, SecretStr
 from pydantic_settings import BaseSettings
 
+from .runtime_topology import (
+    GENERATION_RUNTIME_MODE_SPLIT_REQUIRED_PRODUCTION_ERROR,
+    GENERATION_RUNTIME_MODE_SPLIT_REQUIRED_RUNTIME_ERROR,
+    non_dev_all_in_one_runtime_forbidden,
+    normalize_generation_runtime_mode,
+)
+
 # Always resolve .env relative to unified root (apps/studio/.env), regardless of cwd
 _BACKEND_DIR = Path(__file__).parent.parent
 _STUDIO_ROOT = _BACKEND_DIR.parent
@@ -663,6 +670,7 @@ class Settings(BaseSettings):
     def validate_production_requirements(self):
         """Validate that required settings are present in production."""
         if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
+            runtime_mode = normalize_generation_runtime_mode(self.generation_runtime_mode)
             required_secret_fields = [
                 ("database_url", self.database_url),
                 ("supabase_anon_key", self.supabase_anon_key),
@@ -696,6 +704,8 @@ class Settings(BaseSettings):
                 raise ValueError("STATE_STORE_BACKEND must be set to 'postgres' in staging and production environments")
             if self.asset_storage_backend != "supabase":
                 raise ValueError("ASSET_STORAGE_BACKEND must be set to 'supabase' in staging and production environments")
+            if non_dev_all_in_one_runtime_forbidden(self.environment, runtime_mode):
+                raise ValueError(GENERATION_RUNTIME_MODE_SPLIT_REQUIRED_PRODUCTION_ERROR)
             if self.enable_demo_auth:
                 raise ValueError("ENABLE_DEMO_AUTH must be disabled in staging and production environments")
             if self.enable_demo_generation_fallback:
@@ -717,7 +727,7 @@ class Settings(BaseSettings):
         """Validate startup-critical runtime settings and return soft warnings."""
         issues: list[str] = []
         warnings: list[str] = []
-        runtime_mode = str(self.generation_runtime_mode or "all").strip().lower() or "all"
+        runtime_mode = normalize_generation_runtime_mode(self.generation_runtime_mode)
 
         if self.environment in {Environment.STAGING, Environment.PRODUCTION}:
             if not has_configured_string(self.redis_url):
@@ -728,6 +738,8 @@ class Settings(BaseSettings):
                 issues.append("JWT_SECRET must be configured in staging/production")
             elif is_known_development_secret_value(self.jwt_secret):
                 issues.append("JWT_SECRET must not use the known development fallback value in staging/production")
+            if non_dev_all_in_one_runtime_forbidden(self.environment, runtime_mode):
+                issues.append(GENERATION_RUNTIME_MODE_SPLIT_REQUIRED_RUNTIME_ERROR)
 
         if self.environment == Environment.PRODUCTION and not self.cors_origins_list:
             issues.append("CORS_ORIGINS must not be empty in production")
