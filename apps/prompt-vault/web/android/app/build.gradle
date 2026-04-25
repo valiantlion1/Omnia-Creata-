@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.omniacreata.vault"
+    namespace = "com.omniacreata.omniaprompt"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.omniacreata.vault"
+        applicationId "com.omniacreata.omniaprompt"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

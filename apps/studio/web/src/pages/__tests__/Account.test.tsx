@@ -45,6 +45,7 @@ const mockState = vi.hoisted(() => {
         plan: 'pro',
         default_visibility: 'public',
         featured_asset_id: null,
+        featured_asset_position: 'center',
         usage_summary: {
           plan_label: 'Pro',
           credits_remaining: 240,
@@ -100,6 +101,7 @@ const mockState = vi.hoisted(() => {
         plan: 'pro',
         default_visibility: 'public',
         featured_asset_id: 'asset-1',
+        featured_asset_position: 'bottom',
         usage_summary: {
           plan_label: 'Pro',
           credits_remaining: 240,
@@ -181,10 +183,12 @@ describe('AccountPage', () => {
     renderWithProviders(<AccountPage />, { route: '/account' })
 
     await userEvent.click(await screen.findByRole('button', { name: /choose artwork/i }))
-    await userEvent.click(screen.getByRole('button', { name: /set golden portrait as profile artwork/i }))
+    await userEvent.click(screen.getByRole('button', { name: /preview golden portrait as profile artwork/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^bottom$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apply artwork/i }))
 
     await waitFor(() => {
-      expect(mockState.updateMyProfile).toHaveBeenCalledWith({ featured_asset_id: 'asset-2' })
+      expect(mockState.updateMyProfile).toHaveBeenCalledWith({ featured_asset_id: 'asset-2', featured_asset_position: 'bottom' })
     })
   })
 

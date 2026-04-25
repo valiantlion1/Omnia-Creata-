@@ -28,6 +28,12 @@ export async function MarketingHeader({ locale }: { locale: Locale }) {
           </a>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={localizeHref(locale, "/help")}
+            className="hidden text-sm font-medium text-[var(--text-secondary)] transition hover:text-[var(--text-primary)] lg:inline-flex"
+          >
+            {translate(locale, "common.help")}
+          </Link>
           <div className="hidden items-center gap-2 md:flex">
             <ThemeSwitcher />
             <LanguageSwitcher />

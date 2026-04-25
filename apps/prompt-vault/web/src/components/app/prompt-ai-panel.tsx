@@ -191,11 +191,11 @@ export function PromptAIPanel({
   if (!runtime.enableAI) {
     return (
       <Surface className="space-y-5 p-5">
-        <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(212,167,91,0.15),rgba(255,255,255,0.02))] p-4 shadow-[var(--shadow-panel)]">
+        <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,var(--accent-soft),var(--surface))] p-4 shadow-[var(--shadow-soft)]">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--accent-soft)] bg-[var(--accent-soft)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]">
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
@@ -217,11 +217,11 @@ export function PromptAIPanel({
 
   return (
     <Surface className="space-y-5 p-5">
-      <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,rgba(212,167,91,0.15),rgba(255,255,255,0.02))] p-4 shadow-[var(--shadow-panel)]">
+      <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(135deg,var(--accent-soft),var(--surface))] p-4 shadow-[var(--shadow-soft)]">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:rgba(212,167,91,0.18)] bg-[var(--accent-soft)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--accent-soft)] bg-[var(--accent-soft)] text-[var(--accent-strong)] shadow-[var(--shadow-glow)]">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
@@ -268,20 +268,20 @@ export function PromptAIPanel({
 
           <div className="space-y-3">
             {suggestions.length === 0 ? (
-              <div className="rounded-[26px] border border-dashed border-[var(--border-strong)] bg-[color:rgba(255,255,255,0.02)] px-4 py-5 text-sm leading-7 text-[var(--text-secondary)]">
+              <div className="rounded-[26px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)] px-4 py-5 text-sm leading-7 text-[var(--text-secondary)]">
                 {t("app.aiEmptyState")}
               </div>
             ) : (
               suggestions.map((suggestion) => (
                 <div
                   key={suggestion.id}
-                  className="rounded-[26px] border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-4 shadow-[var(--shadow-panel)]"
+                  className="rounded-[26px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-soft)]"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-[var(--text-primary)]">
                       {labelForAction(suggestion.action, t)}
                     </div>
-                    <Badge>{suggestion.provider}</Badge>
+                    <Badge>{t("app.aiLiveLabel")}</Badge>
                   </div>
                   <div className="mt-3">{renderSuggestionBody(suggestion, locale, t)}</div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -396,7 +396,7 @@ function renderSuggestionBody(
             payload.possibleDuplicates.map((match) => (
               <div
                 key={match.promptId}
-                className="rounded-2xl border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-3"
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <Link
@@ -421,7 +421,7 @@ function renderSuggestionBody(
             payload.relatedPrompts.map((match) => (
               <div
                 key={match.promptId}
-                className="rounded-2xl border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-3"
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <Link
@@ -451,7 +451,7 @@ function renderSuggestionBody(
       ) : null}
       <pre
         className={cn(
-          "max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-[var(--border)] bg-[color:rgba(255,255,255,0.02)] p-3 font-mono text-xs leading-6 text-[var(--text-primary)]"
+          "max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 font-mono text-xs leading-6 text-[var(--text-primary)]"
         )}
       >
         {payload.body}

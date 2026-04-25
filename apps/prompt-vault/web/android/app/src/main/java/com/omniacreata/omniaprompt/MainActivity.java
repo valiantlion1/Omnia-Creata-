@@ -1,4 +1,4 @@
-package com.omniacreata.vault;
+package com.omniacreata.omniaprompt;
 
 import com.getcapacitor.BridgeActivity;
 

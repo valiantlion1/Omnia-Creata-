@@ -1,4 +1,4 @@
-﻿import type { Locale } from "@prompt-vault/types";
+import type { Locale } from "@prompt-vault/types";
 
 export type MessageValue = string | MessageDictionary | string[] | Array<Record<string, string>>;
 
@@ -8,9 +8,9 @@ export interface MessageDictionary {
 
 const en = {
   common: {
-    productName: "Nolra",
+    productName: "OmniaPrompt",
     productTagline: "Capture, organize, and revisit ideas without the clutter.",
-    parentBrand: "Omnia Creata",
+    parentBrand: "OmniaCreata",
     app: "App",
     dashboard: "Home",
     home: "Home",
@@ -24,11 +24,12 @@ const en = {
     search: "Search",
     pricing: "Pricing",
     faq: "FAQ",
+    help: "Help",
     features: "Features",
     howItWorks: "How It Works",
     signIn: "Sign in",
     signUp: "Create account",
-    launchApp: "Open beta",
+    launchApp: "Open app",
     getStarted: "Get started",
     viewPricing: "View pricing",
     language: "Language",
@@ -47,8 +48,8 @@ const en = {
     workflow: "Workflow",
     template: "Template",
     offlineReady: "Offline-ready",
-    previewMode: "Preview mode",
-    authReady: "Auth ready",
+    previewMode: "Local mode",
+    authReady: "Account ready",
     working: "Working...",
     saving: "Saving...",
     somethingWentWrong: "Something went wrong."
@@ -57,65 +58,65 @@ const en = {
     heroEyebrow: "A serious prompt operating system for AI creators",
     heroTitle: "Your personal AI prompt library, built for real work.",
     heroDescription:
-      "Nolra gives teams and solo creators a premium place to save entries, reusable instructions, and evolving ideas across devices without losing structure.",
-    heroPrimaryCta: "Start building your Nolra",
+      "OmniaPrompt gives teams and solo creators a premium place to save entries, reusable instructions, and evolving ideas across devices without losing structure.",
+    heroPrimaryCta: "Start building your OmniaPrompt",
     heroSecondaryCta: "Explore the product",
     proofTitle: "Built for the way modern AI users actually work",
     proofItems: [
       "Version prompts instead of overwriting them.",
       "Organize by projects, categories, tags, and models.",
       "Search across title, content, tags, and usage context.",
-      "Keep a mobile-ready Nolra that feels like an app."
+      "Keep a mobile-ready OmniaPrompt that feels like an app."
     ],
     featureTitle: "A structured idea system, not another notes app",
     workflowTitle: "From scattered chats to a usable system",
     pricingTitle: "Pricing designed for individual creators and growing teams",
     faqTitle: "Questions serious AI users ask before they commit",
-    entryEyebrow: "Nolra beta app",
-    entryTitle: "Open the real product workspace, while the main product site lives on Omnia Creata.",
+    entryEyebrow: "OmniaPrompt app",
+    entryTitle: "A quiet workspace for prompts, notes, and reusable ideas.",
     entryDescription:
-      "This app is the working surface for your library, editor, projects, AI assistance, and sync-ready Nolra flows.",
+      "Open your library, capture ideas, organize projects, and keep useful instructions close on every device.",
     entryHighlights: [
-      "Real dashboard, library, editor, and settings surfaces.",
-      "Auth-first app flow with PWA-ready behavior.",
-      "Same Nolra backend, separate from the main Omnia Creata site."
+      "Fast capture for prompts, notes, and project thinking.",
+      "A mobile-ready workspace that can also run in the browser.",
+      "Local-first use with optional account sync when available."
     ],
     entryCards: [
       {
-        title: "Working app shell",
-        description: "Dashboard, library, editor, projects, settings, and AI assist live here."
+        title: "Capture and return",
+        description: "Save the idea quickly, then come back when you are ready to refine it."
       },
       {
-        title: "Shared backend",
-        description: "Supabase auth, data, sync, and server-side AI routes stay inside the app stack."
+        title: "Organize lightly",
+        description: "Projects, tags, categories, and versions keep the library useful without turning it heavy."
       },
       {
-        title: "Main site stays separate",
-        description: "Product marketing, brand storytelling, and the wider Omnia Creata experience live on omniacreata.com."
+        title: "Keep your work portable",
+        description: "Export your library and keep a local workspace available when you need it."
       }
     ],
     entryProductLink: "View the product page",
     entryMainSiteLink: "Visit Omnia Creata",
     footerDescription:
-      "Nolra on this domain is the real application surface: open the beta, capture your work, and keep going across devices.",
-    footerProductLink: "Nolra product page",
+      "OmniaPrompt is a focused workspace for capturing, organizing, and reusing the prompts and ideas you want to keep.",
+    footerProductLink: "OmniaPrompt product page",
     footerMainSiteLink: "Omnia Creata main site"
   },
   auth: {
-    signInTitle: "Welcome back to your Nolra",
-    signUpTitle: "Create your Nolra account",
-    signInDescription: "Use secure email and password access with Supabase-backed session architecture.",
-    signUpDescription: "Start with a free personal Nolra, then grow into premium automation and sharing later.",
+    signInTitle: "Welcome back to your OmniaPrompt",
+    signUpTitle: "Create your OmniaPrompt account",
+    signInDescription: "Use email and password access when account sync is available.",
+    signUpDescription: "Start with a free personal OmniaPrompt, then grow into premium automation and sharing later.",
     email: "Email address",
     password: "Password",
     fullName: "Full name",
     rememberMe: "Keep me signed in",
     forgotPassword: "Forgot password?",
     continue: "Continue",
-    resetDescription: "Request a secure password reset email for your Nolra account.",
-    resetPreviewMessage: "Reset flow is ready for Supabase. Preview mode opened the app instead.",
-    previewEnterAppMessage: "Supabase is not configured yet, so preview mode opened the app shell.",
-    clientInitError: "Supabase client could not be created.",
+    resetDescription: "Request a secure password reset email for your OmniaPrompt account.",
+    resetPreviewMessage: "Password reset is not needed for local mode, so we opened your workspace.",
+    previewEnterAppMessage: "Account sync is not required to start, so we opened your local workspace.",
+    clientInitError: "Account service is not available right now.",
     signedInSuccess: "Signed in successfully.",
     checkEmailConfirm: "Check your email to confirm your account.",
     resetEmailSent: "Password reset email sent.",
@@ -123,7 +124,7 @@ const en = {
     emailPlaceholder: "name@omniacreata.com",
     passwordPlaceholder: "********",
     previewBanner:
-      "Supabase credentials are not configured yet, so auth screens are wired and ready while the app runs in preview mode."
+      "You can start without an account. Account sync will be offered only when it is available."
   },
   app: {
     dashboardTitle: "A calm mobile workspace for your ideas and active projects",
@@ -156,9 +157,9 @@ const en = {
     recentTitle: "Recent Activity",
     recentSubtitle: "Track updates, versions, and the entries you touched most recently.",
     settingsTitle: "Settings",
-    settingsSubtitle: "Control language, appearance, export behavior, and account readiness.",
+    settingsSubtitle: "Control language, appearance, exports, and workspace safety.",
     editorTitle: "Entry Editor",
-    editorSubtitle: "Refine writing, context, metadata, and reuse details in one place.",
+    editorSubtitle: "Refine writing, context, and reuse details in one place.",
     captureTitle: "Quick Capture",
     captureSubtitle: "Drop an idea fast now, shape it properly when you come back.",
     versionHistory: "Version history",
@@ -177,31 +178,31 @@ const en = {
     titleField: "Title",
     filters: "Filters",
     clearFilters: "Clear filters",
-    emptyStateTitle: "Your Nolra is ready for its first real entry",
+    emptyStateTitle: "Your OmniaPrompt is ready for its first real entry",
     emptyStateDescription:
       "Capture something, add light structure, and start building a system instead of another scattered note pile.",
     offlineDescription:
-      "Nolra keeps a resilient local cache and a lightweight sync queue so capture stays fast even when the connection does not.",
+      "OmniaPrompt keeps a resilient local cache and a lightweight sync queue so capture stays fast even when the connection does not.",
     exportJson: "Export JSON",
     exportMarkdown: "Export Markdown",
     exportTxt: "Export TXT",
-    syncStatusPreview: "Local storage",
+    syncStatusPreview: "Local workspace",
     syncStatusSupabase: "Cloud ready",
     syncLabel: "Sync",
-    vaultStatus: "Nolra status",
+    vaultStatus: "OmniaPrompt status",
     syncDescriptionPreview:
-      "Preview mode keeps your Nolra locally persistent and ready for secure cloud sync.",
-    syncDescriptionSupabase: "Supabase-backed authentication and sync are active across your Nolra.",
+      "Your workspace is saved on this device.",
+    syncDescriptionSupabase: "Cloud sync is active for this workspace.",
     dashboardSearchActionDescription: "Jump into search-first prompt management.",
     dashboardFavoriteActionDescription: "Keep reliable entries within one tap.",
-    dashboardExportActionDescription: "Export the Nolra and tune product defaults.",
+    dashboardExportActionDescription: "Export your library and adjust workspace defaults.",
     dashboardCaptureActionDescription: "Open the fastest way to save an idea before it disappears.",
-    dashboardSettingsActionDescription: "Control offline behavior, exports, beta status, and defaults.",
+    dashboardSettingsActionDescription: "Control offline behavior, exports, account sync, and defaults.",
     activityTitle: "Activity",
     aiAssistantTitle: "AI Organization Assistant",
     aiAssistantDescription:
-      "Use server-side AI to improve structure, metadata, and reuse without turning the Nolra into a chat app.",
-    aiServerOnly: "Server only",
+      "Use AI to improve structure, metadata, and reuse without turning OmniaPrompt into a chat app.",
+    aiServerOnly: "Protected",
     aiWorking: "Working...",
     aiEmptyState:
       "Run an AI action to generate a reviewable suggestion. Nothing changes until you apply it.",
@@ -233,7 +234,7 @@ const en = {
     installApp: "Install app",
     promptCopied: "Prompt copied to the clipboard.",
     aiVersionCreated: "Created a new prompt version from the AI suggestion.",
-    noInternalNotesYet: "No internal notes yet.",
+    noInternalNotesYet: "No private notes yet.",
     noResultNotesYet: "No result notes recorded yet.",
     noSummarySupplied: "No summary supplied.",
     defaultLabel: "Default",
@@ -268,67 +269,67 @@ const en = {
     aiRelatedPrompts: "Related prompts",
     aiNoStrongDuplicates: "No strong duplicates detected.",
     aiNoRelatedPrompts: "No related prompts were found in this library slice.",
-    commandCenterTitle: "Nolra pulse",
+    commandCenterTitle: "OmniaPrompt pulse",
     commandCenterDescription:
       "A quick read on the entries, projects, and reusable material shaping your current workflow.",
-    filterSurfaceTitle: "Search surface",
+    filterSurfaceTitle: "Search filters",
     filterSurfaceDescription:
       "Filter by content, tags, platform, and project without breaking your working rhythm.",
     resultsHeading: "Library results",
-    editorWorkspaceTitle: "Writing workspace",
+    editorWorkspaceTitle: "Writing",
     editorWorkspaceDescription:
-      "Shape the prompt first, then tighten notes, variables, and targeting until it feels production-ready.",
-    editorMetaTitle: "Metadata and targeting",
+      "Shape the prompt first, then tighten notes, variables, and details until it feels ready to reuse.",
+    editorMetaTitle: "Details",
     editorMetaDescription:
       "Keep entries reusable across projects, models, and future versions.",
     detailOverviewTitle: "Prompt overview",
     detailOverviewDescription:
-      "Reusable metadata, targeting, and source context for this prompt.",
+      "Reusable details, source context, and project fit for this prompt.",
     updatedAt: "Updated",
     source: "Source",
     recentActivityTitle: "Recent movement",
     recentActivityDescription:
-      "See the latest edits and saves without leaving the dashboard.",
-    notesWorkspaceTitle: "Notes and operating context",
+      "See the latest edits and saves without leaving Home.",
+    notesWorkspaceTitle: "Notes and context",
     notesWorkspaceDescription:
       "Capture what worked, what failed, and which variations are worth preserving beside the draft.",
-    promptSystemTitle: "Targeting and reusable context",
+    promptSystemTitle: "Tags and reusable context",
     promptSystemDescription:
       "Keep tags, platform fit, variables, and source context attached to the prompt while you shape it.",
     collectionsWorkspaceTitle: "Project studio",
     collectionsWorkspaceDescription:
-      "Create lightweight project hubs that keep related entries together without cluttering the main Nolra.",
+      "Create lightweight project hubs that keep related entries together without cluttering the main OmniaPrompt.",
     projectsWorkspaceTitle: "Project studio",
     projectsWorkspaceDescription:
-      "Create lightweight project hubs that keep related entries together without cluttering the main Nolra.",
+      "Create lightweight project hubs that keep related entries together without cluttering the main OmniaPrompt.",
     versionHistoryDescription:
       "Every refinement stays visible so you can compare evolution without overwriting the original.",
     variablesDescription:
       "Template placeholders stay close to the prompt so reuse remains fast on every device.",
     tagsDescription: "Tags keep the library searchable across projects, categories, and model targets.",
-    betaSupportTitle: "Beta support",
-    betaLabel: "Beta",
-    adSlotDescription: "Free beta users will see light sponsor placements here. Capture and editor screens stay clean.",
-    adSlotCompact: "Ad placement reserved for the beta free plan.",
-    betaStatus: "Public beta is active",
-    betaDescription: "You can use Nolra without an account, keep working locally, and connect cloud sync when you are ready.",
+    betaSupportTitle: "Support",
+    betaLabel: "Info",
+    adSlotDescription: "A sponsor message may appear here when the free plan includes ads. Capture and editor stay clean.",
+    adSlotCompact: "Sponsor message area.",
+    betaStatus: "Local workspace is active",
+    betaDescription: "You can use OmniaPrompt without an account, keep working locally, and connect cloud sync when it is available.",
     pendingSyncLabel: "pending sync",
     cloudReadyLabel: "Cloud ready",
     localReadyLabel: "Local only",
-    betaStatusCardTitle: "Beta build status",
-    betaStatusCardDescription: "This build stays focused on fast capture, projects, search, and stable daily use.",
+    betaStatusCardTitle: "App status",
+    betaStatusCardDescription: "OmniaPrompt is focused on fast capture, projects, search, and stable daily use.",
     aiLiveLabel: "AI live",
-    aiComingSoonLabel: "AI in V1",
-    aiBetaDisabledDescription: "AI stays off during beta so the first release can stay cheap, fast, and stable.",
-    planTitle: "Plan and monetization",
-    planDescription: "Beta keeps the product simple: free entry flow first, Pro later.",
-    freePlanLabel: "Free beta",
+    aiComingSoonLabel: "AI later",
+    aiBetaDisabledDescription: "AI help is not active in this workspace yet.",
+    planTitle: "Plan",
+    planDescription: "Start free, then upgrade only when paid features are available.",
+    freePlanLabel: "Free",
     adsOnLabel: "Ads on",
     adsOffLabel: "Ads off",
     proReadyLabel: "Pro ready",
     proComingSoonLabel: "Pro coming soon",
-    planSummary: "Beta launches as a free ad-supported experience. Pro returns in V1 with no ads, bigger limits, and AI assist.",
-    demoModeLabel: "Demo first"
+    planSummary: "Free use is available now. Pro features will be shown clearly before any charge.",
+    demoModeLabel: "Local first"
   },
   settings: {
     appearance: "Appearance",
@@ -343,29 +344,29 @@ const en = {
     densityCompact: "Compact",
     languageEnglish: "English",
     languageTurkish: "Turkish",
-    live: "Live",
-    preview: "Preview",
+    live: "Cloud",
+    preview: "Local",
     density: "Density",
     defaultLibraryView: "Default library view",
     viewList: "List",
     viewGrid: "Grid",
     accountReadySupabase:
-      "Supabase auth is configured. This section is ready for profile, billing, and security preferences.",
+      "Cloud sync is active for this workspace.",
     accountReadyPreview:
-      "Preview mode is active until Supabase credentials are added. The account shell remains ready for secure sessions.",
-    resetPreviewData: "Reset preview dataset",
+      "You are using local mode. Your data stays on this device unless you export it or turn on sync later.",
+    resetPreviewData: "Reset local workspace",
     appearanceDescription: "Tune theme and density without losing the calm contrast needed for long prompt sessions.",
-    defaultsDescription: "Set the library behavior you want to land in every time you open Nolra.",
+    defaultsDescription: "Set the library behavior you want to land in every time you open OmniaPrompt.",
     backupsDescription: "Keep portable exports close by so your library always feels safe and recoverable.",
-    accountDescription: "Account readiness stays clear whether you are in preview mode or on live Supabase auth."
+    accountDescription: "Account and sync status stays clear without exposing technical setup."
   }
 } satisfies MessageDictionary;
 
 const tr = {
   common: {
-    productName: "Nolra",
+    productName: "OmniaPrompt",
     productTagline: "Fikirlerini hizli yakala, duzenle ve tekrar geri don.",
-    parentBrand: "Omnia Creata",
+    parentBrand: "OmniaCreata",
     app: "Uygulama",
     dashboard: "Ana ekran",
     home: "Ana sayfa",
@@ -379,11 +380,12 @@ const tr = {
     search: "Ara",
     pricing: "Fiyatlandirma",
     faq: "SSS",
+    help: "Yardim",
     features: "Ozellikler",
     howItWorks: "Nasil Calisir",
     signIn: "Giris yap",
     signUp: "Hesap olustur",
-    launchApp: "Betayi ac",
+    launchApp: "Uygulamayi ac",
     getStarted: "Basla",
     viewPricing: "Fiyatlari gor",
     language: "Dil",
@@ -402,8 +404,8 @@ const tr = {
     workflow: "Akis",
     template: "Sablon",
     offlineReady: "Cevrimdisi hazir",
-    previewMode: "Onizleme modu",
-    authReady: "Kimlik sistemi hazir",
+    previewMode: "Yerel mod",
+    authReady: "Hesap hazir",
     working: "Calisiyor...",
     saving: "Kaydediliyor...",
     somethingWentWrong: "Bir seyler ters gitti."
@@ -412,8 +414,8 @@ const tr = {
     heroEyebrow: "AI ureticileri icin ciddi bir istem isletim sistemi",
     heroTitle: "Gercek isler icin tasarlanmis kisisel AI istem kutuphanen.",
     heroDescription:
-      "Nolra; kayitlarini, tekrar kullanilabilir talimatlarini ve gelisen fikirlerini duzen kaybetmeden cihazlar arasinda yonetmen icin premium bir alan sunar.",
-    heroPrimaryCta: "Kasani kurmaya basla",
+      "OmniaPrompt; kayitlarini, tekrar kullanilabilir talimatlarini ve gelisen fikirlerini duzen kaybetmeden cihazlar arasinda yonetmen icin premium bir alan sunar.",
+    heroPrimaryCta: "OmniaPrompt'u kurmaya basla",
     heroSecondaryCta: "Urunu incele",
     proofTitle: "Modern AI kullanicilarinin gercek calisma bicimi icin tasarlandi",
     proofItems: [
@@ -426,40 +428,40 @@ const tr = {
     workflowTitle: "Daginik sohbetlerden kullanilabilir bir sisteme",
     pricingTitle: "Bireysel ureticiler ve buyuyen ekipler icin fiyatlandirma",
     faqTitle: "Ciddi AI kullanicilarinin baglanmadan once sordugu sorular",
-    entryEyebrow: "Nolra beta uygulamasi",
-    entryTitle: "Ana urun sitesi Omnia Creata'da kalirken, gercek calisma alani buradan acilir.",
+    entryEyebrow: "OmniaPrompt uygulamasi",
+    entryTitle: "Promptlar, notlar ve tekrar kullanilabilir fikirler icin sakin bir calisma alani.",
     entryDescription:
-      "Bu alan kutuphane, editor, projeler, AI yardimi ve esitlemeye hazir kasa akislarinin gercek uygulama yuzeyidir.",
+      "Kutuphane ac, fikir yakala, projeleri duzenle ve ise yarayan talimatlari her cihazda yakin tut.",
     entryHighlights: [
-      "Gercek panel, kutuphane, editor ve ayarlar ekranlari burada.",
-      "Kimlik odakli app akisiyla PWA-hazir davranis birlikte gelir.",
-      "Ayni Nolra backend'i kullanilir; sadece Omnia Creata ana sitesinden ayridir."
+      "Promptlar, notlar ve proje fikirleri icin hizli kayit.",
+      "Browser ve mobil kabukta calisabilen mobil hazir alan.",
+      "Yerel-oncelikli kullanim ve hazir oldugunda opsiyonel hesap esitlemesi."
     ],
     entryCards: [
       {
-        title: "Calisan uygulama kabugu",
-        description: "Panel, kutuphane, editor, projeler, ayarlar ve AI yardimi burada yasar."
+        title: "Yakala ve geri don",
+        description: "Fikri hizlica kaydet, sonra hazir oldugunda sakin sakin duzenle."
       },
       {
-        title: "Ortak backend",
-        description: "Supabase auth, veri, esitleme ve server-side AI rotalari uygulama yigininda kalir."
+        title: "Hafifce duzenle",
+        description: "Projeler, etiketler, kategoriler ve surumler kutuphaneyi agirlastirmadan faydali tutar."
       },
       {
-        title: "Ana site ayri kalir",
-        description: "Urun tanitimi, marka hikayesi ve daha genis Omnia Creata deneyimi omniacreata.com tarafinda yasar."
+        title: "Calisman tasinabilir kalsin",
+        description: "Kutuphaneni disa aktar ve gerektiginde yerel calisma alanina guven."
       }
     ],
     entryProductLink: "Urun sayfasini gor",
     entryMainSiteLink: "Omnia Creata'yi ziyaret et",
     footerDescription:
-      "Bu domaindeki Nolra gercek uygulama yuzeyidir: betayi ac, kaydini al ve cihazlar arasinda calismaya devam et.",
-    footerProductLink: "Nolra urun sayfasi",
+      "OmniaPrompt saklamak istedigin promptlari ve fikirleri yakalamak, duzenlemek ve yeniden kullanmak icin odakli bir calisma alanidir.",
+    footerProductLink: "OmniaPrompt urun sayfasi",
     footerMainSiteLink: "Omnia Creata ana sitesi"
   },
   auth: {
-    signInTitle: "Kasana tekrar hos geldin",
-    signUpTitle: "Nolra hesabini olustur",
-    signInDescription: "Supabase tabanli oturum mimarisiyle guvenli e-posta ve sifre erisimi kullan.",
+    signInTitle: "OmniaPrompt'a tekrar hos geldin",
+    signUpTitle: "OmniaPrompt hesabini olustur",
+    signInDescription: "Hesap esitlemesi acik oldugunda e-posta ve sifre ile giris yap.",
     signUpDescription: "Ucretsiz kisisel kasayla basla, sonra premium otomasyon ve paylasima gec.",
     email: "E-posta adresi",
     password: "Sifre",
@@ -467,11 +469,11 @@ const tr = {
     rememberMe: "Oturumum acik kalsin",
     forgotPassword: "Sifremi unuttum",
     continue: "Devam et",
-    resetDescription: "Nolra hesabin icin guvenli sifre sifirlama e-postasi iste.",
-    resetPreviewMessage: "Sifre sifirlama akisi Supabase icin hazir. Onizleme modu uygulamayi acti.",
+    resetDescription: "OmniaPrompt hesabin icin guvenli sifre sifirlama e-postasi iste.",
+    resetPreviewMessage: "Yerel modda sifre sifirlama gerekmiyor; calisma alanini actik.",
     previewEnterAppMessage:
-      "Supabase henuz yapilandirilmadi, bu nedenle onizleme modu uygulama kabugunu acti.",
-    clientInitError: "Supabase istemcisi olusturulamadi.",
+      "Baslamak icin hesap esitlemesi gerekmiyor; yerel calisma alanini actik.",
+    clientInitError: "Hesap servisi su anda kullanilamiyor.",
     signedInSuccess: "Giris basarili.",
     checkEmailConfirm: "Hesabini dogrulamak icin e-postani kontrol et.",
     resetEmailSent: "Sifre sifirlama e-postasi gonderildi.",
@@ -479,7 +481,7 @@ const tr = {
     emailPlaceholder: "name@omniacreata.com",
     passwordPlaceholder: "********",
     previewBanner:
-      "Supabase bilgileri henuz ayarlanmadigi icin kimlik ekranlari hazir; uygulama su anda onizleme modunda calisiyor."
+      "Hesap olmadan baslayabilirsin. Hesap esitlemesi yalnizca kullanima acildiginda sunulur."
   },
   app: {
     dashboardTitle: "Fikirlerin ve aktif projelerin icin sakin bir mobil calisma alani",
@@ -512,9 +514,9 @@ const tr = {
     recentTitle: "Son Hareketler",
     recentSubtitle: "Guncellemeleri, surumleri ve en son dokundugun kayitlari takip et.",
     settingsTitle: "Ayarlar",
-    settingsSubtitle: "Dil, gorunum, disa aktarma davranisi ve hesap hazirligini kontrol et.",
+    settingsSubtitle: "Dil, gorunum, disa aktarma ve calisma alani guvenligini kontrol et.",
     editorTitle: "Kayit Editoru",
-    editorSubtitle: "Yaziyi, baglami, metadata'yi ve tekrar kullanim detaylarini ayni yerde duzenle.",
+    editorSubtitle: "Yaziyi, baglami ve tekrar kullanim detaylarini ayni yerde duzenle.",
     captureTitle: "Hizli Yakala",
     captureSubtitle: "Fikir kacmadan simdi birak, sonra geri donup guzelce sekillendir.",
     versionHistory: "Surum gecmisi",
@@ -533,30 +535,32 @@ const tr = {
     titleField: "Baslik",
     filters: "Filtreler",
     clearFilters: "Filtreleri temizle",
-    emptyStateTitle: "Kasanda ilk gercek kayit icin yer hazir",
+    emptyStateTitle: "OmniaPrompt ilk gercek kayit icin hazir",
     emptyStateDescription:
       "Bir sey yakala, hafif yapisal bilgi ekle ve daginik not yiginlari yerine bir sistem kurmaya basla.",
     offlineDescription:
-      "Nolra; baglanti dusse bile hizli capture icin yerel onbellek ve hafif bir sync kuyrugu tutar.",
+      "OmniaPrompt; baglanti dusse bile hizli capture icin yerel onbellek ve hafif bir sync kuyrugu tutar.",
     exportJson: "JSON disa aktar",
     exportMarkdown: "Markdown disa aktar",
     exportTxt: "TXT disa aktar",
-    syncStatusPreview: "Yerel depolama",
+    syncStatusPreview: "Yerel calisma alani",
     syncStatusSupabase: "Bulut hazir",
     syncLabel: "Esitleme",
-    vaultStatus: "Kasa durumu",
+    vaultStatus: "OmniaPrompt durumu",
     syncDescriptionPreview:
-      "Onizleme modu, kasani yerelde kalici tutar ve guvenli bulut esitlemesine hazirlar.",
+      "Calisma alanin bu cihazda saklanir.",
     syncDescriptionSupabase:
-      "Supabase tabanli kimlik dogrulama ve esitleme kasanin genelinde aktiftir.",
+      "Bu calisma alani icin bulut esitlemesi aktiftir.",
     dashboardSearchActionDescription: "Arama odakli istem yonetimine hizlica gec.",
     dashboardFavoriteActionDescription: "Guvenilir istemlerini tek dokunus uzakliginda tut.",
-    dashboardExportActionDescription: "Kasani disa aktar ve urun varsayilanlarini ayarla.",
+    dashboardExportActionDescription: "Kutuphaneni disa aktar ve calisma alani varsayilanlarini ayarla.",
+    dashboardCaptureActionDescription: "Fikir kaybolmadan hizlica kaydet.",
+    dashboardSettingsActionDescription: "Cevrimdisi kullanim, disa aktarma, hesap esitlemesi ve varsayilanlari yonet.",
     activityTitle: "Aktivite",
     aiAssistantTitle: "AI Duzenleme Asistani",
     aiAssistantDescription:
-      "Kasayi sohbet uygulamasina cevirmeden yapilandirma, etiketleme ve iyilestirme icin sunucu tarafli AI kullan.",
-    aiServerOnly: "Sadece sunucu",
+      "OmniaPrompt'u sohbet uygulamasina cevirmeden yapilandirma, etiketleme ve iyilestirme icin AI kullan.",
+    aiServerOnly: "Korumali",
     aiWorking: "Calisiyor...",
     aiEmptyState:
       "Incelenebilir bir oneri olusturmak icin bir AI islemi calistir. Uygulayana kadar hicbir sey degismez.",
@@ -588,7 +592,7 @@ const tr = {
     installApp: "Uygulamayi yukle",
     promptCopied: "Istem panoya kopyalandi.",
     aiVersionCreated: "AI onerisiyle yeni bir istem surumu olusturuldu.",
-    noInternalNotesYet: "Henuz ic not yok.",
+    noInternalNotesYet: "Henuz kisisel not yok.",
     noResultNotesYet: "Henuz sonuc notu kaydedilmedi.",
     noSummarySupplied: "Ozet eklenmedi.",
     defaultLabel: "Varsayilan",
@@ -623,31 +627,31 @@ const tr = {
     aiRelatedPrompts: "Ilgili istemler",
     aiNoStrongDuplicates: "Guclu bir tekrar benzerligi bulunamadi.",
     aiNoRelatedPrompts: "Bu kutuphane diliminde ilgili istem bulunamadi.",
-    commandCenterTitle: "Kasa nabzi",
+    commandCenterTitle: "OmniaPrompt nabzi",
     commandCenterDescription:
       "Mevcut calisma ritmini sekillendiren kayitlari, projeleri ve tekrar kullanilabilir materyali hizlica gor.",
-    filterSurfaceTitle: "Arama yuzeyi",
+    filterSurfaceTitle: "Arama filtreleri",
     filterSurfaceDescription:
       "Calisma ritmini bozmadan icerik, etiket, platform ve projeye gore filtrele.",
     resultsHeading: "Kutuphane sonuclari",
-    editorWorkspaceTitle: "Yazma alani",
+    editorWorkspaceTitle: "Yazma",
     editorWorkspaceDescription:
-      "Once istemi sekillendir, sonra notlari, degiskenleri ve hedeflemeyi uretim hazir seviyeye getir.",
-    editorMetaTitle: "Metaveri ve hedefleme",
+      "Once istemi sekillendir, sonra notlari, degiskenleri ve detaylari yeniden kullanima hazir hale getir.",
+    editorMetaTitle: "Detaylar",
     editorMetaDescription:
       "Kayitlari projeler, modeller ve gelecekteki surumler boyunca yeniden kullanilabilir tut.",
     detailOverviewTitle: "Istem genel gorunumu",
     detailOverviewDescription:
-      "Bu isteme ait yeniden kullanilabilir metaveri, hedefleme ve kaynak baglami.",
+      "Bu isteme ait yeniden kullanilabilir detaylar, kaynak baglami ve proje uyumu.",
     updatedAt: "Guncellendi",
     source: "Kaynak",
     recentActivityTitle: "Son hareket",
     recentActivityDescription:
       "Panelden ayrilmadan son duzenlemeleri ve kayitlari gor.",
-    notesWorkspaceTitle: "Notlar ve calisma baglami",
+    notesWorkspaceTitle: "Notlar ve baglam",
     notesWorkspaceDescription:
       "Neyin ise yaradigini, neyin zayif kaldigini ve hangi varyasyonlarin korunmaya deger oldugunu taslagin yaninda tut.",
-    promptSystemTitle: "Hedefleme ve yeniden kullanilabilir baglam",
+    promptSystemTitle: "Etiketler ve yeniden kullanilabilir baglam",
     promptSystemDescription:
       "Etiketleri, platform uyumunu, degiskenleri ve kaynak baglamini istemi sekillendirirken birlikte tut.",
     collectionsWorkspaceTitle: "Proje studyosu",
@@ -661,29 +665,29 @@ const tr = {
     variablesDescription:
       "Sablon degiskenleri isteme yakin kalir, boylece her cihazda yeniden kullanim hizli olur.",
     tagsDescription: "Etiketler kutuphaneyi projeler, kategoriler ve platform hedefleri arasinda aranabilir tutar.",
-    betaSupportTitle: "Beta destegi",
-    betaLabel: "Beta",
-    adSlotDescription: "Ucretsiz beta kullanicilarina burada hafif sponsor alanlari gosterilecek. Capture ve editor temiz kalacak.",
-    adSlotCompact: "Beta ucretsiz plan reklam alani burada yer alacak.",
-    betaStatus: "Public beta aktif",
-    betaDescription: "Nolra'u hesapsiz kullanabilir, yerelde calismaya devam edebilir ve hazir olunca bulut baglayabilirsin.",
+    betaSupportTitle: "Destek",
+    betaLabel: "Bilgi",
+    adSlotDescription: "Ucretsiz planda reklam varsa sponsor mesaji burada gorunebilir. Capture ve editor temiz kalir.",
+    adSlotCompact: "Sponsor mesaji alani.",
+    betaStatus: "Yerel calisma alani aktif",
+    betaDescription: "OmniaPrompt'u hesapsiz kullanabilir, yerelde calismaya devam edebilir ve kullanima acildiginda bulut esitlemesi baglayabilirsin.",
     pendingSyncLabel: "bekleyen senkron",
     cloudReadyLabel: "Bulut hazir",
     localReadyLabel: "Sadece yerel",
-    betaStatusCardTitle: "Beta surum durumu",
-    betaStatusCardDescription: "Bu surum hizli capture, projeler, arama ve stabil gunluk kullanim odaginda kaliyor.",
+    betaStatusCardTitle: "Uygulama durumu",
+    betaStatusCardDescription: "OmniaPrompt hizli capture, projeler, arama ve stabil gunluk kullanim odaginda kalir.",
     aiLiveLabel: "AI aktif",
-    aiComingSoonLabel: "AI V1'de",
-    aiBetaDisabledDescription: "Ilk surumu ucuz, hizli ve stabil tutmak icin beta boyunca AI kapali kalir.",
-    planTitle: "Plan ve gelir modeli",
-    planDescription: "Beta urunu sade tutar: once ucretsiz akisi kurulur, Pro sonra acilir.",
-    freePlanLabel: "Ucretsiz beta",
+    aiComingSoonLabel: "AI sonra",
+    aiBetaDisabledDescription: "AI yardimi bu calisma alaninda henuz aktif degil.",
+    planTitle: "Plan",
+    planDescription: "Ucretsiz basla; ucretli ozellikler acikca sunuldugunda yukselt.",
+    freePlanLabel: "Ucretsiz",
     adsOnLabel: "Reklam acik",
     adsOffLabel: "Reklam kapali",
     proReadyLabel: "Pro hazir",
     proComingSoonLabel: "Pro yakinda",
-    planSummary: "Beta ucretsiz ve reklam destekli cikiyor. Pro, V1 ile reklamsiz kullanim, daha yuksek limitler ve AI yardimi getirir.",
-    demoModeLabel: "Demo once"
+    planSummary: "Ucretsiz kullanim simdilik acik. Pro ozellikleri herhangi bir ucret olmadan once net gosterilir.",
+    demoModeLabel: "Yerel once"
   },
   settings: {
     appearance: "Gorunum",
@@ -698,22 +702,22 @@ const tr = {
     densityCompact: "Kompakt",
     languageEnglish: "English",
     languageTurkish: "Turkce",
-    live: "Canli",
-    preview: "Onizleme",
+    live: "Bulut",
+    preview: "Yerel",
     density: "Yogunluk",
     defaultLibraryView: "Varsayilan kutuphane gorunumu",
     viewList: "Liste",
     viewGrid: "Kart",
     accountReadySupabase:
-      "Supabase kimlik dogrulamasi etkin. Bu bolum profil, odeme ve guvenlik tercihleri icin hazir.",
+      "Bu calisma alani icin bulut esitlemesi aktiftir.",
     accountReadyPreview:
-      "Supabase bilgileri eklenene kadar onizleme modu etkin. Hesap alani guvenli oturumlar icin hazir.",
-    resetPreviewData: "Onizleme verisini sifirla",
+      "Yerel moddasin. Disa aktarmadigin veya ileride sync acmadigin surece verin bu cihazda kalir.",
+    resetPreviewData: "Yerel calisma alanini sifirla",
     appearanceDescription: "Uzun istem oturumlari icin gerekli sakin kontrasti korurken tema ve yogunlugu ayarla.",
-    defaultsDescription: "Nolra acildiginda seni her seferinde karsilayacak kutuphane davranisini belirle.",
+    defaultsDescription: "OmniaPrompt acildiginda seni her seferinde karsilayacak kutuphane davranisini belirle.",
     backupsDescription: "Kutuphane her zaman guvende ve geri alinabilir hissettirsin diye tasinabilir disa aktarmalari yakin tut.",
     accountDescription:
-      "Onizleme modunda olsan da canli Supabase kimliginde olsan da hesap hazirligi net gorunur kalsin."
+      "Hesap ve esitleme durumu teknik kurulum dili olmadan net gorunur."
   }
 } satisfies MessageDictionary;
 

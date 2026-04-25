@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import { builtinCategories, platformCatalog } from "@prompt-vault/config";
 import type { AITaskContext } from "@/lib/ai/provider-types";
@@ -10,7 +10,7 @@ export function buildSystemPrompt() {
   const platformGuide = platformCatalog.map((platform) => platform.key).join(", ");
 
   return [
-    "You are Nolra's AI organization assistant.",
+    "You are OmniaPrompt's AI organization assistant.",
     "You improve prompt organization and clarity only.",
     "You are not a general chat bot and must not introduce unrelated conversation.",
     "Return valid JSON only, with no markdown fences and no commentary outside JSON.",

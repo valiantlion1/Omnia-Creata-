@@ -174,6 +174,37 @@ export function SettingsView() {
         </div>
       </SettingsGroup>
 
+      {/* Help and legal */}
+      <SettingsGroup title={locale === "tr" ? "Yardim ve yasal" : "Help and legal"}>
+        <SettingsRow
+          title={locale === "tr" ? "Yardim merkezi" : "Help center"}
+          description={locale === "tr" ? "Yedekleme, sync, AI ve sorun giderme." : "Backups, sync, AI, and troubleshooting."}
+          control={
+            <Link href={localizeHref(locale, "/help")}>
+              <Button size="sm" variant="secondary">{locale === "tr" ? "Ac" : "Open"}</Button>
+            </Link>
+          }
+        />
+        <SettingsRow
+          title={locale === "tr" ? "Gizlilik" : "Privacy"}
+          description={locale === "tr" ? "Verinin nerede kaldigini ve nasil silinecegini oku." : "See where data lives and how deletion works."}
+          control={
+            <Link href={localizeHref(locale, "/privacy")}>
+              <Button size="sm" variant="secondary">{locale === "tr" ? "Oku" : "Read"}</Button>
+            </Link>
+          }
+        />
+        <SettingsRow
+          title={locale === "tr" ? "Kosullar" : "Terms"}
+          description={locale === "tr" ? "Kullanim kurallari, icerik sorumlulugu ve ucretli ozellikler." : "Use rules, content responsibility, and paid-feature terms."}
+          control={
+            <Link href={localizeHref(locale, "/terms")}>
+              <Button size="sm" variant="secondary">{locale === "tr" ? "Oku" : "Read"}</Button>
+            </Link>
+          }
+        />
+      </SettingsGroup>
+
       {/* About / Release notes */}
       <SettingsGroup title={locale === "tr" ? "Hakkında" : "About"}>
         <div className="space-y-2 py-3">

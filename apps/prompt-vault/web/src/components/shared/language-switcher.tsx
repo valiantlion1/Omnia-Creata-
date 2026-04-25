@@ -22,7 +22,7 @@ export function LanguageSwitcher() {
   return (
     <select
       aria-label={t("common.language")}
-      className="h-10 appearance-none rounded-full border border-[var(--border)] bg-[color:rgba(255,255,255,0.03)] px-4 pr-8 text-sm font-medium text-[var(--text-secondary)] shadow-[var(--shadow-panel)] backdrop-blur-xl hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
+      className="h-10 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 pr-8 text-sm font-medium text-[var(--text-secondary)] shadow-[var(--shadow-soft)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none"
       onChange={(event) => onChange(event.target.value)}
       value={locale}
     >

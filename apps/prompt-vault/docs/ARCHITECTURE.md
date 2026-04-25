@@ -52,9 +52,9 @@
 - Trigger:
   `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are present.
 - Data:
-  Auth flows become live through Supabase clients.
+  Auth flows become live through Supabase clients, and the user vault is persisted to `public.user_vault_state`.
 - Goal:
-  Transition from preview-local state to account-backed sync.
+  Provide account-backed sync without forcing the first release into a large relational CRUD rewrite.
 
 ## App route model
 
@@ -81,10 +81,11 @@
 ## State flow
 
 1. `VaultProvider` loads preview data from local storage or falls back to the seeded dataset.
-2. App views derive filtered lists and dashboard summaries from the shared dataset.
-3. Prompt saves validate through `@prompt-vault/validation`.
-4. Saves create a new version record instead of overwriting history.
-5. Dataset changes persist back to local storage in preview mode.
+2. If a Supabase session exists, `VaultProvider` loads the matching `user_vault_state` row and merges it with local state.
+3. App views derive filtered lists and dashboard summaries from the shared dataset.
+4. Prompt saves validate through `@prompt-vault/validation`.
+5. Saves create a new version record instead of overwriting history.
+6. Dataset changes persist back to local storage and, after hydration, back to `user_vault_state` for signed-in users.
 
 ## AI layer
 
@@ -104,4 +105,4 @@
 - Tailwind v4 with product-specific CSS variables
 - Shared primitives for buttons, inputs, surfaces, badges, section headings, and empty states
 - One consistent visual language across marketing and product surfaces
-- Mobile-first app shell with desktop sidebar and mobile bottom navigation
+- Mobile-first app shell with a centered mobile canvas and bottom navigation across viewport sizes

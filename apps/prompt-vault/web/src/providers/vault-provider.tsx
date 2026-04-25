@@ -423,7 +423,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    notify(existingId ? "Saved as a new version in your local vault." : "Entry added to your vault.");
+    notify(existingId ? "Saved as a new OmniaPrompt version." : "Entry added to OmniaPrompt.");
 
     return nextEntryId;
   }
@@ -709,7 +709,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }
 
   function exportVault(format: "json" | "markdown" | "txt") {
-    const filenameBase = `vault-export-${new Date().toISOString().slice(0, 10)}`;
+    const filenameBase = `omniaprompt-export-${new Date().toISOString().slice(0, 10)}`;
     if (format === "json") {
       downloadFile(`${filenameBase}.json`, exportAsJson(dataset), "application/json");
     } else if (format === "markdown") {
@@ -718,7 +718,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       downloadFile(`${filenameBase}.txt`, exportAsText(dataset), "text/plain");
     }
 
-    notify("Export prepared from your current vault data.");
+    notify("Export prepared from your current OmniaPrompt data.");
   }
 
   function recordAISuggestion(
@@ -785,7 +785,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   function resetPreview() {
     const seed = withDatasetAliases(createDemoDataset());
     setDataset(seed);
-    notify("Preview vault reset to the seeded dataset.");
+    notify("Local workspace reset.");
   }
 
   return (

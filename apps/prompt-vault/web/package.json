@@ -12,7 +12,9 @@
     "cap:copy": "npx cap copy android",
     "cap:sync": "npx cap sync android",
     "cap:open": "npx cap open android",
-    "android:build:debug": "if exist android\\\\gradlew.bat (cd android && gradlew.bat assembleDebug) else (echo Android project not initialized && exit /b 1)"
+    "android:build:debug": "if exist android\\\\gradlew.bat (cd android && gradlew.bat assembleDebug) else (echo Android project not initialized && exit /b 1)",
+    "android:build:release": "if exist android\\\\gradlew.bat (cd android && gradlew.bat assembleRelease) else (echo Android project not initialized && exit /b 1)",
+    "android:build:aab": "if exist android\\\\gradlew.bat (cd android && gradlew.bat bundleRelease) else (echo Android project not initialized && exit /b 1)"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",

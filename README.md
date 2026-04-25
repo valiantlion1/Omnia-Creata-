@@ -31,6 +31,7 @@ backups/     Local backups (gitignored)
 
 - `npm run repo:inventory` prints the current manifest-backed inventory.
 - `npm run repo:check` validates current topology, naming, and nested repo rules.
+- `docs/operations/RELEASE_UPDATE_SAFETY.md` defines the release/update hygiene loop for keeping shipped products maintainable from source.
 
 ## Canonical rules
 
@@ -58,4 +59,4 @@ Current migration rule:
 
 ## Current validator scope
 
-Today `npm run repo:check` enforces structure and naming, but it does not yet fail on every generated artifact inside canonical roots. Expanding validator coverage for folders such as `.next`, `out`, `build`, and `dist` remains a follow-up cleanup task.
+Today `npm run repo:check` enforces structure, naming, nested repo rules, root backup-file hygiene, and generated artifact hygiene inside canonical source roots. If local build/cache output exists, run `npm run repo:clean:plan` first, then `npm run repo:clean:apply` when the plan only lists ignored local artifacts.

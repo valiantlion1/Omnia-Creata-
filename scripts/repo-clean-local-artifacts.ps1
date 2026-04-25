@@ -21,6 +21,11 @@ $candidateFileNames = @(
   "tsconfig.tsbuildinfo"
 )
 $scanRoots = @("apps", "website")
+$rootCandidateDirectoryNames = @(
+  ".playwright-cli",
+  ".pytest_cache",
+  "output"
+)
 
 function Get-RelativePath([string]$BasePath, [string]$TargetPath) {
   $normalizedBase = [System.IO.Path]::GetFullPath($BasePath)
@@ -74,6 +79,13 @@ function Remove-ArtifactPath([string]$PathToRemove) {
 Push-Location $repoRoot
 try {
   $discoveredPaths = New-Object System.Collections.Generic.List[string]
+
+  foreach ($candidateDirectoryName in $rootCandidateDirectoryNames) {
+    $candidatePath = Join-Path $repoRoot $candidateDirectoryName
+    if (Test-Path -LiteralPath $candidatePath) {
+      $discoveredPaths.Add($candidatePath)
+    }
+  }
 
   foreach ($scanRoot in $scanRoots) {
     if (-not (Test-Path -LiteralPath $scanRoot)) {

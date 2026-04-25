@@ -41,7 +41,7 @@ from studio_platform.models.identity import (
     TERMS_VERSION,
     USAGE_POLICY_VERSION,
 )
-from studio_platform.service import DeletedIdentityError, StudioService
+from studio_platform.service import DeletedIdentityError, GenerationCapacityError, StudioService
 from studio_platform.studio_model_contract import (
     STUDIO_FAST_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
@@ -50,6 +50,19 @@ from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
 from studio_platform.services.generation_runtime import ExecutedGenerationBatch
 from studio_platform.store import SqliteStudioStateStore, StudioStateStore
+
+
+class _FailingEnqueueBroker(InMemoryGenerationBroker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.discarded_ids: list[str] = []
+
+    async def enqueue(self, job_id: str, *, priority: str) -> bool:
+        raise RuntimeError("redis unavailable")
+
+    async def discard(self, job_id: str) -> None:
+        self.discarded_ids.append(job_id)
+        await super().discard(job_id)
 
 
 @pytest.mark.asyncio
@@ -2149,7 +2162,7 @@ async def test_import_asset_from_data_url_creates_reference_asset(tmp_path: Path
     asset = await service.import_asset_from_data_url(
         identity_id=identity.id,
         project_id=project.id,
-        data_url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2Z0uoAAAAASUVORK5CYII=",
+        data_url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
         title="Reference upload",
     )
 
@@ -4288,6 +4301,95 @@ async def test_web_runtime_mode_with_shared_broker_enqueues_generation_for_exter
 
 
 @pytest.mark.asyncio
+async def test_create_generation_compensates_when_shared_broker_enqueue_fails(tmp_path: Path):
+    settings = get_settings()
+    original_mode = settings.generation_runtime_mode
+    broker = _FailingEnqueueBroker()
+    service: StudioService | None = None
+
+    try:
+        settings.generation_runtime_mode = "web"
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(
+            store,
+            ProviderRegistry(),
+            tmp_path / "media",
+            generation_broker=broker,
+        )
+        await service.initialize()
+
+        identity = OmniaIdentity(
+            id="user-broker-enqueue-fail",
+            email="user@example.com",
+            display_name="User One",
+            username="userone",
+            workspace_id="ws-user-broker-enqueue-fail",
+            plan=IdentityPlan.PRO,
+            subscription_status=SubscriptionStatus.ACTIVE,
+            monthly_credits_remaining=1200,
+            monthly_credit_allowance=1200,
+        )
+        workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+        project = Project(
+            id="project-broker-enqueue-fail",
+            workspace_id=workspace.id,
+            identity_id=identity.id,
+            title="Project One",
+        )
+
+        await store.mutate(
+            lambda state: (
+                state.identities.__setitem__(identity.id, identity),
+                state.workspaces.__setitem__(workspace.id, workspace),
+                state.projects.__setitem__(project.id, project),
+            )
+        )
+
+        with pytest.raises(GenerationCapacityError, match="queue is temporarily unavailable") as exc_info:
+            await service.create_generation(
+                identity_id=identity.id,
+                project_id=project.id,
+                prompt="cinematic fashion portrait",
+                negative_prompt="",
+                reference_asset_id=None,
+                model_id="flux-schnell",
+                width=1024,
+                height=1024,
+                steps=24,
+                cfg_scale=6.0,
+                seed=88,
+                aspect_ratio="1:1",
+                output_count=1,
+            )
+
+        snapshot = await store.snapshot()
+        jobs = list(snapshot.generations.values())
+        assert exc_info.value.queue_full is False
+        assert exc_info.value.estimated_wait_seconds == 30
+        assert len(jobs) == 1
+        failed_job = jobs[0]
+        assert failed_job.status == JobStatus.FAILED
+        assert failed_job.error_code == "generation_enqueue_failed"
+        assert failed_job.credit_status == "released"
+        assert failed_job.final_credit_cost == 0
+        assert broker.discarded_ids == [failed_job.id]
+        assert any(
+            entry.entry_type == CreditEntryType.GENERATION_RESERVE
+            and entry.job_id == failed_job.id
+            for entry in snapshot.credit_ledger.values()
+        )
+        assert any(
+            entry.entry_type == CreditEntryType.GENERATION_RELEASE
+            and entry.job_id == failed_job.id
+            for entry in snapshot.credit_ledger.values()
+        )
+    finally:
+        settings.generation_runtime_mode = original_mode
+        if service is not None:
+            await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_worker_runtime_mode_processes_jobs_claimed_from_shared_broker(tmp_path: Path):
     settings = get_settings()
     original_mode = settings.generation_runtime_mode
@@ -6025,11 +6127,27 @@ async def test_update_profile_can_pin_featured_asset_and_serialize_it(tmp_path: 
             identity.id,
             featured_asset_id=asset.id,
             featured_asset_id_provided=True,
+            featured_asset_position="top",
         )
         payload = await service.get_profile_payload(identity_id=identity.id, viewer_identity_id=identity.id)
 
         assert payload["profile"]["featured_asset_id"] == asset.id
+        assert payload["profile"]["featured_asset_position"] == "top"
         assert payload["featured_asset"] is not None
         assert payload["featured_asset"]["id"] == asset.id
+
+        with pytest.raises(ValueError, match="valid profile artwork crop"):
+            await service.update_profile(identity.id, featured_asset_position="middle")
+
+        await service.update_profile(
+            identity.id,
+            featured_asset_id=None,
+            featured_asset_id_provided=True,
+            featured_asset_position="bottom",
+        )
+        cleared_payload = await service.get_profile_payload(identity_id=identity.id, viewer_identity_id=identity.id)
+
+        assert cleared_payload["profile"]["featured_asset_id"] is None
+        assert cleared_payload["profile"]["featured_asset_position"] == "center"
     finally:
         await service.shutdown()

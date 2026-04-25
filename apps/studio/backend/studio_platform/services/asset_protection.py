@@ -209,13 +209,12 @@ class GeneratedAssetProtectionPipeline:
     def _apply_visible_watermark(self, image: Image.Image, watermark_text: str) -> Image.Image:
         try:
             from pathlib import Path
-            logo_path = Path(__file__).resolve().parent.parent.parent.parent / "web" / "public" / "omnia-logo.png"
+            logo_path = Path(__file__).resolve().parent.parent.parent.parent / "web" / "public" / "omnia-crest.png"
             logo = Image.open(logo_path).convert("RGBA")
             
             width, height = image.size
-            # Calculate dynamic size for the logo, e.g. max 12% of width/height
-            logo_target_size = int(min(width, height) * 0.12)
-            logo_target_size = max(40, min(160, logo_target_size))
+            logo_target_size = int(min(width, height) * 0.045)
+            logo_target_size = max(18, min(56, logo_target_size))
             
             # Keep logo aspect ratio
             logo_ratio = logo.width / logo.height
@@ -224,14 +223,13 @@ class GeneratedAssetProtectionPipeline:
             
             logo = logo.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
             
-            # Opacity
-            target_opacity = 0.9
+            target_opacity = 0.42
             alpha = logo.split()[3]
             alpha = alpha.point(lambda p: int(p * target_opacity))
             logo.putalpha(alpha)
             
             # Position: bottom right
-            margin = max(24, int(min(width, height) * 0.03))
+            margin = max(18, int(min(width, height) * 0.026))
             box_left = width - logo_w - margin
             box_top = height - logo_h - margin
             

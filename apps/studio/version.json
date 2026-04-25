@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.23.205",
+  "build": "2026.04.26.219",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-23",
-  "notes": "Studio backend now also protects the original Postgres failure when connection release cleanup goes wrong, instead of letting a second pool-return problem hide the real issue. That makes the core store layer calmer under bad runtime conditions and safer to maintain."
+  "releaseDate": "2026-04-26",
+  "notes": "Studio Landing gallery rails now separate real image-generation style genres from plain subject categories, add cyberpunk, neon noir, sci-fi, anime, cel shading, fantasy, glam editorial, sexy editorial, photoreal, luxury ad, and car-ad moments, and keep each visible rail segment on distinct source imagery instead of repeating the same asset under different labels."
 }

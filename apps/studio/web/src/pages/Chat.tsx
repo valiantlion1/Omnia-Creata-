@@ -566,7 +566,6 @@ function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 relative">
-      {/* Subtle ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
         <div className="h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.03),transparent_60%)] blur-[80px]" />
       </div>
@@ -1310,8 +1309,8 @@ export default function ChatPage() {
   /* ─── Render ──────────────────────────────────── */
 
   return (
-    <AppPage className="!max-w-full !gap-0 !py-0 !px-0">
-      <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+    <AppPage className="h-full min-h-0 !max-w-full !gap-0 !py-0 !px-0">
+      <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col lg:h-full">
 
         {/* ── Minimal top bar ─────────────────────── */}
         <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-5 py-3">

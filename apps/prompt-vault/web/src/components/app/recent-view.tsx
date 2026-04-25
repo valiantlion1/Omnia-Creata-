@@ -29,14 +29,14 @@ export function RecentView() {
         }
         subtitle={
           locale === "tr"
-            ? "Uygulamaya son eklenenleri, guncel beta notlarini ve en son hareketleri tek yerde takip et."
-            : "Track what changed in the app, read the latest beta notes, and keep an eye on recent movement."
+            ? "Uygulamadaki son degisiklikleri ve yakin zamanda dokundugun kayitlari tek yerde takip et."
+            : "Track app changes and the entries you touched recently in one place."
         }
         title={locale === "tr" ? "Guncelleme notlari" : "Update notes"}
       />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_340px]">
-        <Surface className="rounded-[28px] bg-[rgba(12,12,12,0.94)] p-5 md:p-6">
+        <Surface className="rounded-[28px] bg-[var(--surface)] p-5 md:p-6">
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="accent">
@@ -62,7 +62,7 @@ export function RecentView() {
                   className="rounded-[22px] border border-[var(--border)] bg-[var(--surface-strong)] p-4"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-[14px] bg-[rgba(242,202,80,0.1)] text-[var(--accent-strong)]">
+                    <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-[14px] bg-[var(--accent-soft)] text-[var(--accent-strong)]">
                       <RefreshCw className="h-4 w-4" />
                     </div>
                     <p className="text-sm leading-7 text-[var(--text-primary)]">{item[locale]}</p>
@@ -73,22 +73,22 @@ export function RecentView() {
           </div>
         </Surface>
 
-        <Surface className="rounded-[28px] bg-[rgba(18,18,18,0.92)] p-5 md:p-6">
+        <Surface className="rounded-[28px] bg-[var(--surface)] p-5 md:p-6">
           <div className="space-y-4">
             <SectionHeader
               icon={<Clock3 className="h-4 w-4" />}
-              title={locale === "tr" ? `${brand.name} beta durumu` : `${brand.name} beta status`}
+              title={locale === "tr" ? `${brand.name} durumu` : `${brand.name} status`}
             />
             <div className="space-y-3 text-sm leading-7 text-[var(--text-secondary)]">
               <p>
                 {locale === "tr"
-                  ? "Bu ekran, App Store ve Play Store icin kullanacagin guncelleme notlarinin uygulama icindeki karsiligidir."
-                  : "This screen is the in-app counterpart to the update notes you will later publish in the App Store and Play Store."}
+                  ? "Burada yalnizca seni ilgilendiren uygulama degisiklikleri ve calisma alani hareketleri gorunur."
+                  : "This area shows useful app changes and workspace movement without release-process noise."}
               </p>
               <p>
                 {locale === "tr"
-                  ? "Beta boyunca burada son degisiklikleri, yapisal iyilestirmeleri ve kullaniciyi ilgilendiren davranis farklarini gosterecegiz."
-                  : "During beta, this is where structural changes, workflow improvements, and user-facing behavior updates will be surfaced."}
+                  ? "Onemli duzenlemeler, kayit davranislari ve gunluk kullanimdaki iyilestirmeler burada toplanir."
+                  : "Important fixes, writing-flow changes, and daily-use improvements are collected here."}
               </p>
             </div>
             <div className="grid gap-3">
@@ -110,7 +110,7 @@ export function RecentView() {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Surface className="rounded-[28px] bg-[rgba(18,18,18,0.92)] p-5 md:p-6">
+        <Surface className="rounded-[28px] bg-[var(--surface)] p-5 md:p-6">
           <div className="space-y-4">
             <SectionHeader
               icon={<BellRing className="h-4 w-4" />}
@@ -140,7 +140,7 @@ export function RecentView() {
           </div>
         </Surface>
 
-        <Surface className="rounded-[28px] bg-[rgba(18,18,18,0.92)] p-5 md:p-6">
+        <Surface className="rounded-[28px] bg-[var(--surface)] p-5 md:p-6">
           <div className="space-y-4">
             <SectionHeader
               icon={<Clock3 className="h-4 w-4" />}
@@ -169,7 +169,7 @@ export function RecentView() {
               ) : (
                 <div className="rounded-[22px] border border-[var(--border)] bg-[var(--surface-strong)] p-4 text-sm leading-7 text-[var(--text-secondary)]">
                   {locale === "tr"
-                    ? "Henüz goruntulenecek hareket yok."
+                    ? "Henuz goruntulenecek hareket yok."
                     : "There is no activity to show yet."}
                 </div>
               )}

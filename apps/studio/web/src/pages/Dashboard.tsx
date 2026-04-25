@@ -793,6 +793,68 @@ export default function DashboardPage() {
                   <PostCard key={post.id} post={post} locked={!canUseAccount} onLike={handleLike} onOpen={setSelectedPost} />
                 ))}
               </div>
+              {filteredPosts.length <= 6 && (
+                <div className="mt-8 overflow-hidden rounded-[30px] border border-white/[0.05] bg-[linear-gradient(135deg,rgba(255,255,255,0.055),rgba(255,255,255,0.018))] p-4 shadow-[0_22px_70px_-40px_rgba(4,10,18,0.55)] md:p-5">
+                  <div className="grid gap-5 lg:grid-cols-[0.74fr_1.26fr] lg:items-center">
+                    <div className="max-w-xl">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        <Sparkles className="h-3.5 w-3.5 text-zinc-400" />
+                        Direction shelf
+                      </div>
+                      <h2 className="mt-4 text-2xl font-semibold tracking-[-0.045em] text-white md:text-[1.9rem]">
+                        Need a starting point?
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-zinc-400">
+                        When the community feed is quiet, use curated references to pick a mood before opening Create.
+                      </p>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setGalleryTab('showcase')}
+                          className="rounded-full bg-[rgba(232,239,246,0.94)] px-4 py-2 text-sm font-semibold text-[#0f1720] transition hover:opacity-92"
+                        >
+                          Open Showcase
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGalleryTab('atmospheres')}
+                          className="rounded-full border border-white/[0.08] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white"
+                        >
+                          Browse Atmospheres
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {showcaseReferences.slice(1, 5).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => openLightbox(item.src, item.label, {
+                            title: item.label,
+                            authorName: 'OmniaCreata',
+                            authorUsername: 'studio',
+                            prompt: item.prompt,
+                          })}
+                          className="group relative aspect-[4/5] overflow-hidden rounded-[20px] border border-white/[0.05] bg-[#10151d] text-left"
+                        >
+                          <img
+                            src={item.src}
+                            alt={item.label}
+                            loading="lazy"
+                            style={item.focus ? { objectPosition: item.focus } : undefined}
+                            className="h-full w-full object-cover opacity-90 transition duration-500 group-hover:scale-[1.04] group-hover:opacity-100"
+                          />
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b1017]/82 via-transparent to-transparent" />
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
+                            <div className="text-[11px] font-semibold text-white">{item.label}</div>
+                            <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-400">{item.tag}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : searchQuery ? (
             <div className="py-8">

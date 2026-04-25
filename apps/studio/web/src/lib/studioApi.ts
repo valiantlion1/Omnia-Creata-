@@ -771,6 +771,7 @@ export type ProfileSummary = {
   plan: IdentityPlan
   default_visibility: Visibility | null
   featured_asset_id: string | null
+  featured_asset_position: 'top' | 'center' | 'bottom' | null
   usage_summary: UsageSummary | null
   public_post_count: number
 }
@@ -1297,7 +1298,7 @@ export const studioApi = {
   listFavoritePosts: () => apiFetch<{ posts: PublicPost[] }>('/profiles/me/favorites'),
   exportProfile: () => apiFetch<Record<string, unknown>>('/profiles/me/export'),
   deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
-  updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility; featured_asset_id?: string | null }) =>
+  updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility; featured_asset_id?: string | null; featured_asset_position?: 'top' | 'center' | 'bottom' }) =>
     apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 }
 

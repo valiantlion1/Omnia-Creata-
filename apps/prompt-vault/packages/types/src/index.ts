@@ -1,5 +1,5 @@
-export const appName = "Nolra";
-export const parentBrand = "Omnia Creata";
+export const appName = "OmniaPrompt";
+export const parentBrand = "OmniaCreata";
 export const parentDomain = "omniacreata.com";
 
 export const locales = ["en", "tr"] as const;

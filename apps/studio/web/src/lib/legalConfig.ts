@@ -20,7 +20,7 @@ export const LEGAL_PRELAUNCH_DISCLOSURE =
   'OmniaCreata Studio is currently operating under the OmniaCreata brand while formal business registration and public billing details are being finalized. Registered business details and any required regional representatives will be published before the self-serve public paid launch opens.'
 
 const LEGAL_PLACEHOLDER_MAP: Record<string, string> = {
-  'Omnia Creata Legal Entity Name': 'OmniaCreata Studio. Formal business registration details will be published before the self-serve public paid launch opens.',
+  'Omnia Creata Legal Entity Name': 'Omnia Creata, a founder-operated service',
   'Registered Address': 'Our registered business address will be published before the self-serve public paid launch opens.',
   'Company Registration No.': 'Formal company registration details will be published before the self-serve public paid launch opens.',
   'Governing Jurisdiction — e.g. Republic of Türkiye': 'Republic of Turkiye',

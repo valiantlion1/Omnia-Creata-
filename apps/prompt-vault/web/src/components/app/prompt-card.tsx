@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, Heart, Pencil, Repeat2, Vault } from "lucide-react";
+import { Archive, Copy, Heart, Pencil, Repeat2 } from "lucide-react";
 import { Badge, Button, Surface } from "@/components/ui/primitives";
 import { getEntries, getProjects } from "@/lib/dataset";
 import { formatDate, formatRelative } from "@/lib/format";
@@ -45,7 +45,7 @@ export function PromptCard({
   if (compact) {
     return (
       <Link href={localizeHref(locale, `/app/library/${entryRecord.id}`)}>
-        <Surface className="space-y-3 rounded-[18px] bg-[rgba(24,23,22,0.96)] p-4 transition duration-200 hover:border-[var(--border-strong)] hover:bg-[rgba(30,29,28,0.98)]">
+        <Surface className="space-y-3 rounded-[18px] bg-[var(--surface)] p-4 transition duration-200 hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
@@ -74,7 +74,7 @@ export function PromptCard({
   }
 
   return (
-    <Surface className="space-y-5 rounded-[22px] bg-[rgba(28,27,27,0.96)] p-5 md:p-6">
+    <Surface className="space-y-5 rounded-[22px] bg-[var(--surface)] p-5 md:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -100,7 +100,7 @@ export function PromptCard({
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition active:scale-95",
             entryRecord.isFavorite
-              ? "border-[rgba(242,202,80,0.3)] bg-[rgba(242,202,80,0.14)] text-[var(--accent-strong)]"
+              ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
               : "border-[var(--border)] bg-[var(--surface-strong)] text-[var(--text-secondary)]"
           )}
           onClick={() => toggleFavorite(entryRecord.id)}
@@ -110,7 +110,7 @@ export function PromptCard({
         </button>
       </div>
 
-      <div className="rounded-[18px] border border-[var(--border)] bg-[rgba(14,14,14,0.7)] px-4 py-4 text-sm leading-7 text-[var(--text-secondary)]">
+      <div className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4 text-sm leading-7 text-[var(--text-secondary)]">
         {entryRecord.body}
       </div>
 
@@ -149,7 +149,7 @@ export function PromptCard({
           {t("common.duplicate")}
         </Button>
         <Button className="min-h-10" onClick={() => toggleArchive(entryRecord.id)} size="sm" variant="ghost">
-          <Vault className="h-4 w-4" />
+          <Archive className="h-4 w-4" />
           {t("common.archive")}
         </Button>
       </div>

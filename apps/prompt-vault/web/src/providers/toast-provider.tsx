@@ -34,7 +34,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={cn(
-              "rounded-full border border-[color:rgba(212,167,91,0.16)] bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-4 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[var(--shadow-glow)] backdrop-blur-xl"
+              "rounded-full border border-[var(--border-strong)] bg-[var(--surface-strong)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] shadow-[var(--shadow-glow)]"
             )}
           >
             {toast.message}

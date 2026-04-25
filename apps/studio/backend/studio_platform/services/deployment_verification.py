@@ -23,7 +23,7 @@ _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
 
 def deployment_verification_report_path(settings: Settings, *, label: str) -> Path:
     normalized = _normalize_label(label)
-    return (settings.runtime_root_path / "reports" / f"{normalized}-verify-latest.json").resolve()
+    return _safe_resolve(settings.runtime_root_path / "reports" / f"{normalized}-verify-latest.json")
 
 
 def persist_deployment_verification_report(
@@ -93,14 +93,17 @@ def load_deployment_verification_report(
         candidate_paths.extend(root / f"{normalized}-verify-latest.json" for root in report_roots)
     else:
         for reports_root in report_roots:
-            if reports_root.exists():
-                candidate_paths.extend(sorted(reports_root.glob("*-verify-latest.json")))
+            if _path_exists(reports_root):
+                try:
+                    candidate_paths.extend(sorted(reports_root.glob("*-verify-latest.json")))
+                except OSError:
+                    continue
 
     newest_payload: dict[str, Any] | None = None
     newest_time: float | None = None
     seen_paths: set[Path] = set()
     for path in candidate_paths:
-        resolved_path = path.resolve()
+        resolved_path = _safe_resolve(path)
         if resolved_path in seen_paths:
             continue
         seen_paths.add(resolved_path)
@@ -113,7 +116,7 @@ def load_deployment_verification_report(
             modified_at = path.stat().st_mtime
         except OSError:
             modified_at = 0.0
-        payload["path"] = str(path.resolve())
+        payload["path"] = str(resolved_path)
         if newest_payload is None or newest_time is None or modified_at >= newest_time:
             newest_payload = payload
             newest_time = modified_at
@@ -121,11 +124,11 @@ def load_deployment_verification_report(
 
 
 def _deployment_verification_report_roots(settings: Settings) -> list[Path]:
-    primary_root = (settings.runtime_root_path / "reports").resolve()
+    primary_root = _safe_resolve(settings.runtime_root_path / "reports")
     roots = [primary_root]
-    runtime_root = settings.runtime_root_path.resolve()
+    runtime_root = _safe_resolve(settings.runtime_root_path)
     if runtime_root.name.lower() != "staging":
-        staging_root = (runtime_root / "staging" / "reports").resolve()
+        staging_root = _safe_resolve(runtime_root / "staging" / "reports")
         if staging_root not in roots:
             roots.append(staging_root)
     return roots
@@ -726,10 +729,24 @@ def _normalize_label(label: str) -> str:
     return collapsed or "deployment"
 
 
-def _load_json_payload(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
+def _path_exists(path: Path) -> bool:
     try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+def _safe_resolve(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except OSError:
+        return path
+
+
+def _load_json_payload(path: Path) -> dict[str, Any] | None:
+    try:
+        if not _path_exists(path):
+            return None
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None

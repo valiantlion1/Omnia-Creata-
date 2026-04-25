@@ -1,557 +1,958 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
-  Check,
-  ChevronDown,
-  Minus,
+  Download,
+  ExternalLink,
+  Folder,
+  Heart,
+  SlidersHorizontal,
   Sparkles,
   Wand2,
-  Layers3,
-  Palette,
-  Camera,
-  Lightbulb,
-  Users,
 } from 'lucide-react'
-import { usePageMeta } from '@/lib/usePageMeta'
+import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { LegalFooter } from '@/components/StudioPrimitives'
-import { studioApi, type PublicPlansPayload, type PublicPost } from '@/lib/studioApi'
+import { usePageMeta } from '@/lib/usePageMeta'
+import alpineLake from '@/assets/landing/studio/alpine-lake.png'
+import atelierInterior from '@/assets/landing/studio/atelier-interior.png'
+import coralFlower from '@/assets/landing/studio/coral-flower.png'
+import heroRiviera from '@/assets/landing/studio/hero-riviera.png'
+import marbleBust from '@/assets/landing/studio/marble-bust.png'
+import omniaSignature from '@/assets/landing/studio/omnia-signature.png'
+import portraitFloral from '@/assets/landing/studio/portrait-floral.png'
 
-type PlanCard = {
-  id: 'free_account' | 'creator' | 'pro'
-  name: string
-  price: string
-  cadence: string
-  tagline: string
-  bullets: string[]
-  cta: string
-  recommended: boolean
-  highlighted: boolean
+type StudioAsset = {
+  src: string
+  alt: string
+  label: string
+  focus?: string
 }
 
-function formatPrice(usd: number | null | undefined): string {
-  if (usd === null || usd === undefined) return '—'
-  if (usd === 0) return 'Free'
-  return `$${usd % 1 === 0 ? usd.toFixed(0) : usd.toFixed(2)}`
-}
-
-function buildPlanCards(payload: PublicPlansPayload | undefined): PlanCard[] {
-  if (!payload) return []
-  const featured = payload.featured_subscription
-
-  const free: PlanCard = {
-    id: 'free_account',
-    name: 'Free',
-    price: 'Free',
-    cadence: 'forever',
-    tagline: 'Open your workspace before you spend.',
-    bullets: [
-      'Personal workspace, library, and saved history',
-      'Buy wallet credits only when you are ready to generate',
-      'Upgrade later for Chat and higher capacity',
-    ],
-    cta: 'Open your workspace',
-    recommended: false,
-    highlighted: false,
-  }
-
-  const cards: PlanCard[] = [free]
-
-  for (const sub of payload.subscriptions ?? []) {
-    const isCreator = sub.id === 'creator'
-    const isPro = sub.id === 'pro'
-    const credits = sub.monthly_credits ? sub.monthly_credits.toLocaleString() : null
-    const isFeatured = sub.id === featured
-
-    const bullets = isCreator
-      ? [
-          credits ? `${credits} credits each month` : 'Generous monthly allowance',
-          'Chat mode for guided iteration',
-          'Commercial use included',
-          'Shareable links for your work',
-        ]
-      : isPro
-        ? [
-            credits ? `${credits} credits each month` : 'Higher monthly allowance',
-            'Priority rendering queue',
-            'Advanced finish quality',
-            'Everything in Creator',
-          ]
-        : sub.feature_summary?.slice(0, 4) ?? []
-
-    cards.push({
-      id: sub.id,
-      name: sub.label ?? (isCreator ? 'Creator' : isPro ? 'Pro' : sub.id),
-      price: formatPrice(sub.price_usd),
-      cadence: sub.billing_period === 'month' ? '/ month' : '',
-      tagline: isCreator
-        ? 'For the weekly maker.'
-        : isPro
-          ? 'For the studio operator.'
-          : '',
-      bullets,
-      cta: isFeatured ? `Go ${sub.label ?? sub.id}` : `Choose ${sub.label ?? sub.id}`,
-      recommended: isFeatured || sub.recommended,
-      highlighted: isFeatured,
-    })
-  }
-
-  return cards
-}
-
-type Faq = { q: string; a: string }
-
-const FAQS: Faq[] = [
+const assets: StudioAsset[] = [
   {
-    q: 'Can I use what I make commercially?',
-    a: 'Yes — on any paid plan, you own what you create and can use it for client work, products, or anything else you put out into the world. The free tier is meant for personal projects and exploration.',
+    src: heroRiviera,
+    alt: 'Italian Riviera villa terrace at golden hour',
+    label: 'Cinematic',
   },
   {
-    q: 'Do I really own the images?',
-    a: 'Yes. We do not reuse your prompts, outputs, or references for training, marketing, or anything else. What you make is yours, start to finish.',
+    src: portraitFloral,
+    alt: 'Fine art portrait with a floral crown',
+    label: 'Portrait',
   },
   {
-    q: 'How fast is it?',
-    a: 'Most images come back in a few seconds. Higher-quality finishes take a little longer because they render at a tighter pass — but you stay in the flow, not waiting on a queue.',
+    src: atelierInterior,
+    alt: 'Warm atelier interior with arched windows',
+    label: 'Interior',
   },
   {
-    q: 'What does the free plan actually include?',
-    a: 'Full access to the creative canvas and a personal library. You can start making things immediately, without a card, and upgrade only when you want more room to work.',
+    src: alpineLake,
+    alt: 'Alpine lake and mountain range at sunrise',
+    label: 'Landscape',
   },
   {
-    q: 'Can I cancel anytime?',
-    a: 'Anytime, from your account. No contracts, no exit fees, no support-ticket dance. Your library and past work stay with you either way.',
+    src: coralFlower,
+    alt: 'Dark coral flower macro with warm light',
+    label: 'Macro',
+  },
+  {
+    src: marbleBust,
+    alt: 'Classical marble bust in a dim atelier',
+    label: 'Fine art',
   },
 ]
 
-function PricingCard({ card, onClick }: { card: PlanCard; onClick: () => void }) {
-  return (
-    <div
-      className={[
-        'relative flex flex-col gap-6 rounded-[26px] border p-7 transition',
-        card.highlighted
-          ? 'border-[rgb(var(--primary-light)/0.45)] bg-[rgb(var(--primary)/0.1)]'
-          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1]',
-      ].join(' ')}
-      style={{
-        boxShadow: card.highlighted
-          ? '0 0 60px -20px rgba(124,58,237,0.45), inset 0 0 40px -20px rgba(124,58,237,0.08)'
-          : 'var(--border-glow)',
-      }}
-    >
-      {card.recommended && (
-        <div className="absolute -top-3 left-7 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-[0_4px_20px_-4px_rgba(124,58,237,0.5)]">
-          Most popular
-        </div>
-      )}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">{card.name}</div>
-        {card.tagline && <div className="mt-1.5 text-[13px] text-zinc-400">{card.tagline}</div>}
-        <div className="mt-5 flex items-baseline gap-1.5">
-          <div className="text-[44px] font-black leading-none tracking-tight text-white">{card.price}</div>
-          {card.cadence && <div className="text-sm text-zinc-500">{card.cadence}</div>}
-        </div>
-      </div>
-      <ul className="flex flex-col gap-2.5 text-sm text-zinc-200">
-        {card.bullets.map((b) => (
-          <li key={b} className="flex items-start gap-2.5">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[rgb(var(--primary-light))]" />
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={onClick}
-        className={[
-          'mt-auto rounded-full px-5 py-3.5 text-sm font-bold transition-all active:scale-[0.98]',
-          card.highlighted
-            ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-white shadow-[0_0_30px_-6px_rgba(124,58,237,0.5)] hover:shadow-[0_0_50px_-6px_rgba(124,58,237,0.7)] hover:scale-[1.02]'
-            : 'bg-white/[0.06] text-white ring-1 ring-white/[0.08] hover:bg-white/[0.1]',
-        ].join(' ')}
-      >
-        {card.cta}
-      </button>
-    </div>
-  )
-}
+const galleryBelt: StudioAsset[] = [
+  {
+    src: portraitFloral,
+    alt: 'Fine art portrait with a floral crown',
+    label: 'Portrait',
+    focus: '48% 34%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Italian Riviera villa terrace at golden hour',
+    label: 'Cinematic',
+    focus: '58% 48%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Alpine lake and mountain range at sunrise',
+    label: 'Landscape',
+    focus: '46% 48%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Dark coral flower macro with warm light',
+    label: 'Macro',
+    focus: '54% 46%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Classical marble bust in a dim atelier',
+    label: 'Fine art',
+    focus: '42% 48%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Warm atelier interior with arched windows',
+    label: 'Interior',
+    focus: '42% 52%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Editorial portrait detail with warm studio shadow',
+    label: 'Editorial',
+    focus: '38% 42%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Golden coastal villa reference with sea light',
+    label: 'Riviera',
+    focus: '34% 44%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Alpine sunrise environment concept',
+    label: 'Environment',
+    focus: '58% 42%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Textural coral petal macro study',
+    label: 'Texture',
+    focus: '46% 38%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Sculptural marble study with deep shadow',
+    label: 'Sculpture',
+    focus: '55% 48%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Library-like atelier interior with warm window light',
+    label: 'Atelier',
+    focus: '62% 48%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Painterly portrait crop with floral detail',
+    label: 'Painterly',
+    focus: '62% 38%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Bougainvillea terrace with cinematic sunset',
+    label: 'Golden hour',
+    focus: '72% 46%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Wide alpine panorama with sunrise haze',
+    label: 'Panorama',
+    focus: '42% 44%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Botanical macro rendered with dramatic light',
+    label: 'Botanical',
+    focus: '66% 50%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Museum-like marble bust under warm atelier light',
+    label: 'Classical',
+    focus: '34% 48%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Warm interior product mood reference',
+    label: 'Moodboard',
+    focus: '30% 54%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Fashion portrait crop with flowered hair styling',
+    label: 'Fashion',
+    focus: '56% 36%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Italian coastal terrace framed as a film still',
+    label: 'Film still',
+    focus: '48% 46%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Mountain lake environment with soft dawn light',
+    label: 'Dawn lake',
+    focus: '66% 48%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Material study of warm coral petals',
+    label: 'Material',
+    focus: '40% 52%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Chiaroscuro sculpture study with deep shadow',
+    label: 'Chiaroscuro',
+    focus: '60% 44%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Sunlit creative room with framed artwork and plants',
+    label: 'Creative room',
+    focus: '52% 42%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Character portrait with floral costume detail',
+    label: 'Character',
+    focus: '44% 40%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Travel editorial terrace on the Italian coastline',
+    label: 'Travel',
+    focus: '62% 42%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Wilderness landscape reference with reflected sky',
+    label: 'Wilderness',
+    focus: '30% 52%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Close botanical petal detail with rich red tone',
+    label: 'Petal study',
+    focus: '58% 42%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Fine art plaster and ceramic still life detail',
+    label: 'Gallery study',
+    focus: '46% 52%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Product room reference with warm atelier shelves',
+    label: 'Product room',
+    focus: '70% 50%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Beauty portrait detail with dark painted backdrop',
+    label: 'Beauty',
+    focus: '70% 34%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Soft coastal sunset image-generation reference',
+    label: 'Coastal',
+    focus: '76% 50%',
+  },
+  {
+    src: alpineLake,
+    alt: 'Quiet mountain environment concept with lake reflection',
+    label: 'Quiet wilds',
+    focus: '52% 50%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Red coral bloom used as a rich macro reference',
+    label: 'Coral bloom',
+    focus: '48% 48%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Classical fine art reference with sculptural crop',
+    label: 'Marble study',
+    focus: '68% 48%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Still life interior corner with warm window light',
+    label: 'Still life',
+    focus: '36% 48%',
+  },
+  {
+    src: portraitFloral,
+    alt: 'Romantic editorial portrait with floral crown detail',
+    label: 'Romantic',
+    focus: '34% 36%',
+  },
+  {
+    src: heroRiviera,
+    alt: 'Mediterranean villa terrace with cinematic light',
+    label: 'Mediterranean',
+    focus: '28% 44%',
+  },
+  {
+    src: alpineLake,
+    alt: 'High alpine concept art style environment reference',
+    label: 'Alpine',
+    focus: '76% 42%',
+  },
+  {
+    src: coralFlower,
+    alt: 'Abstract floral macro texture in dark warm light',
+    label: 'Abstract macro',
+    focus: '72% 52%',
+  },
+  {
+    src: marbleBust,
+    alt: 'Antique sculpture reference beside ceramic forms',
+    label: 'Antique',
+    focus: '30% 50%',
+  },
+  {
+    src: atelierInterior,
+    alt: 'Warm library interior with art and plants',
+    label: 'Library light',
+    focus: '58% 46%',
+  },
+]
 
-function FaqItem({ item, open, onToggle }: { item: Faq; open: boolean; onToggle: () => void }) {
-  return (
-    <div className="border-b border-white/[0.05] last:border-b-0">
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-6 py-5 text-left transition"
-      >
-        <span className="text-[15px] font-semibold text-white/95 md:text-base">{item.q}</span>
-        {open ? (
-          <Minus className="h-4 w-4 shrink-0 text-zinc-400" />
-        ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" />
-        )}
-      </button>
-      {open && <p className="pb-6 pr-10 text-[15px] leading-relaxed text-zinc-400">{item.a}</p>}
-    </div>
-  )
-}
+const atmosphereBelt: StudioAsset[] = [
+  {
+    src: '/atmosphere/hero-01-portrait.png',
+    alt: 'Cinematic studio portrait with soft dramatic light',
+    label: 'Studio portrait',
+    focus: '48% 38%',
+  },
+  {
+    src: '/atmosphere/showcase-02-editorial-portrait.png',
+    alt: 'Editorial portrait reference with polished lighting',
+    label: 'Cover portrait',
+    focus: '48% 36%',
+  },
+  {
+    src: '/atmosphere/showcase-07-fashion-editorial.png',
+    alt: 'Fashion editorial image with premium styling',
+    label: 'Runway mood',
+    focus: '50% 38%',
+  },
+  {
+    src: '/atmosphere/hero-02-ocean.png',
+    alt: 'Cinematic ocean landscape at golden hour',
+    label: 'Ocean light',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/hero-04-mountain.png',
+    alt: 'Mountain landscape concept with cinematic atmosphere',
+    label: 'Mountain',
+    focus: '52% 46%',
+  },
+  {
+    src: '/atmosphere/hero-05-blossom.png',
+    alt: 'Blossom landscape study with soft natural light',
+    label: 'Blossom',
+    focus: '54% 44%',
+  },
+  {
+    src: '/atmosphere/showcase-11-nature-macro.png',
+    alt: 'Nature macro detail with rich texture',
+    label: 'Nature macro',
+    focus: '52% 44%',
+  },
+  {
+    src: '/atmosphere/showcase-10-food-photography.png',
+    alt: 'Food photography still life with warm commercial styling',
+    label: 'Food still',
+    focus: '50% 50%',
+  },
+  {
+    src: '/atmosphere/showcase-05-product-photo.png',
+    alt: 'Premium product photography reference',
+    label: 'Product',
+    focus: '48% 48%',
+  },
+  {
+    src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp',
+    alt: 'Volcanic fragrance product concept with dramatic material light',
+    label: 'Fragrance',
+    focus: '50% 50%',
+  },
+  {
+    src: '/atmosphere/showcase-06-luxury-interior.png',
+    alt: 'Luxury interior reference with refined warm light',
+    label: 'Luxury room',
+    focus: '52% 50%',
+  },
+  {
+    src: '/atmosphere/atmosphere-02-conservatory.png',
+    alt: 'Conservatory interior with lush plants and glass light',
+    label: 'Conservatory',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/showcase-03-architecture.png',
+    alt: 'Architecture image with clean material geometry',
+    label: 'Architecture',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/atmosphere-01-brutalist.png',
+    alt: 'Brutalist architectural fine art reference',
+    label: 'Brutalist',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/atmosphere-05-desert-courtyard.png',
+    alt: 'Desert courtyard scene with cinematic golden light',
+    label: 'Courtyard',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/atmosphere-03-skyline-garden.png',
+    alt: 'Skyline garden architecture concept with greenery',
+    label: 'Sky garden',
+    focus: '52% 46%',
+  },
+  {
+    src: '/atmosphere/atmosphere-04-snow-leopard.png',
+    alt: 'Snow leopard wildlife study with premium cinematic atmosphere',
+    label: 'Wildlife',
+    focus: '52% 44%',
+  },
+  {
+    src: '/atmosphere/atmosphere-07-observatory.webp',
+    alt: 'Observatory concept with quiet cinematic architecture',
+    label: 'Observatory',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/atmosphere-08-glass-fins.webp',
+    alt: 'Glass fin architecture detail with polished material light',
+    label: 'Glass forms',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/hero-03-car.png',
+    alt: 'Automotive product image with premium cinematic framing',
+    label: 'Automotive',
+    focus: '52% 50%',
+  },
+]
 
-function GalleryTile({ post, aspect }: { post: PublicPost; aspect: string }) {
-  const url = post.cover_asset?.thumbnail_url ?? post.cover_asset?.url ?? post.preview_assets?.[0]?.url
-  if (!url) return null
-  return (
-    <figure
-      className={`group relative overflow-hidden rounded-[18px] border border-white/[0.05] bg-white/[0.02] ${aspect}`}
-      style={{ boxShadow: 'var(--border-glow)' }}
-    >
-      <img
-        src={url}
-        alt={post.title || post.prompt || 'Studio creation'}
-        loading="lazy"
-        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      {post.title && (
-        <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <div className="text-[13px] font-semibold text-white/95 line-clamp-1">{post.title}</div>
-          <div className="text-[11px] text-zinc-400">by @{post.owner_username}</div>
-        </figcaption>
-      )}
-    </figure>
-  )
-}
+const genreBelt: StudioAsset[] = [
+  {
+    src: '/atmosphere/hero-06-cyberpunk.png',
+    alt: 'Cyberpunk character scene with neon city atmosphere',
+    label: 'Cyberpunk',
+    focus: '50% 42%',
+  },
+  {
+    src: '/atmosphere/showcase-01-neon-cityscape.png',
+    alt: 'Neon cityscape image-generation style reference',
+    label: 'Neon noir',
+    focus: '52% 48%',
+  },
+  {
+    src: '/atmosphere/showcase-09-scifi-cityscape.png',
+    alt: 'Science-fiction cityscape with cinematic light',
+    label: 'Sci-fi city',
+    focus: '50% 48%',
+  },
+  {
+    src: '/atmosphere/showcase-08-anime-warrior.png',
+    alt: 'Anime warrior illustration style reference',
+    label: 'Anime',
+    focus: '50% 38%',
+  },
+  {
+    src: '/atmosphere/atmosphere-10-elven-ward.webp',
+    alt: 'Stylized cel-shaded fantasy image style reference',
+    label: 'Cel shading',
+    focus: '50% 46%',
+  },
+  {
+    src: '/atmosphere/showcase-04-fantasy-dragon.png',
+    alt: 'Fantasy dragon illustration style reference',
+    label: 'Fantasy',
+    focus: '52% 44%',
+  },
+  {
+    src: '/atmosphere/atmosphere-09-snow-leopard.webp',
+    alt: 'Creature concept art style reference',
+    label: 'Creature art',
+    focus: '52% 44%',
+  },
+  {
+    src: '/atmosphere/showcase-07-fashion-editorial.png',
+    alt: 'Glam editorial fashion image style reference',
+    label: 'Glam editorial',
+    focus: '50% 36%',
+  },
+  {
+    src: '/atmosphere/showcase-02-editorial-portrait.png',
+    alt: 'Tasteful sexy editorial fashion style reference',
+    label: 'Sexy editorial',
+    focus: '48% 36%',
+  },
+  {
+    src: '/atmosphere/hero-01-portrait.png',
+    alt: 'Photoreal cinematic portrait style reference',
+    label: 'Photoreal',
+    focus: '48% 38%',
+  },
+  {
+    src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp',
+    alt: 'Dark luxury product-advertising image style reference',
+    label: 'Luxury ad',
+    focus: '50% 50%',
+  },
+  {
+    src: '/atmosphere/hero-03-car.png',
+    alt: 'Premium automotive campaign image style reference',
+    label: 'Car ad',
+    focus: '52% 50%',
+  },
+]
+
+const inspiredGalleryBelt = [
+  ...galleryBelt.slice(0, 6),
+  atmosphereBelt[3],
+  atmosphereBelt[4],
+  atmosphereBelt[5],
+  atmosphereBelt[8],
+  atmosphereBelt[12],
+  atmosphereBelt[16],
+]
+const styleGenreBelt = [...genreBelt]
+const communityGalleryBelt = [
+  atmosphereBelt[8],
+  atmosphereBelt[10],
+  atmosphereBelt[11],
+  atmosphereBelt[12],
+  atmosphereBelt[16],
+  atmosphereBelt[14],
+  atmosphereBelt[18],
+  atmosphereBelt[19],
+  atmosphereBelt[0],
+  atmosphereBelt[1],
+  atmosphereBelt[2],
+  atmosphereBelt[6],
+  atmosphereBelt[7],
+  ...galleryBelt.slice(0, 6),
+]
+
+const styleChips = ['Editorial portrait', 'Product study', 'World mood']
+const ratios = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
+
+const workflow = [
+  {
+    step: '01',
+    title: 'Create',
+    body: 'Turn a prompt into a composed first image without leaving the page flow.',
+    icon: Sparkles,
+  },
+  {
+    step: '02',
+    title: 'Refine',
+    body: 'Adjust style, ratio, and direction before the idea goes cold.',
+    icon: Wand2,
+  },
+  {
+    step: '03',
+    title: 'Save',
+    body: 'Keep the selected work in Library when it is worth returning to.',
+    icon: Folder,
+  },
+]
 
 export default function LandingPage() {
   const navigate = useNavigate()
   usePageMeta(
     'Omnia Creata Studio',
-    'A creative studio for turning ideas into images. Make, iterate, and own the work.',
+    'Premium AI image generation for creating, refining, and keeping visual work.',
   )
 
-  const { data: plansPayload } = useQuery({
-    queryKey: ['landing', 'public-plans'],
-    queryFn: () => studioApi.getPublicPlans(),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  })
-
-  const { data: trendingPosts } = useQuery({
-    queryKey: ['landing', 'trending-posts'],
-    queryFn: () => studioApi.listPublicPosts('trending'),
-    staleTime: 2 * 60 * 1000,
-    retry: 1,
-  })
-
-  const planCards = useMemo(() => buildPlanCards(plansPayload), [plansPayload])
-  const galleryPosts = useMemo(() => {
-    const posts = trendingPosts?.posts ?? []
-    return posts
-      .filter(
-        (p) =>
-          p.cover_asset?.thumbnail_url ||
-          p.cover_asset?.url ||
-          p.preview_assets?.[0]?.url,
-      )
-      .slice(0, 8)
-  }, [trendingPosts])
-
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
-
-  const handlePlanCta = (id: PlanCard['id']) => {
-    if (id === 'free_account') navigate('/signup')
-    else navigate('/subscription')
-  }
+  const openCreate = () => navigate('/create?intent=first_creation')
+  const openGallery = () => navigate('/explore')
 
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#060608] text-white">
-      {/* Ambient glows */}
-      <div className="pointer-events-none absolute left-[-15%] top-[-10%] h-[55vw] w-[55vw] rounded-full bg-[rgb(var(--primary))] opacity-[0.14] blur-[160px]" />
-      <div className="pointer-events-none absolute bottom-[-15%] right-[-15%] h-[45vw] w-[45vw] rounded-full bg-[rgb(var(--accent))] opacity-[0.09] blur-[160px]" />
-      <div className="pointer-events-none absolute left-1/2 top-[30%] h-[30vw] w-[60vw] -translate-x-1/2 rounded-full bg-[rgb(var(--primary-light))] opacity-[0.04] blur-[140px]" />
+    <div className="relative min-h-screen overflow-x-clip bg-[#080704] text-[#f6f0e6]">
+      <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_14%_16%,rgba(205,119,59,0.20),transparent_34%),radial-gradient(circle_at_82%_18%,rgba(33,109,110,0.18),transparent_30%),linear-gradient(180deg,#12100b_0%,#080704_48%,#050403_100%)]" />
+      <div
+        className="pointer-events-none fixed inset-0 z-0 opacity-[0.035] mix-blend-soft-light"
+        style={{
+          backgroundImage:
+            'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E")',
+        }}
+      />
 
-      {/* Navigation */}
-      <nav className="relative z-20 mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-5 md:px-8 md:py-6">
-        <button onClick={() => navigate('/')} className="flex items-center gap-3">
-          <img src="/omnia-crest.png" alt="Omnia Creata" className="h-10 w-10 object-contain" />
-          <div className="hidden sm:block text-left">
-            <div className="text-sm font-semibold tracking-tight text-white/95">Omnia Creata</div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Studio</div>
-          </div>
-        </button>
-        <div className="flex items-center gap-3 md:gap-5">
-          <button onClick={() => navigate('/explore')} className="hidden lg:inline text-sm font-medium text-zinc-400 transition hover:text-white">
-            Gallery
-          </button>
-          <button onClick={() => navigate('/subscription')} className="hidden lg:inline text-sm font-medium text-zinc-400 transition hover:text-white">
-            Pricing
-          </button>
-          <button onClick={() => navigate('/help')} className="hidden lg:inline text-sm font-medium text-zinc-400 transition hover:text-white">
-            Help
-          </button>
-          <button onClick={() => navigate('/login')} className="text-sm font-semibold text-zinc-300 transition hover:text-white">
-            Log in
-          </button>
-          <button
-            onClick={() => navigate('/signup')}
-            className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-[0_0_20px_rgba(255,255,255,0.14)] transition-all hover:scale-105 active:scale-[0.98] md:px-5 md:py-2.5"
-          >
-            Create account
-          </button>
-        </div>
-      </nav>
-
-      {/* Hero */}
-      <main className="relative z-10 mx-auto flex max-w-[1080px] flex-col items-center justify-center px-6 pb-16 pt-16 text-center md:px-8 md:pt-24">
-        <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300 backdrop-blur-md">
-          <Sparkles className="h-3.5 w-3.5 text-[rgb(var(--primary-light))]" />
-          A creative studio, not a prompt box
-        </div>
-
-        <h1
-          className="mb-6 text-[40px] font-black leading-[1.02] tracking-tighter font-display sm:text-6xl md:text-[80px] lg:text-[96px]"
-          style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, rgb(var(--primary-light)) 55%, #ffffff 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
+      <header className="relative z-20 mx-auto flex max-w-[1560px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
+        <button
+          aria-label="Omnia Creata Studio home"
+          className="group flex items-center"
+          onClick={() => navigate('/landing')}
+          type="button"
         >
-          Make it look
-          <br />
-          like you meant it.
-        </h1>
+          <img
+            src={omniaSignature}
+            alt="Omnia Creata"
+            className="h-16 w-[136px] object-contain drop-shadow-[0_14px_30px_rgba(227,177,89,0.28)] transition duration-300 group-hover:-translate-y-0.5 sm:h-20 sm:w-[170px]"
+          />
+        </button>
 
-        <p className="mb-10 max-w-[620px] text-[17px] leading-relaxed text-zinc-400 md:text-[19px]">
-          Omnia Creata Studio is where ideas become images you actually want to use.
-          Characters, concept art, product shots, moodboards — one workspace, your rules.
-        </p>
+        <nav className="hidden items-center gap-2 rounded-full border border-[#e6bb6d]/15 bg-black/25 p-1 text-sm text-[#d7ccbd] shadow-[0_18px_64px_rgba(0,0,0,0.26)] backdrop-blur-xl lg:flex">
+          {[
+            ['Create', openCreate],
+            ['Gallery', openGallery],
+            ['Styles', () => document.getElementById('styles')?.scrollIntoView({ behavior: 'smooth' })],
+            ['Pricing', () => navigate('/subscription')],
+          ].map(([label, handler]) => (
+            <button
+              className="rounded-full px-5 py-2.5 transition hover:bg-white/[0.05] hover:text-white"
+              key={label as string}
+              onClick={handler as () => void}
+              type="button"
+            >
+              {label as string}
+            </button>
+          ))}
+        </nav>
 
-        <div className="flex flex-col items-center gap-3 sm:flex-row">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/signup')}
-            className="group flex items-center gap-2.5 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-7 py-4 text-base font-bold shadow-[0_0_40px_-6px_rgba(124,58,237,0.45)] transition-all hover:scale-[1.03] hover:shadow-[0_0_60px_-6px_rgba(124,58,237,0.65)] active:scale-[0.98]"
+            className="hidden text-sm font-semibold text-[#d7ccbd] transition hover:text-white sm:inline-flex"
+            onClick={() => navigate('/login')}
+            type="button"
+          >
+            Sign in
+          </button>
+          <button
+            className="rounded-full border border-[#f6cf8b]/40 bg-gradient-to-r from-[#f4c979] to-[#c88f3d] px-4 py-2.5 text-sm font-bold text-[#1a1007] shadow-[0_18px_50px_rgba(199,136,55,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_64px_rgba(199,136,55,0.3)] sm:px-5"
+            onClick={openCreate}
+            type="button"
           >
             Start creating
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </button>
-          <button
-            onClick={() => navigate('/explore')}
-            className="rounded-full border border-white/[0.08] bg-white/[0.03] px-7 py-4 text-base font-semibold text-zinc-300 backdrop-blur-md transition-all hover:bg-white/[0.06] hover:border-white/[0.12]"
-          >
-            Browse the gallery
           </button>
         </div>
-      </main>
+      </header>
 
-      {/* Gallery strip — real trending work */}
-      {galleryPosts.length >= 4 && (
-        <section className="relative z-10 py-12 md:py-16">
-          <div className="mx-auto max-w-[1400px] px-6 md:px-8">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-              {galleryPosts.slice(0, 4).map((post, i) => (
-                <GalleryTile
-                  key={post.id}
-                  post={post}
-                  aspect={
-                    i === 0 || i === 3
-                      ? 'aspect-[4/5]'
-                      : i === 1
-                        ? 'aspect-[4/5] md:translate-y-8'
-                        : 'aspect-[4/5] md:-translate-y-4'
-                  }
-                />
+      <main className="relative z-10">
+        <section className="relative mx-auto grid min-h-[calc(100svh-112px)] max-w-[1560px] gap-8 px-5 pb-8 pt-2 sm:px-8 lg:grid-cols-[0.74fr_1.26fr] lg:items-center">
+          <div className="pointer-events-none absolute left-[-12%] top-[8%] h-[28rem] w-[28rem] rounded-full bg-[#d4733f]/20 blur-[130px]" />
+          <div className="pointer-events-none absolute right-[-10%] top-[12%] h-[34rem] w-[34rem] rounded-full bg-[#1f7777]/15 blur-[150px]" />
+
+          <div className="relative z-10 max-w-xl">
+            <p className="mb-5 text-[11px] font-bold uppercase tracking-[0.36em] text-[#f0c979]">
+              AI image generation studio
+            </p>
+            <h1 className="max-w-[10ch] font-display text-[58px] font-black leading-[0.91] tracking-[-0.08em] text-[#f6f0e6] sm:text-[76px] lg:text-[92px] xl:text-[106px]">
+              Your ideas.
+              <span className="block text-[#f1bf67]">Extraordinary images.</span>
+            </h1>
+            <p className="mt-7 max-w-[34rem] text-[16px] leading-8 text-[#cfc4b5] sm:text-[18px]">
+              Create polished images from a prompt, refine the direction, and keep the work worth saving.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button
+                className="group inline-flex items-center justify-center gap-2 rounded-full border border-[#f6cf8b]/45 bg-gradient-to-r from-[#f4c979] to-[#c88f3d] px-7 py-4 text-base font-bold text-[#1a1007] shadow-[0_24px_70px_rgba(199,136,55,0.25)] transition hover:-translate-y-0.5"
+                onClick={openCreate}
+                type="button"
+              >
+                Start creating
+                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+              </button>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#f6cf8b]/18 bg-white/[0.045] px-7 py-4 text-base font-semibold text-[#f6f0e6] backdrop-blur-xl transition hover:border-[#f6cf8b]/32 hover:bg-white/[0.07]"
+                onClick={openGallery}
+                type="button"
+              >
+                Explore gallery
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <TrustNote index="01" title="Open the canvas" body="Create is the next step from the landing page." />
+              <TrustNote index="02" title="Keep the work" body="Library and history unlock when the project matters." />
+            </div>
+          </div>
+
+          <div className="relative z-10 overflow-hidden rounded-[32px] border border-[#f1bf67]/18 bg-[#110e09]/72 shadow-[0_34px_110px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
+            <div className="pointer-events-none absolute inset-[-20%] bg-[linear-gradient(112deg,transparent_25%,rgba(246,207,139,0.07)_44%,rgba(255,255,255,0.04)_52%,transparent_72%)] animate-[studio-panel-sweep_16s_linear_infinite]" />
+            <div className="relative z-10 grid gap-4 p-4">
+              <GeneratedPreview />
+              <ComposerPanel onCreate={openCreate} />
+            </div>
+          </div>
+        </section>
+
+        <section className="relative z-10 space-y-5 pb-10" id="gallery">
+          <GalleryRail items={inspiredGalleryBelt} title="Inspired creations" />
+          <GalleryRail items={styleGenreBelt} title="Style genres" variant="slow" />
+          <GalleryRail items={communityGalleryBelt} title="Community gallery" variant="offset" />
+        </section>
+
+        <section className="relative z-10 mx-auto grid max-w-[1560px] gap-4 px-5 pb-16 pt-4 sm:px-8 lg:grid-cols-[repeat(3,minmax(0,1fr))_1.15fr]">
+          {workflow.map((item) => (
+            <article
+              className="rounded-[26px] border border-[#f1bf67]/14 bg-white/[0.04] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)] backdrop-blur-xl"
+              key={item.title}
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <span className="text-sm font-bold text-[#f1bf67]">{item.step}</span>
+                <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[#f1bf67]/18 bg-[#f1bf67]/8 text-[#f1bf67]">
+                  <item.icon className="h-5 w-5" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold tracking-[-0.05em] text-white">{item.title}</h2>
+              <p className="mt-3 text-sm leading-7 text-[#cfc4b5]">{item.body}</p>
+            </article>
+          ))}
+
+          <article className="rounded-[26px] border border-[#f1bf67]/14 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.25)] backdrop-blur-xl">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#f1bf67]">Library</p>
+            <h2 className="mt-4 text-2xl font-bold tracking-[-0.05em] text-white">Your library, everywhere</h2>
+            <p className="mt-3 text-sm leading-7 text-[#cfc4b5]">
+              Save selected images, return to projects, and keep the creative thread intact.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {['Desktop', 'Tablet', 'Mobile', 'Cloud'].map((item) => (
+                <span
+                  className="rounded-full border border-[#f1bf67]/18 bg-[#f1bf67]/8 px-3 py-1.5 text-xs font-semibold text-[#f1bf67]"
+                  key={item}
+                >
+                  {item}
+                </span>
               ))}
             </div>
-            <div className="mt-6 text-center">
+          </article>
+        </section>
+
+        <section className="relative z-10 px-5 pb-24 sm:px-8">
+          <div className="mx-auto flex max-w-[1560px] flex-col gap-6 rounded-[32px] border border-[#f1bf67]/16 bg-white/[0.045] p-7 shadow-[0_28px_100px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between lg:p-9">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#f1bf67]">Try the flow</p>
+              <h2 className="mt-4 max-w-3xl text-[34px] font-black leading-[1.02] tracking-[-0.07em] text-white sm:text-[52px]">
+                Start in Create. Save when the image is worth keeping.
+              </h2>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
-                onClick={() => navigate('/explore')}
-                className="text-sm font-semibold text-zinc-400 transition hover:text-white"
+                className="rounded-full border border-[#f6cf8b]/45 bg-gradient-to-r from-[#f4c979] to-[#c88f3d] px-7 py-4 text-base font-bold text-[#1a1007] shadow-[0_24px_70px_rgba(199,136,55,0.25)] transition hover:-translate-y-0.5"
+                onClick={openCreate}
+                type="button"
               >
-                See everything people are making →
+                Start creating
+              </button>
+              <button
+                className="rounded-full border border-[#f6cf8b]/18 bg-white/[0.045] px-7 py-4 text-base font-semibold text-[#f6f0e6] transition hover:bg-white/[0.07]"
+                onClick={() => navigate('/login')}
+                type="button"
+              >
+                Sign in
               </button>
             </div>
           </div>
         </section>
-      )}
+      </main>
 
-      {/* Use cases */}
-      <section className="relative z-10 border-t border-white/[0.04] bg-[#07080c] py-20 md:py-28">
-        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
-          <div className="mb-14 max-w-2xl">
-            <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-600">Built for real work</div>
-            <h2 className="text-[32px] font-bold leading-[1.1] tracking-tight text-white md:text-[48px]">
-              Whatever you make,
-              <br className="hidden md:inline" />
-              <span className="text-zinc-500"> make it better.</span>
-            </h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              {
-                icon: Users,
-                title: 'Characters & portraits',
-                body: 'Consistent faces, fits, and expressions for the cast you actually need.',
-              },
-              {
-                icon: Palette,
-                title: 'Concept & key art',
-                body: 'Big establishing shots, environments, and story beats that read at a glance.',
-              },
-              {
-                icon: Camera,
-                title: 'Product & editorial',
-                body: 'Clean staging, controlled lighting, and finishes that hold up on a grid.',
-              },
-              {
-                icon: Lightbulb,
-                title: 'Moodboards & exploration',
-                body: 'Blast through twenty directions before lunch. Keep the two that click.',
-              },
-              {
-                icon: Layers3,
-                title: 'Iteration, not lottery',
-                body: 'Refine an image with precision. No re-rolling the dice until you get lucky.',
-              },
-              {
-                icon: Wand2,
-                title: 'Your signature look',
-                body: 'Save styles that match your voice and reuse them across projects.',
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="group rounded-[22px] border border-white/[0.05] bg-white/[0.02] p-7 transition hover:border-white/[0.1] hover:bg-white/[0.035]"
-                style={{ boxShadow: 'var(--border-glow)' }}
-              >
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.05] text-[rgb(var(--primary-light))] transition group-hover:bg-[rgb(var(--primary)/0.12)]">
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <h3 className="mb-2 text-lg font-bold text-white">{item.title}</h3>
-                <p className="text-[14px] leading-relaxed text-zinc-400">{item.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section className="relative z-10 border-t border-white/[0.04] bg-[#060608] py-20 md:py-28">
-        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
-          <div className="mb-14 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-            <div>
-              <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-600">Pricing</div>
-              <h2 className="text-[32px] font-bold leading-[1.1] tracking-tight text-white md:text-[48px]">
-                Simple plans.
-                <br className="hidden md:inline" />
-                <span className="text-zinc-500"> Honest math.</span>
-              </h2>
-            </div>
-            <button
-              onClick={() => navigate('/subscription')}
-              className="text-sm font-semibold text-[rgb(var(--primary-light))] transition hover:text-white"
-            >
-              See full pricing →
-            </button>
-          </div>
-
-          {planCards.length > 0 ? (
-            <div className="grid gap-5 md:grid-cols-3">
-              {planCards.map((card) => (
-                <PricingCard key={card.id} card={card} onClick={() => handlePlanCta(card.id)} />
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-5 md:grid-cols-3">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-[380px] rounded-[26px] border border-white/[0.05] bg-white/[0.02] p-7"
-                  style={{ boxShadow: 'var(--border-glow)' }}
-                >
-                  <div className="h-3 w-20 animate-pulse rounded-full bg-white/[0.06]" />
-                  <div className="mt-6 h-12 w-32 animate-pulse rounded-lg bg-white/[0.05]" />
-                  <div className="mt-8 flex flex-col gap-3">
-                    <div className="h-3 w-full animate-pulse rounded-full bg-white/[0.04]" />
-                    <div className="h-3 w-3/4 animate-pulse rounded-full bg-white/[0.04]" />
-                    <div className="h-3 w-2/3 animate-pulse rounded-full bg-white/[0.04]" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="relative z-10 border-t border-white/[0.04] bg-[#07080c] py-20 md:py-28">
-        <div className="mx-auto grid max-w-[1100px] gap-12 px-6 md:px-8 lg:grid-cols-[340px_1fr]">
-          <div>
-            <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-600">Questions</div>
-            <h2 className="text-[32px] font-bold leading-[1.1] tracking-tight text-white md:text-[42px]">
-              The things people ask first.
-            </h2>
-            <p className="mt-4 text-[15px] leading-relaxed text-zinc-400">
-              Everything else lives on the{' '}
-              <button onClick={() => navigate('/help')} className="text-zinc-300 underline underline-offset-4 transition hover:text-white">
-                help page
-              </button>
-              .
-            </p>
-          </div>
-          <div
-            className="rounded-[22px] border border-white/[0.05] bg-white/[0.015] px-6"
-            style={{ boxShadow: 'var(--border-glow)' }}
-          >
-            {FAQS.map((item, i) => (
-              <FaqItem
-                key={item.q}
-                item={item}
-                open={openFaq === i}
-                onToggle={() => setOpenFaq(openFaq === i ? null : i)}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="relative z-10 border-t border-white/[0.04] bg-gradient-to-b from-[#060608] to-[#04040a] py-24">
-        <div className="mx-auto max-w-[720px] px-6 text-center">
-          <h2
-            className="text-[36px] font-bold leading-[1.05] tracking-tight md:text-[52px] font-display"
-            style={{
-              background: 'linear-gradient(135deg, #ffffff 0%, rgb(var(--primary-light)) 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            Go make something.
-          </h2>
-          <p className="mt-5 text-[17px] text-zinc-400">
-            Free account, full canvas, no card. The upgrade path is there when you want it.
-          </p>
-          <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <button
-              onClick={() => navigate('/signup')}
-              className="group flex items-center gap-2.5 rounded-full bg-white px-8 py-4 text-base font-bold text-black shadow-[0_0_30px_rgba(255,255,255,0.18)] transition-all hover:scale-[1.03] active:scale-[0.98]"
-            >
-              Create your account
-              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </button>
-            <button
-              onClick={() => navigate('/explore')}
-              className="rounded-full border border-white/[0.08] bg-white/[0.03] px-8 py-4 text-base font-semibold text-zinc-300 backdrop-blur-md transition-all hover:bg-white/[0.06]"
-            >
-              Peek the gallery
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.04] bg-[#050507] px-6 py-8 md:px-8">
-        <LegalFooter className="mx-auto max-w-[1400px]" />
+      <footer className="relative z-10 border-t border-[#f1bf67]/10 bg-[#050403] px-6 py-8 md:px-8">
+        <LegalFooter className="mx-auto max-w-[1560px]" />
       </footer>
+    </div>
+  )
+}
+
+function ComposerPanel({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="grid gap-3 rounded-[28px] border border-[rgba(124,90,43,0.48)] bg-[radial-gradient(circle_at_22%_0%,rgba(241,191,103,0.08),transparent_32%),linear-gradient(180deg,rgba(18,17,14,0.96),rgba(8,9,8,0.96))] p-3 shadow-[0_24px_86px_rgba(0,0,0,0.38)] xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="rounded-[24px] border border-[rgba(124,90,43,0.28)] bg-[linear-gradient(180deg,rgba(17,17,14,0.94),rgba(10,11,10,0.9))] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#9f9280]">
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-[#f1bf67]" />
+            Describe your image
+          </span>
+          <span className="hidden text-[#8a7b68] sm:inline">Templates</span>
+        </div>
+
+        <div className="rounded-[18px] border border-white/[0.10] bg-[#171711] px-4 py-3 text-sm leading-7 text-[#cfc4b5]">
+          Cinematic coastal villa at golden hour, Italian Riviera, soft sunlight, bougainvillea, fine art photography
+        </div>
+
+        <div className="mt-3 flex flex-wrap justify-end gap-2 text-[11px] font-semibold">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[#9f9280]">Save style</span>
+          <span className="rounded-full border border-[#f1bf67]/18 bg-[#f1bf67]/7 px-3 py-1.5 text-[#f1bf67]">Refine prompt</span>
+        </div>
+
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8a7b68]">Aspect ratio</p>
+          <div className="flex overflow-hidden rounded-[14px] border border-white/[0.08] bg-black/18">
+            {ratios.map((ratio) => (
+              <span
+                className={[
+                  'flex min-h-10 flex-1 items-center justify-center border-r border-white/[0.07] px-2 text-[12px] font-bold last:border-r-0',
+                  ratio === '1:1'
+                    ? 'bg-[#f1bf67]/14 text-[#f1bf67] shadow-[inset_0_0_0_1px_rgba(241,191,103,0.42)]'
+                    : 'text-[#8f8170]',
+                ].join(' ')}
+                key={ratio}
+              >
+                {ratio}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[24px] border border-[rgba(124,90,43,0.28)] bg-[linear-gradient(180deg,rgba(17,17,14,0.9),rgba(10,11,10,0.88))] p-4" id="styles">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8a7b68]">Style</p>
+        <div className="grid grid-cols-3 gap-2">
+          {assets.slice(0, 3).map((asset, index) => (
+            <figure
+              className="group relative h-[70px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#11110f]"
+              key={asset.src}
+            >
+              <img alt="" className="h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105" src={asset.src} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/22 to-black/4" />
+              <figcaption className="absolute inset-x-2 bottom-2 truncate text-[10px] font-bold text-white">
+                {styleChips[index]}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-3 rounded-[16px] border border-white/[0.08] bg-[#171711] px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a7b68]">Model</p>
+          <p className="mt-1 text-sm font-bold text-white">FLUX.2</p>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
+          <div>
+            <p className="text-[12px] font-bold text-white">3 Credits</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8a7b68]">1 variation reserve</p>
+          </div>
+          <button
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[16px] bg-[#c99849] px-5 text-sm font-black text-[#120b05] shadow-[0_20px_54px_rgba(201,152,73,0.22)] transition hover:-translate-y-0.5 hover:bg-[#f1bf67]"
+            onClick={onCreate}
+            type="button"
+          >
+            <Wand2 className="h-4 w-4" />
+            Generate image
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between rounded-[18px] border border-white/[0.07] bg-[#11110f]/72 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.16em] text-[#8a7b68]">
+          <span>Optional controls</span>
+          <span className="flex items-center gap-1.5">
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Advanced
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GeneratedPreview() {
+  return (
+    <figure className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-[#f1bf67]/20 bg-black/25 sm:min-h-[320px]">
+      <img
+        alt="Generated Italian Riviera villa preview"
+        className="absolute inset-0 h-full w-full object-cover"
+        src={heroRiviera}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_54%,rgba(0,0,0,0.52)),linear-gradient(110deg,rgba(255,255,255,0.08),transparent_34%,rgba(241,191,103,0.10))]" />
+      <div className="absolute right-4 top-4 grid gap-2 rounded-2xl border border-[#f1bf67]/18 bg-black/50 p-2 text-[#f1bf67] backdrop-blur-xl">
+        <PreviewButton label="Like" icon={<Heart className="h-4 w-4" />} />
+        <PreviewButton label="Download" icon={<Download className="h-4 w-4" />} />
+        <PreviewButton label="Open" icon={<ExternalLink className="h-4 w-4" />} />
+      </div>
+      <figcaption className="absolute bottom-4 left-4 right-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f1bf67]">Generated preview</p>
+          <p className="mt-1 text-sm text-white">Italian Riviera, golden hour, fine art photography</p>
+        </div>
+        <img
+          alt=""
+          className="h-12 w-24 object-contain opacity-85"
+          src={omniaSignature}
+        />
+      </figcaption>
+    </figure>
+  )
+}
+
+function PreviewButton({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <button
+      aria-label={label}
+      className="grid h-9 w-9 place-items-center rounded-xl transition hover:bg-white/10"
+      type="button"
+    >
+      {icon}
+    </button>
+  )
+}
+
+function GalleryRail({
+  items,
+  title,
+  variant = 'base',
+}: {
+  items?: StudioAsset[]
+  title: string
+  variant?: 'base' | 'offset' | 'slow'
+}) {
+  const railItems = items ?? inspiredGalleryBelt
+  const railAssets = [...railItems, ...railItems]
+  const railClassName = [
+    'landing-asset-rail',
+    variant === 'offset' ? 'landing-asset-rail--offset' : '',
+    variant === 'slow' ? 'landing-asset-rail--slow' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-3 px-5 sm:px-8">
+        <span className="h-2 w-2 rounded-full bg-[#f1bf67] shadow-[0_0_24px_rgba(241,191,103,0.75)]" />
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#cfc4b5]">{title}</h2>
+      </div>
+      <div className="landing-rail-window overflow-hidden">
+        <div className={railClassName}>
+          {railAssets.map((asset, index) => (
+            <figure
+              className="group relative h-[118px] w-[260px] shrink-0 overflow-hidden rounded-[18px] border border-[#f1bf67]/16 bg-white/[0.04] shadow-[0_18px_54px_rgba(0,0,0,0.28)] sm:h-[138px] sm:w-[310px]"
+              key={`${asset.src}-${asset.label}-${index}`}
+            >
+              <img
+                alt={asset.alt}
+                className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+                loading="lazy"
+                src={asset.src}
+                style={{ objectPosition: asset.focus ?? 'center' }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+              <figcaption className="absolute bottom-3 left-3 text-xs font-bold uppercase tracking-[0.14em] text-white">
+                {asset.label}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TrustNote({ body, index, title }: { body: string; index: string; title: string }) {
+  return (
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-2xl border border-[#f1bf67]/14 bg-white/[0.045] p-4 backdrop-blur-xl">
+      <span className="row-span-2 grid h-9 w-9 place-items-center rounded-full border border-[#f1bf67]/22 text-xs font-bold text-[#f1bf67]">
+        {index}
+      </span>
+      <strong className="text-sm text-white">{title}</strong>
+      <p className="text-xs leading-5 text-[#cfc4b5]">{body}</p>
     </div>
   )
 }

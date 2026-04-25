@@ -1403,8 +1403,8 @@ class StudioService(StudioServiceDelegatesMixin):
     async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
         return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id, limit=limit)
 
-    async def update_profile(self, identity_id: str, *, display_name: Optional[str] = None, bio: Optional[str] = None, default_visibility: Optional[Visibility] = None, featured_asset_id: Optional[str] = None, featured_asset_id_provided: bool = False) -> OmniaIdentity:
-        return await self.public.update_profile(identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility, featured_asset_id=featured_asset_id, featured_asset_id_provided=featured_asset_id_provided)
+    async def update_profile(self, identity_id: str, *, display_name: Optional[str] = None, bio: Optional[str] = None, default_visibility: Optional[Visibility] = None, featured_asset_id: Optional[str] = None, featured_asset_id_provided: bool = False, featured_asset_position: Optional[str] = None) -> OmniaIdentity:
+        return await self.public.update_profile(identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility, featured_asset_id=featured_asset_id, featured_asset_id_provided=featured_asset_id_provided, featured_asset_position=featured_asset_position)
 
     async def get_post_payload(self, post_id: str, *, viewer_identity_id: Optional[str] = None) -> Dict[str, Any]:
         return await self.public.get_post_payload(post_id, viewer_identity_id=viewer_identity_id)

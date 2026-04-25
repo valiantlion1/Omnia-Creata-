@@ -5,7 +5,7 @@
 - Marketing site:
   `omniacreata.com`
 - Product app:
-  `app.omniacreata.com` or `vault.omniacreata.com`
+  `prompt.omniacreata.com`
 
 ## Recommended deployment stack
 
@@ -40,14 +40,30 @@ Create `.env.local` in [`../web`](../web) from [`../web/.env.example`](../web/.e
 3. Add the public Supabase URL and anon key to the web app environment.
 4. Add the server-only AI provider secrets and `SUPABASE_SERVICE_ROLE_KEY`.
 5. Deploy the web workspace to Vercel.
-6. Map `omniacreata.com` and the chosen app subdomain.
-7. Replace preview-only local writes with live Supabase CRUD operations.
+6. Map `prompt.omniacreata.com`.
+7. Verify sign-in, vault hydration, and `user_vault_state` writes with a real test account.
+
+## Production web readiness gates
+
+- `NEXT_PUBLIC_SITE_URL=https://prompt.omniacreata.com`
+- `CAPACITOR_SERVER_URL=https://prompt.omniacreata.com`
+- `NEXT_PUBLIC_ENABLE_ADS=false` until a real ad network and data safety update exist
+- `NEXT_PUBLIC_ENABLE_AI=false` until provider policy, cost controls, and data safety update exist
+- `/en/privacy` and `/en/terms` must be public and reachable
+- `/api/health` must return `status: "ok"` from the deployed runtime
+- `npm run lint`, `npm run typecheck`, and `npm run build` must pass from `apps/prompt-vault/web`
+- Browser proof must cover:
+  - `/en`
+  - `/en/app`
+  - `/en/app/capture`
+  - `/en/app/library`
+  - `/en/privacy`
+  - `/en/terms`
 
 ## Production follow-up checklist
 
-- Gate `/app` routes by authenticated session in Supabase mode
 - Add profile write/read flows
-- Replace preview dataset bootstrap with live per-user vault queries
+- Add hosted auth/sync smoke proof with a real Supabase user
 - Add password reset redirect configuration in Supabase Auth
 - Move AI library context reads fully server-side for authenticated users
 - Add analytics, error monitoring, and billing provider integration

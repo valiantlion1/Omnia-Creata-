@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Copy, X } from 'lucide-react'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -50,7 +51,7 @@ function LightboxModal({ image, onClose }: { image: LightboxPayload; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex bg-black/92 backdrop-blur-xl"
+      className="fixed inset-0 z-[140] flex bg-black/92 backdrop-blur-xl"
       onClick={onClose}
     >
       {/* Close */}
@@ -76,15 +77,14 @@ function LightboxModal({ image, onClose }: { image: LightboxPayload; onClose: ()
 
         {/* Watermark — only for other users' content */}
         {!isOwn && !isStudio && image.metadata?.authorUsername && (
-          <div className="pointer-events-none absolute bottom-7 left-7 flex items-center gap-2.5 select-none">
+          <div className="pointer-events-none absolute bottom-7 right-7 select-none">
             <img
               src="/omnia-crest.png"
               alt=""
               draggable={false}
-              className="h-7 w-7"
-              style={{ opacity: 0.35, filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.6))' }}
+              className="h-5 w-5"
+              style={{ opacity: 0.38, filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.55))' }}
             />
-            <span className="text-[11px] text-white/30">@{image.metadata.authorUsername}</span>
           </div>
         )}
       </div>
@@ -189,7 +189,9 @@ export function LightboxProvider({ children }: { children: ReactNode }) {
       closeLightbox: () => setActiveImage(null),
     }}>
       {children}
-      {activeImage && <LightboxModal image={activeImage} onClose={() => setActiveImage(null)} />}
+      {activeImage && typeof document !== 'undefined'
+        ? createPortal(<LightboxModal image={activeImage} onClose={() => setActiveImage(null)} />, document.body)
+        : null}
     </LightboxContext.Provider>
   )
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
-import { Archive, Search, Star, X } from "lucide-react";
+import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { FileText, FolderOpen, Search } from "lucide-react";
 import Link from "next/link";
-import { EmptyState, Input, Select } from "@/components/ui/primitives";
+import { Input } from "@/components/ui/primitives";
 import { getProjects } from "@/lib/dataset";
 import { formatRelative } from "@/lib/format";
 import { localizeHref } from "@/lib/locale";
@@ -12,232 +12,155 @@ import { cn } from "@/lib/cn";
 import { useLocaleContext } from "@/providers/locale-provider";
 import { useVault } from "@/providers/vault-provider";
 
+const filterTabs = ["all", "prompt", "idea", "workflow", "note"] as const;
+
 export function LibraryView() {
   const { dataset } = useVault();
   const { locale, t } = useLocaleContext();
-  const [filters, setFilters] = useState(defaultFilters);
-  const deferredQuery = useDeferredValue(filters.query);
-  const entries = filterEntries(dataset, { ...filters, query: deferredQuery });
+  const [activeTab, setActiveTab] = useState<(typeof filterTabs)[number]>("all");
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const projects = getProjects(dataset);
+  const entries = filterEntries(dataset, {
+    ...defaultFilters,
+    query: deferredQuery,
+    type: activeTab === "all" ? "all" : activeTab
+  });
 
-  const hasActiveFilters =
-    filters.favoritesOnly ||
-    filters.archivedOnly ||
-    filters.categoryId !== "all" ||
-    filters.projectId !== "all" ||
-    filters.platform !== "all" ||
-    filters.tags.length > 0 ||
-    filters.query.trim().length > 0;
+  const recentEntries = useMemo(
+    () => [...entries].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)).slice(0, 8),
+    [entries]
+  );
 
   return (
-    <div className="flex flex-col gap-6 py-1">
-      <section className="vault-card p-5 sm:p-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <div className="vault-kicker">{locale === "tr" ? "Arama" : "Search"}</div>
-              <h2 className="text-[24px] font-semibold tracking-[-0.05em] text-[var(--text-primary)]">
-                {locale === "tr" ? "Library hizli ve okunur olmali." : "The library should feel fast and easy to scan."}
-              </h2>
-              <p className="max-w-[520px] text-[13px] leading-6 text-[var(--text-secondary)]">
-                {locale === "tr"
-                  ? "Aradigini bul, filtrele, sonra kayda gir. Burasi galeri degil; tekrar tekrar acilan bir calisma kutuphanesi."
-                  : "Find the right entry, filter lightly, and jump back in. This is a working library, not a gallery of cards."}
-              </p>
-            </div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-              {entries.length} {locale === "tr" ? "sonuc" : "results"}
-            </div>
-          </div>
+    <div className="space-y-7">
+      <section className="space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
+          <Input
+            className="h-12 rounded-[14px] bg-[rgba(255,252,245,0.72)] pl-11"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("app.searchPlaceholder")}
+            value={query}
+          />
+        </div>
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-            <Input
-              className="h-14 rounded-[22px] pl-11 pr-4"
-              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              placeholder={t("app.searchPlaceholder")}
-              value={filters.query}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <FilterChip
-              active={!hasActiveFilters}
-              icon={<Search className="h-3.5 w-3.5" />}
-              onClick={() => setFilters(defaultFilters)}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {filterTabs.map((tab) => (
+            <button
+              key={tab}
+              className={cn("omni-filter-pill vault-press", activeTab === tab ? "is-active" : "")}
+              onClick={() => setActiveTab(tab)}
+              type="button"
             >
-              {locale === "tr" ? "Tum kayitlar" : "All entries"}
-            </FilterChip>
-            <FilterChip
-              active={filters.favoritesOnly}
-              icon={<Star className="h-3.5 w-3.5" />}
-              onClick={() => setFilters((current) => ({ ...current, favoritesOnly: !current.favoritesOnly }))}
-            >
-              {locale === "tr" ? "Favoriler" : "Favorites"}
-            </FilterChip>
-            <FilterChip
-              active={filters.archivedOnly}
-              icon={<Archive className="h-3.5 w-3.5" />}
-              onClick={() => setFilters((current) => ({ ...current, archivedOnly: !current.archivedOnly }))}
-            >
-              {locale === "tr" ? "Arsiv" : "Archive"}
-            </FilterChip>
-            {hasActiveFilters ? (
-              <button
-                className="vault-chip vault-press text-[var(--accent-strong)]"
-                onClick={() => setFilters(defaultFilters)}
-                type="button"
-              >
-                <X className="h-3.5 w-3.5" />
-                {locale === "tr" ? "Temizle" : "Clear"}
-              </button>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2 md:grid-cols-3">
-            <Select
-              onChange={(event) => setFilters((current) => ({ ...current, categoryId: event.target.value }))}
-              value={filters.categoryId}
-            >
-              <option value="all">{t("app.allCategories")}</option>
-              {dataset.categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label[locale]}
-                </option>
-              ))}
-            </Select>
-            <Select
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  projectId: event.target.value,
-                  collectionId: event.target.value,
-                }))
-              }
-              value={filters.projectId}
-            >
-              <option value="all">{t("app.allProjects")}</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
-            <Select
-              onChange={(event) => setFilters((current) => ({ ...current, platform: event.target.value }))}
-              value={filters.platform}
-            >
-              <option value="all">{t("app.allPlatforms")}</option>
-              {dataset.platforms.map((platform) => (
-                <option key={platform.id} value={platform.key}>
-                  {platform.label[locale]}
-                </option>
-              ))}
-            </Select>
-          </div>
+              {labelForTab(tab, locale)}
+            </button>
+          ))}
         </div>
       </section>
 
-      {dataset.tags.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {dataset.tags.map((tag) => {
-            const active = filters.tags.includes(tag.id);
-            return (
-              <button
-                key={tag.id}
-                className="vault-chip vault-press"
-                data-active={active}
-                onClick={() =>
-                  setFilters((current) => ({
-                    ...current,
-                    tags: active
-                      ? current.tags.filter((item) => item !== tag.id)
-                      : [...current.tags, tag.id],
-                  }))
-                }
-                type="button"
-              >
-                #{tag.name}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      {entries.length > 0 ? (
-        <div className="space-y-2">
-          {entries.map((entry) => {
-            const category = dataset.categories.find((category) => category.id === entry.categoryId);
-            const project = projects.find((item) => item.id === (entry.projectId ?? entry.collectionId));
-
-            return (
-              <Link
-                key={entry.id}
-                className="vault-list-item vault-press group"
-                href={localizeHref(locale, `/app/library/${entry.id}`)}
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-[rgba(255,255,255,0.04)] text-[var(--text-primary)]">
-                  {entry.title.trim().charAt(0).toUpperCase()}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="truncate text-[15px] font-semibold text-[var(--text-primary)]">
-                      {entry.title}
-                    </div>
-                    {entry.isFavorite ? (
-                      <span className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--accent-strong)]">
-                        {locale === "tr" ? "Favori" : "Favorite"}
-                      </span>
-                    ) : null}
-                    {project ? (
-                      <span className="inline-flex items-center rounded-full bg-[rgba(255,255,255,0.04)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)]">
-                        {project.name}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 line-clamp-2 text-[13px] leading-6 text-[var(--text-secondary)]">
-                    {entry.summary || entry.body}
-                  </div>
-                </div>
-
-                <div className="shrink-0 text-right">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
-                    {formatRelative(entry.updatedAt, locale)}
-                  </div>
-                  <div className="mt-2 text-[11px] text-[var(--text-tertiary)]">
-                    {category?.label[locale] ?? entry.type.replace(/_/g, " ")}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyState
-          description={t("app.emptyStateDescription")}
-          title={locale === "tr" ? "Eslesen sonuc yok" : "No matching entries"}
+      <section className="space-y-3">
+        <SectionTitle
+          action={locale === "tr" ? "Yeni" : "New"}
+          href={localizeHref(locale, "/app/projects")}
+          title={locale === "tr" ? "Projeler" : "Projects"}
         />
-      )}
+        <div className="omni-simple-list">
+          {projects.slice(0, 4).map((project) => {
+            const count = entries.filter((entry) => entry.projectId === project.id || entry.collectionId === project.id).length;
+            return (
+              <LibraryRow
+                key={project.id}
+                href={localizeHref(locale, "/app/projects")}
+                icon={<FolderOpen className="h-4 w-4" />}
+                meta={`${count} ${locale === "tr" ? "kayit" : "items"}`}
+                title={project.name}
+              />
+            );
+          })}
+          <LibraryRow
+            href={localizeHref(locale, "/app/projects")}
+            icon={<FolderOpen className="h-4 w-4" />}
+            meta={locale === "tr" ? "Tum proje alanlari" : "All project spaces"}
+            title={locale === "tr" ? "Tum projeleri gor" : "View all projects"}
+          />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle
+          action={`${recentEntries.length}`}
+          title={locale === "tr" ? "Son" : "Recent"}
+        />
+        <div className="omni-simple-list">
+          {recentEntries.length > 0 ? (
+            recentEntries.map((entry) => (
+              <LibraryRow
+                key={entry.id}
+                href={localizeHref(locale, `/app/library/${entry.id}`)}
+                icon={<FileText className="h-4 w-4" />}
+                meta={`${formatRelative(entry.updatedAt, locale)} · ${entry.type.replace(/_/g, " ")}`}
+                title={entry.title}
+              />
+            ))
+          ) : (
+            <div className="px-4 py-5 text-sm text-[var(--text-secondary)]">
+              {locale === "tr" ? "Eslesen kayit yok." : "No matching entries."}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
 
-function FilterChip({
-  active,
-  icon,
-  onClick,
-  children,
+function labelForTab(tab: (typeof filterTabs)[number], locale: "en" | "tr") {
+  const labels = {
+    en: { all: "All", prompt: "Prompts", idea: "Ideas", workflow: "Workflows", note: "Notes" },
+    tr: { all: "Tum", prompt: "Promptlar", idea: "Fikirler", workflow: "Akislar", note: "Notlar" }
+  } as const;
+  return labels[locale][tab];
+}
+
+function SectionTitle({
+  action,
+  href,
+  title
 }: {
-  active: boolean;
-  icon: React.ReactNode;
-  onClick: () => void;
-  children: React.ReactNode;
+  action?: string;
+  href?: string;
+  title: string;
+}) {
+  const content = action ? (
+    <span className="text-[13px] font-medium text-[var(--accent-strong)]">{action}</span>
+  ) : null;
+
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h2>
+      {href && action ? <Link href={href}>{content}</Link> : content}
+    </div>
+  );
+}
+
+function LibraryRow({
+  href,
+  icon,
+  meta,
+  title
+}: {
+  href: string;
+  icon: ReactNode;
+  meta: string;
+  title: string;
 }) {
   return (
-    <button className="vault-chip vault-press" data-active={active} onClick={onClick} type="button">
-      {icon}
-      <span className={cn(active ? "text-[var(--accent-strong)]" : "")}>{children}</span>
-    </button>
+    <Link className="omni-simple-row vault-press" href={href}>
+      <span className="omni-row-icon">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-medium text-[var(--text-primary)]">{title}</span>
+        <span className="mt-1 block truncate text-[12px] text-[var(--text-tertiary)]">{meta}</span>
+      </span>
+    </Link>
   );
 }

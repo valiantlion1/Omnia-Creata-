@@ -19,7 +19,7 @@ function walkDirectories(dir, visitor) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
     visitor(fullPath, entry);
-    if (entry.isDirectory()) {
+    if (entry.isDirectory() && ![".git", "node_modules"].includes(entry.name)) {
       walkDirectories(fullPath, visitor);
     }
   }
@@ -105,6 +105,34 @@ const canonicalRoots = [
   "prototypes"
 ];
 
+const generatedArtifactDirectoryNames = new Set([
+  ".next",
+  ".turbo",
+  "__pycache__",
+  ".pytest_cache",
+  ".vite",
+  ".mypy_cache",
+  ".ruff_cache",
+  "build",
+  "coverage",
+  "dist",
+  "out"
+]);
+
+const rootLocalArtifactDirectories = new Set([
+  ".playwright-cli",
+  ".pytest_cache",
+  "output"
+]);
+
+const forbiddenRootFilePatterns = [
+  /\.bak$/i,
+  /\.tmp$/i,
+  /\.orig$/i,
+  /\.rej$/i,
+  /\.hprof$/i
+];
+
 for (const area of canonicalRoots) {
   walkDirectories(join(root, area), (fullPath, entry) => {
     const rel = relative(root, fullPath).replaceAll("\\", "/");
@@ -114,7 +142,21 @@ for (const area of canonicalRoots) {
     if (entry.isDirectory() && entry.name === "apps" && !rel.startsWith("apps/internal")) {
       errors.push(`Nested apps directory found inside canonical area: ${rel}`);
     }
+    if (entry.isDirectory() && generatedArtifactDirectoryNames.has(entry.name)) {
+      errors.push(`Generated artifact directory found inside canonical source: ${rel}`);
+    }
   });
+}
+
+for (const entry of readdirSync(root, { withFileTypes: true })) {
+  if (entry.isDirectory() && rootLocalArtifactDirectories.has(entry.name)) {
+    errors.push(`Local artifact directory found at repo root: ${entry.name}`);
+    continue;
+  }
+
+  if (entry.isFile() && forbiddenRootFilePatterns.some((pattern) => pattern.test(entry.name))) {
+    errors.push(`Backup or temporary file found at repo root: ${entry.name}`);
+  }
 }
 
 if (warnings.length) {

@@ -18,7 +18,7 @@ export default function Icon() {
           width: "100%",
           height: "100%",
           background:
-            "radial-gradient(circle at 22% 18%, rgba(240,210,157,0.18), transparent 30%), radial-gradient(circle at 78% 85%, rgba(160,112,45,0.15), transparent 38%), linear-gradient(165deg, #060605 0%, #0f0d0b 48%, #17130f 100%)"
+            "radial-gradient(circle at 20% 18%, rgba(213,121,85,0.24), transparent 32%), radial-gradient(circle at 78% 82%, rgba(47,111,98,0.22), transparent 38%), linear-gradient(165deg, #fbf4e8 0%, #f6efe3 56%, #e7d8c1 100%)"
         }}
       >
         <div
@@ -29,11 +29,11 @@ export default function Icon() {
             width: 350,
             height: 350,
             borderRadius: 108,
-            border: "2px solid rgba(240,210,157,0.44)",
+            border: "2px solid rgba(47,111,98,0.22)",
             background:
-              "linear-gradient(180deg, rgba(26,21,16,0.96) 0%, rgba(14,11,8,0.98) 100%)",
+              "linear-gradient(180deg, rgba(255,252,245,0.96) 0%, rgba(246,239,227,0.98) 100%)",
             boxShadow:
-              "0 0 0 1px rgba(240,210,157,0.2) inset, 0 28px 58px rgba(0,0,0,0.35), 0 10px 22px rgba(178,129,63,0.25)"
+              "0 0 0 1px rgba(255,255,255,0.7) inset, 0 28px 58px rgba(69,51,31,0.18), 0 10px 22px rgba(47,111,98,0.16)"
           }}
         >
           <div
@@ -44,10 +44,10 @@ export default function Icon() {
               width: 188,
               height: 188,
               borderRadius: 56,
-              border: "10px solid #d9b171",
+              border: "10px solid #2f6f62",
               background:
-                "radial-gradient(circle at 40% 30%, rgba(255,240,207,0.22), rgba(45,31,16,0.86) 65%)",
-              boxShadow: "0 0 0 1px rgba(255,236,198,0.35) inset"
+                "radial-gradient(circle at 40% 30%, rgba(255,255,255,0.72), rgba(47,111,98,0.16) 68%)",
+              boxShadow: "0 0 0 1px rgba(47,111,98,0.14) inset"
             }}
           >
             <div
@@ -55,8 +55,8 @@ export default function Icon() {
                 width: 26,
                 height: 54,
                 borderRadius: 999,
-                background: "#d9b171",
-                boxShadow: "0 0 0 8px rgba(217,177,113,0.18)"
+                background: "#2f6f62",
+                boxShadow: "0 0 0 8px rgba(47,111,98,0.14)"
               }}
             />
           </div>

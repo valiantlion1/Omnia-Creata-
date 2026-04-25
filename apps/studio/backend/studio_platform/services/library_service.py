@@ -39,6 +39,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _path_exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
 class LibraryService:
     def __init__(self, service: "StudioService") -> None:
         self.service = service
@@ -372,10 +379,18 @@ class LibraryService:
     def asset_variant_exists(self, asset: MediaAsset, variant: str) -> bool:
         if variant in {"preview", "blocked"}:
             return self.asset_has_renderable_variant(asset)
-        if self.resolve_asset_variant_storage_key(asset, variant):
+        storage_key = self.resolve_asset_variant_storage_key(asset, variant)
+        storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
+        if storage_key and storage_kind:
+            if storage_kind == "local":
+                try:
+                    local_path = self.service.asset_storage.local_backend.resolve_path(storage_key)
+                except Exception:
+                    return False
+                return _path_exists(local_path)
             return True
         path = self.resolve_asset_variant_path(asset, variant)
-        return path is not None and path.exists()
+        return path is not None and _path_exists(path)
 
     async def delete_asset_variant(self, asset: MediaAsset, variant: str) -> None:
         storage_key = self.resolve_asset_variant_storage_key(asset, variant)
@@ -386,7 +401,7 @@ class LibraryService:
             return
 
         path = self.resolve_asset_variant_path(asset, variant)
-        if path and path.exists():
+        if path and _path_exists(path):
             await asyncio.to_thread(path.unlink)
 
     async def purge_asset_storage(self, asset: MediaAsset) -> None:
@@ -504,7 +519,7 @@ class LibraryService:
             )
 
         path = self.resolve_asset_variant_path(asset, variant)
-        if path is None or not path.exists():
+        if path is None or not _path_exists(path):
             raise FileNotFoundError("Asset file not found")
 
         return ResolvedAssetDelivery(

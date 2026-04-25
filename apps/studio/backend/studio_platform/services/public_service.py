@@ -438,6 +438,7 @@ class PublicService:
         default_visibility: Visibility | None = None,
         featured_asset_id: str | None = None,
         featured_asset_id_provided: bool = False,
+        featured_asset_position: str | None = None,
     ) -> OmniaIdentity:
         return await self.service.identity.update_profile(
             identity_id=identity_id,
@@ -446,6 +447,7 @@ class PublicService:
             default_visibility=default_visibility,
             featured_asset_id=featured_asset_id,
             featured_asset_id_provided=featured_asset_id_provided,
+            featured_asset_position=featured_asset_position,
         )
 
     async def get_post_payload(

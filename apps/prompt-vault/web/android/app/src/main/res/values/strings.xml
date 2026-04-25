@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Vault</string>
-    <string name="title_activity_main">Vault</string>
-    <string name="package_name">com.omniacreata.vault</string>
-    <string name="custom_url_scheme">com.omniacreata.vault</string>
+    <string name="app_name">OmniaPrompt</string>
+    <string name="title_activity_main">OmniaPrompt</string>
+    <string name="package_name">com.omniacreata.omniaprompt</string>
+    <string name="custom_url_scheme">com.omniacreata.omniaprompt</string>
 </resources>

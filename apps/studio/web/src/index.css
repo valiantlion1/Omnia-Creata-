@@ -319,6 +319,88 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
   animation: oc-glass-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Landing page motion */
+@keyframes studio-panel-sweep {
+  0% { transform: translate3d(-18%, 0, 0); }
+  100% { transform: translate3d(18%, 0, 0); }
+}
+
+@keyframes studio-landing-progress {
+  0%, 100% { transform: translate3d(-5%, 0, 0); opacity: 0.72; }
+  50% { transform: translate3d(13%, 0, 0); opacity: 1; }
+}
+
+@keyframes studio-landing-rail {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+
+.landing-progress-line {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.landing-progress-line::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 78%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(241, 191, 103, 0.2), rgba(241, 191, 103, 0.98));
+  box-shadow: 0 0 24px rgba(241, 191, 103, 0.45);
+  animation: studio-landing-progress 4.6s ease-in-out infinite;
+}
+
+.landing-progress-line span {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #f1bf67;
+  box-shadow: 0 0 18px rgba(241, 191, 103, 0.72);
+  transform: translate(-50%, -50%);
+}
+
+.landing-progress-line span:nth-child(1) { left: 18%; }
+.landing-progress-line span:nth-child(2) { left: 50%; }
+.landing-progress-line span:nth-child(3) { left: 82%; }
+
+.landing-rail-window {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+}
+
+.landing-asset-rail {
+  display: flex;
+  width: max-content;
+  gap: 1rem;
+  padding: 0.1rem 0;
+  animation: studio-landing-rail 360s linear infinite;
+  will-change: transform;
+}
+
+.landing-asset-rail--offset {
+  animation-delay: -144s;
+  animation-duration: 420s;
+}
+
+.landing-asset-rail--slow {
+  animation-delay: -18s;
+  animation-duration: 480s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-progress-line::before,
+  .landing-asset-rail {
+    animation: none !important;
+  }
+}
+
 @keyframes oc-create-cloud-drift {
   0% { transform: translate3d(-3%, -2%, 0) scale(1); opacity: 0.18; }
   50% { transform: translate3d(4%, 3%, 0) scale(1.08); opacity: 0.3; }

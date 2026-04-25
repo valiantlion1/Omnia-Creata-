@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   const backend = getAIBackendConfig();
 
   if (!isAIEnabled) {
-    return NextResponse.json({ error: "AI beta is disabled for this build." }, { status: 503 });
+    return NextResponse.json({ error: "AI help is not available for this workspace." }, { status: 503 });
   }
 
   if (!isSameOrigin(request)) {

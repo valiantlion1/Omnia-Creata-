@@ -1,4 +1,4 @@
-﻿import { builtinCategories, platformCatalog } from "@prompt-vault/config";
+import { builtinCategories, platformCatalog } from "@prompt-vault/config";
 import type { PromptVaultDataset } from "@prompt-vault/types";
 
 const demoUserId = "demo-user";
@@ -70,8 +70,8 @@ export function createDemoDataset(): PromptVaultDataset {
       entryId: "prompt-launch",
       versionChainId: "chain-launch",
       versionNumber: 1,
-      title: "Nolra hero narrative",
-      body: "You are an expert product storyteller. Create a positioning narrative for Nolra focused on trust, structure, and cross-device reuse.",
+      title: "OmniaPrompt hero narrative",
+      body: "You are an expert product storyteller. Create a positioning narrative for OmniaPrompt focused on trust, structure, and cross-device reuse.",
       summary: "First positioning draft",
       notes: "Initial angle was strong on trust, still weak on mobile clarity.",
       resultNotes: "Strong clarity, but it needed more mobile emphasis.",
@@ -90,8 +90,8 @@ export function createDemoDataset(): PromptVaultDataset {
       entryId: "prompt-launch",
       versionChainId: "chain-launch",
       versionNumber: 2,
-      title: "Nolra hero narrative",
-      body: "You are a senior SaaS copy strategist. Write a concise hero section for Nolra that emphasizes searchability, reusable entries, mobile-ready access, and premium trust.",
+      title: "OmniaPrompt hero narrative",
+      body: "You are a senior SaaS copy strategist. Write a concise hero section for OmniaPrompt that emphasizes searchability, reusable entries, mobile-ready access, and premium trust.",
       summary: "Refined launch positioning",
       notes: "Pushed mobile, searchability, and premium trust to the front.",
       resultNotes: "This version converted better for short-form homepage copy.",
@@ -231,7 +231,7 @@ export function createDemoDataset(): PromptVaultDataset {
     {
       id: "prompt-launch",
       userId: demoUserId,
-      title: "Nolra hero narrative",
+      title: "OmniaPrompt hero narrative",
       body: versions[1].body,
       summary: "Homepage hero copy framework for the product launch.",
       notes: "Angle toward trust, speed, and mobile usability rather than generic AI hype.",
@@ -255,7 +255,7 @@ export function createDemoDataset(): PromptVaultDataset {
       sourceUrl: "https://omniacreata.com",
       sourceLabel: "Product positioning notes",
       variables: [
-        { id: "var-product", key: "product_name", label: "Product name", defaultValue: "Nolra", required: true },
+        { id: "var-product", key: "product_name", label: "Product name", defaultValue: "OmniaPrompt", required: true },
         { id: "var-audience", key: "audience", label: "Audience", defaultValue: "AI creators", required: true }
       ],
       createdAt: isoDaysAgo(10),
@@ -432,8 +432,8 @@ export function createDemoDataset(): PromptVaultDataset {
       type: "version_created",
       entryId: "prompt-launch",
       promptId: "prompt-launch",
-      entryTitle: "Nolra hero narrative",
-      promptTitle: "Nolra hero narrative",
+      entryTitle: "OmniaPrompt hero narrative",
+      promptTitle: "OmniaPrompt hero narrative",
       createdAt: isoDaysAgo(2),
       description: "Saved version 2 of the launch hero narrative."
     },

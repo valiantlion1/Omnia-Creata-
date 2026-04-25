@@ -95,5 +95,8 @@ Root `packages/` is not a dumping ground. Promotion into it must follow these ru
 - ASCII kebab-case naming for canonical app and website roots
 - allowed `docs/` root directories
 - nested `.git` and nested `apps` violations
+- generated artifact directories such as `.next`, `out`, `build`, `dist`, `coverage`, `__pycache__`, and cache folders inside canonical source roots
+- root-level local artifact directories such as `.playwright-cli`, `.pytest_cache`, and `output`
+- root-level backup or temporary files such as `*.bak`, `*.tmp`, `*.orig`, `*.rej`, and heap dumps
 
-`npm run repo:check` does not yet fail on every generated folder such as `.next`, `out`, `build`, or `dist`. Manual cleanup and future validator expansion are still required.
+If the validator reports generated output, run `npm run repo:clean:plan` and only apply the cleanup when the plan lists ignored local artifacts rather than source files.

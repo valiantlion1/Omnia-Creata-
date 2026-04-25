@@ -24,6 +24,13 @@ class AssetNotFoundError(FileNotFoundError):
     """Raised when a stored asset cannot be found."""
 
 
+def _path_exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
 @dataclass(slots=True)
 class ResolvedAssetDelivery:
     filename: str
@@ -69,14 +76,23 @@ class LocalAssetStorageBackend(AssetStorageBackend):
 
     async def fetch_bytes(self, key: str) -> bytes:
         path = self.resolve_path(key)
-        if not path.exists():
+        if not _path_exists(path):
             raise AssetNotFoundError(f"Local asset not found: {key}")
-        return await asyncio.to_thread(path.read_bytes)
+        try:
+            return await asyncio.to_thread(path.read_bytes)
+        except OSError as exc:
+            raise AssetNotFoundError(f"Local asset not found: {key}") from exc
 
     async def delete_bytes(self, key: str) -> None:
         path = self.resolve_path(key)
-        if path.exists():
+        if not _path_exists(path):
+            return
+        try:
             await asyncio.to_thread(path.unlink)
+        except FileNotFoundError:
+            return
+        except OSError:
+            return
 
 
 class SupabaseAssetStorageBackend(AssetStorageBackend):

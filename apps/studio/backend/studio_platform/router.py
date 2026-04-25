@@ -277,6 +277,7 @@ class ProfileUpdateRequest(BaseModel):
     bio: Optional[str] = Field(default=None, max_length=220)
     default_visibility: Optional[Visibility] = None
     featured_asset_id: Optional[str] = Field(default=None, max_length=128)
+    featured_asset_position: Optional[str] = Field(default=None, pattern="^(top|center|bottom)$")
 
 
 class PersonaCreateRequest(BaseModel):
@@ -1148,6 +1149,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 default_visibility=payload.default_visibility,
                 featured_asset_id=payload.featured_asset_id,
                 featured_asset_id_provided="featured_asset_id" in payload.model_fields_set,
+                featured_asset_position=payload.featured_asset_position,
             )
             return await service.get_profile_payload(identity_id=auth_user.id, viewer_identity_id=auth_user.id)
         except KeyError:
@@ -1478,7 +1480,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 },
                 headers={
                     "Retry-After": str(exc.estimated_wait_seconds or 30),
-                    "X-Queue-Full": "true",
+                    "X-Queue-Full": "true" if exc.queue_full else "false",
                 },
             )
         except ValueError as exc:

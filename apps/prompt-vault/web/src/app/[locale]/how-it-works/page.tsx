@@ -1,13 +1,13 @@
-﻿import { Badge, Surface } from "@/components/ui/primitives";
+import { Badge, Surface } from "@/components/ui/primitives";
 import { MarketingShell } from "@/components/site/marketing-shell";
 import { assertLocale } from "@/lib/locale";
 
 const copy = {
   en: {
-    eyebrow: "How Nolra works",
+    eyebrow: "How OmniaPrompt works",
     title: "Capture first. Organize lightly. Revisit when it matters.",
     description:
-      "Nolra is built for people who think in motion. The flow stays simple so you can save now and shape later.",
+      "OmniaPrompt is built for people who think in motion. The flow stays simple so you can save now and shape later.",
     steps: [
       {
         title: "1. Capture quickly",
@@ -22,16 +22,16 @@ const copy = {
         description: "Return to the same entry over time, keep versions, and build something reusable instead of scattered fragments."
       },
       {
-        title: "4. Upgrade in V1",
-        description: "Beta focuses on speed and reliability first. AI assist and Pro upgrades arrive after the core flow is stable."
+        title: "4. Add more when you need it",
+        description: "Use the free workspace first. Paid or AI-powered features appear only when they are available and clearly explained."
       }
     ]
   },
   tr: {
-    eyebrow: "Nolra nasil calisir",
+    eyebrow: "OmniaPrompt nasil calisir",
     title: "Once kaydet. Hafifce duzenle. Gerektiginde geri don.",
     description:
-      "Nolra hareket halindeyken dusunen insanlar icin tasarlandi. Akis basit kalir; hemen kaydet, sonra sekillendir.",
+      "OmniaPrompt hareket halindeyken dusunen insanlar icin tasarlandi. Akis basit kalir; hemen kaydet, sonra sekillendir.",
     steps: [
       {
         title: "1. Hizlica kaydet",
@@ -46,8 +46,8 @@ const copy = {
         description: "Ayni kayda tekrar don, versiyonlarini koru ve daginik kirintilar yerine tekrar kullanilabilir bir sey olustur."
       },
       {
-        title: "4. V1 ile guclendir",
-        description: "Beta once hiz ve guvenilirlik uzerine kurulur. AI assist ve Pro ozellikleri, cekirdek akis oturduktan sonra gelir."
+        title: "4. Gerektiginde fazlasini ekle",
+        description: "Once ucretsiz calisma alanini kullan. Ucretli veya AI destekli ozellikler yalnizca kullanima acildiginda ve net aciklandiginda gorunur."
       }
     ]
   }

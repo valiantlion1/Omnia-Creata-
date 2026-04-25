@@ -21,24 +21,24 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://omniacreata.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? brand.appUrl),
   title: {
     default: `${brand.name} | ${brand.parent}`,
     template: `%s | ${brand.name}`
   },
   description:
-    `${brand.name} is Omnia Creata's lightweight idea operating system for capturing, organizing, and revisiting prompts, notes, workflows, and project thinking.`,
+    `${brand.name} is OmniaCreata's focused prompt workspace for capturing, organizing, and reusing AI prompts, notes, workflows, and project thinking.`,
   applicationName: brand.name,
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: brand.name
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
-  colorScheme: "dark light",
+  themeColor: "#f6efe3",
+  colorScheme: "light",
   viewportFit: "cover"
 };
 

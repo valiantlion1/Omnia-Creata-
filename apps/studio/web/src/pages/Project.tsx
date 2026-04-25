@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Download, Images, Lock } from 'lucide-react'
+import { ChevronLeft, Download, Images, Lock, Sparkles } from 'lucide-react'
 
 import { LightboxTrigger } from '@/components/ImageLightbox'
 import { useLightbox } from '@/components/Lightbox'
@@ -245,9 +245,14 @@ export default function ProjectPage() {
   const isChatSurface = project.surface === 'chat'
   const projectImageLabel = `${assets.length} image${assets.length === 1 ? '' : 's'}`
   const projectDescription = cleanedProjectDescription(project.description)
+  const projectPurpose = projectDescription ?? (
+    isChatSurface
+      ? 'This is the visual board for one Chat direction: review the images, share the set, or open the library.'
+      : 'Use this project as one visual direction: continue it in Create, review the images, then export or share the set.'
+  )
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 md:px-6">
       <Link
         to="/library/projects"
         className="group flex w-fit items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 py-1.5 text-[12px] font-semibold text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 hover:bg-white/[0.06] hover:text-white hover:ring-white/[0.1]"
@@ -256,14 +261,20 @@ export default function ProjectPage() {
         Projects
       </Link>
 
-      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <section className="flex flex-col gap-5 rounded-[30px] border border-white/[0.06] bg-white/[0.025] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl md:p-6 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
           <h1 className="truncate text-[30px] font-semibold tracking-[-0.05em] text-white md:text-[38px]">
             {project.title}
           </h1>
-          {projectDescription ? (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">{projectDescription}</p>
-          ) : null}
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">{projectPurpose}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[11px] font-medium text-zinc-400">
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
+              {projectImageLabel}
+            </span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
+              Updated {new Date(project.updated_at).toLocaleDateString()}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {!isChatSurface ? (
@@ -295,15 +306,6 @@ export default function ProjectPage() {
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-medium text-zinc-400">
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
-          {projectImageLabel}
-        </span>
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
-          Updated {new Date(project.updated_at).toLocaleDateString()}
-        </span>
-      </div>
-
       {shareMessage ? <p className="text-sm text-cyan-200/85">{shareMessage}</p> : null}
 
       <section className="min-w-0">
@@ -312,6 +314,9 @@ export default function ProjectPage() {
             <h2 className="text-[26px] font-semibold tracking-[-0.04em] text-white">
               Images
             </h2>
+            <p className="mt-1 text-sm leading-6 text-zinc-500">
+              Pick an image to inspect it full-screen, keep building from this direction, or export the set.
+            </p>
           </div>
           <Link
             to="/library/images"
@@ -323,7 +328,7 @@ export default function ProjectPage() {
         </div>
 
         {assets.length ? (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {assets.map((asset) => {
               const previewSrc = assetPreviewSources(asset).find(Boolean) ?? ''
               const canOpenPreview =
@@ -398,16 +403,36 @@ export default function ProjectPage() {
             })}
           </div>
         ) : (
-          <section className="mt-8 flex min-h-[38vh] flex-col items-center justify-center px-6 text-center">
-            <h3 className="text-2xl font-semibold tracking-[-0.04em] text-white">No images yet</h3>
-            {!isChatSurface ? (
-              <Link
-                to={`/create?projectId=${project.id}`}
-                className="mt-5 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[12px] font-medium text-zinc-200 transition hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white"
-              >
-                Open Create
-              </Link>
-            ) : null}
+          <section className="mt-8 overflow-hidden rounded-[34px] border border-white/[0.05] bg-[#0c0d12] shadow-[0_24px_70px_rgba(0,0,0,0.24)]">
+            <div className="relative min-h-[320px] bg-[radial-gradient(ellipse_at_78%_20%,rgba(255,255,255,0.08),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.04),transparent_48%)]">
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,10,14,0.96)_0%,rgba(8,10,14,0.88)_50%,rgba(8,10,14,0.76)_100%)]" />
+              <div className="relative z-10 flex min-h-[320px] flex-col justify-center px-7 py-10 sm:px-10">
+                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/[0.06] text-zinc-200 ring-1 ring-white/[0.1]">
+                  <Images className="h-6 w-6" />
+                </div>
+                <h3 className="mt-6 max-w-xl text-3xl font-semibold tracking-[-0.05em] text-white">This project is ready for its first set.</h3>
+                <p className="mt-3 max-w-lg text-[14px] leading-7 text-zinc-400">
+                  Keep the direction here, open Create with this project selected, and the finished images will return to this page.
+                </p>
+                {!isChatSurface ? (
+                  <div className="mt-7 flex flex-wrap gap-3">
+                    <Link
+                      to={`/create?projectId=${project.id}`}
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[13px] font-semibold text-black transition hover:bg-zinc-200"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Open Create
+                    </Link>
+                    <Link
+                      to="/library/images"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-5 py-2.5 text-[13px] font-semibold text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                    >
+                      Open library
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </section>
         )}
       </section>

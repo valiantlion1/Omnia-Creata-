@@ -25,11 +25,19 @@ export async function MarketingFooter({ locale }: { locale: Locale }) {
             <Link href={localizeHref(locale, "/sign-in")}>{translate(locale, "common.signIn")}</Link>
             <Link href={localizeHref(locale, "/sign-up")}>{translate(locale, "common.signUp")}</Link>
             <Link href={appHref}>{translate(locale, "common.launchApp")}</Link>
+            <Link href={localizeHref(locale, "/help")}>{translate(locale, "common.help")}</Link>
           </div>
           <div className="space-y-3">
             <div className="font-semibold text-[var(--text-primary)]">
-              {translate(locale, "common.parentBrand")}
+              {locale === "tr" ? "Yasal" : "Legal"}
             </div>
+            <Link href={localizeHref(locale, "/privacy")}>
+              {locale === "tr" ? "Gizlilik" : "Privacy"}
+            </Link>
+            <Link href={localizeHref(locale, "/terms")}>
+              {locale === "tr" ? "Kosullar" : "Terms"}
+            </Link>
+            <Link href={localizeHref(locale, "/faq")}>{translate(locale, "common.faq")}</Link>
             <a href={brand.productUrl} rel="noreferrer" target="_blank">
               {translate(locale, "marketing.footerProductLink")}
             </a>

@@ -68,7 +68,11 @@ def _attach_redaction_filter(handler: logging.Handler) -> None:
 
 def configure_runtime_logging(settings: Settings) -> Path:
     log_directory = settings.log_directory_path
-    log_directory.mkdir(parents=True, exist_ok=True)
+    file_logging_available = True
+    try:
+        log_directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        file_logging_available = False
 
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, settings.log_level.value, logging.INFO))
@@ -82,28 +86,36 @@ def configure_runtime_logging(settings: Settings) -> Path:
     app_log_path = log_directory / "backend.app.log"
     error_log_path = log_directory / "backend.error.log"
 
-    if not any(getattr(handler, "_oc_runtime_file_path", None) == str(app_log_path) for handler in root_logger.handlers):
-        app_file_handler = RotatingFileHandler(
-            app_log_path,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
-        app_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-        app_file_handler._oc_runtime_file_path = str(app_log_path)  # type: ignore[attr-defined]
-        root_logger.addHandler(app_file_handler)
+    if file_logging_available and not any(getattr(handler, "_oc_runtime_file_path", None) == str(app_log_path) for handler in root_logger.handlers):
+        try:
+            app_file_handler = RotatingFileHandler(
+                app_log_path,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=5,
+                encoding="utf-8",
+            )
+        except OSError:
+            file_logging_available = False
+        else:
+            app_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            app_file_handler._oc_runtime_file_path = str(app_log_path)  # type: ignore[attr-defined]
+            root_logger.addHandler(app_file_handler)
 
-    if not any(getattr(handler, "_oc_runtime_file_path", None) == str(error_log_path) for handler in root_logger.handlers):
-        error_file_handler = RotatingFileHandler(
-            error_log_path,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
-        error_file_handler.setLevel(logging.WARNING)
-        error_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-        error_file_handler._oc_runtime_file_path = str(error_log_path)  # type: ignore[attr-defined]
-        root_logger.addHandler(error_file_handler)
+    if file_logging_available and not any(getattr(handler, "_oc_runtime_file_path", None) == str(error_log_path) for handler in root_logger.handlers):
+        try:
+            error_file_handler = RotatingFileHandler(
+                error_log_path,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=5,
+                encoding="utf-8",
+            )
+        except OSError:
+            file_logging_available = False
+        else:
+            error_file_handler.setLevel(logging.WARNING)
+            error_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            error_file_handler._oc_runtime_file_path = str(error_log_path)  # type: ignore[attr-defined]
+            root_logger.addHandler(error_file_handler)
 
     for handler in root_logger.handlers:
         if getattr(handler, "_oc_runtime_console", False) or getattr(handler, "_oc_runtime_file_path", None):
@@ -115,5 +127,10 @@ def configure_runtime_logging(settings: Settings) -> Path:
         logger.handlers = []
         logger.propagate = True
 
+    if not file_logging_available:
+        logging.getLogger("omnia.studio").warning(
+            "runtime_file_logging_unavailable",
+            extra={"log_directory": str(log_directory)},
+        )
     logging.getLogger("omnia.studio").info("runtime_logging_configured", extra={"log_directory": str(log_directory)})
     return log_directory

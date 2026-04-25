@@ -19,6 +19,8 @@
     "android:add": "npm run cap:add:android --workspace @prompt-vault/web",
     "android:sync": "npm run cap:sync --workspace @prompt-vault/web",
     "android:open": "npm run cap:open --workspace @prompt-vault/web",
-    "android:build:debug": "npm run android:build:debug --workspace @prompt-vault/web"
+    "android:build:debug": "npm run android:build:debug --workspace @prompt-vault/web",
+    "android:build:release": "npm run android:build:release --workspace @prompt-vault/web",
+    "android:build:aab": "npm run android:build:aab --workspace @prompt-vault/web"
   }
 }

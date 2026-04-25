@@ -79,7 +79,7 @@ function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?
 
 function SettingsCard({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   return (
-    <div className={`relative overflow-hidden rounded-[24px] ring-1 ring-white/[0.06] bg-[#0c0d12]/60 backdrop-blur-3xl shadow-[0_32px_80px_-12px_rgba(0,0,0,0.8)] before:absolute before:inset-0 before:rounded-[24px] before:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] before:pointer-events-none ${compact ? '' : 'divide-y divide-white/[0.04]'}`}>
+    <div className={`relative overflow-hidden rounded-[22px] ring-1 ring-white/[0.055] bg-white/[0.025] backdrop-blur-2xl shadow-[0_20px_60px_-24px_rgba(0,0,0,0.75)] before:absolute before:inset-0 before:rounded-[22px] before:shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] before:pointer-events-none ${compact ? '' : 'divide-y divide-white/[0.045]'}`}>
       <div className="relative z-10 w-full h-full">
         {children}
       </div>
@@ -829,9 +829,21 @@ export default function SettingsPage() {
       const a = document.createElement('a')
       a.href = url
       a.download = `omnia-creata-export-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
       a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setNotice({
+        tone: 'success',
+        title: 'Archive export started',
+        body: 'Your browser is downloading the Studio account archive.',
+      })
     } catch (e) {
-      alert('Export failed.')
+      setNotice({
+        tone: 'warning',
+        title: 'Export failed',
+        body: toUserFacingErrorMessage(e, 'Try again in a moment.'),
+      })
     }
   }
 
@@ -1109,21 +1121,23 @@ export default function SettingsPage() {
                     action={
                       <div className="flex items-center gap-1.5 rounded-[12px] bg-black/40 p-1 ring-1 ring-white/10 w-max">
                         <button
+                          type="button"
                           onClick={() => {
                             setPendingVisibility('public')
                             discoverabilityMutation.mutate('public')
                           }}
-                          disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'public'}
+                          disabled={discoverabilityMutation.isPending}
                           className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                         >
                           {discoverabilityMutation.isPending && pendingVisibility === 'public' ? 'Saving...' : 'Public'}
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setPendingVisibility('private')
                             discoverabilityMutation.mutate('private')
                           }}
-                          disabled={discoverabilityMutation.isPending || activeDefaultVisibility === 'private'}
+                          disabled={discoverabilityMutation.isPending}
                           className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                         >
                           {discoverabilityMutation.isPending && pendingVisibility === 'private' ? 'Saving...' : 'Private'}
@@ -1136,7 +1150,7 @@ export default function SettingsPage() {
                     title="Download Archive"
                     description="Export a full backup of your images, projects, and account history."
                     action={
-                      <button onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                      <button type="button" onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                         Export Archive
                       </button>
                     }
@@ -1277,24 +1291,24 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-amber-500/60">Community Controls</h3>
+                <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-amber-500/60">Owner Operations</h3>
                 <SettingsCard>
                   <SettingsRow
                     icon={Users}
-                    title="User Management"
-                    description="Workspace account administration stays in backoffice tooling."
+                    title="Users & Moderation"
+                    description="Account review, user actions, and moderation queues stay in owner backoffice tooling until the in-shell console is wired."
                     action={<StatusPill tone="neutral">Backoffice only</StatusPill>}
                   />
                   <SettingsRow
                     icon={BarChart3}
-                    title="Growth Analytics"
-                    description="Growth and spend analytics are kept outside the Studio shell until public rollout."
+                    title="Growth & Spend"
+                    description="Adoption, cost, and provider-spend analytics remain external for now so this screen does not pretend to be a full admin system."
                     action={<StatusPill tone="neutral">Not in shell</StatusPill>}
                   />
                   <SettingsRow
                     icon={Trash2}
                     title="Clear Sandbox Data"
-                    description="Sandbox cleanup stays manual-only to avoid destructive accidental clicks."
+                    description="Sandbox cleanup stays manual-only outside Studio to avoid destructive accidental clicks."
                     action={<StatusPill tone="neutral">Manual only</StatusPill>}
                     danger
                   />

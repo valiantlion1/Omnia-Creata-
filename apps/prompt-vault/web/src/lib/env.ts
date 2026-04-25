@@ -1,6 +1,17 @@
 import { brand } from "@prompt-vault/config";
 import type { AIProviderKey, AuthMode } from "@prompt-vault/types";
 
+const legacyAppNames = new Set(["Prompt Vault", "OmniaVault", "Omnia Vault", "Vault"]);
+
+function resolveAppName(value: string | undefined) {
+  const normalized = value?.trim();
+  if (!normalized || legacyAppNames.has(normalized)) {
+    return brand.name;
+  }
+
+  return normalized;
+}
+
 export const env = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   supabaseAnonKey:
@@ -8,11 +19,15 @@ export const env = {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
     "",
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001",
-  appName: process.env.NEXT_PUBLIC_APP_NAME ?? brand.name,
-  betaMode: process.env.NEXT_PUBLIC_BETA_MODE !== "false",
+  appName: resolveAppName(process.env.NEXT_PUBLIC_APP_NAME),
+  betaMode: process.env.NEXT_PUBLIC_BETA_MODE === "true",
   enableAI: process.env.NEXT_PUBLIC_ENABLE_AI === "true",
-  enableAds: process.env.NEXT_PUBLIC_ENABLE_ADS !== "false",
-  enablePro: process.env.NEXT_PUBLIC_ENABLE_PRO === "true",
+  enableAds:
+    process.env.NEXT_PUBLIC_ENABLE_ADS === "true" &&
+    Boolean(process.env.NEXT_PUBLIC_ADS_PROVIDER_ID),
+  enablePro:
+    process.env.NEXT_PUBLIC_ENABLE_PRO === "true" &&
+    Boolean(process.env.NEXT_PUBLIC_BILLING_PROVIDER),
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   aiProvider: (process.env.AI_PROVIDER ?? "preview") as AIProviderKey,
   aiModel: process.env.AI_MODEL ?? "preview-organizer-v1",

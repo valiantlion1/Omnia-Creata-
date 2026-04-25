@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import tsconfigPaths from 'vite-tsconfig-paths'
 import { fileURLToPath, URL } from 'node:url'
 import { studioSeoPlugin } from './tools/studioSeoPlugin'
 
@@ -13,8 +12,9 @@ export default defineConfig(({ mode }) => {
   const localApiBaseUrl = env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
   return {
     envDir: '..',
-    plugins: [react(), tsconfigPaths(), studioSeoPlugin({ siteUrl })],
+    plugins: [react(), studioSeoPlugin({ siteUrl })],
     resolve: {
+      tsconfigPaths: true,
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },

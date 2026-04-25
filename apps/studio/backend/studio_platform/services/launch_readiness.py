@@ -54,11 +54,25 @@ def _warning_counts_for_protected_launch(check: dict[str, str]) -> bool:
 
 
 def provider_smoke_report_path(settings: Settings) -> Path:
-    return (settings.runtime_root_path / "reports" / "provider-smoke-latest.json").resolve()
+    return _safe_resolve(settings.runtime_root_path / "reports" / "provider-smoke-latest.json")
 
 
 def startup_verification_report_path(settings: Settings) -> Path:
-    return (settings.runtime_root_path / "reports" / "local-verify-latest.json").resolve()
+    return _safe_resolve(settings.runtime_root_path / "reports" / "local-verify-latest.json")
+
+
+def _path_exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+def _safe_resolve(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except OSError:
+        return path
 
 
 def persist_provider_smoke_report(
@@ -113,9 +127,9 @@ def persist_provider_smoke_report(
 
 def load_provider_smoke_report(settings: Settings) -> dict[str, Any] | None:
     report_path = provider_smoke_report_path(settings)
-    if not report_path.exists():
-        return None
     try:
+        if not _path_exists(report_path):
+            return None
         payload = json.loads(report_path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
@@ -231,9 +245,9 @@ def persist_startup_verification_report(
 
 def load_startup_verification_report(settings: Settings) -> dict[str, Any] | None:
     report_path = startup_verification_report_path(settings)
-    if not report_path.exists():
-        return None
     try:
+        if not _path_exists(report_path):
+            return None
         payload = json.loads(report_path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return None
@@ -311,7 +325,8 @@ def build_truth_sync_summary(
 
 def build_runtime_log_snapshot(settings: Settings) -> dict[str, Any]:
     log_directory = settings.log_directory_path
-    repo_root = Path(__file__).resolve().parents[3]
+    resolved_log_directory = _safe_resolve(log_directory)
+    repo_root = _safe_resolve(Path(__file__)).parents[3]
     tracked_files = (
         "backend.app.log",
         "backend.error.log",
@@ -325,12 +340,13 @@ def build_runtime_log_snapshot(settings: Settings) -> dict[str, Any]:
     files: dict[str, dict[str, Any]] = {}
     existing_files: list[str] = []
     for name in tracked_files:
-        file_path = (log_directory / name).resolve()
+        file_path = _safe_resolve(log_directory / name)
+        file_exists = _path_exists(file_path)
         entry: dict[str, Any] = {
             "path": str(file_path),
-            "exists": file_path.exists(),
+            "exists": file_exists,
         }
-        if file_path.exists():
+        if file_exists:
             try:
                 stat = file_path.stat()
             except OSError:
@@ -340,12 +356,12 @@ def build_runtime_log_snapshot(settings: Settings) -> dict[str, Any]:
                 entry["modified_at"] = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
                 existing_files.append(name)
         files[name] = entry
-    outside_repo = _is_outside_repo(log_directory, repo_root=repo_root)
+    outside_repo = _is_outside_repo(resolved_log_directory, repo_root=repo_root)
     if not outside_repo:
-        outside_repo = _looks_like_external_runtime_mount(settings=settings, path=log_directory, repo_root=repo_root)
+        outside_repo = _looks_like_external_runtime_mount(settings=settings, path=resolved_log_directory, repo_root=repo_root)
     return {
-        "directory": str(log_directory.resolve()),
-        "exists": log_directory.exists(),
+        "directory": str(resolved_log_directory),
+        "exists": _path_exists(log_directory),
         "outside_repo": outside_repo,
         "existing_count": len(existing_files),
         "existing_files": existing_files,
@@ -1675,7 +1691,7 @@ def _classify_provider_snapshot(provider: dict[str, Any]) -> str:
 
 def _is_outside_repo(path: Path, *, repo_root: Path) -> bool:
     try:
-        path.resolve().relative_to(repo_root.resolve())
+        _safe_resolve(path).relative_to(_safe_resolve(repo_root))
     except ValueError:
         return True
     return False
@@ -1685,8 +1701,8 @@ def _looks_like_external_runtime_mount(*, settings: Settings, path: Path, repo_r
     configured_runtime_root = str(getattr(settings, "studio_runtime_root", "") or "").strip()
     if not configured_runtime_root:
         return False
-    resolved_path = path.resolve()
-    runtime_root = settings.runtime_root_path.resolve()
+    resolved_path = _safe_resolve(path)
+    runtime_root = _safe_resolve(settings.runtime_root_path)
     try:
         resolved_path.relative_to(runtime_root)
     except ValueError:

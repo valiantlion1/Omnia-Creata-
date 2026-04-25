@@ -1,15 +1,14 @@
 "use client";
 
 import { entryTypes, type PromptVariableDefinition } from "@prompt-vault/types";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Code2, ImageIcon, ListChecks, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PromptAIPanel } from "@/components/app/prompt-ai-panel";
-import { Badge, Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui/primitives";
+import { Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
 import { getEntries, getProjects } from "@/lib/dataset";
-import { formatDate } from "@/lib/format";
 import { localizeHref } from "@/lib/locale";
 import { useLocaleContext } from "@/providers/locale-provider";
 import { useToast } from "@/providers/toast-provider";
@@ -283,11 +282,11 @@ export function PromptEditor({
 
   async function handleSave() {
     if (title.trim().length < 2) {
-      notify(locale === "tr" ? "Kayıt için kısa bir başlık ekle." : "Add a short title before saving.");
+      notify(locale === "tr" ? "Kayit icin kisa bir baslik ekle." : "Add a short title before saving.");
       return;
     }
     if (body.trim().length < 10) {
-      notify(locale === "tr" ? "Gövdeyi biraz daha doldur." : "Add a little more detail to the body first.");
+      notify(locale === "tr" ? "Govdeyi biraz daha doldur." : "Add a little more detail to the body first.");
       return;
     }
     setIsSaving(true);
@@ -319,63 +318,77 @@ export function PromptEditor({
   // ─── UI ───
   return (
     <>
-      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-6 py-2">
+      <div className="flex w-full flex-col gap-6 py-1">
         {/* Header */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+        <div className="omni-editor-topbar">
+          <Link
+            aria-label={locale === "tr" ? "Kapat" : "Close"}
+            className="omni-icon-button vault-press"
+            href={detailHref}
+          >
+            <X className="h-4 w-4" />
+          </Link>
+          <div className="min-w-0">
+            <div className="omni-editor-title">
               {mode === "capture"
-                ? locale === "tr" ? "Hızlı yakala" : "Quick capture"
-                : locale === "tr" ? "Düzenle" : "Edit entry"}
-            </h1>
+                ? locale === "tr" ? "Hizli Yakala" : "Quick Capture"
+                : locale === "tr" ? "Duzenle" : "Edit Entry"}
+            </div>
             {draftBadge ? (
-              <Badge tone={draftBadge === "restored" ? "warning" : "success"}>
+              <div className="mt-1 text-center text-[11px] text-[var(--text-tertiary)]">
                 {draftBadge === "restored"
-                  ? locale === "tr" ? "Taslak geri yüklendi" : "Draft restored"
+                  ? locale === "tr" ? "Taslak geri yuklendi" : "Draft restored"
                   : locale === "tr" ? "Otomatik kaydedildi" : "Autosaved"}
-              </Badge>
+              </div>
             ) : null}
           </div>
-          {existingEntry ? (
-            <p className="text-xs text-[var(--text-tertiary)]">
-              {t("app.versionHint")} {formatDate(existingEntry.updatedAt, locale)}
-            </p>
-          ) : null}
+          <button
+            className="omni-editor-save vault-press disabled:opacity-40"
+            disabled={isSaving}
+            onClick={handleSave}
+            type="button"
+          >
+            {isSaving ? t("common.saving") : t("common.save")}
+          </button>
         </div>
 
-        {/* Type selector */}
-        <div className="flex gap-1.5 overflow-x-auto">
-          {activeTypeOptions.map((item) => (
-            <button
-              key={item}
-              className={cn(
-                "vault-press shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                type === item
-                  ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-                  : "bg-[var(--surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-              onClick={() => setType(item)}
-              type="button"
-            >
-              {typeLabel(item, t)}
-            </button>
-          ))}
-        </div>
+        {mode !== "capture" ? (
+          <div className="flex gap-1.5 overflow-x-auto">
+            {activeTypeOptions.map((item) => (
+              <button
+                key={item}
+                className={cn(
+                  "vault-press shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  type === item
+                    ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                    : "bg-[var(--surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                )}
+                onClick={() => setType(item)}
+                type="button"
+              >
+                {typeLabel(item, t)}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {/* Title */}
-        <Input
-          className="h-12 border-0 bg-transparent px-0 text-lg font-semibold text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:ring-0"
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={locale === "tr" ? "Aklındaki nedir?" : "What's on your mind?"}
-          value={title}
-        />
+        <div>
+          <label className="omni-field-label">{t("app.titleField")}</label>
+          <Input
+            className="omni-line-input"
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={locale === "tr" ? "Aklindaki nedir?" : "What's on your mind?"}
+            value={title}
+          />
+        </div>
 
         {/* Body */}
         <div className="space-y-2">
           <Textarea
-            className="min-h-[180px] border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[15px] leading-7"
+            className="omni-capture-textarea"
             onChange={(e) => setBody(e.target.value)}
-            placeholder={locale === "tr" ? "Düşünceyi olduğu gibi bırak..." : "Let the thought land as it is..."}
+            placeholder={locale === "tr" ? "Dusunceyi oldugu gibi birak..." : "Let the thought land as it is..."}
             value={body}
           />
           <div className="flex items-center justify-between">
@@ -432,7 +445,7 @@ export function PromptEditor({
                 <Textarea className="min-h-[100px]" onChange={(e) => setSummary(e.target.value)} placeholder={locale === "tr" ? "Kısa bağlam..." : "A short context..."} value={summary} />
               </Field>
               <Field label={t("app.notes")}>
-                <Textarea className="min-h-[100px]" onChange={(e) => setNotes(e.target.value)} placeholder={locale === "tr" ? "İçsel notlar..." : "Internal notes..."} value={notes} />
+                <Textarea className="min-h-[100px]" onChange={(e) => setNotes(e.target.value)} placeholder={locale === "tr" ? "Kisisel notlar..." : "Private notes..."} value={notes} />
               </Field>
               <Field label={t("app.resultNotes")}>
                 <Textarea className="min-h-[80px] sm:col-span-2" onChange={(e) => setResultNotes(e.target.value)} placeholder={locale === "tr" ? "Neyin işe yaradığını not al..." : "Capture what worked..."} value={resultNotes} />
@@ -474,40 +487,39 @@ export function PromptEditor({
           ) : null}
         </div>
 
-        {/* AI Panel */}
-        <PromptAIPanel
-          collapsedByDefault
-          handlers={{
-            onApplyTitle: setTitle,
-            onApplyCategory: setCategoryId,
-            onApplyTags: (tags) => setTagInput(tags.join(", ")),
-            onApplyPlatforms: setPlatforms,
-            onApplySummary: setSummary,
-            onApplyRewrite: (payload) => {
-              setBody(payload.body);
-              setSummary(payload.summary ?? summary);
-              setNotes(payload.notes ?? notes);
-            },
-          }}
-          prompt={{
-            entryId: existingEntry?.id, promptId: existingEntry?.id,
-            title, body, summary, notes, resultNotes,
-            categoryId, projectId, collectionId: projectId,
-            language: locale, type, platforms, tagNames,
-            variables: draftVariables,
-          }}
-          promptId={existingEntry?.id}
-        />
+        {mode === "capture" ? (
+          <div className="omni-capture-tools" aria-label={locale === "tr" ? "Ekleme kisayollari" : "Attachment shortcuts"}>
+            <button aria-label={locale === "tr" ? "Gorsel" : "Image"} type="button"><ImageIcon className="h-4 w-4" /></button>
+            <button aria-label={locale === "tr" ? "Kod" : "Code"} type="button"><Code2 className="h-4 w-4" /></button>
+            <button aria-label={locale === "tr" ? "Liste" : "List"} type="button"><ListChecks className="h-4 w-4" /></button>
+            <button aria-label={locale === "tr" ? "Dosya" : "File"} type="button"><Paperclip className="h-4 w-4" /></button>
+          </div>
+        ) : (
+          <PromptAIPanel
+            collapsedByDefault
+            handlers={{
+              onApplyTitle: setTitle,
+              onApplyCategory: setCategoryId,
+              onApplyTags: (tags) => setTagInput(tags.join(", ")),
+              onApplyPlatforms: setPlatforms,
+              onApplySummary: setSummary,
+              onApplyRewrite: (payload) => {
+                setBody(payload.body);
+                setSummary(payload.summary ?? summary);
+                setNotes(payload.notes ?? notes);
+              },
+            }}
+            prompt={{
+              entryId: existingEntry?.id, promptId: existingEntry?.id,
+              title, body, summary, notes, resultNotes,
+              categoryId, projectId, collectionId: projectId,
+              language: locale, type, platforms, tagNames,
+              variables: draftVariables,
+            }}
+            promptId={existingEntry?.id}
+          />
+        )}
 
-        {/* Save bar */}
-        <div className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 flex gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[rgba(0,0,0,0.9)] p-3 backdrop-blur-xl lg:bottom-4">
-          <Button className="flex-1" disabled={isSaving} onClick={handleSave} size="lg">
-            {isSaving ? t("common.saving") : t("common.save")}
-          </Button>
-          <Link href={detailHref}>
-            <Button size="lg" variant="secondary">{t("common.cancel")}</Button>
-          </Link>
-        </div>
       </div>
 
       {/* Focus composer overlay */}

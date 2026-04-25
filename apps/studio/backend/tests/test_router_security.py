@@ -2669,10 +2669,10 @@ async def test_verify_captcha_token_rejects_missing_hostname_in_staging() -> Non
 
 
 def test_share_routes_require_no_store_headers() -> None:
-    from main import _requires_no_store_headers
+    from security.response_headers import requires_no_store_headers
 
-    assert _requires_no_store_headers("/v1/shares") is True
-    assert _requires_no_store_headers("/v1/shares/public/sharetoken") is True
+    assert requires_no_store_headers("/v1/shares") is True
+    assert requires_no_store_headers("/v1/shares/public/sharetoken") is True
 
 
 @pytest.mark.asyncio
@@ -3017,6 +3017,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
         default_visibility=None,
         featured_asset_id=None,
         featured_asset_id_provided=False,
+        featured_asset_position=None,
     ) -> None:
         captured_updates.append(
             {
@@ -3026,6 +3027,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
                 "default_visibility": default_visibility,
                 "featured_asset_id": featured_asset_id,
                 "featured_asset_id_provided": featured_asset_id_provided,
+                "featured_asset_position": featured_asset_position,
             }
         )
         return None
@@ -3062,6 +3064,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
                 "default_visibility": None,
                 "featured_asset_id": "asset-hero-1",
                 "featured_asset_id_provided": True,
+                "featured_asset_position": None,
             }
         ]
         assert any("profiles:export" in key and limit == 6 and window == 3600 for key, limit, window in calls)

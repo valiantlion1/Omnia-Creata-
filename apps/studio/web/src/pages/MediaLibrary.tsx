@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -25,6 +26,7 @@ import {
   SkeletonImageGrid,
   StatusPill,
 } from '@/components/StudioPrimitives'
+import { EmptyInline, InlineActionMenu, MenuAction, MenuDivider } from '@/components/media-library/LibraryUi'
 import { usePageMeta } from '@/lib/usePageMeta'
 import {
   getCreativeProfileLabel,
@@ -634,9 +636,9 @@ function AssetLightbox({
   const aspectRatio = metadataString(asset.metadata, 'aspect_ratio')
   const detailTags = state.group.derivedTags.slice(0, 4)
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
+      className="fixed inset-0 z-[140] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
       role="dialog"
       aria-modal="true"
       aria-label={`${state.group.title} preview`}
@@ -855,6 +857,8 @@ function AssetLightbox({
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
 
 function FavoriteLightbox({
@@ -916,9 +920,9 @@ function FavoriteLightbox({
   const model = metadataString(asset.metadata, 'display_model_label') ??
     metadataString(asset.metadata, 'model')
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
+      className="fixed inset-0 z-[140] overflow-y-auto overscroll-contain bg-[rgba(4,6,10,0.82)] px-3 py-3 backdrop-blur-[10px] sm:px-4 sm:py-5"
       role="dialog"
       aria-modal="true"
       aria-label={`${favoritePostTitle(state.post)} preview`}
@@ -1082,6 +1086,8 @@ function FavoriteLightbox({
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
 
 function MovePostDialog({
@@ -1158,38 +1164,6 @@ function MovePostDialog({
         </div>
       </div>
     </div>
-  )
-}
-
-function InlineActionMenu({ children }: { children: ReactNode }) {
-  return (
-    <div
-      className="absolute right-0 top-full z-30 mt-1.5 w-[min(196px,calc(100vw-2rem))] overflow-hidden rounded-[16px] bg-[#111216]/98 p-1 shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/8 backdrop-blur-xl"
-      style={{ boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.48)' }}
-    >
-      <div className="space-y-1">{children}</div>
-    </div>
-  )
-}
-
-function MenuDivider() {
-  return <div className="my-1 border-t border-white/[0.06]" />
-}
-
-function MenuAction({
-  children,
-  tone = 'default',
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: 'default' | 'danger'
-}) {
-  return (
-    <button
-      {...props}
-      className={`flex w-full items-center justify-between gap-3 rounded-[12px] px-2.5 py-2 text-left text-[13px] transition ${tone === 'danger' ? 'text-rose-300 hover:bg-rose-500/[0.08] hover:text-rose-200' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'} ${props.className ?? ''}`}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -1419,37 +1393,6 @@ function Toolbar({
           ) : null}
         </div>
         {filters ? <div className="flex flex-wrap items-center gap-2">{filters}</div> : null}
-      </div>
-    </section>
-  )
-}
-
-function EmptyInline({
-  icon,
-  title,
-  description,
-  compact = false,
-}: {
-  icon: ReactNode
-  title: string
-  description: string
-  compact?: boolean
-}) {
-  return (
-    <section
-      className={`flex flex-col gap-4 py-8 ${compact ? 'min-h-[12vh] items-start justify-start text-left' : 'min-h-[22vh] items-center justify-center text-center'}`}
-    >
-      <div className={`group relative flex flex-col ${compact ? 'items-start text-left max-w-xl' : 'items-center text-center max-w-lg mx-auto py-10 px-8 rounded-[32px] bg-[#0c0d12]/50 ring-1 ring-white/[0.04] backdrop-blur-sm transition-all duration-500 hover:ring-white/[0.08] hover:bg-[#101116]/80'}`}>
-        <div className={`relative flex items-center justify-center rounded-[22px] bg-gradient-to-br from-[#1c1d24]/90 to-[#0c0d12]/80 text-zinc-400 ring-1 ring-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-500 group-hover:scale-110 group-hover:text-white group-hover:ring-white/[0.18] group-hover:shadow-[0_0_30px_rgba(124,58,237,0.15)] ${compact ? 'h-14 w-14 mb-4' : 'h-16 w-16 mb-5'}`}>
-          <div className="absolute inset-0 rounded-[22px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
-          <div className="relative z-10 drop-shadow-md">{icon}</div>
-        </div>
-        <div className="text-[16px] font-semibold tracking-tight text-white/95 group-hover:text-white transition-colors duration-300">
-          {title}
-        </div>
-        <div className="mt-2 text-[13px] leading-relaxed text-zinc-500 group-hover:text-zinc-400 transition-colors duration-300">
-          {description}
-        </div>
       </div>
     </section>
   )
@@ -2757,6 +2700,15 @@ export default function MediaLibraryPage() {
                 <EmptyInline
                   icon={<Sparkles className="h-4 w-4" />}
                   title="Nothing is in flight right now."
+                  action={
+                    <Link
+                      to="/create"
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Open Create
+                    </Link>
+                  }
                   description="Head to Create and start generating — your images will appear here while they're in progress."
                 />
               )
@@ -2772,7 +2724,7 @@ export default function MediaLibraryPage() {
                     return (
                       <article
                         key={group.id}
-                        className={`group relative overflow-hidden rounded-[22px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:340px] ${
+                        className={`group relative rounded-[22px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:340px] ${
                           isSelected
                             ? 'ring-white/[0.16] shadow-[0_22px_50px_rgba(0,0,0,0.32)]'
                             : 'ring-white/[0.06] shadow-[0_16px_38px_rgba(0,0,0,0.24)] hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_22px_50px_rgba(0,0,0,0.3)]'
@@ -3229,7 +3181,16 @@ export default function MediaLibraryPage() {
               <EmptyInline
                 icon={<ImageIcon className="h-4 w-4" />}
                 title="No images yet."
-                description="Finished images will appear here."
+                description="Start in Create, then every finished set will land here for reuse, projects, and sharing."
+                action={
+                  <Link
+                    to="/create"
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Start creating
+                  </Link>
+                }
               />
             )}
 
@@ -3241,9 +3202,9 @@ export default function MediaLibraryPage() {
 
             {/* Bulk action bar - Summoning Animation */}
             {selectedGroups.size > 0 && (
-              <div className="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center px-4">
+              <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[100] flex justify-center px-4 lg:bottom-8 lg:left-[var(--studio-sidebar-width,260px)]">
                 <div
-                  className="pointer-events-auto flex items-center gap-4 rounded-full bg-[#16181f]/80 px-6 py-4 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/20 backdrop-blur-2xl animate-tray-summon"
+                  className="pointer-events-auto flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-3 rounded-[24px] bg-[#16181f]/86 px-4 py-3 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/20 backdrop-blur-2xl animate-tray-summon sm:rounded-full sm:px-5 lg:max-w-[min(720px,calc(100vw-var(--studio-sidebar-width,260px)-2rem))] lg:gap-4 lg:px-6 lg:py-4"
                   style={{
                     boxShadow:
                       'var(--border-glow), 0 20px 50px rgba(0,0,0,0.6)',
@@ -3375,35 +3336,35 @@ export default function MediaLibraryPage() {
                             {cover ? (
                               <Link
                                 to={`/projects/${project.id}`}
-                                className="grid grid-cols-[minmax(0,1fr)_64px] gap-1 sm:grid-cols-[minmax(0,1.16fr)_76px]"
+                                className="grid aspect-[1.62] grid-cols-[minmax(0,1fr)_72px] gap-1 sm:grid-cols-[minmax(0,1fr)_84px]"
                               >
-                                  <div className="overflow-hidden rounded-[14px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
+                                  <div className="h-full overflow-hidden rounded-[14px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
                                     <ProtectedAssetImage
                                       sources={assetPreviewSources(cover)}
                                       alt={project.title}
-                                      className="aspect-[16/9] w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
-                                      fallbackClassName="flex aspect-[16/9] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
+                                      fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                     />
                                   </div>
-                                <div className="grid grid-rows-2 gap-1">
+                                <div className="grid min-h-0 grid-rows-2 gap-1">
                                   {Array.from({ length: 2 }, (_, index) => {
                                     const asset = previewAssets[index] ?? null
                                     return asset ? (
                                       <div
                                         key={asset.id}
-                                        className="overflow-hidden rounded-[12px] bg-[#111216]"
+                                        className="min-h-0 overflow-hidden rounded-[12px] bg-[#111216]"
                                       >
                                         <ProtectedAssetImage
                                           sources={assetPreviewSources(asset)}
                                           alt={assetDisplayTitle(asset)}
-                                          className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                                          fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                                          fallbackClassName="flex h-full w-full items-center justify-center bg-white/[0.04] text-zinc-600"
                                         />
                                       </div>
                                     ) : (
                                       <div
                                         key={`${project.id}-placeholder-${index}`}
-                                        className="flex aspect-square items-center justify-center rounded-[12px] bg-[#111216] text-zinc-700"
+                                        className="flex h-full items-center justify-center rounded-[12px] bg-[#111216] text-zinc-700"
                                       >
                                         <Folder className="h-4 w-4" />
                                       </div>
@@ -3417,7 +3378,7 @@ export default function MediaLibraryPage() {
                                 className="flex aspect-[16/10] flex-col items-center justify-center rounded-[18px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
                               >
                                 <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-transform duration-500 group-hover:scale-110">
-                                  <Folder className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                                  <Folder className="h-5 w-5 text-zinc-500 transition-colors group-hover:text-zinc-300" />
                                 </div>
                                 <div className="mt-4 text-[13px] font-semibold text-zinc-300 transition-colors group-hover:text-white">
                                   Empty project
@@ -3428,20 +3389,22 @@ export default function MediaLibraryPage() {
                               </Link>
                             )}
                           </div>
-                          <button
-                            onClick={() =>
-                              setActionMenu((current) =>
-                                current === `project:${project.id}`
-                                  ? null
-                                  : `project:${project.id}`,
-                              )
-                            }
-                            className="absolute right-3.5 top-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-zinc-300 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/80 hover:text-white hover:ring-white/30 opacity-0 group-hover:opacity-100"
-                            title="Project actions"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                          {renderProjectMenu(project, projectAssets)}
+                          <div className="absolute right-3.5 top-3.5 z-20" data-library-menu-root="true">
+                            <button
+                              onClick={() =>
+                                setActionMenu((current) =>
+                                  current === `project:${project.id}`
+                                    ? null
+                                    : `project:${project.id}`,
+                                )
+                              }
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-zinc-300 opacity-0 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/80 hover:text-white hover:ring-white/30 group-hover:opacity-100"
+                              title="Project actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {renderProjectMenu(project, projectAssets)}
+                          </div>
                         </div>
                         <div className="min-w-0 space-y-1.5 px-1">
                           <div className="truncate text-[14.5px] font-semibold text-white transition-colors group-hover:text-[rgb(var(--primary-light))]">
@@ -3660,7 +3623,7 @@ export default function MediaLibraryPage() {
                     return (
                       <article
                         key={post.id}
-                        className="group relative overflow-hidden rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] shadow-[0_18px_50px_rgba(0,0,0,0.28)] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_24px_60px_rgba(0,0,0,0.36)]"
+                        className="group relative rounded-[24px] bg-[#0f1015] ring-1 ring-white/[0.06] shadow-[0_18px_50px_rgba(0,0,0,0.28)] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_24px_60px_rgba(0,0,0,0.36)]"
                       >
                         <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
                           <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.12]">

@@ -16,11 +16,11 @@ export function Button({
       className={cn(
         "vault-press relative inline-flex items-center justify-center gap-2 rounded-[16px] text-[13px] font-semibold tracking-[-0.01em] outline-none disabled:pointer-events-none disabled:opacity-40",
         variant === "primary" &&
-          "border border-[rgba(200,162,72,0.14)] bg-gradient-to-b from-[var(--accent-strong)] to-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_1px_2px_rgba(0,0,0,0.3),var(--shadow-glow)] hover:brightness-110",
+          "border border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[var(--shadow-soft)] hover:bg-[var(--accent-strong)]",
         variant === "secondary" &&
-          "border border-[var(--border-strong)] bg-[rgba(255,255,255,0.035)] text-[var(--text-primary)] hover:bg-[rgba(255,255,255,0.05)]",
+          "border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-strong)]",
         variant === "ghost" &&
-          "bg-transparent text-[var(--text-secondary)] hover:bg-[rgba(255,255,255,0.045)] hover:text-[var(--text-primary)]",
+          "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]",
         variant === "danger" &&
           "border border-red-500/20 bg-red-500/8 text-[var(--danger)] hover:bg-red-500/14",
         size === "sm" && "h-9 px-3 text-xs",
@@ -38,7 +38,7 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
   return (
     <input
       className={cn(
-        "h-12 w-full rounded-[18px] border border-[var(--border)] bg-[rgba(255,255,255,0.028)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
+        "h-12 w-full rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -51,7 +51,7 @@ export function Textarea({ className, ...props }: ComponentPropsWithoutRef<"text
   return (
     <textarea
       className={cn(
-        "min-h-[120px] w-full rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.028)] px-4 py-3 text-sm leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] resize-none",
+        "min-h-[120px] w-full rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] resize-none",
         className
       )}
       {...props}
@@ -64,7 +64,7 @@ export function Select({ className, ...props }: ComponentPropsWithoutRef<"select
   return (
     <select
       className={cn(
-        "h-12 w-full appearance-none rounded-[18px] border border-[var(--border)] bg-[rgba(255,255,255,0.028)] px-4 text-sm text-[var(--text-primary)] outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
+        "h-12 w-full appearance-none rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--text-primary)] outline-none hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
         className
       )}
       {...props}
@@ -109,15 +109,15 @@ export function Badge({
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
         tone === "default" &&
-          "border border-[rgba(255,255,255,0.06)] bg-[var(--surface-muted)] text-[var(--text-secondary)]",
+          "border border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]",
         tone === "accent" &&
-          "border border-[rgba(200,162,72,0.16)] bg-[var(--accent-soft)] text-[var(--accent-strong)]",
+          "border border-[var(--accent-soft)] bg-[var(--accent-soft)] text-[var(--accent-strong)]",
         tone === "success" &&
           "border border-emerald-500/15 bg-emerald-500/10 text-emerald-400",
         tone === "warning" &&
           "border border-amber-500/15 bg-amber-500/10 text-amber-400",
         tone === "info" &&
-          "border border-[rgba(137,163,161,0.15)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-strong)]",
+        "border border-[var(--accent-secondary-soft)] bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary-strong)]",
         className
       )}
     >
@@ -168,7 +168,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-[26px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-8 text-center">
+    <div className="flex min-h-[220px] flex-col items-center justify-center gap-4 rounded-[26px] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-soft)]">
         <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
       </div>

@@ -38,6 +38,87 @@ from ..resilience import CircuitBreaker, CircuitOpenError, describe_breaker
 
 logger = logging.getLogger("omnia.studio.generation_broker")
 
+_REDIS_ENQUEUE_SCRIPT = """
+-- generation_broker_enqueue
+local queued_index_key = KEYS[1]
+local claimed_scores_key = KEYS[2]
+local claimed_priority_key = KEYS[3]
+local queue_key = KEYS[4]
+local job_id = ARGV[1]
+
+if redis.call("SISMEMBER", queued_index_key, job_id) == 1 then
+    return 0
+end
+if redis.call("ZSCORE", claimed_scores_key, job_id) ~= false then
+    return 0
+end
+if redis.call("HEXISTS", claimed_priority_key, job_id) == 1 then
+    return 0
+end
+
+redis.call("SADD", queued_index_key, job_id)
+redis.call("RPUSH", queue_key, job_id)
+return 1
+"""
+
+_REDIS_CLAIM_NEXT_SCRIPT = """
+-- generation_broker_claim_next
+local queue_key = KEYS[1]
+local queued_index_key = KEYS[2]
+local claimed_scores_key = KEYS[3]
+local claimed_priority_key = KEYS[4]
+local claim_score = ARGV[1]
+local priority = ARGV[2]
+
+local job_id = redis.call("LPOP", queue_key)
+if not job_id then
+    return nil
+end
+
+redis.call("SREM", queued_index_key, job_id)
+redis.call("ZADD", claimed_scores_key, claim_score, job_id)
+redis.call("HSET", claimed_priority_key, job_id, priority)
+return job_id
+"""
+
+_REDIS_HEARTBEAT_CLAIM_SCRIPT = """
+-- generation_broker_heartbeat_claim
+local claimed_scores_key = KEYS[1]
+local claimed_priority_key = KEYS[2]
+local job_id = ARGV[1]
+local claim_score = ARGV[2]
+
+if redis.call("ZSCORE", claimed_scores_key, job_id) == false
+    and redis.call("HEXISTS", claimed_priority_key, job_id) == 0 then
+    return 0
+end
+
+redis.call("ZADD", claimed_scores_key, claim_score, job_id)
+return 1
+"""
+
+_REDIS_REQUEUE_STALE_CLAIM_SCRIPT = """
+-- generation_broker_requeue_stale_claim
+local claimed_scores_key = KEYS[1]
+local claimed_priority_key = KEYS[2]
+local queued_index_key = KEYS[3]
+local queue_key = KEYS[4]
+local job_id = ARGV[1]
+
+local removed = redis.call("ZREM", claimed_scores_key, job_id)
+redis.call("HDEL", claimed_priority_key, job_id)
+if removed <= 0 then
+    return 0
+end
+if redis.call("SISMEMBER", queued_index_key, job_id) == 1 then
+    return 0
+end
+
+redis.call("SADD", queued_index_key, job_id)
+redis.call("RPUSH", queue_key, job_id)
+return 1
+"""
+
 
 class GenerationBroker(ABC):
     @abstractmethod
@@ -228,14 +309,16 @@ class RedisGenerationBroker(GenerationBroker):
     async def enqueue(self, job_id: str, *, priority: str) -> bool:
         async def operation() -> bool:
             normalized = _normalize_priority(priority)
-            queue_key = self._queue_key(normalized)
-            async with self.redis.pipeline(transaction=True) as pipe:
-                pipe.sadd(self._queued_index_key, job_id)
-                pipe.rpush(queue_key, job_id)
-                results = await pipe.execute()
-            if int(results[0]) == 0:
-                return False
-            return True
+            enqueued = await self.redis.eval(
+                _REDIS_ENQUEUE_SCRIPT,
+                4,
+                self._queued_index_key,
+                self._claimed_scores_key,
+                self._claimed_priority_key,
+                self._queue_key(normalized),
+                str(job_id),
+            )
+            return int(enqueued or 0) == 1
 
         return await self._call_with_breaker(operation)
 
@@ -256,19 +339,19 @@ class RedisGenerationBroker(GenerationBroker):
             if chosen_priority is None:
                 return None, None, next_streak
 
-            queue_key = self._queue_key(chosen_priority)
             now = time.time()
-            async with self.redis.pipeline(transaction=True) as pipe:
-                pipe.lpop(queue_key)
-                results = await pipe.execute()
-            job_id = results[0]
+            job_id = await self.redis.eval(
+                _REDIS_CLAIM_NEXT_SCRIPT,
+                4,
+                self._queue_key(chosen_priority),
+                self._queued_index_key,
+                self._claimed_scores_key,
+                self._claimed_priority_key,
+                str(now),
+                chosen_priority,
+            )
             if job_id is None:
                 return None, None, next_streak
-            async with self.redis.pipeline(transaction=True) as pipe:
-                pipe.srem(self._queued_index_key, job_id)
-                pipe.zadd(self._claimed_scores_key, {str(job_id): now})
-                pipe.hset(self._claimed_priority_key, str(job_id), chosen_priority)
-                await pipe.execute()
             return str(job_id), chosen_priority, next_streak
 
         return await self._call_with_breaker(operation)
@@ -277,7 +360,14 @@ class RedisGenerationBroker(GenerationBroker):
         async def operation() -> None:
             if not job_id:
                 return
-            await self.redis.zadd(self._claimed_scores_key, {str(job_id): time.time()})
+            await self.redis.eval(
+                _REDIS_HEARTBEAT_CLAIM_SCRIPT,
+                2,
+                self._claimed_scores_key,
+                self._claimed_priority_key,
+                str(job_id),
+                str(time.time()),
+            )
 
         await self._call_with_breaker(operation)
 
@@ -303,16 +393,17 @@ class RedisGenerationBroker(GenerationBroker):
             for job_id in stale_job_ids:
                 priority = await self.redis.hget(self._claimed_priority_key, str(job_id))
                 normalized_priority = _normalize_priority(priority or "standard")
-                async with self.redis.pipeline(transaction=True) as pipe:
-                    pipe.zrem(self._claimed_scores_key, str(job_id))
-                    pipe.hdel(self._claimed_priority_key, str(job_id))
-                    pipe.sadd(self._queued_index_key, str(job_id))
-                    results = await pipe.execute()
-                removed = int(results[0])
-                if removed <= 0:
-                    continue
-                await self.redis.rpush(self._queue_key(normalized_priority), str(job_id))
-                recovered.append((str(job_id), normalized_priority))
+                requeued = await self.redis.eval(
+                    _REDIS_REQUEUE_STALE_CLAIM_SCRIPT,
+                    4,
+                    self._claimed_scores_key,
+                    self._claimed_priority_key,
+                    self._queued_index_key,
+                    self._queue_key(normalized_priority),
+                    str(job_id),
+                )
+                if int(requeued or 0) == 1:
+                    recovered.append((str(job_id), normalized_priority))
             return recovered
 
         return await self._call_with_breaker(operation)

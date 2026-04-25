@@ -2,7 +2,7 @@
 
 ## Vision
 
-Prompt Vault is a premium cross-platform prompt and idea management system for serious AI users. It is positioned as a smart vault for prompts, ideas, reusable AI instructions, and evolving workflows.
+OmniaPrompt is a premium cross-platform prompt and idea management system for serious AI users. It is positioned as a fast workspace for prompts, ideas, reusable AI instructions, and evolving workflows.
 
 ## Core promise
 
@@ -30,9 +30,9 @@ Prompt Vault is a premium cross-platform prompt and idea management system for s
 - Public pages:
   Homepage, features, how-it-works, pricing, FAQ, sign-in, sign-up, forgot-password
 - App pages:
-  Dashboard, library, collections, favorites, recent, settings, prompt detail, prompt editor
+  Home, library, projects, favorites, recent, settings, prompt detail, prompt editor
 - Prompt features:
-  Search, filters, favorites, archive, duplicate, copy, collections, tags, platforms, variables, version history, exports
+  Search, filters, favorites, archive, duplicate, copy, projects, tags, platforms, variables, version history, exports
 - AI features:
   Suggest title, category, tags, platform, summarize long prompts, improve structure, create shorter or more detailed versions, and surface similar prompts
 - Data modes:
@@ -60,7 +60,7 @@ Planned next:
 
 ## Audience fit
 
-Prompt Vault is intentionally suitable for:
+OmniaPrompt is intentionally suitable for:
 
 - AI image and video users
 - ChatGPT, Claude, Gemini, and coding assistant users

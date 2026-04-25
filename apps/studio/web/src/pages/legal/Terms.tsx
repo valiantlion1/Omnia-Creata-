@@ -47,9 +47,9 @@ export default function TermsPage() {
           These Terms of Service (the <strong className="text-white">"Terms"</strong>) form a binding legal
           agreement between you (the <strong className="text-white">"User"</strong>,{' '}
           <strong className="text-white">"you"</strong>) and{' '}
-          <LegalPlaceholder>Omnia Creata Legal Entity Name</LegalPlaceholder>, a company registered at{' '}
-          <LegalPlaceholder>Registered Address</LegalPlaceholder>, with company registration number{' '}
-          <LegalPlaceholder>Company Registration No.</LegalPlaceholder> (the{' '}
+          <LegalPlaceholder>Omnia Creata Legal Entity Name</LegalPlaceholder>. Registered address:{' '}
+          <LegalPlaceholder>Registered Address</LegalPlaceholder>. Company registration number:{' '}
+          <LegalPlaceholder>Company Registration No.</LegalPlaceholder>. For these Terms, the operator is the{' '}
           <strong className="text-white">"Company"</strong>, <strong className="text-white">"we"</strong>,{' '}
           <strong className="text-white">"us"</strong>, or <strong className="text-white">"our"</strong>).
         </p>

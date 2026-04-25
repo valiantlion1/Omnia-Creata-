@@ -23,6 +23,10 @@ import {
 import { useStudioAuth } from '@/lib/studioAuth'
 import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { usePageVisibility } from '@/lib/usePageVisibility'
+import alpineLake from '@/assets/landing/studio/alpine-lake.png'
+import atelierInterior from '@/assets/landing/studio/atelier-interior.png'
+import coralFlower from '@/assets/landing/studio/coral-flower.png'
+import heroRiviera from '@/assets/landing/studio/hero-riviera.png'
 
 /* ─── Prompt history ──────────────────────────────── */
 
@@ -132,6 +136,48 @@ const PROMPT_TEMPLATES = [
   },
 ] as const
 
+const STARTER_DIRECTIONS = [
+  {
+    label: 'Editorial portrait',
+    prompt: 'Editorial portrait, calm expression, soft side light, tactile wardrobe detail, restrained charcoal backdrop',
+  },
+  {
+    label: 'Product study',
+    prompt: 'Premium product study on dark stone, soft overhead light, precise reflections, clean commercial finish',
+  },
+  {
+    label: 'World mood',
+    prompt: 'Cinematic landscape moodboard, layered mountain light, atmospheric depth, quiet luxury color grade',
+  },
+] as const
+
+const CREATE_STUDIO_SAMPLES = [
+  {
+    label: '01',
+    title: 'Coastal villa',
+    image: heroRiviera,
+    prompt: 'Cinematic coastal villa at golden hour, Italian Riviera, soft sunlight, bougainvillea, fine art photography',
+  },
+  {
+    label: '02',
+    title: 'Atelier interior',
+    image: atelierInterior,
+    prompt: 'Quiet creative atelier, warm window light, tactile surfaces, editorial interior composition',
+  },
+  {
+    label: '03',
+    title: 'Alpine light',
+    image: alpineLake,
+    prompt: 'Alpine lake at first light, atmospheric depth, painterly realism, polished editorial finish',
+  },
+  {
+    label: '04',
+    title: 'Coral study',
+    image: coralFlower,
+    prompt: 'Coral floral macro study, sculptural detail, soft dramatic light, premium material texture',
+  },
+] as const
+
 /* ─── Placeholder prompts ──────────────────────────── */
 
 const LEGACY_PLACEHOLDER_PROMPTS = [
@@ -182,6 +228,19 @@ type GenerationToast = {
   notice: string | null
 }
 
+type CreatePreviewItem = {
+  key: string
+  label: string
+  title: string
+  prompt: string
+  imageUrl: string | null
+  modelLabel: string
+  status: JobStatus | 'sample'
+  slotIndex: number
+  canOpen: boolean
+  source: 'session' | 'sample'
+}
+
 function isTerminalStatus(status: JobStatus) {
   return isTerminalJobStatus(status)
 }
@@ -205,6 +264,16 @@ function getToastLabel(status: JobStatus) {
     case 'timed_out': return 'Timed out'
     default: return 'Queued'
   }
+}
+
+function getPreviewStateLabel(status: CreatePreviewItem['status']) {
+  if (status === 'sample') return 'Starter'
+  return getToastLabel(status)
+}
+
+function normalizePreviewSlotStatus(status: string): JobStatus {
+  if (status === 'claimed') return 'running'
+  return normalizeJobStatus(status as JobStatus)
 }
 
 function humanizeGenerationError(error: string | null, errorCode?: string | null) {
@@ -364,13 +433,12 @@ export default function CreatePage() {
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(requestedProjectId ?? null)
   const [modelPickerOpen, setModelPickerOpen] = useState(false)
   const [modelPickerDirection, setModelPickerDirection] = useState<'down' | 'up'>('down')
-  const [ratioPickerOpen, setRatioPickerOpen] = useState(false)
-  const [ratioPickerDirection, setRatioPickerDirection] = useState<'down' | 'up'>('down')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [activeTemplateCategory, setActiveTemplateCategory] = useState(0)
   const [sharingToastId, setSharingToastId] = useState<string | null>(null)
+  const [selectedPreviewSlotIndex, setSelectedPreviewSlotIndex] = useState(0)
   const activeSessionStorageKey = useMemo(() => {
     if (auth?.identity?.id) {
       return buildActiveCreateSessionStorageKey(auth.identity.id)
@@ -391,8 +459,6 @@ export default function CreatePage() {
   const projectPromiseRef = useRef<Promise<string> | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
   const modelPickerButtonRef = useRef<HTMLButtonElement | null>(null)
-  const ratioPickerRef = useRef<HTMLDivElement | null>(null)
-  const ratioPickerButtonRef = useRef<HTMLButtonElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   /* ─── Queries ─────────────────────────────────── */
@@ -519,8 +585,8 @@ export default function CreatePage() {
   )
   const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
   const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
+  const runtimeCreditLabel = hasUnlimitedCredits ? 'Unlimited' : runtimeCredits.toLocaleString()
   const isOutOfCredits = !hasUnlimitedCredits && runtimeCredits <= 0
-  const activeAspect = aspectPresets[aspectRatio]
   const orderedAspectOptions = useMemo(
     () =>
       aspectOrder.map((ratio) => ({
@@ -553,9 +619,52 @@ export default function CreatePage() {
     [previewSession?.slots],
   )
   const hasPreviewSurface = previewSessionSlots.length > 0
-  const previewGridClass = previewSessionSlots.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+  const previewItems = useMemo<CreatePreviewItem[]>(() => {
+    if (previewSessionSlots.length > 0) {
+      return previewSessionSlots.map((slot) => {
+        const imageUrl = slot.output?.thumbnail_url ?? slot.output?.url ?? null
+        const title = previewSession?.display_title || previewSession?.title || `Variation ${slot.slot_index + 1}`
+        return {
+          key: `${previewSession?.job_id ?? 'session'}:${slot.slot_index}`,
+          label: String(slot.slot_index + 1).padStart(2, '0'),
+          title,
+          prompt: previewSession?.prompt_snapshot.prompt ?? prompt,
+          imageUrl,
+          modelLabel: getStudioModelDisplayName(
+            previewSession?.model ?? selectedModel?.id,
+            previewSession?.display_model_label ?? selectedModel?.label,
+          ),
+          status: normalizePreviewSlotStatus(slot.slot_status),
+          slotIndex: slot.slot_index,
+          canOpen: Boolean(imageUrl) && slot.slot_status === 'succeeded',
+          source: 'session',
+        }
+      })
+    }
+
+    return CREATE_STUDIO_SAMPLES.map((sample, index) => ({
+      key: `sample:${sample.label}`,
+      label: sample.label,
+      title: sample.title,
+      prompt: sample.prompt,
+      imageUrl: sample.image,
+      modelLabel: selectedModel ? getStudioModelDisplayName(selectedModel.id, selectedModel.label) : 'Omnia Model',
+      status: 'sample',
+      slotIndex: index,
+      canOpen: false,
+      source: 'sample',
+    }))
+  }, [previewSession, previewSessionSlots, prompt, selectedModel])
+  const selectedPreviewItem = previewItems.find((item) => item.slotIndex === selectedPreviewSlotIndex) ?? previewItems[0] ?? null
+  const leftPreviewItems = previewItems.slice(0, 2)
+  const rightPreviewItems = previewItems.slice(2, 4)
 
   /* ─── Effects ─────────────────────────────────── */
+
+  useEffect(() => {
+    if (previewItems.some((item) => item.slotIndex === selectedPreviewSlotIndex)) return
+    setSelectedPreviewSlotIndex(previewItems[0]?.slotIndex ?? 0)
+  }, [previewItems, selectedPreviewSlotIndex])
 
   useEffect(() => {
     if (!accessibleModels.length) return
@@ -611,22 +720,10 @@ export default function CreatePage() {
       if (modelPickerRef.current && !modelPickerRef.current.contains(event.target as Node)) {
         setModelPickerOpen(false)
       }
-      if (ratioPickerRef.current && !ratioPickerRef.current.contains(event.target as Node)) {
-        setRatioPickerOpen(false)
-      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  useEffect(() => {
-    if (!ratioPickerOpen) return
-    const trigger = ratioPickerButtonRef.current
-    if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
-    const estimatedHeight = Math.min(Math.max(orderedAspectOptions.length * 68 + 16, 180), 380)
-    setRatioPickerDirection(window.innerHeight - rect.bottom < estimatedHeight + 24 ? 'up' : 'down')
-  }, [orderedAspectOptions.length, ratioPickerOpen])
 
   /* ─── Auto-resize textarea ────────────────────── */
 
@@ -634,7 +731,7 @@ export default function CreatePage() {
     const ta = textareaRef.current
     if (!ta) return
     ta.style.height = 'auto'
-    ta.style.height = `${Math.min(ta.scrollHeight, 420)}px`
+    ta.style.height = `${Math.min(ta.scrollHeight, 82)}px`
   }, [prompt])
 
   /* ─── Poll running jobs for status ────────────── */
@@ -896,6 +993,18 @@ export default function CreatePage() {
     }
   }, [aspectRatio, blockedByCurrentCredits, cfgScale, ensureProjectId, missingRequiredReference, negativePrompt, outputCount, prompt, pushPromptHistory, queryClient, referenceAssetId, selectedModel, selectedModelCreditGuide, steps])
 
+  const handleOpenSelectedPreview = useCallback(() => {
+    if (!selectedPreviewItem?.canOpen || !selectedPreviewItem.imageUrl) return
+    openLightbox(selectedPreviewItem.imageUrl, selectedPreviewItem.title, {
+      title: selectedPreviewItem.title,
+      prompt: selectedPreviewItem.prompt,
+      authorName: auth?.identity.display_name ?? 'You',
+      authorUsername: auth?.identity.username ?? 'creator',
+      aspectRatio: previewSession?.prompt_snapshot.aspect_ratio ?? aspectRatio,
+      model: selectedPreviewItem.modelLabel,
+    })
+  }, [aspectRatio, auth?.identity.display_name, auth?.identity.username, openLightbox, previewSession?.prompt_snapshot.aspect_ratio, selectedPreviewItem])
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault()
@@ -949,37 +1058,181 @@ export default function CreatePage() {
 
   return (
     <>
-      <AppPage className={`${hasPreviewSurface ? 'max-w-[1680px]' : 'max-w-[1140px]'} gap-0 py-6 md:py-10`}>
-        <div className={hasPreviewSurface ? 'grid gap-8 xl:grid-cols-[minmax(620px,1.06fr)_minmax(420px,0.94fr)] 2xl:grid-cols-[minmax(700px,1fr)_minmax(500px,0.92fr)]' : 'mx-auto max-w-[1020px]'}>
-          <div className="min-w-0">
+      <AppPage className="min-h-[calc(100svh-72px)] max-w-[1800px] gap-0 py-4 md:py-7">
+        <div className="min-w-0">
 
         {/* ── Header ─────────────────────────────── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">Create</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              {isOutOfCredits
-                ? 'Shape the prompt now, then top up when you are ready to run it.'
-                : 'Describe the image, pick the model, then run it.'}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 text-sm font-semibold tracking-[-0.01em]">
+              <span className="text-[#f2be62]">Create</span>
+              <span className="text-white/22">/</span>
+              <span className="text-white/82">New image</span>
+            </div>
+            <p className="mt-1 text-[12px] text-zinc-500">
+              {isOutOfCredits ? 'Shape the image now; run it after credits are ready.' : 'Prompt, preview, and generate from one focused workspace.'}
             </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
-            {runningJobs ? <StatusPill tone="neutral">{runningJobs} creating</StatusPill> : null}
+          <div className="flex items-center gap-2 text-[12px]">
+            <div className="rounded-full border border-[#f2be62]/16 bg-[#f2be62]/8 px-3 py-1.5 font-semibold text-[#f2be62]">
+              {runtimeCreditLabel} credits
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 font-medium text-white/70">
+              <span className={`h-2 w-2 rounded-full ${runningJobs ? 'bg-[#f2be62]' : isOutOfCredits ? 'bg-amber-300' : 'bg-emerald-400'}`} />
+              {runningJobs ? `${runningJobs} creating` : isOutOfCredits ? 'Need credits' : 'Ready'}
+            </div>
           </div>
         </div>
 
 
+        {/* ── Result theater ─────────────────────── */}
+        <section
+          data-testid="create-preview-surface"
+          className="mb-5 overflow-hidden rounded-[34px] border border-[#e0a94f]/15 bg-[radial-gradient(circle_at_50%_0%,rgba(224,169,79,0.12),transparent_32%),linear-gradient(180deg,rgba(18,19,17,0.98),rgba(8,10,9,0.98))] p-3 shadow-[0_34px_110px_rgba(0,0,0,0.42)] sm:p-5"
+        >
+          <div className="grid items-start gap-4 xl:grid-cols-[190px_minmax(0,1fr)_190px] 2xl:grid-cols-[220px_minmax(0,1fr)_220px]">
+            <div className="order-2 grid grid-cols-2 gap-3 xl:order-none xl:grid-cols-1">
+              {leftPreviewItems.map((item) => {
+                const selected = item.slotIndex === selectedPreviewItem?.slotIndex
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setSelectedPreviewSlotIndex(item.slotIndex)}
+                    className={`group relative h-[150px] overflow-hidden rounded-[24px] border bg-[#11120f] text-left transition duration-500 sm:h-[158px] xl:h-[162px] ${
+                      selected
+                        ? 'border-[#f2be62] shadow-[0_0_0_1px_rgba(242,190,98,0.22),0_18px_44px_rgba(0,0,0,0.36)]'
+                        : 'border-white/[0.08] hover:border-[#f2be62]/45 hover:-translate-y-0.5'
+                    }`}
+                  >
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]" />
+                    ) : (
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(242,190,98,0.12),transparent_34%),linear-gradient(135deg,#171814,#0c0d0c)]" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/8 to-black/10" />
+                    <div className="absolute left-3 top-3 rounded-full bg-black/42 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white/78 backdrop-blur-md">
+                      {item.label}
+                    </div>
+                    <div className="absolute inset-x-3 bottom-3">
+                      <div className="line-clamp-1 text-[12px] font-semibold text-white">{item.title}</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#f2be62]/75">{getPreviewStateLabel(item.status)}</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenSelectedPreview}
+              disabled={!selectedPreviewItem?.canOpen}
+              className={`order-1 group relative self-start overflow-hidden rounded-[30px] border border-white/[0.08] bg-[#10110f] text-left shadow-[0_24px_80px_rgba(0,0,0,0.38)] transition duration-500 xl:order-none ${
+                selectedPreviewItem?.canOpen ? 'cursor-zoom-in hover:border-[#f2be62]/45' : 'cursor-default'
+              }`}
+            >
+              <div className="relative h-[280px] overflow-hidden sm:h-[320px] xl:h-[340px]">
+                {selectedPreviewItem?.imageUrl ? (
+                  <img
+                    src={selectedPreviewItem.imageUrl}
+                    alt={selectedPreviewItem.title}
+                    className={`h-full w-full object-cover transition duration-700 ${
+                      selectedPreviewItem.source === 'session' && selectedPreviewItem.status !== 'succeeded'
+                        ? 'scale-[1.035] blur-[14px] brightness-[0.72] saturate-75'
+                        : 'group-hover:scale-[1.018]'
+                    }`}
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_22%,rgba(242,190,98,0.18),transparent_34%),linear-gradient(135deg,#1c1d19,#0a0c0b)]" />
+                )}
+                <div className="absolute inset-0 create-preview-shell" />
+                {selectedPreviewItem?.source === 'session' && selectedPreviewItem.status !== 'succeeded' ? (
+                  <>
+                    <div className="create-preview-cloud create-preview-cloud-a" />
+                    <div className="create-preview-cloud create-preview-cloud-b" />
+                    <div className="create-preview-sheen" />
+                    <div className="create-preview-orbit-ring" />
+                    <div className="create-preview-orbit-ring create-preview-orbit-ring-delayed" />
+                    <div className="create-preview-orbit"><div className="create-preview-orbit-dot" /></div>
+                    <div className="create-preview-core" />
+                  </>
+                ) : null}
+                <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 bg-gradient-to-b from-black/62 via-black/24 to-transparent px-5 py-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/78">
+                      <span className={`h-2 w-2 rounded-full ${hasPreviewSurface ? 'bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.55)]' : 'bg-[#f2be62] shadow-[0_0_16px_rgba(242,190,98,0.5)]'}`} />
+                      {hasPreviewSurface ? 'Live result' : 'Studio preview'}
+                    </div>
+                    <div className="mt-1 text-[12px] text-white/48">{selectedPreviewItem?.modelLabel}</div>
+                  </div>
+                  <div className="rounded-full border border-white/[0.1] bg-black/28 px-3 py-1 text-[11px] font-semibold text-white/72 backdrop-blur-md">
+                    {aspectRatio}
+                  </div>
+                </div>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/78 via-black/28 to-transparent px-5 pb-5 pt-20">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div className="max-w-2xl">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#f2be62]">{selectedPreviewItem?.label ?? '01'} selected</div>
+                      <div className="mt-1 line-clamp-2 text-[18px] font-semibold tracking-[-0.03em] text-white sm:text-[22px]">
+                        {selectedPreviewItem?.title ?? 'Select a variation'}
+                      </div>
+                      <div className="mt-2 line-clamp-2 text-[12px] leading-5 text-white/58">{selectedPreviewItem?.prompt}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-white/74">
+                        {selectedPreviewItem?.canOpen ? 'Click to inspect' : hasPreviewSurface ? 'Rendering details' : 'Starter reference'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            <div className="order-3 grid grid-cols-2 gap-3 xl:order-none xl:grid-cols-1">
+              {rightPreviewItems.map((item) => {
+                const selected = item.slotIndex === selectedPreviewItem?.slotIndex
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setSelectedPreviewSlotIndex(item.slotIndex)}
+                    className={`group relative h-[150px] overflow-hidden rounded-[24px] border bg-[#11120f] text-left transition duration-500 sm:h-[158px] xl:h-[162px] ${
+                      selected
+                        ? 'border-[#f2be62] shadow-[0_0_0_1px_rgba(242,190,98,0.22),0_18px_44px_rgba(0,0,0,0.36)]'
+                        : 'border-white/[0.08] hover:border-[#f2be62]/45 hover:-translate-y-0.5'
+                    }`}
+                  >
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]" />
+                    ) : (
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(242,190,98,0.12),transparent_34%),linear-gradient(135deg,#171814,#0c0d0c)]" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/8 to-black/10" />
+                    <div className="absolute left-3 top-3 rounded-full bg-black/42 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white/78 backdrop-blur-md">
+                      {item.label}
+                    </div>
+                    <div className="absolute inset-x-3 bottom-3">
+                      <div className="line-clamp-1 text-[12px] font-semibold text-white">{item.title}</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#f2be62]/75">{getPreviewStateLabel(item.status)}</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* ── Prompt Area ────────────────────────── */}
-        <div className="overflow-visible">
+        <div className="grid gap-3 overflow-visible rounded-[34px] border border-[rgba(124,90,43,0.55)] bg-[radial-gradient(circle_at_30%_0%,rgba(224,169,79,0.08),transparent_30%),linear-gradient(180deg,rgba(18,17,14,0.98),rgba(8,9,8,0.98))] p-3 shadow-[0_24px_86px_rgba(0,0,0,0.4)] sm:p-4 xl:grid-cols-[minmax(0,1fr)_410px] xl:items-stretch">
           
           {/* Prompt Box */}
-          <div className="relative z-10 flex flex-col rounded-[36px] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.035),transparent_52%),linear-gradient(180deg,rgba(16,18,25,0.84),rgba(10,12,17,0.76))] px-8 pt-8 pb-6 shadow-[0_28px_90px_rgba(0,0,0,0.24)] transition-all duration-500 focus-within:border-white/[0.12] focus-within:shadow-[0_34px_110px_rgba(0,0,0,0.3)] sm:px-10">
+          <div className="relative z-10 order-1 flex h-full flex-col rounded-[28px] border border-[rgba(124,90,43,0.28)] bg-[linear-gradient(180deg,rgba(17,17,14,0.94),rgba(10,11,10,0.9))] px-4 pb-4 pt-4 shadow-[0_18px_58px_rgba(0,0,0,0.26)] transition-all duration-500 focus-within:border-[rgba(242,190,98,0.28)] sm:px-5 xl:order-none xl:col-start-1">
 
-            <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
-              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-zinc-400" /> Your idea</span>
+            <div className="mb-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-500">
+              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-[#f2be62]/75" /> Describe your image</span>
               <div className="flex items-center gap-2">
                 {historyEntries.length > 0 && (
                   <div className="relative">
@@ -1084,17 +1337,17 @@ export default function CreatePage() {
               rows={1}
               disabled={runningJobs > 0}
               placeholder={PLACEHOLDER_PROMPTS[Math.floor(Date.now() / 60000) % PLACEHOLDER_PROMPTS.length]}
-              className={`w-full resize-none bg-transparent text-[1rem] font-normal leading-[1.68] tracking-[-0.012em] text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:text-white md:text-[1.08rem] ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              style={{ minHeight: '260px' }}
+              className={`w-full resize-none rounded-[18px] border border-white/[0.1] bg-[#171711] px-4 py-3 text-[0.98rem] font-normal leading-[1.5] tracking-[-0.012em] text-zinc-100 outline-none transition-all placeholder:text-zinc-500 focus:border-[#f2be62]/34 focus:bg-[#1b1a13] focus:text-white md:text-[1rem] ${runningJobs > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              style={{ minHeight: '78px' }}
             />
 
             {/* ✨ Improve & Random buttons */}
-            <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-white/[0.05] pt-4">
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
               <button
                 onClick={() => saveStyleMutation.mutate()}
                 disabled={!prompt.trim() || saveStyleMutation.isPending}
                 title="Save this prompt as a reusable style"
-                className="flex h-9 items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 text-[12px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-8 items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 text-[11px] font-semibold tracking-wide text-zinc-300 ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {saveStyleMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-[rgb(var(--primary-light))]" />}
                 Save style
@@ -1106,7 +1359,7 @@ export default function CreatePage() {
                   if (improveState !== 'idle') setImproveState('idle')
                 }}
                 title="Random prompt"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.02] text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.02] text-zinc-400 ring-1 ring-white/[0.06] transition hover:bg-white/[0.06] hover:text-white"
               >
                 <Dices className="h-3.5 w-3.5" />
               </button>
@@ -1114,144 +1367,72 @@ export default function CreatePage() {
                 onClick={handleImprovePrompt}
                 disabled={!prompt.trim() || improveState === 'working'}
                 title="Refine prompt"
-                className="group flex h-9 items-center gap-1.5 rounded-full bg-[rgb(var(--primary-light)/0.05)] px-4 text-[12px] font-semibold tracking-wide text-[rgb(var(--primary-light))] ring-1 ring-[rgb(var(--primary-light)/0.2)] shadow-[0_0_15px_rgba(var(--primary-light),0.08)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[rgb(var(--primary-light)/0.1)] hover:ring-[rgb(var(--primary-light)/0.35)] hover:shadow-[0_0_20px_rgba(var(--primary-light),0.16)] hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                className="group flex h-8 items-center gap-1.5 rounded-full bg-[#f2be62]/7 px-3.5 text-[11px] font-semibold tracking-wide text-[#f2be62] ring-1 ring-[#f2be62]/18 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#f2be62]/12 hover:ring-[#f2be62]/32 hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0"
               >
                 {improveState === 'working' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[rgb(var(--primary-light))]" />}
                 {improveState === 'done' ? 'Refined' : improveState === 'fallback' ? 'Polished' : 'Refine prompt'}
               </button>
             </div>
-          </div>
 
-          {/* ── Advanced Drawer ──────────────────── */}
-          <div className="relative z-10 border-t border-white/[0.04]">
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex w-full items-center justify-end gap-2 px-6 py-3 text-[12px] font-semibold uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
-            >
-              <span className="relative flex items-center gap-1.5">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Advanced
-                {(negativePrompt || cfgScale !== DEFAULT_CFG_SCALE || outputCount !== DEFAULT_OUTPUT_COUNT) && (
-                  <span className="absolute -right-2.5 -top-0.5 h-[6px] w-[6px] rounded-full bg-[rgb(var(--primary-light))] shadow-[0_0_6px_rgb(var(--primary-light))]" />
-                )}
-              </span>
-            </button>
-
-            {showAdvanced && (
-              <div className="animate-in fade-in slide-in-from-top-1 duration-300 px-6 pb-5">
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {/* Negative Prompt */}
-                  <div className="sm:col-span-2">
-                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Negative Prompt</label>
-                    <textarea
-                      id="studio-create-negative-prompt"
-                      name="negativePrompt"
-                      value={negativePrompt}
-                      onChange={(e) => setNegativePrompt(e.target.value)}
-                      rows={2}
-                      placeholder="Things to avoid: blur, oversharpening, extra fingers..."
-                      className="w-full resize-none rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04]"
-                      style={{ maxHeight: '80px' }}
-                    />
-                  </div>
-
-                  {/* Guidance */}
-                  <div>
-                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
-                      <span>Guidance</span>
-                      <span className="tabular-nums text-zinc-300">{cfgScale}</span>
-                    </label>
-                    <input
-                      aria-label="Guidance"
-                      type="range"
-                      min={1}
-                      max={15}
-                      step={0.5}
-                      value={cfgScale}
-                      onChange={(e) => setCfgScale(Number(e.target.value))}
-                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
-                    />
-                  </div>
-
-                  {/* Variations */}
-                  <div>
-                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
-                      <span>Variations</span>
-                      <span className="tabular-nums text-zinc-300">{outputCount}</span>
-                    </label>
-                    <input
-                      aria-label="Variations"
-                      type="range"
-                      min={1}
-                      max={4}
-                      step={1}
-                      value={outputCount}
-                      onChange={(e) => setOutputCount(Number(e.target.value))}
-                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
-                    />
-                  </div>
-                </div>
+            <div className="mt-3 border-t border-white/[0.06] pt-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Aspect ratio</div>
+              <div className="flex flex-wrap overflow-hidden rounded-[14px] border border-white/[0.08] bg-black/18">
+                {orderedAspectOptions.map((option) => {
+                  const active = option.ratio === aspectRatio
+                  return (
+                    <button
+                      key={option.ratio}
+                      type="button"
+                      onClick={() => {
+                        setAspectRatio(option.ratio)
+                      }}
+                      className={`min-h-10 flex-1 border-r border-white/[0.07] px-3 text-[12px] font-semibold transition last:border-r-0 ${
+                        active
+                          ? 'bg-[#f2be62]/14 text-[#f2be62] shadow-[inset_0_0_0_1px_rgba(242,190,98,0.42)]'
+                          : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300'
+                      }`}
+                    >
+                      {option.ratio}
+                    </button>
+                  )
+                })}
               </div>
-            )}
+            </div>
           </div>
-
 
           {/* Controls bar */}
-          <div className="relative z-20 flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between bg-transparent">
-            {/* Left: aspect ratio picker and model picker */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div ref={ratioPickerRef} className="relative">
-                <button
-                  ref={ratioPickerButtonRef}
-                  onClick={() => setRatioPickerOpen((value) => !value)}
-                  className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                >
-                  <div className="flex h-[22px] w-[22px] items-center justify-center opacity-90">
-                    <div className={`border-2 ${activeAspect.aspect} w-full rounded-sm border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.18)]`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Format</div>
-                    <div className="mt-0.5 text-[13px] font-semibold text-white">{aspectRatio}</div>
-                  </div>
-                  <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${ratioPickerOpen ? 'rotate-180 text-white' : ''}`} />
-                </button>
-
-                {ratioPickerOpen ? (
-                  <div className={`${ratioPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(380px, calc(100vh - 48px))' }}>
-                    {orderedAspectOptions.map((option) => {
-                      const active = option.ratio === aspectRatio
-                      return (
-                        <button
-                          key={option.ratio}
-                          onClick={() => {
-                            setAspectRatio(option.ratio)
-                            setRatioPickerOpen(false)
-                          }}
-                          className={`flex w-full items-center justify-between gap-3 rounded-[16px] px-3.5 py-3 text-left transition ${
-                            active ? 'bg-white/[0.08] text-white' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-white/[0.04]">
-                              <div className={`border-2 ${option.aspect} w-5 rounded-sm ${active ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light)/0.2)]' : 'border-zinc-400'}`} />
-                            </div>
-                            <div className="min-w-0 text-[13px] font-semibold tracking-wide">{option.ratio}</div>
-                          </div>
-                          {active ? <Check className="h-4 w-4 text-white" /> : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
+          <div className="relative z-20 order-2 flex flex-col gap-4 rounded-[28px] border border-[rgba(124,90,43,0.28)] bg-[linear-gradient(180deg,rgba(17,17,14,0.9),rgba(10,11,10,0.88))] p-4 shadow-[0_18px_58px_rgba(0,0,0,0.22)] xl:order-none xl:col-start-2 xl:row-start-1">
+            {/* Style and model picker */}
+            <div className="flex flex-col gap-2">
+              <div>
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Style</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {STARTER_DIRECTIONS.map((direction, index) => {
+                    const sample = CREATE_STUDIO_SAMPLES[index]
+                    return (
+                      <button
+                        key={direction.label}
+                        type="button"
+                        onClick={() => {
+                          setPrompt(direction.prompt)
+                          if (improveState !== 'idle') setImproveState('idle')
+                        }}
+                        className="group relative h-[70px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#11110f] text-left transition hover:-translate-y-0.5 hover:border-[#f2be62]/45"
+                      >
+                        {sample ? <img src={sample.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70 transition duration-500 group-hover:scale-105" /> : null}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/22 to-black/4" />
+                        <div className="absolute inset-x-2 bottom-2 line-clamp-1 text-[10px] font-semibold text-white/88">{direction.label}</div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-
-              <div className="mx-2 hidden h-6 w-px bg-white/[0.06] sm:block" />
 
               <div ref={modelPickerRef} className="relative">
                 <button
                   ref={modelPickerButtonRef}
                   onClick={() => setModelPickerOpen((value) => !value)}
-                  className="group flex h-11 items-center gap-3 rounded-[14px] bg-white/[0.02] px-4 text-left ring-1 ring-white/[0.05] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.06] hover:ring-white/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                  className="group flex h-12 w-full items-center justify-between gap-3 rounded-[16px] bg-[#171711] px-4 text-left ring-1 ring-white/[0.08] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-[#1b1a13] hover:ring-[#f2be62]/22 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 >
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Model</div>
@@ -1312,9 +1493,9 @@ export default function CreatePage() {
             </div>
 
             {/* Right: generate button + credit cost */}
-            <div className="flex w-full sm:w-auto items-center justify-end gap-3 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t border-white/[0.04] sm:border-t-0">
+            <div className="mt-auto flex w-full items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
               {selectedModel && selectedModel.runtime !== 'local' && (
-                <div className="flex flex-col items-end mr-2">
+                <div className="flex flex-col">
                   <div className="text-[12px] font-bold text-white tracking-wide flex items-center gap-1.5">
                     <Sparkles className="h-3 w-3 text-[rgb(var(--baseline))]" style={{ color: 'rgb(var(--primary-light))' }} />
                     {estimatedReserve} Credits
@@ -1328,133 +1509,94 @@ export default function CreatePage() {
               <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || !selectedModel || submittingCount > 0 || missingRequiredReference || blockedByCurrentCredits}
-                className="group relative flex h-12 w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-[14px] px-10 text-[14px] font-bold text-black bg-white transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-[1.02] hover:bg-white hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none shadow-[0_0_24px_rgba(255,255,255,0.15)]"
+                className="group relative flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-[16px] bg-[#f2be62] px-8 text-[14px] font-bold text-black shadow-[0_0_30px_rgba(242,190,98,0.22)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-[1.02] hover:bg-[#ffd27a] hover:shadow-[0_0_44px_rgba(242,190,98,0.34)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:scale-100 disabled:hover:shadow-none sm:w-auto"
               >
                 <span className="relative z-10 flex items-center gap-2">
                   {submittingCount ? <RefreshCw className="h-4.5 w-4.5 animate-spin text-black/80" /> : <Wand2 className="h-4.5 w-4.5 text-black" />}
-                  {submittingCount ? 'Creating…' : 'Generate'}
+                  {submittingCount ? 'Creating…' : 'Generate image'}
                 </span>
               </button>
             </div>
+
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex w-full items-center justify-between gap-2 rounded-[18px] border border-white/[0.07] bg-[#11110f]/72 px-4 py-3 text-[12px] font-semibold uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              <span className="text-[10px] text-zinc-600">Optional controls</span>
+              <span className="relative flex items-center gap-1.5">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Advanced
+                {(negativePrompt || cfgScale !== DEFAULT_CFG_SCALE || outputCount !== DEFAULT_OUTPUT_COUNT) && (
+                  <span className="absolute -right-2.5 -top-0.5 h-[6px] w-[6px] rounded-full bg-[rgb(var(--primary-light))] shadow-[0_0_6px_rgb(var(--primary-light))]" />
+                )}
+              </span>
+            </button>
           </div>
+
+          {showAdvanced ? (
+            <div className="order-3 rounded-[24px] border border-white/[0.07] bg-[#11110f]/72 px-5 py-5 xl:col-span-2">
+              <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-zinc-500">Negative Prompt</label>
+                    <textarea
+                      id="studio-create-negative-prompt"
+                      name="negativePrompt"
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      rows={2}
+                      placeholder="Things to avoid: blur, oversharpening, extra fingers..."
+                      className="w-full resize-none rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 transition focus:border-white/[0.12] focus:bg-white/[0.04]"
+                      style={{ maxHeight: '80px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>Guidance</span>
+                      <span className="tabular-nums text-zinc-300">{cfgScale}</span>
+                    </label>
+                    <input
+                      aria-label="Guidance"
+                      type="range"
+                      min={1}
+                      max={15}
+                      step={0.5}
+                      value={cfgScale}
+                      onChange={(e) => setCfgScale(Number(e.target.value))}
+                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>Variations</span>
+                      <span className="tabular-nums text-zinc-300">{outputCount}</span>
+                    </label>
+                    <input
+                      aria-label="Variations"
+                      type="range"
+                      min={1}
+                      max={4}
+                      step={1}
+                      value={outputCount}
+                      onChange={(e) => setOutputCount(Number(e.target.value))}
+                      className="accent-[rgb(var(--primary-light))] w-full h-2 rounded-full appearance-none bg-white/[0.06] cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(var(--primary-light),0.5)]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Feedback row — only errors, no technical billing info */}
           {createError ? (
-            <div className="border-t border-white/[0.04] px-5 py-3">
+            <div className="order-4 border-t border-white/[0.04] px-5 py-3 xl:col-span-2">
               <div className="text-sm text-amber-200/80">{createError}</div>
             </div>
           ) : null}
         </div>
 
-          </div>
-
-          {hasPreviewSurface ? (
-          <aside data-testid="create-preview-surface" className="min-w-0 xl:sticky xl:top-24 xl:self-start">
-            <section className="overflow-hidden rounded-[38px] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_48%),linear-gradient(180deg,rgba(17,19,27,0.97),rgba(10,12,17,0.94))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-5">
-              <div className={`grid gap-4 ${previewGridClass}`}>
-                {previewSessionSlots.map((slot) => {
-                  const previewUrl = slot.output?.thumbnail_url ?? slot.output?.url ?? null
-                  const canOpen = Boolean(previewUrl) && slot.slot_status === 'succeeded'
-                  const isSettling = slot.slot_status === 'queued' || slot.slot_status === 'claimed' || slot.slot_status === 'running'
-                  const slotErrorCode = slot.error_code ?? previewSession?.error_code ?? null
-                  const sessionAspectRatio =
-                    (previewSession?.prompt_snapshot.aspect_ratio as keyof typeof aspectPresets | undefined)
-                    ?? aspectRatio
-                  const previewAspectClass = aspectPresets[sessionAspectRatio]?.aspect ?? activeAspect.aspect
-                  const statusBadge =
-                    slot.slot_status === 'blocked'
-                      ? 'Blocked'
-                      : slot.slot_status === 'cancelled'
-                        ? 'Cancelled'
-                        : slot.slot_status === 'timed_out'
-                          ? 'Timed out'
-                          : slot.slot_status === 'failed'
-                            ? (slotErrorCode === 'provider_auth' || slotErrorCode === 'provider_not_configured' ? 'Unavailable' : 'Failed')
-                        : null
-
-                  return (
-                    <button
-                      key={`${previewSession?.job_id ?? 'draft'}:${slot.slot_index}`}
-                      type="button"
-                      disabled={!canOpen}
-                      onClick={() => {
-                        if (!canOpen || !previewUrl) return
-                        openLightbox(previewUrl, `Variation ${slot.slot_index + 1}`, {
-                          title: previewSession?.display_title || previewSession?.title || `Variation ${slot.slot_index + 1}`,
-                          prompt: previewSession?.prompt_snapshot.prompt ?? prompt,
-                          authorName: auth?.identity.display_name ?? 'You',
-                          authorUsername: auth?.identity.username ?? 'creator',
-                          aspectRatio: previewSession?.prompt_snapshot.aspect_ratio ?? aspectRatio,
-                          model: getStudioModelDisplayName(
-                            previewSession?.model ?? selectedModel?.id,
-                            previewSession?.display_model_label ?? selectedModel?.label,
-                          ),
-                        })
-                      }}
-                      className={`group relative overflow-hidden rounded-[30px] border border-white/[0.05] bg-[#0f1118] text-left transition-all duration-500 ${
-                        canOpen
-                          ? 'cursor-zoom-in hover:-translate-y-0.5 hover:border-white/[0.14]'
-                          : 'cursor-default'
-                      }`}
-                    >
-                      <div className={`relative ${previewAspectClass} overflow-hidden bg-[#11141c]`}>
-                        {previewUrl ? (
-                          <img
-                            src={previewUrl}
-                            alt={`Variation ${slot.slot_index + 1}`}
-                            className={`h-full w-full object-cover transition duration-700 ${
-                              slot.slot_status === 'succeeded'
-                                ? 'animate-gen-reveal group-hover:scale-[1.025]'
-                                : 'scale-[1.04] blur-[18px] saturate-75 brightness-[0.72]'
-                            }`}
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.08),transparent_26%),linear-gradient(135deg,#171a23_0%,#202534_45%,#0f1219_100%)]" />
-                        )}
-
-                        <div className="absolute inset-0 create-preview-shell" />
-                        {isSettling ? (
-                          <>
-                            <div className="create-preview-cloud create-preview-cloud-a" />
-                            <div className="create-preview-cloud create-preview-cloud-b" />
-                            <div className="create-preview-sheen" />
-                            <div className="create-preview-orbit-ring" />
-                            <div className="create-preview-orbit-ring create-preview-orbit-ring-delayed" />
-                            <div className="create-preview-orbit">
-                              <div className="create-preview-orbit-dot" />
-                            </div>
-                            <div className="create-preview-core" />
-                          </>
-                        ) : null}
-                        {statusBadge && !previewUrl ? (
-                          <div className="absolute inset-0 create-preview-failure-veil" />
-                        ) : null}
-
-                        <div className="absolute left-3 top-3 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white/75 backdrop-blur-md">
-                          {String(slot.slot_index + 1).padStart(2, '0')}
-                        </div>
-
-                        {isSettling ? (
-                          <div className="absolute right-3 top-3 flex h-2.5 w-2.5 rounded-full bg-white/70 shadow-[0_0_14px_rgba(255,255,255,0.35)] animate-pulse" />
-                        ) : null}
-
-                        {statusBadge ? (
-                          <div className="absolute inset-x-0 bottom-3 flex justify-center">
-                            <span className="rounded-full bg-black/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70 backdrop-blur-md">
-                              {statusBadge}
-                            </span>
-                          </div>
-                        ) : null}
-
-                        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-          </aside>
-          ) : null}
         </div>
       </AppPage>
 

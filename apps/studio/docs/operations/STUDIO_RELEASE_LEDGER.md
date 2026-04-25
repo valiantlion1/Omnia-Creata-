@@ -18,6 +18,146 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.26.219`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.217` and `.218` improved the Landing gallery volume and speed, but the style language still leaned too much toward subject categories such as interior, landscape, and macro. The gallery needed to show actual image-generation style genres: cyberpunk, anime, cel-shading, sci-fi, fantasy, glam/sexy editorial, photoreal, luxury ad, and similar prompt families.
+- What:
+  `.219` adds a dedicated genre belt to the Landing gallery using existing public `atmosphere` assets. The first gallery rows now mix in `Cyberpunk`, `Neon noir`, `Sci-fi city`, `Anime`, `Cel shading`, `Fantasy`, `Creature art`, `Glam editorial`, `Sexy editorial`, `Photoreal`, `Luxury ad`, and `Car ad` moments, and the middle row title changes from `Style studies` to `Style genres`. The visible rail segments are split by source pool so the same image is not repeated under different labels in the same viewport. The slower `.218` conveyor timing remains unchanged.
+  Verification on `.219` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-gallery-genres-dedup-219-final-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-gallery-genres-dedup-219-final-mobile` both pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-gallery-genres-dedup-219-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-gallery-genres-dedup-219-final-mobile-mobile-manifest.json`. A focused gallery screenshot was also captured at `apps/studio/web/output/playwright/studio-proof/landing-gallery-genres-dedup-219-final-gallery-desktop.png`.
+
+### `0.6.0-alpha` / build `2026.04.26.218`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.217` made the Landing gallery richer, but keeping the old animation durations against the larger belt made the rails feel too fast. The gallery needed to read as a calm continuous showcase, not a racing ticker.
+- What:
+  `.218` slows the Landing gallery conveyor motion only. The three rail cycles now run at `360s`, `420s`, and `480s`, preserving the one-direction trigger-belt feel while making the visual stream much calmer. No Create routing, backend behavior, provider setup, or gallery asset selection changes in this wave.
+  Verification on `.218` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-gallery-slow-218-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-gallery-slow-218-mobile` both pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-gallery-slow-218-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-gallery-slow-218-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.217`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.216` made the Landing gallery rails move like a continuous belt, but the visual vocabulary still felt too small because the same few source moments reappeared quickly. The gallery needed more style coverage so portrait, cinematic, landscape, macro, fine-art, and interior all had enough presence.
+- What:
+  `.217` expands the Landing gallery data into a larger style-balanced belt using the existing Studio landing assets plus selected public `atmosphere` images for real extra variety. The gallery now covers portrait, cinematic, landscape, macro, product, architecture, fine-art, and interior moments with varied crop focus, labels, and alt text. The section now has three rails: `Inspired creations`, `Style studies`, and `Community gallery`. The third rail runs at a slower, offset phase so the page feels richer without switching back to a forward/back carousel.
+  Verification on `.217` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-gallery-real-styles-217-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-gallery-real-styles-217-mobile` both pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-gallery-real-styles-217-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-gallery-real-styles-217-mobile-mobile-manifest.json`. A focused gallery screenshot was also captured at `apps/studio/web/output/playwright/studio-proof/landing-gallery-real-styles-217-gallery-desktop.png`.
+
+### `0.6.0-alpha` / build `2026.04.25.216`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.215` made Landing's Create handoff match the current Create composer, but the gallery rails underneath still felt too short and mechanical. The two rows could read like a small carousel moving forward/backward instead of a continuous creative stream.
+- What:
+  `.216` expands the Landing gallery belt with more labeled visual moments from the existing Studio asset set, varies crop focus across repeated source imagery, and changes the rail motion to one-direction seamless conveyor movement. The second row now starts at a different phase and speed instead of reversing, so the section reads more like a continuous rotating image belt.
+  Verification on `.216` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-gallery-belt-216-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-gallery-belt-216-mobile` both pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-gallery-belt-216-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-gallery-belt-216-mobile-mobile-manifest.json`. A focused gallery screenshot was also captured at `apps/studio/web/output/playwright/studio-proof/landing-gallery-belt-216-gallery-desktop.png`.
+
+### `0.6.0-alpha` / build `2026.04.25.215`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.214` made the signed-in Create composer match the selected reference, but Landing still advertised Create through the older composer preview. That created a small visual mismatch at the handoff: the user saw one control language on Landing and a more refined dock inside Create.
+- What:
+  `.215` updates the Landing hero's Create preview to mirror the current Create composer language. The hero visual now stacks the generated preview above a full-width darker black/gold dock with `Describe your image`, inline aspect-ratio controls, image-backed style chips, model, reserve, Generate, and Advanced. The old progress strip was removed because the dock itself now carries the Create intent. The primary Landing CTA still routes to `/create?intent=first_creation`.
+  Verification on `.215` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-create-dock-match-215-final-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-create-dock-match-215-final-mobile` both pass against `127.0.0.1:5173` with zero failed routes. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-create-dock-match-215-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-create-dock-match-215-final-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.25.214`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.213` fixed the broad Create workspace composition, but the selected composer dock still did not match the reference closely enough. It read as two large blue-ish app panels instead of one lower, darker generation control dock where prompt, style, aspect ratio, model, and Generate belong to the same flow.
+- What:
+  `.214` refines only the Create composer area. The prompt area now reads as `Describe your image`, aspect ratio is an inline segmented control like the reference, the style presets moved into image-backed chips on the right, model selection and Generate sit in the same right-side control column, and Advanced is a quiet footer toggle instead of a separate heavy row. The palette is also pulled back toward black/gold so the dock no longer feels like a blue dashboard card. Existing generation API/session/lightbox behavior is unchanged.
+  Verification on `.214` is signed-in frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /create --auth demo --plan pro --viewport desktop --label create-composer-reference-dock-final-desktop` plus `npm run proof:route -- --route /create --auth demo --plan pro --viewport mobile --label create-composer-reference-dock-final-mobile` both pass against `127.0.0.1:5173` with zero failed routes. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/create-composer-reference-dock-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/create-composer-reference-dock-final-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.25.213`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.212` put the Create page in the right image-led direction, but the first pass still felt too much like a loose web page in the signed-in app: the header was oversized, the composer controls were not clearly prioritized, the Create route inherited the global legal footer, and mobile reading order could put Advanced before the primary generate controls. The user-facing goal for `.213` is to make Create feel like a focused production workspace instead of a dressed-up form.
+- What:
+  `.213` tightens Create without changing the generation contract. The page now uses a compact `Create / New image` workspace bar, keeps credits and readiness status in that top row, preserves the central result theater with clickable variation previews, keeps prompt/model/format/generate controls in a clearer composer sequence, moves Advanced behind the primary controls in both DOM and visual flow, and suppresses the global legal footer on `/create` so the signed-in workspace does not read like a marketing page. This remains frontend-only and keeps the existing Create API/session/lightbox behavior; it does not start a second frontend host.
+  Verification on `.213` is signed-in frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /create --auth demo --plan pro --viewport desktop --label create-redesign-213-final-desktop` plus `npm run proof:route -- --route /create --auth demo --plan pro --viewport mobile --label create-redesign-213-final-mobile` both pass against `127.0.0.1:5173` with zero console errors or warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/create-redesign-213-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/create-redesign-213-final-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.25.212`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.211` turned Landing into the selected premium AI image-generation entry surface. The next page in that flow is Create, so its first signed-in workspace needed to carry the same image-led direction instead of feeling like a form-heavy dashboard. The chosen reference was the variation theater: one large selected result, two preview cells on each side, and a bottom composer dock that keeps prompting and settings close to the visual result.
+- What:
+  `.212` rebuilds Create around that selected reference. The page now has a central result theater, clickable left/right variation previews that update the selected center image, starter imagery for empty sessions, preserved real session slot handling for generated outputs, and a more compact composer dock with prompt starters, templates, advanced settings, model/format controls, credit reserve, and Generate kept in one flow. This is frontend-only and keeps the existing Create API/session/lightbox behavior; it does not start a second frontend host.
+  Verification on `.212` is signed-in frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /create --auth demo --plan pro --viewport desktop --label create-redesign-212-balanced-desktop` plus `npm run proof:route -- --route /create --auth demo --plan pro --viewport mobile --label create-redesign-212-balanced-mobile` both pass against `127.0.0.1:5173` with zero console errors or warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/create-redesign-212-balanced-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/create-redesign-212-balanced-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.25.211`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.210` tightened backend storage truth, but the public landing surface still needed to match the new AI image-generation direction we selected from visual references. The first impression needed to feel like a real creative product: image-led, dark and cinematic, clear about Create as the next step, and grounded in the actual OmniaCreata signature mark instead of a generic dashboard or white SaaS shell.
+- What:
+  `.211` rebuilds the Studio landing page around a premium image-generation hero, imported GPT-generated editorial assets, a prompt-composer preview, slow gallery rails, and concise product copy that avoids unsupported free-generation promises. The primary landing action now routes toward Create intent while preserving the current auth/entitlement contract. The implementation stays inside the Studio web app and does not start or require a second frontend host.
+  Verification on `.211` is frontend-focused. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and route proof against the existing canonical frontend host on `127.0.0.1:5173` passes for `/landing` on both desktop and mobile with zero console errors or warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-redesign-imported-assets-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-redesign-imported-assets-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.25.210`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.209` made generation enqueue failures compensate correctly. The next nearby storage edge was local asset truth. Studio already treated unreadable legacy `local_path` values as missing, but assets stored through the newer `storage_backend=local` + `storage_key` metadata path could still look renderable just because the metadata key existed. That could make previews, clean export checks, or delivery flows advertise a file that the machine could not actually read.
+- What:
+  `.210` makes local storage-key behavior match local-path behavior. Local storage now treats path-existence and read permission failures as missing assets, delete attempts become no-op when the local payload is inaccessible, and Library checks verify local storage keys against the actual local file before saying a variant exists. Remote storage keys still avoid expensive existence probes and remain resolved at fetch time. This is backend-only and no-cost; it does not touch provider smoke, billing accounts, account linking, or Prompt Vault.
+  Verification on `.210` is backend-focused. From `apps/studio/backend`, `python -m pytest tests/test_library_asset_paths.py tests/test_asset_storage.py -q` passes (`5 passed`), `python -m pytest tests/test_asset_import_ops.py tests/test_asset_protection.py tests/test_security_hardening.py -q -k "asset or share or preview or import or path"` passes (`25 passed, 12 deselected`), and `python -m pytest tests/test_versioning.py tests/test_backend_spine_ops.py -q` passes (`21 passed`).
+
+### `0.6.0-alpha` / build `2026.04.25.209`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.208` made Redis broker transitions atomic, but one adjacent create-flow edge still mattered. Generation creation persists the job and reserves credits before the job is handed to the processing queue. If the shared broker rejected or failed that enqueue step, Studio could otherwise leave a queued/reserved job behind while the user received an error. In a paid creative product, that is exactly the kind of "it failed but something still happened" behavior that damages trust.
+- What:
+  `.209` adds a backend compensation path for enqueue failures after persistence. If a persisted generation cannot enter the dispatcher or shared broker, Studio now best-effort discards the broker entry, marks the job `failed`, releases reserved credits through the existing credit ledger path, logs a structured `generation_enqueue_failed` event, and returns a retryable queue-unavailable response. Router responses now also distinguish true queue saturation from temporary queue unavailability through `queue_full=false` and `X-Queue-Full: false`. This remains backend-only and no-cost: no paid provider smoke, no billing-account changes, and no account-linking work.
+  Verification on `.209` is backend-focused. From `apps/studio/backend`, `python -m pytest tests/test_service_regressions.py::test_create_generation_compensates_when_shared_broker_enqueue_fails tests/test_service_regressions.py::test_web_runtime_mode_with_shared_broker_enqueues_generation_for_external_worker tests/test_service_regressions.py::test_worker_runtime_mode_processes_jobs_claimed_from_shared_broker -q` passes (`3 passed`), `python -m pytest tests/test_router_generation.py::test_generation_endpoint_returns_structured_queue_full_response tests/test_router_generation.py::test_generation_endpoint_distinguishes_queue_unavailable_from_queue_full -q` passes (`2 passed`), `python -m pytest tests/test_generation_broker.py tests/test_router_generation.py -q` passes (`25 passed`), `python -m pytest tests/test_service_regressions.py -q -k "generation_broker or shared_broker or broker or enqueue"` passes (`12 passed, 79 deselected`), and `python -m pytest tests/test_versioning.py tests/test_backend_spine_ops.py -q` passes (`21 passed`).
+
+### `0.6.0-alpha` / build `2026.04.25.208`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.207` closed bad reference-image and unreadable local-path scenarios. The next no-cost backend scenario was the shared generation broker: Redis queue writes could still depend on multi-command transitions, and a claimed job could be re-enqueued because the enqueue guard only checked the queued index, not the claimed set. In a split web/worker runtime that kind of edge can become duplicate work, confusing worker recovery, or a job that gets stuck between queue and claim state.
+- What:
+  `.208` makes the Redis generation broker stricter. Enqueue, claim-next, heartbeat, and stale-claim requeue now use small Redis Lua scripts so each mutation is atomic at the broker boundary. Claimed jobs are rejected during enqueue, unclaimed heartbeat calls no longer create phantom claims, and stale-claim recovery removes the claim and requeues the job in one operation. This stays backend-only and no-cost: no paid provider smoke, no billing flow, and no account-linking work.
+  Verification on `.208` is backend-focused. From `apps/studio/backend`, `python -m pytest tests/test_generation_broker.py -q` passes (`7 passed`), `python -m pytest tests/test_service_regressions.py -q -k "generation_broker or shared_broker or broker"` passes (`11 passed, 79 deselected`), `python -m pytest tests/test_generation_broker.py tests/test_versioning.py -q` passes (`10 passed`), and the `.207` asset/local-path checks remain covered by the earlier passing targeted suites in this ledger.
+
+### `0.6.0-alpha` / build `2026.04.25.207`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.206` made owner proof/readiness safer around missing local artifacts. The next no-cost backend scenario was asset import: a client could send a `data:image/...` URL whose bytes were not actually a valid image, or whose declared MIME type did not match the payload. That could store a bad reference asset and push the failure later into thumbnailing, reference loading, public preview, or generation prep.
+- What:
+  `.207` validates imported data-url images before persistence. The backend now checks decoded byte size, verifies that PIL can open and verify the image, rejects corrupt image bytes, and rejects MIME mismatches such as PNG bytes declared as JPEG. The same wave treats inaccessible local asset paths as missing files instead of letting `Path.exists()` permission errors bubble into asset listing, delivery, or delete flows. This is a local/backend-only hardening wave; it does not run paid provider smoke, billing flows, or account-linking flows.
+  Verification on `.207` is backend-focused. From `apps/studio/backend`, `python -m pytest tests/test_asset_import_ops.py tests/test_service_regressions.py::test_import_asset_from_data_url_creates_reference_asset tests/test_router_security.py::test_asset_import_route_uses_user_and_ip_rate_limits -q` passes (`6 passed`), `python -m pytest tests/test_asset_import_ops.py tests/test_versioning.py -q` passes (`7 passed`), and `python -m pytest tests/test_library_asset_paths.py tests/test_asset_import_ops.py tests/test_asset_storage.py tests/test_asset_protection.py tests/test_security_hardening.py -q -k "asset or share or preview or import or path"` passes (`28 passed, 12 deselected`).
+
+### `0.6.0-alpha` / build `2026.04.25.206`
+- Date: `2026-04-25`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.205` made bad database failures easier to diagnose, but the owner proof/readiness path still had another real-world rough edge: if launch proof files, deployment reports, or runtime log paths were unreadable on the machine, Studio could treat a missing optional artifact like a backend crash instead of reporting missing evidence. The profile artwork crop work also needed server-side guardrails so client UI choices could not leave invalid crop state behind.
+- What:
+  `.206` hardens the backend proof spine. Launch readiness and deployment verification now safely treat inaccessible report/log paths as unavailable evidence, profile featured-artwork crop values are validated and reset when artwork is cleared, and sensitive `no-store` response-header routing now lives in a small security helper instead of forcing a full app/store bootstrap for simple tests. The backend pytest harness also uses a test-owned runtime root so local AppData permissions do not produce false red security-header failures.
+  Verification on `.206` is backend-focused. From `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q` passes (`82 passed`), `python -m pytest tests/test_main_security_headers.py -q` passes (`24 passed`), and `python -m pytest tests/test_launch_readiness.py tests/test_deployment_verification.py tests/test_backend_spine_ops.py tests/test_asset_protection.py tests/test_service_regressions.py::test_update_profile_can_pin_featured_asset_and_serialize_it -q` passes (`69 passed`). From repo root, `npm run repo:check` was rerun after cleaning Studio backend caches and is blocked only by `apps/prompt-vault/web/.next`, which is intentionally left untouched because Prompt Vault is active in another thread.
+
 ### `0.6.0-alpha` / build `2026.04.23.205`
 - Date: `2026-04-23`
 - Codename: `Foundation`

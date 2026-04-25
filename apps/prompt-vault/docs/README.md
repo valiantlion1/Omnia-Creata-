@@ -1,6 +1,6 @@
-# Prompt Vault Docs Hub
+# OmniaPrompt Docs Hub
 
-This folder is the developer-facing documentation entrypoint for Prompt Vault.
+This folder is the developer-facing documentation entrypoint for OmniaPrompt.
 
 Its job is to:
 - define the canonical product truth
@@ -18,14 +18,18 @@ Its job is to:
 Human path:
 1. [Product README](../README.md)
 2. [PRODUCT.md](./PRODUCT.md)
-3. [EXECUTION-PLAN.md](./EXECUTION-PLAN.md)
+3. [OMNIAPROMPT_DESIGN_DIRECTION.md](./OMNIAPROMPT_DESIGN_DIRECTION.md)
+4. [RELEASE-READINESS.md](./RELEASE-READINESS.md)
+5. [EXECUTION-PLAN.md](./EXECUTION-PLAN.md)
 
 AI / IDE path:
 1. [PRODUCT.md](./PRODUCT.md)
 2. [ARCHITECTURE.md](./ARCHITECTURE.md)
 3. [DATA-MODEL.md](./DATA-MODEL.md)
 4. [DECISIONS.md](./DECISIONS.md)
-5. [DEPLOYMENT.md](./DEPLOYMENT.md)
+5. [OMNIAPROMPT_DESIGN_DIRECTION.md](./OMNIAPROMPT_DESIGN_DIRECTION.md)
+6. [DEPLOYMENT.md](./DEPLOYMENT.md)
+7. [PLAY-STORE.md](./PLAY-STORE.md)
 
 ## Canonical docs
 
@@ -39,6 +43,12 @@ AI / IDE path:
   Current design and product decisions
 - [EXECUTION-PLAN.md](./EXECUTION-PLAN.md)
   Active build order
+- [OMNIAPROMPT_DESIGN_DIRECTION.md](./OMNIAPROMPT_DESIGN_DIRECTION.md)
+  Current reset direction for the visible product surface
+- [RELEASE-READINESS.md](./RELEASE-READINESS.md)
+  Phased web and Play Store readiness plan
+- [PLAY-STORE.md](./PLAY-STORE.md)
+  Android package, Play Console, AAB, and policy checklist
 - [DEPLOYMENT.md](./DEPLOYMENT.md)
   Deploy and environment posture
 

@@ -258,6 +258,18 @@ describe('MediaLibraryPage final image library', () => {
     expect(screen.getByText(/finished image/i)).toBeInTheDocument()
   })
 
+  it('keeps the image selection tray inside the content shell instead of under the sidebar', async () => {
+    renderWithProviders(<MediaLibraryPage />, { route: '/library/images' })
+
+    await userEvent.click(await screen.findByTitle('Select'))
+
+    const tray = screen.getByText(/Selected/i).closest('div.pointer-events-none.fixed')
+
+    expect(tray).toHaveClass('bottom-20')
+    expect(tray).toHaveClass('lg:bottom-8')
+    expect(tray).toHaveClass('lg:left-[var(--studio-sidebar-width,260px)]')
+  })
+
   it('renders liked public posts in Favorites and keeps grid/list actions working', async () => {
     renderWithProviders(<MediaLibraryPage />, { route: '/library/likes' })
 

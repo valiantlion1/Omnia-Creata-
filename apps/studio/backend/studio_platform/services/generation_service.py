@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from uuid import uuid4
 from dataclasses import replace
 from datetime import datetime, timedelta
+from contextlib import suppress
 from fastapi import Request
 import asyncio
 import json
@@ -380,6 +381,40 @@ class GenerationService:
         if self.service.generation_broker is not None:
             return await self.service.generation_broker.enqueue(job_id, priority=priority)
         return await self.service.generation_dispatcher.enqueue(job_id, priority=priority)
+
+
+    async def _compensate_generation_enqueue_failure(
+        self,
+        job: GenerationJob,
+        *,
+        error: str,
+        error_code: str,
+        cause: Exception | None = None,
+    ) -> None:
+        now = utc_now()
+        if self.service.generation_broker is not None:
+            with suppress(Exception):
+                await self.service.generation_broker.discard(job.id)
+        updated_job = await self._update_job_status(
+            job.id,
+            JobStatus.FAILED,
+            error=error,
+            error_code=error_code,
+            now=now,
+        )
+        event_job = updated_job or job
+        log_error = error if cause is None else f"{error} Cause: {cause.__class__.__name__}."
+        self._log_generation_event(
+            "generation_enqueue_failed",
+            job=event_job,
+            status=JobStatus.FAILED,
+            provider=event_job.provider,
+            error=log_error,
+            error_code=error_code,
+            started_at=event_job.started_at or event_job.created_at,
+            finished_at=now,
+            level=logging.ERROR,
+        )
 
 
     async def _claim_generation_job(
@@ -934,7 +969,31 @@ class GenerationService:
             plan_config=plan_config,
         )
         if self._can_process_generations() or self._uses_shared_generation_broker():
-            await self._enqueue_generation_job(job.id, priority=job.queue_priority)
+            try:
+                enqueued = await self._enqueue_generation_job(job.id, priority=job.queue_priority)
+            except Exception as exc:
+                await self._compensate_generation_enqueue_failure(
+                    job,
+                    error="Generation could not enter the processing queue.",
+                    error_code="generation_enqueue_failed",
+                    cause=exc,
+                )
+                raise self._generation_capacity_error(
+                    "Generation queue is temporarily unavailable. Please try again shortly.",
+                    queue_full=False,
+                    estimated_wait_seconds=30,
+                ) from exc
+            if not enqueued:
+                await self._compensate_generation_enqueue_failure(
+                    job,
+                    error="Generation was not accepted by the processing queue.",
+                    error_code="generation_enqueue_rejected",
+                )
+                raise self._generation_capacity_error(
+                    "Generation queue is temporarily unavailable. Please try again shortly.",
+                    queue_full=False,
+                    estimated_wait_seconds=30,
+                )
         if self._can_process_generations():
             self._ensure_generation_maintenance_task()
         await self.service._record_prompt_memory_signal(

@@ -1,6 +1,6 @@
-# Vault Web App
+# OmniaPrompt Web App
 
-This workspace contains Vault, Omnia Creata's mobile-first web application and Android-ready shell built with Next.js App Router and Capacitor.
+This workspace contains OmniaPrompt, OmniaCreata's mobile-first prompt workspace and Android-ready shell built with Next.js App Router and Capacitor.
 
 Primary reference:
 

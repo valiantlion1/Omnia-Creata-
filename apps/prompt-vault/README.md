@@ -1,6 +1,6 @@
-# Prompt Vault
+# OmniaPrompt
 
-Prompt Vault is Omnia Creata's premium prompt and idea management product.
+OmniaPrompt is Omnia Creata's premium prompt and idea management product.
 
 ## Product layout
 
@@ -28,9 +28,10 @@ Use `web/.env.example` as the starting point for local Supabase configuration.
 
 - Docs hub: [docs/README.md](docs/README.md)
 - Product: [docs/PRODUCT.md](docs/PRODUCT.md)
+- Design direction: [docs/OMNIAPROMPT_DESIGN_DIRECTION.md](docs/OMNIAPROMPT_DESIGN_DIRECTION.md)
 - Execution plan: [docs/EXECUTION-PLAN.md](docs/EXECUTION-PLAN.md)
 
 ## Notes
 
-- Prompt Vault stays product-local inside `apps/prompt-vault`.
+- OmniaPrompt stays product-local inside `apps/prompt-vault`.
 - Only ecosystem-wide modules should eventually move to root `packages/`.

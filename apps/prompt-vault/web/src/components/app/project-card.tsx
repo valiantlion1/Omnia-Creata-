@@ -22,12 +22,12 @@ export function ProjectCard({ projectId }: { projectId: string }) {
   );
 
   return (
-    <Surface className="overflow-hidden rounded-[20px] bg-[rgba(24,23,22,0.96)] p-4 transition duration-200 hover:border-[var(--border-strong)] hover:bg-[rgba(30,29,28,0.98)]">
+    <Surface className="overflow-hidden rounded-[20px] bg-[var(--surface)] p-4 transition duration-200 hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgba(242,202,80,0.1)] text-[var(--accent-strong)]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-strong)]">
                 <FolderKanban className="h-4 w-4" />
               </div>
               <div>

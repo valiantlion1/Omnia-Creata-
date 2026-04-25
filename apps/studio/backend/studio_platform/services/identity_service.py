@@ -39,6 +39,8 @@ from ..billing_ops import BillingStateSnapshot, resolve_billing_state
 
 logger = logging.getLogger(__name__)
 
+_PROFILE_FEATURED_ASSET_POSITIONS = frozenset({"top", "center", "bottom"})
+
 
 class DeletedIdentityError(PermissionError):
     def __init__(
@@ -1002,6 +1004,10 @@ class IdentityService:
         if limit is not None:
             posts_for_payload = visible_posts[:limit]
 
+        featured_asset_position = identity.profile_featured_asset_position
+        if featured_asset_position not in _PROFILE_FEATURED_ASSET_POSITIONS:
+            featured_asset_position = "center"
+
         return {
             "profile": {
                 "display_name": identity.display_name,
@@ -1011,6 +1017,7 @@ class IdentityService:
                 "plan": identity.plan.value,
                 "default_visibility": identity.default_visibility.value if own_profile else None,
                 "featured_asset_id": identity.profile_featured_asset_id if own_profile else None,
+                "featured_asset_position": featured_asset_position,
                 "usage_summary": self.serialize_usage_summary(identity, billing_state=billing_state) if own_profile else None,
                 "public_post_count": public_post_count,
             },
@@ -1041,6 +1048,7 @@ class IdentityService:
         default_visibility: Optional[Visibility] = None,
         featured_asset_id: Optional[str] = None,
         featured_asset_id_provided: bool = False,
+        featured_asset_position: Optional[str] = None,
     ) -> OmniaIdentity:
         identity = await self.get_identity(identity_id)
         cleaned_name: str | None = None
@@ -1054,6 +1062,9 @@ class IdentityService:
             moderation_result, _ = check_display_name_safety(cleaned_name)
             if moderation_result != ModerationResult.SAFE:
                 raise ValueError("That display name is not allowed. Choose a different one.")
+
+        if featured_asset_position is not None and featured_asset_position not in _PROFILE_FEATURED_ASSET_POSITIONS:
+            raise ValueError("Choose a valid profile artwork crop.")
 
         if featured_asset_id_provided and featured_asset_id is not None:
             selected_featured_asset = await self.service.store.get_model("assets", featured_asset_id, MediaAsset)
@@ -1077,6 +1088,10 @@ class IdentityService:
                 current.default_visibility = default_visibility
             if featured_asset_id_provided:
                 current.profile_featured_asset_id = selected_featured_asset.id if selected_featured_asset is not None else None
+                if selected_featured_asset is None:
+                    current.profile_featured_asset_position = "center"
+            if featured_asset_position is not None and current.profile_featured_asset_id is not None:
+                current.profile_featured_asset_position = featured_asset_position
             current.updated_at = utc_now()
             state.identities[current.id] = current
 

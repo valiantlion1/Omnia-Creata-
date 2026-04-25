@@ -188,7 +188,8 @@ function Start-BackendProcess {
     -ArgumentList $backendArgs `
     -WorkingDirectory $backendDir `
     -RedirectStandardOutput $backendOut `
-    -RedirectStandardError $backendErr | Out-Null
+    -RedirectStandardError $backendErr `
+    -WindowStyle Hidden | Out-Null
 }
 
 function Test-CurrentBackendBuild {
@@ -303,7 +304,8 @@ if ($HotReload) {
       -ArgumentList "run", "dev", "--", "--host", "127.0.0.1", "--port", "5173" `
       -WorkingDirectory $webDir `
       -RedirectStandardOutput $frontendOut `
-      -RedirectStandardError $frontendErr | Out-Null
+      -RedirectStandardError $frontendErr `
+      -WindowStyle Hidden | Out-Null
   } else {
     Write-Host "Studio frontend already running on port 5173 (hot-reload dev)." -ForegroundColor Green
   }
@@ -327,7 +329,8 @@ if ($HotReload) {
     -ArgumentList "run", "preview", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort" `
     -WorkingDirectory $webDir `
     -RedirectStandardOutput $frontendOut `
-    -RedirectStandardError $frontendErr | Out-Null
+    -RedirectStandardError $frontendErr `
+    -WindowStyle Hidden | Out-Null
 }
 
 $backendStatus = Wait-BackendReady -ExpectedBuild $expectedBuild

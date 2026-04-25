@@ -106,7 +106,7 @@ export default async function AppEntryPage({
             {messages.marketing.entryCards.map((item) => (
               <div
                 key={item.title}
-                className="rounded-[26px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(205,160,96,0.08),rgba(255,255,255,0.02))] p-5"
+                className="rounded-[26px] border border-[var(--border)] bg-[linear-gradient(180deg,var(--accent-soft),var(--surface))] p-5"
               >
                 <div className="text-lg font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
                   {item.title}

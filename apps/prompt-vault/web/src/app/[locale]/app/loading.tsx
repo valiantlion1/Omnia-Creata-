@@ -4,13 +4,13 @@ import { Surface } from "@/components/ui/primitives";
 export default function AppLoading() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-10">
-      <Surface className="intro-fade-rise w-full max-w-[480px] rounded-[32px] bg-[rgba(20,20,20,0.88)] p-8 text-center">
+      <Surface className="intro-fade-rise w-full max-w-[480px] rounded-[32px] bg-[var(--surface)] p-8 text-center">
         <div className="space-y-5">
           <div className="flex justify-center">
             <BrandMark />
           </div>
           <div className="flex justify-center">
-            <div className="intro-pulse-ring relative h-20 w-20 rounded-full border border-[rgba(242,202,80,0.18)]">
+            <div className="intro-pulse-ring relative h-20 w-20 rounded-full border border-[var(--accent-soft)]">
               <div className="intro-pulse-dot absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent-strong)]" />
             </div>
           </div>

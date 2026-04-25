@@ -1,13 +1,13 @@
-﻿import { Badge, Surface } from "@/components/ui/primitives";
+import { Badge, Surface } from "@/components/ui/primitives";
 import { MarketingShell } from "@/components/site/marketing-shell";
 import { assertLocale } from "@/lib/locale";
 
 const copy = {
   en: {
-    eyebrow: "Nolra beta features",
+    eyebrow: "OmniaPrompt features",
     title: "Built for fast capture, clean organization, and daily reuse.",
     description:
-      "Nolra keeps the first release focused: capture ideas quickly, organize them into projects, and return without fighting a bloated workspace.",
+      "OmniaPrompt keeps the flow focused: capture ideas quickly, organize them into projects, and return without fighting a bloated workspace.",
     features: [
       {
         title: "Fast capture",
@@ -18,7 +18,7 @@ const copy = {
         description: "Keep entries grouped by project, category, and tag without losing browsing speed."
       },
       {
-        title: "Offline-first beta flow",
+        title: "Offline-first flow",
         description: "Keep capturing locally first, then connect cloud sync when you are ready."
       },
       {
@@ -31,15 +31,15 @@ const copy = {
       },
       {
         title: "AI-ready foundation",
-        description: "Beta stays manual and stable first. Helper AI actions arrive in V1."
+        description: "AI help is shown only when it is available, so the core app stays fast and predictable."
       }
     ]
   },
   tr: {
-    eyebrow: "Nolra beta ozellikleri",
+    eyebrow: "OmniaPrompt ozellikleri",
     title: "Hizli capture, temiz duzen ve gunluk tekrar kullanim icin tasarlandi.",
     description:
-      "Nolra ilk surumde odagi dar tutar: fikirleri hizlica kaydet, projelerde duzenle ve agir bir workspace ile ugrasmadan geri don.",
+      "OmniaPrompt ilk surumde odagi dar tutar: fikirleri hizlica kaydet, projelerde duzenle ve agir bir workspace ile ugrasmadan geri don.",
     features: [
       {
         title: "Hizli capture",
@@ -50,7 +50,7 @@ const copy = {
         description: "Kayitlarini proje, kategori ve etiketlere gore grupla; gezinme hizini kaybetme."
       },
       {
-        title: "Offline-oncelikli beta akis",
+        title: "Offline-oncelikli akis",
         description: "Once lokal kaydet, hazir oldugunda cloud sync bagla."
       },
       {
@@ -63,7 +63,7 @@ const copy = {
       },
       {
         title: "AI hazir temel",
-        description: "Beta once manuel ve stabil kalir. Yardimci AI aksiyonlari V1 ile gelir."
+        description: "AI yardimi yalnizca kullanima acildiginda gorunur; cekirdek app hizli ve ongorulebilir kalir."
       }
     ]
   }

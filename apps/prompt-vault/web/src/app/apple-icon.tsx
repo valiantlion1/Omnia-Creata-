@@ -18,7 +18,7 @@ export default function AppleIcon() {
           width: "100%",
           height: "100%",
           background:
-            "radial-gradient(circle at 25% 22%, rgba(240,210,157,0.18), transparent 32%), linear-gradient(165deg, #080706 0%, #120f0d 52%, #1a1511 100%)"
+            "radial-gradient(circle at 25% 22%, rgba(213,121,85,0.24), transparent 32%), linear-gradient(165deg, #fbf4e8 0%, #f6efe3 58%, #e7d8c1 100%)"
         }}
       >
         <div
@@ -29,11 +29,11 @@ export default function AppleIcon() {
             width: 124,
             height: 124,
             borderRadius: 38,
-            border: "2px solid rgba(240,210,157,0.46)",
+            border: "2px solid rgba(47,111,98,0.22)",
             background:
-              "linear-gradient(180deg, rgba(30,23,17,0.97) 0%, rgba(15,11,8,0.98) 100%)",
+              "linear-gradient(180deg, rgba(255,252,245,0.97) 0%, rgba(246,239,227,0.98) 100%)",
             boxShadow:
-              "0 0 0 1px rgba(240,210,157,0.2) inset, 0 10px 24px rgba(0,0,0,0.38), 0 8px 14px rgba(168,116,49,0.22)"
+              "0 0 0 1px rgba(255,255,255,0.7) inset, 0 10px 24px rgba(69,51,31,0.18), 0 8px 14px rgba(47,111,98,0.16)"
           }}
         >
           <div
@@ -44,10 +44,10 @@ export default function AppleIcon() {
               width: 64,
               height: 64,
               borderRadius: 20,
-              border: "4px solid #d9b171",
+              border: "4px solid #2f6f62",
               background:
-                "radial-gradient(circle at 42% 30%, rgba(255,240,207,0.24), rgba(45,31,16,0.88) 68%)",
-              boxShadow: "0 0 0 1px rgba(255,236,198,0.32) inset"
+                "radial-gradient(circle at 42% 30%, rgba(255,255,255,0.72), rgba(47,111,98,0.16) 68%)",
+              boxShadow: "0 0 0 1px rgba(47,111,98,0.14) inset"
             }}
           >
             <div
@@ -55,8 +55,8 @@ export default function AppleIcon() {
                 width: 10,
                 height: 22,
                 borderRadius: 999,
-                background: "#d9b171",
-                boxShadow: "0 0 0 4px rgba(217,177,113,0.2)"
+                background: "#2f6f62",
+                boxShadow: "0 0 0 4px rgba(47,111,98,0.14)"
               }}
             />
           </div>

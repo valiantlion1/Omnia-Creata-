@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react'
+import type { ComponentType, CSSProperties, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -266,6 +266,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isGuestShell = !canLoadPrivate
+  const hideLegalFooter = location.pathname.startsWith('/create')
 
   useEffect(() => {
     const saved = window.localStorage.getItem('oc-studio-rail-collapsed')
@@ -494,7 +495,10 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   )
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-[#0f1318] text-white">
+    <div
+      className="relative flex h-screen overflow-hidden bg-[#0f1318] text-white"
+      style={{ '--studio-sidebar-width': desktopCollapsed ? '76px' : '260px' } as CSSProperties}
+    >
       <div className="fx-layer">
         <div className="fx-glow fx-glow-1" />
         <div className="fx-glow fx-glow-2" />
@@ -542,7 +546,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(188,209,229,0.08),transparent_24%),linear-gradient(180deg,#0f141b_0%,#11171f_42%,#10151c_100%)]">
             <div className="flex min-h-full flex-col">
               <div className="flex-1">{children}</div>
-              <LegalFooter className="mx-auto w-full max-w-[1520px] px-4 pb-6 md:px-5 xl:px-6" />
+              {hideLegalFooter ? null : <LegalFooter className="mx-auto w-full max-w-[1520px] px-4 pb-6 md:px-5 xl:px-6" />}
             </div>
           </main>
         </div>

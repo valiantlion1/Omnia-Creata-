@@ -57,6 +57,7 @@ from security.auth_policy import validate_route_policy_coverage
 from security.ingress import IngressLimitMiddleware, resolve_request_id
 from security.maintenance import MaintenanceMiddleware, load_maintenance_config
 from security.rate_limit import build_rate_limiter
+from security.response_headers import requires_no_store_headers as _requires_no_store_headers
 from runtime_logging import configure_runtime_logging
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
@@ -160,29 +161,6 @@ app.add_middleware(
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 app.include_router(create_router(service, rate_limiter))
-
-
-def _requires_no_store_headers(path: str) -> bool:
-    normalized = str(path or "").strip().lower()
-    if not normalized.startswith("/v1/"):
-        return False
-    if normalized.startswith("/v1/auth/"):
-        return True
-    if normalized.startswith("/v1/billing/"):
-        return True
-    if normalized.startswith("/v1/owner/"):
-        return True
-    if normalized.startswith("/v1/shares"):
-        return True
-    if normalized.startswith("/v1/assets/") and normalized.endswith(("/content", "/thumbnail", "/preview", "/blocked-preview")):
-        return True
-    if normalized in {"/v1/settings/bootstrap", "/v1/healthz/detail", "/v1/profiles/me/export"}:
-        return True
-    if normalized.startswith("/v1/projects/") and normalized.endswith("/export"):
-        return True
-    if normalized.startswith("/v1/assets/") and normalized.endswith("/clean-export"):
-        return True
-    return False
 
 
 def _apply_security_headers(response: Response, *, request_path: str) -> None:

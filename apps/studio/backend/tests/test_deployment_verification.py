@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from config.env import get_settings
+from studio_platform.services import deployment_verification as deployment_verification_module
 from studio_platform.services.deployment_verification import (
     build_blocked_deployment_verification_report,
     build_deployment_verification_report,
@@ -17,6 +18,36 @@ CURRENT_LOGIN_SHELL_HTML = (
     "<html><head><title>Omnia Creata Studio</title></head>"
     "<body>Omnia Creata Studio</body></html>"
 )
+
+
+class _UnreadablePath:
+    def __init__(self, raw_path: str = "C:/blocked/studio-runtime/reports") -> None:
+        self.raw_path = raw_path
+
+    @property
+    def name(self) -> str:
+        return self.raw_path.rstrip("/\\").replace("\\", "/").split("/")[-1]
+
+    def exists(self) -> bool:
+        raise PermissionError("runtime path is not readable")
+
+    def glob(self, pattern: str):
+        raise PermissionError("runtime path is not readable")
+
+    def read_text(self, *args, **kwargs) -> str:
+        raise PermissionError("runtime path is not readable")
+
+    def resolve(self):
+        raise PermissionError("runtime path is not readable")
+
+    def stat(self):
+        raise PermissionError("runtime path is not readable")
+
+    def __truediv__(self, child: str):
+        return _UnreadablePath(f"{self.raw_path}/{child}")
+
+    def __str__(self) -> str:
+        return self.raw_path
 
 
 def _platform_readiness_payload(
@@ -285,6 +316,21 @@ def test_load_deployment_verification_report_prefers_newer_staging_sibling_repor
         assert "staging" in loaded["path"]
     finally:
         settings.studio_runtime_root = original_runtime_root
+
+
+def test_load_deployment_verification_report_treats_inaccessible_runtime_reports_as_missing(
+    monkeypatch,
+) -> None:
+    settings = get_settings()
+    unreadable_root = _UnreadablePath()
+    monkeypatch.setattr(
+        deployment_verification_module,
+        "_deployment_verification_report_roots",
+        lambda _settings: [unreadable_root],
+    )
+
+    assert load_deployment_verification_report(settings, label="protected-staging") is None
+    assert load_deployment_verification_report(settings) is None
 
 
 def test_deployment_verification_warns_when_owner_health_detail_is_skipped() -> None:

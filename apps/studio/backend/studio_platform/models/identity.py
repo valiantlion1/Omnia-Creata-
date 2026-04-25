@@ -65,6 +65,7 @@ class OmniaIdentity(BaseModel):
     bio: str = ""
     avatar_url: Optional[str] = None
     profile_featured_asset_id: Optional[str] = None
+    profile_featured_asset_position: str = "center"
     default_visibility: Visibility = Visibility.PRIVATE
     workspace_id: str = Field(default_factory=lambda: __import__("uuid").uuid4().__str__())
     subscription_status: SubscriptionStatus = SubscriptionStatus.NONE

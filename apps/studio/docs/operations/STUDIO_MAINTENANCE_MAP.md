@@ -1,23 +1,79 @@
 # Studio Maintenance Map
 
-Last updated: 2026-04-23
+Last updated: 2026-04-25
 
 ## Current baseline
 
-- Backend regression tests pass.
-- Root `repo:check` passes.
+- Current-wave targeted backend regression tests pass.
+- Root `repo:check` is currently blocked only by Prompt Vault generated `.next` output, which is intentionally outside this Studio backend wave.
 - Login/signup currently support Google plus email/password only.
 - UI is intentionally in preservation mode unless explicitly requested.
 - Frontend is under active Antigravity work, so UI-side `type-check` / build status should be re-checked after each frontend merge wave.
 - Active product/docs frame is now `Controlled Public Paid Launch`.
 - `Protected Beta Hardening` remains the preserved baseline proof that current builds must not regress.
 - `main` is now the only official Studio continuation branch again; mistaken OOFM branch work has been selectively recovered into the Studio line instead of merged wholesale.
-- Current implementation build is `2026.04.23.205`. The frontend route-proof matrix from `.198` stays intact, `.199` still holds the fail-closed launch-runtime rule, `.200` still centralizes the top-level topology contract, `.201` still keeps broker fallback truth under that shared runtime contract, `.202` still carries authenticated identity through request-scoped context, `.203` still pushes that context into runtime logging, `.204` still hardens rollback-side Postgres cleanup, and the newest backend follow-up now prevents connection-release cleanup from masking the original database failure.
-- Current backend truth on `.205` is even calmer under bad database conditions. When the store is already failing, a second problem while returning the connection to the pool is now logged without replacing the main error, which keeps incident debugging much more honest.
+- Current implementation build is `2026.04.26.219`. The frontend route-proof matrix from `.198` stays intact, `.199` still holds the fail-closed launch-runtime rule, `.200` still centralizes the top-level topology contract, `.201` still keeps broker fallback truth under that shared runtime contract, `.202` still carries authenticated identity through request-scoped context, `.203` still pushes that context into runtime logging, `.204` still hardens rollback-side Postgres cleanup, `.205` still prevents connection-release cleanup from masking the original database failure, `.206` still keeps owner proof/readiness paths from crashing when optional report/log artifacts are inaccessible, `.207` validates imported reference-image payloads before persistence while treating unreadable local asset paths as missing files, `.208` makes Redis generation-broker claim/queue transitions atomic, `.209` compensates safely when a persisted generation cannot enter the processing queue, `.210` keeps local storage-key metadata from falsely advertising unreadable files, `.211` turns Landing into the selected premium AI image-generation entry surface, `.212` turns Create into the selected variation-theater workspace, `.213` tightens that workspace so it no longer feels like a loose web page, `.214` brings the Create composer dock closer to the selected reference, `.215` mirrors that dock language back into Landing's Create handoff preview, `.216` makes the Landing gallery rails feel like a continuous image belt instead of a short carousel, `.217` adds broader per-style gallery coverage, `.218` slows that richer gallery belt down, and `.219` separates real style genres from plain subject categories.
+- Current frontend truth on `.219` is stricter around Landing gallery style language. The gallery now includes a dedicated genre belt with cyberpunk, neon noir, sci-fi, anime, cel shading, fantasy, creature art, glam editorial, sexy editorial, photoreal, luxury ad, and car-ad moments, and the middle row is now titled `Style genres`. The three visible rail segments use separate source pools so one image is not shown twice under different labels in the same viewport.
+- Current frontend truth on `.218` remains active underneath `.219`. The richer mixed gallery set still uses long `360s`, `420s`, and `480s` one-direction cycles so the showcase feels calm instead of racing.
+- Current frontend truth on `.217` remains active underneath `.218`. The gallery still mixes the imported Studio landing assets with selected public `atmosphere` images, carries more real visual moments across portrait, cinematic, landscape, macro, product, architecture, fine-art, and interior styles, and includes the third `Style studies` rail.
+- Current frontend truth on `.216` remains active underneath `.217`. The Inspired creations and Community gallery rows still use a longer labeled asset belt, varied crop focus, and same-direction seamless rail motion with offset phase and speed instead of reverse movement.
+- Current frontend truth on `.215` remains active underneath `.217`. Landing still previews Create through the same darker black/gold composer language as the signed-in Create page, with a generated preview stacked above a full-width prompt/aspect/style/model/generate dock while preserving the `/create?intent=first_creation` route.
+- Current frontend truth on `.211` remains active underneath `.212`. Landing uses the real OmniaCreata signature mark, imported editorial image assets, a clear Create-oriented composer preview, restrained motion, and verified desktop/mobile route proof on the canonical `127.0.0.1:5173` frontend host without opening a second Studio server.
+- Current backend truth on `.210` is still active underneath `.211`. Local storage keys are checked against actual readable local files before Library says a variant exists, and local read/path permission failures now surface as missing assets instead of raw filesystem/storage confusion.
 - The backend hardening stack from `.171` through `.184` remains underneath the current build, `.185` remains the broader Create / Library / Projects contract pass, `.186` is the empty-state/layout honesty follow-up, `.187` is the motion plus failure-language refinement, `.188` is the draft/session-preview consistency and layout-protection fix, `.189` is the Projects composition/detail cleanup, `.190` is the tighter Projects index proportion/copy cleanup, `.191` is the project-detail de-verbosity pass, `.192` is the stale-project recovery pass, `.193` is the shell/library language-plus-density cleanup, `.194` is the lazy-chunk recovery plus subscription-language consistency pass, `.195` is the prod-safe error-surface and source-map hardening pass, `.196` is the tighter mobile library proportion and project-utility pass, `.197` is the local browser-proof fallback and Windows shell-hardening pass, and `.198` is the signed-in proof bridge plus full route-matrix verification pass on top of that foundation.
 - Studio's moderation contract from `.168`, provider-truth readability from `.169`, runtime-topology clarity from `.170`, backend hardening from `.171`, shell/explore polish from `.172`, local-host discipline from `.173`, the `.174` atomic session plus schema-versioning work, the `.175` runtime-aware durable-store pool budgeting, the `.176` stricter startup pool-budget truth, the `.177` secret/log/token hardening, the `.178` scoped public-surface reads, the `.179` public-route throttles, the `.180` targeted generation-status counts, the `.181` row-level generation hot writes, the `.182` reserve/spend/release audit truth, the `.183` paused-subscription state truth, and the `.184` refund-policy assessment all remain active. `.185` is the corresponding frontend IA and workspace wave on top of that stack.
 
 ## Recent stabilization wins
+
+- `.219` corrects the Landing gallery's style vocabulary. The gallery now shows actual prompt-style genres such as cyberpunk, anime, cel shading, sci-fi, fantasy, glam/sexy editorial, photoreal, luxury ad, and car-ad moments instead of only subject categories.
+- The same wave separates the rail source pools so the same image is not visible twice under different labels in the same viewport.
+- The same wave keeps the slower `.218` conveyor motion and changes only Landing gallery data/copy, not Create routing, backend behavior, or provider setup.
+
+- `.218` slows the Landing gallery belt down after the `.217` asset expansion. The rails now move with long `360s`, `420s`, and `480s` cycles, keeping the conveyor feel without the rushed ticker effect.
+- The same wave changes motion timing only; it preserves the `.217` mixed asset set, Create routing, backend behavior, and provider setup.
+
+- `.217` makes the Landing gallery feel fuller across every style. Portrait, cinematic, landscape, macro, product, architecture, fine-art, and interior now each have more real visual moments, and the page adds a third slower `Style studies` rail.
+- The same wave keeps the existing imported Studio image set, selected public `atmosphere` assets, and conveyor interaction model; it expands the visible gallery language without changing Create routing, backend behavior, or provider setup. Desktop and mobile Landing proof ran against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings.
+
+- `.216` makes the Landing gallery rails feel more like a 360-degree conveyor belt. The image rows now have more labeled moments, varied crops, and one-direction seamless motion instead of a short forward/backward carousel feel.
+- The same wave keeps the existing Studio asset set and local host contract; it changes composition and motion only, not Create routing, backend behavior, or provider setup. Desktop and mobile Landing proof ran against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings.
+
+- `.215` makes Landing's Create handoff match the current signed-in Create composer. Users no longer see one composer style on Landing and another inside Create.
+- The same wave stacks the generated preview above a full-width black/gold composer dock and removes the old progress strip that no longer matched the reference flow.
+- It also preserves the local host contract. Desktop and mobile Landing proof ran against the existing canonical `127.0.0.1:5173` frontend host, with no extra frontend server started for this work.
+
+- `.214` makes the Create composer match the selected reference more closely. The prompt, aspect ratio, style, model, Advanced, and Generate controls now read as one lower black/gold generation dock instead of two large blue-ish panels.
+- The same wave keeps the core interaction simple. Aspect ratio is now a segmented control beside the prompt, style presets use image-backed chips, and Generate remains the only loud action.
+
+- `.213` makes Create feel more like a focused signed-in image-generation workspace instead of a web page with controls attached.
+- The same wave removes the Create-route legal footer, reduces the oversized header to a slim workspace bar, and keeps Generate ahead of optional Advanced controls in both visual and DOM flow.
+
+- `.212` makes Create feel like the selected AI-image workspace reference instead of a form-heavy generator page.
+- The same wave keeps the core interaction simple. A variation thumbnail updates the large selected preview, and real generated slots still use the existing session/lightbox path.
+
+- `.211` makes the public Studio landing surface feel like the selected AI image-generation product direction instead of a generic SaaS shell.
+- The same wave keeps the promise honest. The page invites users toward Create intent without adding an unsupported free-generation entitlement claim.
+- It also preserves the local host contract. Desktop and mobile route proof ran against the existing canonical `127.0.0.1:5173` frontend host, with no extra frontend server kept alive for this landing work.
+
+- `.210` removes one more storage-truth mismatch from Studio backend. `storage_backend=local` metadata can no longer make a missing or unreadable local file look renderable.
+- The same wave makes delivery and cleanup calmer. Local storage read failures now become missing-asset responses, and delete attempts for inaccessible local files do not turn cleanup into a user-facing storage outage.
+- It keeps remote storage behavior practical. Supabase-style keys are still resolved at fetch time instead of adding expensive existence checks to normal listing paths.
+
+- `.209` removes one more trust-breaking generation edge. A request can no longer return a queue error while leaving a queued/reserved job silently waiting behind the scenes.
+- The same wave keeps credit truth safer. Enqueue failure after persistence now moves the job to `failed`, sets final cost to zero, and records a reserve/release pair instead of leaving held credits ambiguous.
+- It also makes client responses more honest. Temporary queue unavailability now reports `queue_full=false` and `X-Queue-Full: false`, separate from true saturation.
+
+- `.208` removes one more production queue footgun from Studio backend. A generation job that is already claimed by a worker can no longer be accepted into the Redis queue again just because it is no longer in the queued index.
+- The same wave makes broker mutations safer under split runtimes. Queue-to-claim, claim heartbeat, and stale-claim recovery are now atomic Redis script operations, so worker recovery has fewer ways to leave a job half-moved between queue and claim state.
+- It also keeps broker metrics cleaner. Accidental heartbeat calls for unknown jobs no longer create phantom claimed entries.
+
+- `.207` removes a quiet bad-asset path from Studio backend. Fake base64 bytes can no longer be labeled `image/png` and stored as a reference asset.
+- The same wave rejects corrupt image payloads and MIME mismatches at import time, so later thumbnail, preview, and reference-image flows do not inherit broken data.
+- It also keeps asset delivery/listing calmer when local files disappear or become unreadable. Those paths are treated as missing variants instead of bubbling raw filesystem permission errors.
+
+- `.206` removes one more machine-specific proof failure from Studio backend. Launch readiness and deployment verification can now survive unreadable report/log paths and report missing evidence instead of crashing owner health.
+- The same wave keeps profile artwork crop state honest. The backend validates top/center/bottom crop positions and resets the crop when featured artwork is cleared, so future UI changes cannot leave a stale crop behind.
+- Backend tests are less tied to one developer machine now. The pytest harness uses a test-owned runtime root, and the sensitive no-store route rule can be tested without importing the full app/store bootstrap.
 
 - `.205` removes one more ugly failure-masking edge from Studio backend. A connection-return problem can no longer steal the spotlight from the real Postgres error that started the failure.
 - The same wave also makes database incidents easier to read. Cleanup trouble is still visible in logs, but it now stays secondary instead of rewriting the main failure story.

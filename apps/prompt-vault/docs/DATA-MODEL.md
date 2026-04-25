@@ -84,11 +84,12 @@ Each prompt supports:
 Current repository behavior:
 
 - Preview mode persists locally in the browser
-- The UI and SQL schema are aligned for Supabase-backed per-user sync
+- Signed-in Supabase mode persists the merged vault dataset to `public.user_vault_state`
+- The relational tables remain available as the long-term structured data model
 
 Next step:
 
-- Replace preview-only writes with live Supabase writes
-- Add server-side reads for authenticated user vault data
+- Add hosted Supabase smoke proof with a real test account
+- Promote high-value flows from JSON state sync to relational CRUD when the product needs richer querying
 - Add storage conflict handling for future offline editing
 - Add persistent AI suggestion acceptance and feedback records in live mode

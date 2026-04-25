@@ -8,6 +8,7 @@ import pytest
 from config.env import Environment, get_settings
 from studio_platform.providers import ProviderRegistry
 from studio_platform.service import StudioService
+from studio_platform.services import launch_readiness as launch_readiness_module
 from studio_platform.services.launch_readiness import (
     build_runtime_log_snapshot,
     build_launch_readiness_report,
@@ -21,6 +22,23 @@ from studio_platform.services.deployment_verification import persist_deployment_
 from studio_platform.services.provider_economics_dossier import persist_provider_economics_dossier
 from studio_platform.store import SqliteStudioStateStore
 from studio_platform.versioning import load_version_info
+
+
+class _UnreadablePath:
+    def __init__(self, raw_path: str = "C:/blocked/studio-runtime/reports/report.json") -> None:
+        self.raw_path = raw_path
+
+    def exists(self) -> bool:
+        raise PermissionError("runtime path is not readable")
+
+    def read_text(self, *args, **kwargs) -> str:
+        raise PermissionError("runtime path is not readable")
+
+    def resolve(self):
+        raise PermissionError("runtime path is not readable")
+
+    def __str__(self) -> str:
+        return self.raw_path
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +100,20 @@ def _public_plan_payload(tmp_path: Path) -> dict[str, object]:
         tmp_path / "plan-media",
     )
     return service.get_public_plan_payload()
+
+
+def test_launch_readiness_missing_report_loaders_tolerate_inaccessible_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    unreadable = _UnreadablePath()
+    monkeypatch.setattr(launch_readiness_module, "provider_smoke_report_path", lambda _settings: unreadable)
+    monkeypatch.setattr(launch_readiness_module, "startup_verification_report_path", lambda _settings: unreadable)
+
+    assert launch_readiness_module._path_exists(unreadable) is False
+    assert launch_readiness_module._safe_resolve(unreadable) is unreadable
+    assert load_provider_smoke_report(settings) is None
+    assert load_startup_verification_report(settings) is None
 
 
 def test_provider_smoke_report_persists_outside_repo(tmp_path: Path) -> None:

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid2X2, ImagePlus, List, PenSquare, Settings, X } from 'lucide-react'
@@ -10,6 +11,22 @@ import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
 
 type ViewMode = 'grid' | 'list'
+type ArtworkCropPosition = 'top' | 'center' | 'bottom'
+
+function normalizeArtworkCropPosition(value: string | null | undefined): ArtworkCropPosition {
+  return value === 'top' || value === 'bottom' ? value : 'center'
+}
+
+function artworkObjectPosition(position: string | null | undefined) {
+  switch (normalizeArtworkCropPosition(position)) {
+    case 'top':
+      return 'center 22%'
+    case 'bottom':
+      return 'center 78%'
+    default:
+      return 'center center'
+  }
+}
 
 function assetPreviewSource(asset: MediaAsset | null | undefined) {
   return asset?.preview_url ?? asset?.thumbnail_url ?? asset?.url ?? null
@@ -170,6 +187,7 @@ function ArtworkPickerDialog({
   open,
   assets,
   currentAssetId,
+  currentPosition,
   busy,
   onClose,
   onSelect,
@@ -177,22 +195,40 @@ function ArtworkPickerDialog({
   open: boolean
   assets: MediaAsset[]
   currentAssetId: string | null
+  currentPosition: string | null | undefined
   busy: boolean
   onClose: () => void
-  onSelect: (assetId: string | null) => Promise<void>
+  onSelect: (assetId: string | null, position: ArtworkCropPosition) => Promise<void>
 }) {
+  const [draftAssetId, setDraftAssetId] = useState<string | null>(currentAssetId)
+  const [draftPosition, setDraftPosition] = useState<ArtworkCropPosition>(normalizeArtworkCropPosition(currentPosition))
+
+  useEffect(() => {
+    if (!open) return
+    setDraftAssetId(currentAssetId ?? assets[0]?.id ?? null)
+    setDraftPosition(normalizeArtworkCropPosition(currentPosition))
+  }, [assets, currentAssetId, currentPosition, open])
+
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/80 px-4 backdrop-blur-xl" onClick={onClose}>
+  const draftAsset = assets.find((asset) => asset.id === draftAssetId) ?? null
+  const draftPreview = assetPreviewSource(draftAsset)
+  const cropOptions: Array<{ id: ArtworkCropPosition; label: string }> = [
+    { id: 'top', label: 'Top' },
+    { id: 'center', label: 'Center' },
+    { id: 'bottom', label: 'Bottom' },
+  ]
+
+  const dialog = (
+    <div className="fixed inset-0 z-[135] flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-5 backdrop-blur-xl sm:items-center" onClick={onClose}>
       <div
-        className="w-full max-w-5xl rounded-[28px] border border-white/[0.08] bg-[#0d0f14]/96 p-6 shadow-[0_32px_100px_rgba(0,0,0,0.55)]"
+        className="flex max-h-[calc(100svh-2.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0d0f14]/96 shadow-[0_32px_100px_rgba(0,0,0,0.55)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] p-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Profile artwork</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">Choose from your Studio images</h2>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">Choose and crop the header</h2>
           </div>
           <button
             type="button"
@@ -204,29 +240,95 @@ function ArtworkPickerDialog({
           </button>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onSelect(null)}
-            className="rounded-full border border-white/[0.08] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Use automatic cover
-          </button>
-          <div className="text-xs text-zinc-500">{assets.length} image{assets.length === 1 ? '' : 's'}</div>
-        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="min-w-0">
+              <div className="relative aspect-[5/1.25] overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03]">
+                {draftPreview ? (
+                  <img
+                    src={draftPreview}
+                    alt={draftAsset?.display_title ?? draftAsset?.title ?? 'Selected artwork'}
+                    className="h-full w-full object-cover"
+                    style={{ objectPosition: artworkObjectPosition(draftPosition) }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">
+                    Pick an image below.
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,8,12,0.04),rgba(6,8,12,0.55)_72%,rgba(6,8,12,0.82))]" />
+                <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/55">Header preview</div>
+                    <div className="mt-1 truncate text-sm font-semibold text-white">
+                      {draftAsset ? draftAsset.display_title ?? draftAsset.title : 'Automatic cover'}
+                    </div>
+                  </div>
+                  <div className="hidden rounded-full bg-black/35 px-3 py-1 text-[11px] font-medium text-white/70 ring-1 ring-white/[0.08] sm:block">
+                    {draftPosition}
+                  </div>
+                </div>
+              </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {assets.map((asset) => {
-            const preview = assetPreviewSource(asset)
-            const selected = currentAssetId === asset.id
-            return (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {cropOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={busy || !draftAsset}
+                    onClick={() => setDraftPosition(option.id)}
+                    className={`rounded-full px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      draftPosition === option.id
+                        ? 'bg-white text-black'
+                        : 'border border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07] hover:text-white'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-between gap-4 rounded-[22px] border border-white/[0.06] bg-white/[0.025] p-4">
+              <div>
+                <div className="text-sm font-semibold text-white">Crop focus</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-500">
+                  Choose the image, then pick which vertical area should stay visible in the wide profile banner.
+                </p>
+                <div className="mt-4 text-xs text-zinc-600">{assets.length} image{assets.length === 1 ? '' : 's'} available</div>
+              </div>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  disabled={busy || !draftAssetId}
+                  onClick={() => onSelect(draftAssetId, draftPosition)}
+                  className="rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? 'Saving...' : 'Apply artwork'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onSelect(null, 'center')}
+                  className="rounded-full border border-white/[0.08] px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Use automatic cover
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {assets.map((asset) => {
+              const preview = assetPreviewSource(asset)
+              const selected = draftAssetId === asset.id
+              return (
               <button
                 key={asset.id}
                 type="button"
                 disabled={busy}
-                onClick={() => onSelect(asset.id)}
-                aria-label={`Set ${asset.display_title ?? asset.title} as profile artwork`}
+                onClick={() => setDraftAssetId(asset.id)}
+                aria-label={`Preview ${asset.display_title ?? asset.title} as profile artwork`}
                 className={`group overflow-hidden rounded-[22px] border text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
                   selected ? 'border-[rgba(124,58,237,0.6)] ring-2 ring-[rgba(124,58,237,0.3)]' : 'border-white/[0.08] hover:border-white/[0.18]'
                 }`}
@@ -244,12 +346,15 @@ function ArtworkPickerDialog({
                   <div className="truncate text-xs text-zinc-500">{asset.prompt}</div>
                 </div>
               </button>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>
   )
+
+  return createPortal(dialog, document.body)
 }
 
 function GalleryGrid({
@@ -412,6 +517,7 @@ export default function AccountPage() {
         plan: auth.identity.plan ?? 'free',
         default_visibility: auth.identity.default_visibility ?? 'public',
         featured_asset_id: null,
+        featured_asset_position: 'center',
         usage_summary: {
           plan_label: auth.plan?.label ?? 'Free',
           credits_remaining: creditsRemaining,
@@ -429,7 +535,7 @@ export default function AccountPage() {
   }, [auth, ownAccount])
 
   const updateProfileMutation = useMutation({
-    mutationFn: (payload: { display_name?: string; bio?: string; default_visibility?: 'public' | 'private'; featured_asset_id?: string | null }) =>
+    mutationFn: (payload: { display_name?: string; bio?: string; default_visibility?: 'public' | 'private'; featured_asset_id?: string | null; featured_asset_position?: ArtworkCropPosition }) =>
       studioApi.updateMyProfile(payload),
     onSuccess: async () => {
       await Promise.all([
@@ -489,7 +595,12 @@ export default function AccountPage() {
       <div className="relative isolate min-h-[220px] overflow-hidden border-b border-white/[0.05]">
         {featuredPreview ? (
           <>
-            <img src={featuredPreview} alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name} className="absolute inset-0 h-full w-full object-cover" />
+            <img
+              src={featuredPreview}
+              alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name}
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: artworkObjectPosition(payload.profile.featured_asset_position) }}
+            />
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,8,12,0.18),rgba(6,8,12,0.48)_28%,rgba(6,8,12,0.88)_78%,#090a0d)]" />
           </>
         ) : (
@@ -571,7 +682,12 @@ export default function AccountPage() {
                       className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] transition hover:border-white/[0.18]"
                       title="Open profile artwork"
                     >
-                      <img src={featuredPreview} alt={featuredAsset?.display_title ?? featuredAsset?.title ?? 'Profile artwork'} className="h-12 w-12 object-cover" />
+                      <img
+                        src={featuredPreview}
+                        alt={featuredAsset?.display_title ?? featuredAsset?.title ?? 'Profile artwork'}
+                        className="h-12 w-12 object-cover"
+                        style={{ objectPosition: artworkObjectPosition(payload.profile.featured_asset_position) }}
+                      />
                     </button>
                   ) : null}
                 </div>
@@ -669,10 +785,11 @@ export default function AccountPage() {
         open={artworkPickerOpen}
         assets={galleryAssets}
         currentAssetId={payload.profile.featured_asset_id}
+        currentPosition={payload.profile.featured_asset_position}
         busy={updateProfileMutation.isPending}
         onClose={() => setArtworkPickerOpen(false)}
-        onSelect={async (assetId) => {
-          await updateProfileMutation.mutateAsync({ featured_asset_id: assetId })
+        onSelect={async (assetId, position) => {
+          await updateProfileMutation.mutateAsync({ featured_asset_id: assetId, featured_asset_position: position })
           setArtworkPickerOpen(false)
         }}
       />

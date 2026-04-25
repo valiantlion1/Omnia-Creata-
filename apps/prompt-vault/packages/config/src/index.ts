@@ -1,12 +1,12 @@
 import type { CategoryDefinition, LocalizedLabel, PlatformDefinition } from "@prompt-vault/types";
 
 export const brand = {
-  name: "OmniaVault",
-  parent: "Omnia Creata",
+  name: "OmniaPrompt",
+  parent: "OmniaCreata",
   domain: "omniacreata.com",
   marketingUrl: "https://omniacreata.com",
-  productUrl: "https://omniacreata.com/vault",
-  appUrl: "https://vault.omniacreata.com",
+  productUrl: "https://omniacreata.com/prompt",
+  appUrl: "https://prompt.omniacreata.com",
   repoName: "prompt-vault",
 };
 
@@ -21,6 +21,7 @@ export function buildProductUrl(path = "") {
 
 export const support = {
   email: "hello@omniacreata.com",
+  helpPath: "/help",
   privacyPath: "/privacy",
   termsPath: "/terms",
 };
@@ -28,6 +29,7 @@ export const support = {
 export const primaryNavigation = [
   { href: "/", key: "home" },
   { href: "/pricing", key: "pricing" },
+  { href: "/help", key: "help" },
   { href: "/faq", key: "faq" },
 ] as const;
 
@@ -51,22 +53,22 @@ export interface ReleaseNoteDefinition {
 
 export const releaseNotes: ReleaseNoteDefinition[] = [
   {
-    id: "0.3.0-beta",
-    version: "0.3.0-beta",
-    channel: "beta",
+    id: "0.3.0",
+    version: "0.3.0",
+    channel: "stable",
     publishedAt: "2026-03-19T12:00:00.000Z",
     title: {
-      en: "A calmer app shell, real drafts, and safer version restores",
-      tr: "Daha sakin uygulama kabugu, gercek taslaklar ve daha guvenli surum geri yukleme"
+      en: "A calmer Home, real drafts, and safer version restores",
+      tr: "Daha sakin Home, gercek taslaklar ve daha guvenli surum geri yukleme"
     },
     summary: {
       en: `${brand.name} now behaves more like a real app: Home is simpler, drafts autosave locally, and restoring old versions creates safe new snapshots instead of overwriting history.`,
-      tr: `${brand.name} artik daha gercek bir uygulama gibi davranir: Ana ekran sadeleşti, taslaklar yerelde otomatik kaydolur ve eski surumu geri almak gecmisi ezmeden yeni bir guvenli snapshot olusturur.`
+      tr: `${brand.name} artik daha gercek bir uygulama gibi davranir: Ana ekran sadelesti, taslaklar yerelde otomatik kaydolur ve eski surumu geri almak gecmisi ezmeden yeni bir guvenli snapshot olusturur.`
     },
     highlights: [
       {
-        en: "Home now acts as a true app start surface instead of a busy dashboard.",
-        tr: "Ana ekran artik kalabalik bir dashboard yerine gercek bir baslangic yuzeyi gibi davranir."
+        en: "Home now acts as a true start page instead of a busy dashboard.",
+        tr: "Ana ekran artik kalabalik bir dashboard yerine net bir baslangic sayfasi gibi davranir."
       },
       {
         en: "Capture and editor flows autosave local drafts so unfinished writing is easier to resume.",
@@ -77,15 +79,15 @@ export const releaseNotes: ReleaseNoteDefinition[] = [
         tr: "Surum geri yukleme artik eski gecmisi degistirmek yerine yeni bir guvenli snapshot olusturur."
       },
       {
-        en: "Android shell, privacy pages, and Play Store prep moved closer to a real beta build.",
-        tr: "Android shell, gizlilik sayfalari ve Play Store hazirligi gercek bir beta build'e daha da yaklasti."
+        en: "Android packaging, privacy pages, and release readiness are now aligned.",
+        tr: "Android paketi, gizlilik sayfalari ve yayin hazirligi artik ayni cizgide."
       }
     ]
   },
   {
-    id: "0.2.0-beta",
-    version: "0.2.0-beta",
-    channel: "beta",
+    id: "0.2.0",
+    version: "0.2.0",
+    channel: "stable",
     publishedAt: "2026-03-18T12:00:00.000Z",
     title: {
       en: "Mobile-first foundation and project-aware capture",
@@ -97,8 +99,8 @@ export const releaseNotes: ReleaseNoteDefinition[] = [
     },
     highlights: [
       {
-        en: "Home, Library, Capture, Projects, and Settings became the core beta information architecture.",
-        tr: "Home, Library, Capture, Projects ve Settings beta bilgi mimarisinin ana omurgasi oldu."
+        en: "Home, Library, Capture, Projects, and Settings became the core app structure.",
+        tr: "Home, Library, Capture, Projects ve Settings temel uygulama yapisi oldu."
       },
       {
         en: "Collections were folded into projects so the product structure feels simpler and more coherent.",
@@ -166,8 +168,8 @@ export const builtinCategories: CategoryDefinition[] = [
     key: "coding",
     label: { en: "Coding", tr: "Kodlama" },
     description: {
-      en: "Developer workflows, debugging prompts, and architecture notes.",
-      tr: "Gelistirici akisleri, hata ayiklama istemleri ve mimari notlar.",
+      en: "Coding plans, implementation notes, and technical instructions.",
+      tr: "Kod planlari, uygulama notlari ve teknik talimatlar.",
     },
     tone: "ink",
     icon: "code",
@@ -317,7 +319,7 @@ export const pricingTiers = [
     limits: {
       prompts: "Up to 150 entries",
       collections: "Up to 8 projects",
-      exports: "Local export and beta ads included",
+      exports: "Local export included",
     },
   },
   {
@@ -328,7 +330,7 @@ export const pricingTiers = [
     limits: {
       prompts: "Higher limits and no ads",
       collections: "More projects and organization tools",
-      exports: "AI assist and premium sync land in V1",
+      exports: "AI assist and premium sync when available",
     },
   },
   {
@@ -339,7 +341,7 @@ export const pricingTiers = [
     limits: {
       prompts: "Team workspaces and governance",
       collections: "Shared projects and approvals",
-      exports: "Admin controls after the beta cycle",
+      exports: "Admin controls for larger teams",
     },
   },
 ] as const;

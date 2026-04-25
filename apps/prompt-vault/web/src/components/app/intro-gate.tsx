@@ -17,6 +17,13 @@ import {
 
 type IntroStage = "booting" | "splash" | "welcome" | "auth" | "offers" | "app";
 
+const initialIntroState: IntroStateRecord = {
+  hasSeenWelcome: false,
+  hasCompletedIntro: false,
+  authDeferred: false,
+  hasSeenOffers: false,
+};
+
 const copy = {
   en: {
     splashTag: "Your idea system",
@@ -42,11 +49,11 @@ const copy = {
     signUp: "Create account",
     continueGuest: "Continue as guest",
     offersTitle: "Start free",
-    offersBody: "The beta is fast and accessible. Pro features come with V1.",
-    freeLabel: "Free beta",
+    offersBody: "Start with the essentials. Paid features will be shown clearly before any charge.",
+    freeLabel: "Free",
     freeBody: "Capture, projects, local persistence, and the core workflow.",
-    proLabel: "Pro — coming soon",
-    proBody: "No ads, bigger limits, AI-assisted cleanup.",
+    proLabel: "Pro - later",
+    proBody: "Higher limits, account sync, and AI-assisted cleanup when available.",
     continueToApp: "Get started",
     next: "Next",
     back: "Back",
@@ -54,35 +61,35 @@ const copy = {
   },
   tr: {
     splashTag: "Fikir sisteminiz",
-    welcomeTitle: "Fikirleri yakala. Sonra düzenle.",
-    welcomeSub: "Saklamaya değer her düşünce için hızlı, sakin bir alan.",
+    welcomeTitle: "Fikirleri yakala. Sonra duzenle.",
+    welcomeSub: "Saklamaya deger her dusunce icin hizli, sakin bir alan.",
     slides: [
       {
         title: "Kaybolmadan yakala",
-        body: "Fikirleri, notları, promptları ve proje düşüncelerini saniyeler içinde kaydet.",
+        body: "Fikirleri, notlari, promptlari ve proje dusuncelerini saniyeler icinde kaydet.",
       },
       {
-        title: "Düzeni yük haline getirme",
-        body: "Projeler ve etiketler yakında kalır ama yazı alanını boğmaz.",
+        title: "Duzeni yuk haline getirme",
+        body: "Projeler ve etiketler yakinda kalir ama yazi alanini bogmaz.",
       },
       {
-        title: "Gerektiğinde geliştir",
-        body: "Geri dön, versiyonla, genişlet, yeniden kullan.",
+        title: "Gerektiginde gelistir",
+        body: "Geri don, versiyonla, genislet, yeniden kullan.",
       },
     ],
-    authTitle: "İstediğin şekilde devam et",
-    authBody: "Sync için hesap oluştur ya da misafir olarak devam et.",
-    signIn: "Giriş yap",
-    signUp: "Hesap oluştur",
+    authTitle: "Istedigin sekilde devam et",
+    authBody: "Sync icin hesap olustur ya da misafir olarak devam et.",
+    signIn: "Giris yap",
+    signUp: "Hesap olustur",
     continueGuest: "Misafir devam et",
-    offersTitle: "Ücretsiz başla",
-    offersBody: "Beta hızlı ve erişilebilir. Pro özellikler V1 ile gelir.",
-    freeLabel: "Ücretsiz beta",
-    freeBody: "Capture, projeler, lokal kalıcılık ve temel akış.",
-    proLabel: "Pro — yakında",
-    proBody: "Reklamsız, daha yüksek limitler, AI destekli düzenleme.",
-    continueToApp: "Başla",
-    next: "İleri",
+    offersTitle: "Ucretsiz basla",
+    offersBody: "Temel akisla basla. Ucretli ozellikler herhangi bir ucretten once net gosterilir.",
+    freeLabel: "Ucretsiz",
+    freeBody: "Capture, projeler, yerel kalicilik ve temel akis.",
+    proLabel: "Pro - sonra",
+    proBody: "Daha yuksek limitler, hesap esitlemesi ve kullanima acildiginda AI destekli duzenleme.",
+    continueToApp: "Basla",
+    next: "Ileri",
     back: "Geri",
     skip: "Atla",
   },
@@ -106,12 +113,19 @@ export function IntroGate({
   hasUser: boolean;
 }) {
   const text = copy[locale];
-  const [introState, setIntroState] = useState<IntroStateRecord>(() => loadIntroState());
-  const [stage, setStage] = useState<IntroStage>(() =>
-    hasSeenSessionSplash() ? resolveStage(loadIntroState(), hasUser) : "splash"
-  );
+  const [introState, setIntroState] = useState<IntroStateRecord>(initialIntroState);
+  const [stage, setStage] = useState<IntroStage>("booting");
   const [slideIndex, setSlideIndex] = useState(0);
   const isLastSlide = slideIndex === text.slides.length - 1;
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const storedState = loadIntroState();
+      setIntroState(storedState);
+      setStage(hasSeenSessionSplash() ? resolveStage(storedState, hasUser) : "splash");
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [hasUser]);
 
   useEffect(() => {
     if (stage !== "splash") return;
@@ -152,7 +166,7 @@ export function IntroGate({
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-hidden bg-[var(--background)]">
       {/* Splash */}
-      {stage === "splash" ? (
+      {stage === "booting" || stage === "splash" ? (
         <div className="flex flex-col items-center gap-6 text-center">
           {/* Glow dot */}
           <div className="intro-scale intro-glow-pulse flex h-16 w-16 items-center justify-center rounded-full bg-[var(--accent-soft)]">

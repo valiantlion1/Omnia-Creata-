@@ -19,7 +19,7 @@ export function ProjectsView() {
   function onCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return;
-    createProject({ name, description, color: "gold", icon: "folder" });
+    createProject({ name, description, color: "sage", icon: "folder" });
     setName("");
     setDescription("");
     setShowForm(false);
