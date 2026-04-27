@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LegalFooter } from '@/components/StudioPrimitives'
+import { studioGeneratedAssets } from '@/data/studioGeneratedAssets'
 import { usePageMeta } from '@/lib/usePageMeta'
 import alpineLake from '@/assets/landing/studio/alpine-lake.png'
 import atelierInterior from '@/assets/landing/studio/atelier-interior.png'
@@ -26,39 +27,6 @@ type StudioAsset = {
   label: string
   focus?: string
 }
-
-const assets: StudioAsset[] = [
-  {
-    src: heroRiviera,
-    alt: 'Italian Riviera villa terrace at golden hour',
-    label: 'Cinematic',
-  },
-  {
-    src: portraitFloral,
-    alt: 'Fine art portrait with a floral crown',
-    label: 'Portrait',
-  },
-  {
-    src: atelierInterior,
-    alt: 'Warm atelier interior with arched windows',
-    label: 'Interior',
-  },
-  {
-    src: alpineLake,
-    alt: 'Alpine lake and mountain range at sunrise',
-    label: 'Landscape',
-  },
-  {
-    src: coralFlower,
-    alt: 'Dark coral flower macro with warm light',
-    label: 'Macro',
-  },
-  {
-    src: marbleBust,
-    alt: 'Classical marble bust in a dim atelier',
-    label: 'Fine art',
-  },
-]
 
 const galleryBelt: StudioAsset[] = [
   {
@@ -315,232 +283,70 @@ const galleryBelt: StudioAsset[] = [
   },
 ]
 
-const atmosphereBelt: StudioAsset[] = [
-  {
-    src: '/atmosphere/hero-01-portrait.png',
-    alt: 'Cinematic studio portrait with soft dramatic light',
-    label: 'Studio portrait',
-    focus: '48% 38%',
-  },
-  {
-    src: '/atmosphere/showcase-02-editorial-portrait.png',
-    alt: 'Editorial portrait reference with polished lighting',
-    label: 'Cover portrait',
-    focus: '48% 36%',
-  },
-  {
-    src: '/atmosphere/showcase-07-fashion-editorial.png',
-    alt: 'Fashion editorial image with premium styling',
-    label: 'Runway mood',
-    focus: '50% 38%',
-  },
-  {
-    src: '/atmosphere/hero-02-ocean.png',
-    alt: 'Cinematic ocean landscape at golden hour',
-    label: 'Ocean light',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/hero-04-mountain.png',
-    alt: 'Mountain landscape concept with cinematic atmosphere',
-    label: 'Mountain',
-    focus: '52% 46%',
-  },
-  {
-    src: '/atmosphere/hero-05-blossom.png',
-    alt: 'Blossom landscape study with soft natural light',
-    label: 'Blossom',
-    focus: '54% 44%',
-  },
-  {
-    src: '/atmosphere/showcase-11-nature-macro.png',
-    alt: 'Nature macro detail with rich texture',
-    label: 'Nature macro',
-    focus: '52% 44%',
-  },
-  {
-    src: '/atmosphere/showcase-10-food-photography.png',
-    alt: 'Food photography still life with warm commercial styling',
-    label: 'Food still',
-    focus: '50% 50%',
-  },
-  {
-    src: '/atmosphere/showcase-05-product-photo.png',
-    alt: 'Premium product photography reference',
-    label: 'Product',
-    focus: '48% 48%',
-  },
-  {
-    src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp',
-    alt: 'Volcanic fragrance product concept with dramatic material light',
-    label: 'Fragrance',
-    focus: '50% 50%',
-  },
-  {
-    src: '/atmosphere/showcase-06-luxury-interior.png',
-    alt: 'Luxury interior reference with refined warm light',
-    label: 'Luxury room',
-    focus: '52% 50%',
-  },
-  {
-    src: '/atmosphere/atmosphere-02-conservatory.png',
-    alt: 'Conservatory interior with lush plants and glass light',
-    label: 'Conservatory',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/showcase-03-architecture.png',
-    alt: 'Architecture image with clean material geometry',
-    label: 'Architecture',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/atmosphere-01-brutalist.png',
-    alt: 'Brutalist architectural fine art reference',
-    label: 'Brutalist',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/atmosphere-05-desert-courtyard.png',
-    alt: 'Desert courtyard scene with cinematic golden light',
-    label: 'Courtyard',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/atmosphere-03-skyline-garden.png',
-    alt: 'Skyline garden architecture concept with greenery',
-    label: 'Sky garden',
-    focus: '52% 46%',
-  },
-  {
-    src: '/atmosphere/atmosphere-04-snow-leopard.png',
-    alt: 'Snow leopard wildlife study with premium cinematic atmosphere',
-    label: 'Wildlife',
-    focus: '52% 44%',
-  },
-  {
-    src: '/atmosphere/atmosphere-07-observatory.webp',
-    alt: 'Observatory concept with quiet cinematic architecture',
-    label: 'Observatory',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/atmosphere-08-glass-fins.webp',
-    alt: 'Glass fin architecture detail with polished material light',
-    label: 'Glass forms',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/hero-03-car.png',
-    alt: 'Automotive product image with premium cinematic framing',
-    label: 'Automotive',
-    focus: '52% 50%',
-  },
-]
+const atmosphereBelt: StudioAsset[] = studioGeneratedAssets.map(({ alt, focus, label, src }) => ({
+  alt,
+  focus,
+  label,
+  src,
+}))
 
-const genreBelt: StudioAsset[] = [
-  {
-    src: '/atmosphere/hero-06-cyberpunk.png',
-    alt: 'Cyberpunk character scene with neon city atmosphere',
-    label: 'Cyberpunk',
-    focus: '50% 42%',
-  },
-  {
-    src: '/atmosphere/showcase-01-neon-cityscape.png',
-    alt: 'Neon cityscape image-generation style reference',
-    label: 'Neon noir',
-    focus: '52% 48%',
-  },
-  {
-    src: '/atmosphere/showcase-09-scifi-cityscape.png',
-    alt: 'Science-fiction cityscape with cinematic light',
-    label: 'Sci-fi city',
-    focus: '50% 48%',
-  },
-  {
-    src: '/atmosphere/showcase-08-anime-warrior.png',
-    alt: 'Anime warrior illustration style reference',
-    label: 'Anime',
-    focus: '50% 38%',
-  },
-  {
-    src: '/atmosphere/atmosphere-10-elven-ward.webp',
-    alt: 'Stylized cel-shaded fantasy image style reference',
-    label: 'Cel shading',
-    focus: '50% 46%',
-  },
-  {
-    src: '/atmosphere/showcase-04-fantasy-dragon.png',
-    alt: 'Fantasy dragon illustration style reference',
-    label: 'Fantasy',
-    focus: '52% 44%',
-  },
-  {
-    src: '/atmosphere/atmosphere-09-snow-leopard.webp',
-    alt: 'Creature concept art style reference',
-    label: 'Creature art',
-    focus: '52% 44%',
-  },
-  {
-    src: '/atmosphere/showcase-07-fashion-editorial.png',
-    alt: 'Glam editorial fashion image style reference',
-    label: 'Glam editorial',
-    focus: '50% 36%',
-  },
-  {
-    src: '/atmosphere/showcase-02-editorial-portrait.png',
-    alt: 'Tasteful sexy editorial fashion style reference',
-    label: 'Sexy editorial',
-    focus: '48% 36%',
-  },
-  {
-    src: '/atmosphere/hero-01-portrait.png',
-    alt: 'Photoreal cinematic portrait style reference',
-    label: 'Photoreal',
-    focus: '48% 38%',
-  },
-  {
-    src: '/atmosphere/atmosphere-06-volcanic-fragrance.webp',
-    alt: 'Dark luxury product-advertising image style reference',
-    label: 'Luxury ad',
-    focus: '50% 50%',
-  },
-  {
-    src: '/atmosphere/hero-03-car.png',
-    alt: 'Premium automotive campaign image style reference',
-    label: 'Car ad',
-    focus: '52% 50%',
-  },
-]
+const genreBelt: StudioAsset[] = [...atmosphereBelt]
+
+const [
+  cyberpunkAsset,
+  animeStormAsset,
+  celCanyonAsset,
+  fantasyDragonAsset,
+  glamEditorialAsset,
+  noirPortraitAsset,
+  luxuryProductAsset,
+  underwaterEditorialAsset,
+  retrofutureCityAsset,
+  liquidAbstractAsset,
+  automotiveCampaignAsset,
+  claymationWorkshopAsset,
+] = genreBelt
 
 const inspiredGalleryBelt = [
   ...galleryBelt.slice(0, 6),
-  atmosphereBelt[3],
-  atmosphereBelt[4],
-  atmosphereBelt[5],
-  atmosphereBelt[8],
-  atmosphereBelt[12],
-  atmosphereBelt[16],
+  luxuryProductAsset,
+  underwaterEditorialAsset,
+  retrofutureCityAsset,
+  liquidAbstractAsset,
+  automotiveCampaignAsset,
+  claymationWorkshopAsset,
 ]
-const styleGenreBelt = [...genreBelt]
+const styleGenreBelt = [
+  cyberpunkAsset,
+  animeStormAsset,
+  celCanyonAsset,
+  fantasyDragonAsset,
+  glamEditorialAsset,
+  noirPortraitAsset,
+  luxuryProductAsset,
+  underwaterEditorialAsset,
+  retrofutureCityAsset,
+  liquidAbstractAsset,
+  automotiveCampaignAsset,
+  claymationWorkshopAsset,
+]
 const communityGalleryBelt = [
-  atmosphereBelt[8],
-  atmosphereBelt[10],
-  atmosphereBelt[11],
-  atmosphereBelt[12],
-  atmosphereBelt[16],
-  atmosphereBelt[14],
-  atmosphereBelt[18],
-  atmosphereBelt[19],
-  atmosphereBelt[0],
-  atmosphereBelt[1],
-  atmosphereBelt[2],
-  atmosphereBelt[6],
-  atmosphereBelt[7],
+  underwaterEditorialAsset,
+  luxuryProductAsset,
+  liquidAbstractAsset,
+  automotiveCampaignAsset,
+  claymationWorkshopAsset,
+  noirPortraitAsset,
+  glamEditorialAsset,
+  fantasyDragonAsset,
+  cyberpunkAsset,
+  animeStormAsset,
+  celCanyonAsset,
+  retrofutureCityAsset,
   ...galleryBelt.slice(0, 6),
 ]
 
-const styleChips = ['Editorial portrait', 'Product study', 'World mood']
+const heroStyleCards = [cyberpunkAsset, animeStormAsset, luxuryProductAsset]
 const ratios = ['1:1', '16:9', '9:16', '4:5', '3:4', '2:3']
 
 const workflow = [
@@ -776,7 +582,7 @@ function ComposerPanel({ onCreate }: { onCreate: () => void }) {
         </div>
 
         <div className="rounded-[18px] border border-white/[0.10] bg-[#171711] px-4 py-3 text-sm leading-7 text-[#cfc4b5]">
-          Cinematic coastal villa at golden hour, Italian Riviera, soft sunlight, bougainvillea, fine art photography
+          Cyberpunk neon rain market at night, cinematic wet-street reflections, teal-magenta light, premium detail
         </div>
 
         <div className="mt-3 flex flex-wrap justify-end gap-2 text-[11px] font-semibold">
@@ -807,15 +613,20 @@ function ComposerPanel({ onCreate }: { onCreate: () => void }) {
       <div className="rounded-[24px] border border-[rgba(124,90,43,0.28)] bg-[linear-gradient(180deg,rgba(17,17,14,0.9),rgba(10,11,10,0.88))] p-4" id="styles">
         <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8a7b68]">Style</p>
         <div className="grid grid-cols-3 gap-2">
-          {assets.slice(0, 3).map((asset, index) => (
+          {heroStyleCards.map((asset) => (
             <figure
               className="group relative h-[70px] overflow-hidden rounded-[16px] border border-white/[0.08] bg-[#11110f]"
               key={asset.src}
             >
-              <img alt="" className="h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105" src={asset.src} />
+              <img
+                alt=""
+                className="h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105"
+                src={asset.src}
+                style={{ objectPosition: asset.focus ?? 'center' }}
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/22 to-black/4" />
               <figcaption className="absolute inset-x-2 bottom-2 truncate text-[10px] font-bold text-white">
-                {styleChips[index]}
+                {asset.label}
               </figcaption>
             </figure>
           ))}
@@ -857,9 +668,10 @@ function GeneratedPreview() {
   return (
     <figure className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-[#f1bf67]/20 bg-black/25 sm:min-h-[320px]">
       <img
-        alt="Generated Italian Riviera villa preview"
+        alt="Generated cyberpunk neon rain market preview"
         className="absolute inset-0 h-full w-full object-cover"
-        src={heroRiviera}
+        src={cyberpunkAsset.src}
+        style={{ objectPosition: cyberpunkAsset.focus ?? 'center' }}
       />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_54%,rgba(0,0,0,0.52)),linear-gradient(110deg,rgba(255,255,255,0.08),transparent_34%,rgba(241,191,103,0.10))]" />
       <div className="absolute right-4 top-4 grid gap-2 rounded-2xl border border-[#f1bf67]/18 bg-black/50 p-2 text-[#f1bf67] backdrop-blur-xl">
@@ -870,7 +682,7 @@ function GeneratedPreview() {
       <figcaption className="absolute bottom-4 left-4 right-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#f1bf67]">Generated preview</p>
-          <p className="mt-1 text-sm text-white">Italian Riviera, golden hour, fine art photography</p>
+          <p className="mt-1 text-sm text-white">Cyberpunk neon rain, cinematic reflections</p>
         </div>
         <img
           alt=""

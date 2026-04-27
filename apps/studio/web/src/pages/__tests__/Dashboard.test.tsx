@@ -29,14 +29,18 @@ import DashboardPage from '@/pages/Dashboard'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
 describe('DashboardPage', () => {
-  it('renders showcase as a curated aspect-ratio wall instead of a uniform tile grid', async () => {
+  it('renders showcase as a curated gallery with a selected-reference inspector', async () => {
     const user = userEvent.setup()
     const { container } = renderWithProviders(<DashboardPage />, { route: '/explore' })
 
     await user.click(screen.getByRole('button', { name: /^showcase$/i }))
 
     expect(await screen.findByTestId('showcase-grid')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /open neon cityscape showcase piece/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /select cyberpunk showcase piece/i })).toBeInTheDocument()
+    expect(screen.getByTestId('curated-inspector')).toHaveTextContent('Cyberpunk')
+
+    await user.click(screen.getByRole('button', { name: /select anime showcase piece/i }))
+    expect(screen.getByTestId('curated-inspector')).toHaveTextContent('Anime')
 
     const layouts = new Set(
       Array.from(container.querySelectorAll('[data-showcase-layout]'))

@@ -1,1 +1,0 @@
-# Placeholder for usage_logger.py

@@ -1,1 +1,0 @@
-# Placeholder for first_launch_guide.py

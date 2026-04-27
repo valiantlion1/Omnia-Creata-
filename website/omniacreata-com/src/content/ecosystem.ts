@@ -46,7 +46,7 @@ export const products: ProductRecord[] = [
       "OmniaCreata Studio is the flagship workspace for the ecosystem. It gives teams a unified place to shape strategy, direct AI-assisted creation, review output, and move polished work into release.",
     roleTitle: "Studio is the orchestration layer.",
     roleDescription:
-      "It is where the rest of the ecosystem becomes usable as one system. Ideas enter through Prompt Vault, visuals arrive through OmniaPixels, execution stays aligned through OmniaOrganizer, and live signals remain visible through Omnia Watch.",
+      "It is where the rest of the ecosystem becomes usable as one system. Ideas enter through Prompt Vault, edited visual assets can arrive through OmniaPixels, execution stays aligned through OmniaOrganizer, and live signals remain visible through Omnia Watch.",
     keyFeatures: [
       {
         title: "Creative orchestration boards",
@@ -76,9 +76,9 @@ export const products: ProductRecord[] = [
           "Studio draws organized prompting logic, libraries, and experimentation history from Prompt Vault.",
       },
       {
-        title: "Coordinates visual generation",
+        title: "Receives mobile-ready visuals",
         description:
-          "Visual exploration, enhancement, and final asset refinement flow in from OmniaPixels.",
+          "Phone-edited images and clean exports can flow in from OmniaPixels when the mobile app is ready.",
       },
       {
         title: "Keeps operations synchronized",
@@ -120,44 +120,44 @@ export const products: ProductRecord[] = [
   },
   {
     slug: "omniapixels",
-    badge: "Visual intelligence",
+    badge: "Mobile photo editor",
     name: "OmniaPixels",
     shortDescription:
-      "A premium visual engine for generation, enhancement, refinement, and image intelligence.",
-    tagline: "Visual intelligence for the Omnia Creata ecosystem.",
-    headline: "Build a sharper visual pipeline for every creative outcome.",
+      "A local-first mobile photo editor and upscaler for improving existing images on-device.",
+    tagline: "Mobile photo editing for the Omnia Creata ecosystem.",
+    headline: "Improve photos on your phone without turning editing into a cloud workflow.",
     heroSummary:
-      "OmniaPixels handles the visual dimension of the ecosystem. It brings generation, enhancement, and visual processing into a premium environment designed to support deliberate creation rather than novelty output.",
-    roleTitle: "OmniaPixels is the image pipeline.",
+      "OmniaPixels handles the phone-first editing path: select a photo, adjust it, compare an upscale, and export a clean copy.",
+    roleTitle: "OmniaPixels is the mobile photo tool.",
     roleDescription:
-      "It feeds Studio with stronger visual output, helps Prompt Vault connect prompts to visual results, gives Organizer clearer production checkpoints, and supplies Watch with quality and throughput visibility.",
+      "It keeps existing photos and visual assets useful when the work needs quick mobile correction, enhancement, and export.",
     keyFeatures: [
       {
-        title: "Generation and exploration",
+        title: "Gallery-first editing",
         description:
-          "Move from direction to image concepts quickly with workspace-grade generation tuned for iterative visual development.",
+          "Start from photos already on the phone, keep the flow simple, and move quickly into editing.",
       },
       {
         title: "Refinement and enhancement",
         description:
-          "Upscale, clean, stylize, and prepare assets for polished delivery without bouncing into fragmented editing steps.",
+          "Tune crop, rotation, light, color, detail, and upscale without bouncing into fragmented editing steps.",
       },
       {
-        title: "Visual consistency controls",
+        title: "Before and after confidence",
         description:
-          "Keep series work aligned through style guidance, reference-aware workflows, and production-ready output review.",
+          "Compare changes clearly before saving a new copy of the image.",
       },
       {
-        title: "Studio-connected delivery",
+        title: "Clean mobile export",
         description:
-          "Send approved assets directly into broader campaign or project workflows across the Omnia Creata ecosystem.",
+          "Save or share finished images in formats that make sense for mobile publishing.",
       },
     ],
     ecosystemPoints: [
       {
         title: "Powered by prompt intelligence",
         description:
-          "Prompt Vault supplies organized prompt systems that improve repeatability and clarity in visual generation.",
+          "Prompt Vault can later support reusable visual-editing notes, but the first OmniaPixels app stays photo-first.",
       },
       {
         title: "Feeds final assets into Studio",
@@ -172,10 +172,10 @@ export const products: ProductRecord[] = [
     ],
     previewCards: [
       {
-        label: "Generation",
-        title: "Concept-to-image acceleration",
+        label: "Gallery",
+        title: "Photo-to-edit flow",
         detail:
-          "Launch visual explorations with clear direction, structured references, and premium output controls.",
+          "Open recent photos and move into edit mode without dashboard friction.",
       },
       {
         label: "Refinement",
@@ -185,15 +185,15 @@ export const products: ProductRecord[] = [
       },
       {
         label: "Series work",
-        title: "Consistency across sets",
+        title: "Simple saved copies",
         detail:
-          "Maintain visual rhythm across multiple deliverables, not just isolated one-off image generation.",
+          "Protect originals while exporting polished versions for sharing or publishing.",
       },
     ],
     heroStats: [
-      { label: "Role", value: "Visual engine" },
-      { label: "Focus", value: "Image creation and refinement" },
-      { label: "Designed for", value: "Consistent asset pipelines" },
+      { label: "Role", value: "Mobile photo tool" },
+      { label: "Focus", value: "Local editing and upscale" },
+      { label: "Designed for", value: "Fast phone workflows" },
     ],
     companionSlugs: ["omnia-creata-studio", "prompt-vault", "omnia-watch"],
   },
@@ -241,7 +241,7 @@ export const products: ProductRecord[] = [
       {
         title: "Supports asset and prompt work",
         description:
-          "OmniaPixels and Prompt Vault become easier to scale when their outputs are attached to operational structure.",
+          "OmniaPixels and Prompt Vault become easier to scale when their product outputs are attached to operational structure.",
       },
       {
         title: "Improves system awareness",
@@ -288,7 +288,7 @@ export const products: ProductRecord[] = [
       "Prompt Vault gives Omnia Creata a long-term memory layer. It turns prompt work into organized, reusable intellectual infrastructure that can evolve alongside the ecosystem.",
     roleTitle: "Prompt Vault is the knowledge layer.",
     roleDescription:
-      "It provides Studio and OmniaPixels with cleaner prompt systems, gives Organizer reusable patterns for recurring work, and helps Watch observe quality shifts rooted in prompt changes.",
+      "It provides Studio with cleaner prompt systems, can later support OmniaPixels editing notes, gives Organizer reusable patterns for recurring work, and helps Watch observe quality shifts rooted in prompt changes.",
     keyFeatures: [
       {
         title: "Structured prompt libraries",
@@ -308,7 +308,7 @@ export const products: ProductRecord[] = [
       {
         title: "Cross-product portability",
         description:
-          "Carry prompt intelligence into Studio, OmniaPixels, and future Omnia Creata products without losing fidelity.",
+          "Carry prompt intelligence into Studio and future Omnia Creata products without losing fidelity.",
       },
     ],
     ecosystemPoints: [
@@ -318,9 +318,9 @@ export const products: ProductRecord[] = [
           "Prompt logic becomes a strategic input instead of a hidden dependency inside individual workflows.",
       },
       {
-        title: "Improves visual direction",
+        title: "Supports future visual notes",
         description:
-          "OmniaPixels benefits from structured prompt families, references, and experimentation history.",
+          "OmniaPixels may later use structured references and editing notes, after the mobile editor itself is stable.",
       },
       {
         title: "Creates observable quality baselines",
@@ -367,7 +367,7 @@ export const products: ProductRecord[] = [
       "Omnia Watch brings operational awareness to Omnia Creata. It turns events, trends, and quality signals into calm intelligence that helps the ecosystem stay reliable as it grows.",
     roleTitle: "Omnia Watch is the monitoring layer.",
     roleDescription:
-      "It watches the ecosystem as a connected platform rather than isolated products. Studio sees rollout readiness, Organizer gains execution awareness, Prompt Vault benefits from quality signals, and OmniaPixels can surface visual pipeline health.",
+      "It watches the ecosystem as a connected platform rather than isolated products. Studio sees rollout readiness, Organizer gains execution awareness, Prompt Vault benefits from quality signals, and OmniaPixels can later surface mobile editing health.",
     keyFeatures: [
       {
         title: "System health visibility",
@@ -404,7 +404,7 @@ export const products: ProductRecord[] = [
       {
         title: "Closes the improvement loop",
         description:
-          "Prompt Vault and OmniaPixels gain better feedback loops when Watch connects outcomes to their upstream inputs.",
+          "Prompt Vault and OmniaPixels gain better feedback loops when Watch connects outcomes to the real product actions behind them.",
       },
     ],
     previewCards: [
@@ -465,7 +465,7 @@ export const workflowSteps = [
     id: "03",
     name: "OmniaPixels",
     description:
-      "Generate, refine, and deliver visual assets with premium control over quality and consistency.",
+      "Edit, upscale, and export phone photos with a local-first mobile workflow.",
     href: "/products/omniapixels" as const,
   },
   {

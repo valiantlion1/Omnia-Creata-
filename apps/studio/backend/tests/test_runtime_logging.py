@@ -14,6 +14,8 @@ from runtime_logging import RedactingLogFilter, RequestContextLogFilter, configu
 def test_settings_runtime_root_prefers_localappdata(monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\creator\AppData\Local")
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.delenv("STUDIO_RUNTIME_ROOT", raising=False)
+    monkeypatch.delenv("STUDIO_LOG_DIRECTORY", raising=False)
 
     settings = Settings(_env_file=None, jwt_secret="x" * 32)
 

@@ -6,7 +6,7 @@
 - `apps/internal/control-center` - OCOS / Control Center, future internal app
 - `apps/organizer` - OmniaOrganizer, incubation / secondary review
 - `apps/prompt-vault` - Prompt Vault, incubation / secondary review
-- `apps/omniapixels` - OmniaPixels, incubation / secondary review
+- `apps/omniapixels` - OmniaPixels, clean rebuild / mobile incubation
 - `apps/omnia-watch` - Omnia Watch, incubation / secondary review
 - `apps/companion` - OmniaCompanion, planned / hold
 

@@ -123,22 +123,23 @@
   z-index: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at top, rgba(188, 209, 229, 0.06), transparent 18%),
-    linear-gradient(180deg, #0e131a 0%, #11171f 38%, #0f141b 100%);
+    radial-gradient(circle at 18% 0%, rgba(229, 173, 86, 0.08), transparent 22%),
+    radial-gradient(circle at 86% 100%, rgba(39, 79, 62, 0.12), transparent 38%),
+    linear-gradient(180deg, #080706 0%, #0d0b08 42%, #060605 100%);
 }
 
 /* Subdued background glows replacing loud gradients */
 .fx-glow { position: absolute; inset: 0; filter: blur(120px); opacity: 0.08; pointer-events: none; }
 .fx-glow-1 {
-  background: radial-gradient(circle at 18% 0%, rgba(146, 184, 214, 0.18), transparent 48%);
+  background: radial-gradient(circle at 18% 0%, rgba(229, 173, 86, 0.2), transparent 48%);
   animation: oc-ambientSway 20s ease-in-out infinite alternate;
 }
 .fx-glow-2 {
-  background: radial-gradient(circle at 82% 100%, rgba(111, 137, 165, 0.12), transparent 48%);
+  background: radial-gradient(circle at 82% 100%, rgba(43, 89, 68, 0.16), transparent 48%);
   animation: oc-ambientSway 25s ease-in-out infinite alternate-reverse;
 }
 .fx-glow-3 {
-  background: radial-gradient(circle at 50% 45%, rgba(224, 234, 244, 0.05), transparent 60%);
+  background: radial-gradient(circle at 50% 45%, rgba(241, 191, 103, 0.05), transparent 60%);
 }
 
 .noise-overlay {
@@ -220,11 +221,11 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
 .glass-card:hover { border-color: rgba(255,255,255,0.09); box-shadow: var(--border-glow), 0 22px 46px rgba(4,10,18,0.32); }
 
 .glass-sidebar {
-  background: linear-gradient(180deg, rgba(17,22,29,0.94) 0%, rgba(14,19,26,0.97) 100%);
+  background: linear-gradient(180deg, rgba(14,13,10,0.97) 0%, rgba(8,8,7,0.99) 100%);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.35);
-  border-right: 1px solid rgba(255,255,255,0.06);
-  box-shadow: inset -1px 0 0 rgba(255,255,255,0.02), 10px 0 36px rgba(4,10,18,0.18);
+  border-right: 1px solid rgba(215,174,104,0.12);
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.02), 14px 0 44px rgba(0,0,0,0.34);
 }
 
 /* Custom Scrollbar */

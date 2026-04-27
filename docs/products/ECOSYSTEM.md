@@ -8,7 +8,7 @@
 | Control Center / OCOS | `apps/internal/control-center` | Future internal app | Internal operating-system seed; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/internal/control-center/docs/README.md) |
 | OmniaOrganizer | `apps/organizer` | Incubation / secondary review | Mobile Android root plus a docs-consolidation hotspot; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/organizer/docs/README.md) |
 | Prompt Vault | `apps/prompt-vault` | Incubation / secondary review | Web + packages + Supabase with docs cleanup still needed; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/prompt-vault/docs/README.md) |
-| OmniaPixels | `apps/omniapixels` | Incubation / secondary review | Backend + mobile + preserved migration docs; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omniapixels/docs/README.md) |
+| OmniaPixels | `apps/omniapixels` | Clean rebuild / mobile incubation | Fresh Flutter app plus product/versioning docs; start at [README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omniapixels/README.md) |
 | Omnia Watch | `apps/omnia-watch` | Incubation / secondary review | Web + desktop + shared packages; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/omnia-watch/docs/README.md) |
 | OmniaCompanion | `apps/companion` | Planned / hold | Canonical planning root; start at [docs/README.md](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/companion/docs/README.md) |
 

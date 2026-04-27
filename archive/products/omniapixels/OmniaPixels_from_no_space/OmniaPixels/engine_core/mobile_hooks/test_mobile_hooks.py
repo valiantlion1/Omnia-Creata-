@@ -1,1 +1,0 @@
-# Placeholder for test_mobile_hooks.py

@@ -18,6 +18,66 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.26.225`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The selected Explore reference was visually stronger than the live page because it behaved like a focused discovery workspace: dense image browsing in the center, persistent prompt/style context on the right, and account/credit trust anchored in the left shell. The live Explore page had the right pieces, but the header, filters, grid density, and inspector still felt looser than that reference.
+- What:
+  `.225` tightens Explore toward that reference without changing backend contracts. Showcase and Atmospheres now share a search-aware curated reference wall, sorting works for curated references as well as Community, the header uses the black-and-gold tab/search/filter language, the grid is denser with mosaic/dense layout controls, and the right inspector now reads as a proper Details drawer with image actions, prompt copy, style chips, creator info, stats, model/aspect/resolution/seed metadata, and `Open details`. The signed-in shell also promotes the liked sidebar metering detail into a clearer Credits card with reset timing.
+  Verification on `.225` is frontend proof. From `apps/studio/web`, `npm run test:ci -- Dashboard.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof against `127.0.0.1:5173` passes for guest `/explore` desktop/mobile and demo Pro `/explore` desktop with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/explore-reference-fit-225-final2-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/explore-reference-fit-225-final2-mobile-mobile-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/explore-reference-fit-225-final2-pro-sidebar-desktop-desktop-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.224`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The Studio UI wave exposed a front-back contract issue in the owner Analytics surface. The backend was already returning honest `blocked_injections=null` / `blocked_injections_status=unavailable` truth, but the frontend converted that unavailable security signal into a reassuring `0` and bypassed the shared Studio API client with an ad-hoc fetch. The root-admin route also needed cleaner loading/redirect states so non-root users do not see a fake telemetry failure.
+- What:
+  `.224` routes Admin Analytics through the shared `studioApi` client, adds a typed admin telemetry payload, removes the unused legacy local-lab client hook for a non-existent endpoint, and makes unavailable backend signals render as `Not tracked` / `No fake data` instead of zero. The page now gates root-admin telemetry before fetching, redirects non-root users back to Explore, and keeps the copy scoped to backend telemetry truth instead of framework-style dashboard language.
+  Verification on `.224` covers the front-back seam and backend state. From `apps/studio/web`, `npm run test:ci -- Analytics.test.tsx studioApi.test.ts` passes with 2 files / 3 tests, `npm run type-check` passes, and `npm run build` passes. From `apps/studio/backend`, targeted admin telemetry/version tests pass (`5 passed`) and the full backend suite passes with `678 passed in 947.59s`. Live `/v1/version` reports build `2026.04.26.224`; `bootBuild` remains `2026.04.26.219` because the already-running local backend process was not restarted during this UI/contract wave. Browser proof against `127.0.0.1:5173` passes for `/explore` desktop/mobile with zero failed routes and zero console errors/warnings. `/dashboard` demo non-root proof correctly resolves to `/explore` with zero console errors/warnings, but the strict proof manifest marks it failed because the expected target route changed during the intentional redirect. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/telemetry-224-explore-redirect-target-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/telemetry-224-explore-redirect-target-mobile-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/dashboard-admin-telemetry-224-nonroot-desktop-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/dashboard-admin-telemetry-224-nonroot-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.223`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.222` landed the selected Explore gallery direction, but the first polish pass exposed practical UX friction: mobile users could not reach the real selected-reference details until after the gallery, the desktop inspector was tall enough that actions sat too low, and the header repeated selected-state metadata already handled by the inspector.
+- What:
+  `.223` tightens Explore without changing the concept. The selected-reference inspector now has a compact sticky mobile version before the gallery wall, the desktop inspector uses a shorter image ratio and clamped prompt copy so `Open details` / `Copy prompt` are visible sooner, and the redundant selected header card is removed. This keeps Explore focused on browsing and inspecting references instead of adding more chrome.
+  Verification on `.223` is frontend proof. From `apps/studio/web`, `npm run test:ci -- Dashboard.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, `npm run build` passes, and `/explore` desktop/mobile route proof against `127.0.0.1:5173` passes with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/explore-ux-polish-223-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/explore-ux-polish-223-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.222`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The selected Explore concept was stronger because it treated Explore as a premium image gallery, not another Create conversion surface. The live page still needed that direction in product UI: image-led browsing, a selected-reference detail area, and a warmer sidebar shell that matches the black/gold Studio direction.
+- What:
+  `.222` rebuilds Explore's curated `Showcase` and `Atmospheres` tabs around a selectable generated-reference wall plus a quiet right-side inspector. Tapping a tile now selects it in-place, the inspector shows the larger image, mood tags, prompt, saves, `Open details`, and `Copy prompt`, and the route no longer pushes a dominant Create action inside the curated gallery. The Studio shell/sidebar also moves from cooler blue glass toward the same warmer black-and-gold language, including active nav states, logo treatment, mobile chrome, and ambient shell background.
+  Verification on `.222` is frontend proof. From `apps/studio/web`, `npm run test:ci -- Dashboard.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, `npm run build` passes, and route proof against `127.0.0.1:5173` passes for `/explore` desktop/mobile plus `/landing` desktop/mobile with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/explore-gallery-redesign-222-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/explore-gallery-redesign-222-mobile-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/sidebar-shell-redesign-222-landing-desktop-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/sidebar-shell-redesign-222-landing-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.221`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.220` replaced the old image source set, but the new GPT-generated assets could still be missed because Landing's first viewport kept the older Riviera preview and older style chips. The page needed the new asset direction to be visible immediately, not only after scrolling or opening Explore.
+- What:
+  `.221` updates Landing's hero preview and style chips to use the new generated catalog directly. The first viewport now shows the cyberpunk generated preview plus cyberpunk, anime, and luxury-product style chips, while the deeper gallery rails and Explore continue to use the full generated catalog from `.220`.
+  Verification on `.221` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-generated-assets-visible-221-final-desktop` plus `npm run proof:route -- --route /landing --viewport mobile --label landing-generated-assets-visible-221-final-mobile` both pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-generated-assets-visible-221-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/landing-generated-assets-visible-221-final-mobile-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.26.220`
+- Date: `2026-04-26`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  `.219` fixed the gallery vocabulary, but it still depended on the older public `atmosphere` image folder. The user-facing surface needed real GPT-generated style assets instead of carrying old, lower-quality reference images forward under new labels.
+- What:
+  `.220` adds a curated GPT-generated style asset catalog under `apps/studio/web/src/assets/landing/generated` and centralizes the metadata in `apps/studio/web/src/data/studioGeneratedAssets.ts`. Landing's gallery rails and Explore/Dashboard's showcase and atmosphere references now use that catalog, covering cyberpunk, anime, cel shading, fantasy, glam editorial, photoreal noir, luxury product, surreal editorial, sci-fi city, abstract generative, automotive, and claymation looks. Explore now opens on the curated Showcase tab first so weak or stale community examples do not define the first impression, while the live Community feed remains available as its own tab. After `rg` confirmed no remaining source references to `/atmosphere`, the obsolete untracked `apps/studio/web/public/atmosphere` folder was removed from the workspace.
+  Verification on `.220` is frontend proof. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and `npm run proof:route -- --route /landing --viewport desktop --label landing-generated-assets-220-final-desktop`, `npm run proof:route -- --route /landing --viewport mobile --label landing-generated-assets-220-final-mobile`, `npm run proof:route -- --route /explore --viewport desktop --label explore-generated-assets-220-final-desktop`, and `npm run proof:route -- --route /explore --viewport mobile --label explore-generated-assets-220-final-mobile` all pass against `127.0.0.1:5173` with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/landing-generated-assets-220-final-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/landing-generated-assets-220-final-mobile-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/explore-generated-assets-220-final-desktop-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/explore-generated-assets-220-final-mobile-mobile-manifest.json`.
+
 ### `0.6.0-alpha` / build `2026.04.26.219`
 - Date: `2026-04-26`
 - Codename: `Foundation`

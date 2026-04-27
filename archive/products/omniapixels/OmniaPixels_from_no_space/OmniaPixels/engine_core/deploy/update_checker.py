@@ -1,1 +1,0 @@
-# Placeholder for update_checker.py

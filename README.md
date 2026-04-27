@@ -23,7 +23,7 @@ backups/     Local backups (gitignored)
 - `apps/internal/control-center` - future internal operating system app
 - `apps/organizer` - incubation / secondary review
 - `apps/prompt-vault` - incubation / secondary review
-- `apps/omniapixels` - incubation / secondary review
+- `apps/omniapixels` - clean rebuild / mobile incubation
 - `apps/omnia-watch` - incubation / secondary review
 - `apps/companion` - planned / hold
 
@@ -41,7 +41,7 @@ backups/     Local backups (gitignored)
 - Root `packages/` is the long-term home for code that is genuinely shared across multiple products; product-local shared code may exist temporarily, but duplicated package families should not keep multiplying forever.
 - Do not promote product-local UI, contracts, validation, or design systems to root `packages/` until at least two active products need the same stable surface.
 - Product plans must align with root repo governance; product docs do not override taxonomy or migration rules.
-- In-place products such as Studio and OmniaPixels are cleaned incrementally rather than rewritten by default.
+- In-place products are cleaned incrementally by default unless a product reset is explicitly approved; OmniaPixels is currently an approved clean rebuild.
 - Heavy exports, local caches, and machine output are not canonical source.
 - Product-local docs carry product truth; root docs carry taxonomy, portfolio, and repo governance.
 

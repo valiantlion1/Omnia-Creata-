@@ -8,7 +8,7 @@
 | Control Center / OCOS | `apps/internal/control-center` | Future internal app | Keep truth aligned, but do not open active implementation wave |
 | Organizer | `apps/organizer` | Incubation / secondary review | Needs docs consolidation |
 | Prompt Vault | `apps/prompt-vault` | Incubation / secondary review | Needs docs consolidation and publish cleanup |
-| OmniaPixels | `apps/omniapixels` | Incubation / secondary review | Clean enough to keep, but not an active wave |
+| OmniaPixels | `apps/omniapixels` | Clean rebuild / mobile incubation | Old implementation removed; fresh Flutter seed is the active source of truth |
 | Omnia Watch | `apps/omnia-watch` | Incubation / secondary review | Clean enough to keep, but not an active wave |
 | Companion | `apps/companion` | Planned / hold | Planning-only |
 
@@ -70,7 +70,7 @@ Hard gates before active feature churn resumes:
 | --- | --- | --- | --- |
 | Organizer | 3 | needs docs consolidation | Canonical entry is clearer and export/capture clutter was reduced, but `NEW PLANS` and `master-plan` still need consolidation. |
 | Prompt Vault | 3 | needs docs consolidation | Canonical docs are now easier to enter and zip bundles are gone, but blueprint/handoff duplication still needs trimming. |
-| OmniaPixels | 3 | clean enough incubation | Product root is normalized, but not currently worth a deep cleanup wave. |
+| OmniaPixels | 2 | clean rebuild seed | Old code/archive material was removed; fresh Flutter seed exists but real edit/upscale/export behavior is not launch-grade yet. |
 | Omnia Watch | 3 | clean enough incubation | Product root is structurally fine; can wait behind primary work. |
 | Companion | 4 | hold / planning-only | Planning-only product is already clearly marked as not yet implemented. |
 | Control Center / OCOS | 4 | future internal app | Product-local docs are strong; root truth needed alignment more than the app itself. |
@@ -145,7 +145,8 @@ Current rule:
    - absorb useful handoff content into canonical docs
    - remove zip/export artifacts from tracked canonical docs
 5. Secondary-product publish pass
-   - keep OmniaPixels and Omnia Watch readable
+   - grow OmniaPixels from its clean Flutter seed without reusing old backend/archive assumptions
+   - keep Omnia Watch readable
    - leave Companion as planning-only
 6. Root shared-package refactor
    - promote proven shared config/tooling/contracts into root `packages/`

@@ -44,7 +44,6 @@ These usually stay inside the product that owns them:
 - Omnia Watch `packages/design-tokens`
 - Omnia Watch `packages/api-contracts`
 - Control Center `packages/contracts`
-- OmniaPixels `packages/shared` until it owns a real boundary or gets deleted
 
 ## Anti-patterns
 

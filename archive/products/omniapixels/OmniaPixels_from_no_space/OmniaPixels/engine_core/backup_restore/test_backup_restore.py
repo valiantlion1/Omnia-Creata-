@@ -1,1 +1,0 @@
-# Placeholder for test_backup_restore.py

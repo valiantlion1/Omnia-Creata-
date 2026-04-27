@@ -43,7 +43,8 @@ Nested `apps/*` folders are not allowed inside product roots.
 
 ## Cleanup posture
 
-- `studio`, `omniapixels`, and `organizer` are in-place products and should be cleaned incrementally.
+- `studio` and `organizer` are in-place products and should be cleaned incrementally.
+- `omniapixels` is an approved clean rebuild rooted at `apps/omniapixels`.
 - Product-local packages may exist during migration, but the long-term direction remains convergence toward root `packages/`.
 - Archiving is the last step after replacement is verified, not the default first step.
 - `studio` is the active primary product path.

@@ -888,11 +888,6 @@ export type LocalRuntimeSummary = {
   models?: string[]
 }
 
-export type OwnerLocalLabBootstrap = {
-  runtime: LocalRuntimeSummary
-  models: ModelCatalogEntry[]
-}
-
 export type HealthProvider = {
   name: string
   status: string
@@ -1006,6 +1001,20 @@ export type BillingSummary = {
     description: string
     created_at: string
   }>
+}
+
+export type AdminTelemetryPayload = {
+  status: string
+  telemetry: {
+    event_count?: number | null
+    grand_total_generations?: number | null
+    grand_total_spent_usd?: number | null
+    [key: string]: number | string | null | undefined
+  }
+  total_identities: number
+  blocked_injections: number | null
+  blocked_injections_status: 'available' | 'unavailable' | string
+  blocked_injections_detail?: string
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1279,7 +1288,7 @@ export const studioApi = {
   }) =>
     apiFetch<StudioStyle>('/styles/from-prompt', { method: 'POST', body: JSON.stringify(payload) }),
   getPromptMemory: () => apiFetch<PromptMemoryProfile>('/prompt-memory'),
-  getOwnerLocalLabBootstrap: () => apiFetch<OwnerLocalLabBootstrap>('/owner/local-lab/bootstrap'),
+  getAdminTelemetry: () => apiFetch<AdminTelemetryPayload>('/admin/telemetry'),
   getHealth: () => apiFetch<HealthResponse>('/healthz'),
   getHealthDetail: () => apiFetch<HealthResponse>('/healthz/detail'),
   getPublicPlans: () => apiFetch<PublicPlansPayload>('/public/plans'),

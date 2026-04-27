@@ -1,1 +1,0 @@
-# Placeholder for latent_diffusion_tester.py

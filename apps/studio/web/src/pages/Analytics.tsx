@@ -1,164 +1,199 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { LineChart, Activity, Database, Zap, ShieldAlert, Cpu } from 'lucide-react'
 
 import { useStudioAuth } from '@/lib/studioAuth'
+import { studioApi, type AdminTelemetryPayload } from '@/lib/studioApi'
+import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { usePageMeta } from '@/lib/usePageMeta'
-import { getStudioAccessToken } from '@/lib/studioSession'
 
-const API_BASE_URL = (import.meta.env.DEV ? '' : (import.meta.env.VITE_API_BASE_URL || '')).replace(/\/$/, '')
+function formatCount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '0'
+}
+
+function formatUsd(value: number | null | undefined) {
+  return `$${(typeof value === 'number' && Number.isFinite(value) ? value : 0).toFixed(4)}`
+}
+
+function getBlockedInjectionSignal(data: AdminTelemetryPayload | undefined) {
+  if (data?.blocked_injections_status === 'available' && typeof data.blocked_injections === 'number') {
+    return {
+      value: data.blocked_injections.toLocaleString(),
+      trend: 'Tracked',
+      tone: 'text-rose-400',
+      detail: null,
+    }
+  }
+
+  return {
+    value: 'Not tracked',
+    trend: 'No fake data',
+    tone: 'text-amber-300',
+    detail: data?.blocked_injections_detail ?? 'Studio is not persisting injection-specific blocking telemetry on this build.',
+  }
+}
 
 export default function AnalyticsPage() {
   const navigate = useNavigate()
-  const { auth: session } = useStudioAuth()
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const { auth: session, isAuthenticated, isLoading } = useStudioAuth()
+  const isRootAdmin = Boolean(session?.identity.root_admin)
   usePageMeta('Admin Analytics', 'System telemetry and performance monitoring for root administrators.')
 
+  const telemetryQuery = useQuery({
+    queryKey: ['admin-telemetry'],
+    queryFn: () => studioApi.getAdminTelemetry(),
+    enabled: isRootAdmin,
+    retry: false,
+  })
+
   useEffect(() => {
-    // 1. Client-side rapid block
-    if (session?.identity && !session.identity.root_admin) {
-        navigate('/explore', { replace: true })
-        return
+    if (isLoading) return
+    if (isAuthenticated && session?.identity && !isRootAdmin) {
+      navigate('/explore', { replace: true })
     }
+  }, [isAuthenticated, isLoading, isRootAdmin, navigate, session?.identity])
 
-    async function fetchTelemetry() {
-      try {
-        const token = getStudioAccessToken() || ''
-        const resp = await fetch(`${API_BASE_URL}/v1/admin/telemetry`, { headers: { Authorization: 'Bearer ' + token } })
-        if (resp.status === 401 || resp.status === 403) {
-          navigate('/explore', { replace: true })
-          setError(true)
-          return
-        }
-        if (!resp.ok) {
-          throw new Error(`Telemetry request failed with status ${resp.status}`)
-        }
-        const res = await resp.json()
-        setData(res)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-      }
+  useEffect(() => {
+    if (!telemetryQuery.error) return
+    const message = telemetryQuery.error instanceof Error ? telemetryQuery.error.message : String(telemetryQuery.error)
+    if (/authentication required|invalid or expired session|root administrator required/i.test(message)) {
+      navigate('/explore', { replace: true })
     }
+  }, [navigate, telemetryQuery.error])
 
-    if (session?.identity?.root_admin) {
-        fetchTelemetry()
-    } else if (session?.identity) {
-        setLoading(false)
-        setError(true)
-    }
-  }, [session, navigate])
+  if (isLoading) {
+    return <div className="p-10 text-sm font-medium tracking-wide text-zinc-500">Loading owner telemetry...</div>
+  }
 
-  if (loading) return <div className="p-10 text-zinc-500 font-medium tracking-wide">Establishing Secure Connection...</div>
+  if (!isAuthenticated || !session?.identity) {
+    return <Navigate to="/login?next=%2Fdashboard" replace />
+  }
 
-  const cost = data?.telemetry?.grand_total_spent_usd || 0
+  if (!isRootAdmin) {
+    return <div className="p-10 text-sm font-medium tracking-wide text-zinc-500">Redirecting to Explore...</div>
+  }
+
+  if (telemetryQuery.isLoading) {
+    return <div className="p-10 text-sm font-medium tracking-wide text-zinc-500">Loading owner telemetry...</div>
+  }
+
+  const data = telemetryQuery.data
+  const telemetry = data?.telemetry
+  const blockedSignal = getBlockedInjectionSignal(data)
+  const errorMessage = telemetryQuery.error
+    ? toUserFacingErrorMessage(telemetryQuery.error, 'Owner telemetry could not be loaded right now.')
+    : null
 
   const statCards = [
     {
-      title: 'Model Inferences',
-      value: data?.telemetry?.grand_total_generations || 0,
-      trend: '+Active',
-      trendUp: true,
-      icon: <Cpu className="h-5 w-5 text-blue-400" />,
+      title: 'Model inferences',
+      value: formatCount(telemetry?.grand_total_generations ?? telemetry?.event_count),
+      trend: 'Backend truth',
+      trendClassName: 'text-emerald-300',
+      icon: <Cpu className="h-5 w-5 text-cyan-300" />,
+      detail: null,
     },
     {
-      title: 'Total API Cost',
-      value: `$${cost.toFixed(4)}`,
-      trend: 'Live',
-      trendUp: true, 
-      icon: <Database className="h-5 w-5 text-emerald-400" />,
+      title: 'Total API cost',
+      value: formatUsd(telemetry?.grand_total_spent_usd),
+      trend: 'Cost telemetry',
+      trendClassName: 'text-emerald-300',
+      icon: <Database className="h-5 w-5 text-emerald-300" />,
+      detail: null,
     },
     {
-      title: 'Active Workspaces',
-      value: data?.total_identities || 0,
-      trend: 'Network',
-      trendUp: true,
-      icon: <Activity className="h-5 w-5 text-purple-400" />,
+      title: 'Active workspaces',
+      value: formatCount(data?.total_identities),
+      trend: 'Store count',
+      trendClassName: 'text-zinc-300',
+      icon: <Activity className="h-5 w-5 text-sky-300" />,
+      detail: null,
     },
     {
-      title: 'Blocked Injections',
-      value: data?.blocked_injections || 0,
-      trend: 'Critical',
-      trendUp: false,
-      icon: <ShieldAlert className="h-5 w-5 text-rose-400" />,
+      title: 'Injection blocks',
+      value: blockedSignal.value,
+      trend: blockedSignal.trend,
+      trendClassName: blockedSignal.tone,
+      icon: <ShieldAlert className="h-5 w-5 text-amber-300" />,
+      detail: blockedSignal.detail,
     },
   ]
 
   return (
-    <div className="mx-auto flex w-full max-w-[1620px] flex-col gap-8 px-4 py-8 md:px-6">
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-[12px] font-medium text-emerald-500 uppercase tracking-wider">
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-7 px-4 py-7 md:px-6">
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.28em] text-emerald-300">
           <LineChart className="h-4 w-4" />
-          <span>System Telemetry</span>
+          <span>Owner telemetry</span>
         </div>
-        <h1 className="text-4xl font-semibold tracking-tight text-white">
+        <h1 className="text-4xl font-semibold tracking-[-0.04em] text-white">
           Admin Analytics
         </h1>
-        <p className="text-zinc-400 max-w-2xl text-lg">
-          Monitor real-time system performance, provider API costs, and security events across the entire Omni Creata framework (Root Admin Access Only).
+        <p className="max-w-2xl text-base leading-7 text-zinc-400">
+          Root-admin view of Studio usage, cost, and signal availability. Values here come from the backend telemetry contract.
         </p>
       </section>
 
-      {error ? (
-        <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-6 text-rose-400">
-          <ShieldAlert className="h-6 w-6" />
-          <p className="font-medium">Failed to connect to secure telemetry stream. You do not have Root Privileges.</p>
+      {errorMessage ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-rose-100">
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Telemetry unavailable</p>
+            <p className="mt-1 text-sm leading-6 text-rose-100/80">{errorMessage}</p>
+          </div>
         </div>
       ) : (
         <>
-          <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {statCards.map((stat, idx) => (
-              <div key={idx} className="flex flex-col rounded-[24px] border border-white/[0.08] bg-white/[0.02] p-6 transition-all hover:bg-white/[0.04]">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05] ring-1 ring-white/[0.1]">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {statCards.map((stat) => (
+              <div key={stat.title} className="flex min-h-[168px] flex-col rounded-[24px] border border-white/[0.08] bg-white/[0.035] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/[0.1]">
                     {stat.icon}
                   </div>
-                  <span className={`text-sm font-semibold ${stat.trendUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-[0.18em] ${stat.trendClassName}`}>
                     {stat.trend}
                   </span>
                 </div>
-                <div className="mt-6 flex flex-col">
+                <div className="mt-6 flex flex-col gap-1">
                   <span className="text-sm font-medium text-zinc-500">{stat.title}</span>
-                  <span className="mt-1 text-3xl font-bold tracking-tight text-white">{stat.value}</span>
+                  <span className="text-3xl font-semibold tracking-[-0.04em] text-white">{stat.value}</span>
+                  {stat.detail ? (
+                    <span className="pt-1 text-xs leading-5 text-zinc-500">{stat.detail}</span>
+                  ) : null}
                 </div>
               </div>
             ))}
           </section>
 
-          <section className="grid gap-6 lg:grid-cols-3">
-            <div className="col-span-2 flex min-h-[400px] flex-col rounded-[32px] border border-white/[0.08] bg-[#0e0f12] p-8 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[rgb(var(--primary))] to-transparent opacity-50" />
-              <h3 className="text-lg font-semibold text-white mb-6">API Provider Utilization</h3>
-              <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-6">
-                <div className="flex flex-col items-center text-center text-zinc-500 gap-3">
-                  <Zap className="h-8 w-8 text-emerald-500/80" />
-                  <p>
-                    Owner telemetry is connected.
-                    <br />
-                    Detailed provider trends will populate as live staging and production signals are wired.
-                  </p>
-                </div>
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.85fr)]">
+            <div className="relative flex min-h-[360px] flex-col overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0e0f12] p-7">
+              <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-emerald-300/50 to-transparent" />
+              <h2 className="text-lg font-semibold text-white">Provider utilization</h2>
+              <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.02] p-6 text-center">
+                <Zap className="h-8 w-8 text-emerald-300/80" />
+                <p className="mt-3 max-w-md text-sm leading-6 text-zinc-500">
+                  Cost and usage totals are connected. Provider-by-provider trend charts will stay quiet until the backend exposes persisted trend buckets.
+                </p>
               </div>
             </div>
-            
-            <div className="flex min-h-[400px] flex-col rounded-[32px] border border-white/[0.08] bg-[#0e0f12] p-8 hidden lg:flex">
-              <h3 className="text-lg font-semibold text-white mb-6">Security Audit Log</h3>
-              <div className="flex-1 space-y-4">
-                <div className="flex items-start gap-4 border-b border-white/[0.05] pb-4">
-                  <div className="mt-1 h-2 w-2 rounded-full bg-amber-400" />
+
+            <div className="flex min-h-[360px] flex-col rounded-[28px] border border-white/[0.08] bg-[#0e0f12] p-7">
+              <h2 className="text-lg font-semibold text-white">Signal health</h2>
+              <div className="mt-5 flex-1 space-y-4">
+                <div className="flex items-start gap-4 border-b border-white/[0.06] pb-4">
+                  <div className="mt-1.5 h-2 w-2 rounded-full bg-emerald-300" />
                   <div>
-                    <p className="text-sm font-medium text-white">Owner-only event stream</p>
-                    <p className="text-xs text-zinc-500">Detailed security events appear here once staging and production log drains are connected.</p>
+                    <p className="text-sm font-medium text-white">Admin route connected</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">This page now reads `/v1/admin/telemetry` through the shared Studio API client.</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-4 border-b border-white/[0.05] pb-4">
-                  <div className="mt-1 h-2 w-2 rounded-full bg-[rgb(var(--primary))]" />
+                <div className="flex items-start gap-4 border-b border-white/[0.06] pb-4">
+                  <div className="mt-1.5 h-2 w-2 rounded-full bg-amber-300" />
                   <div>
-                    <p className="text-sm font-medium text-white">Current build truth</p>
-                    <p className="text-xs text-zinc-500">Use launch readiness and owner health detail for the canonical blocker list on this build.</p>
+                    <p className="text-sm font-medium text-white">Unavailable fields stay explicit</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">Null backend signals are shown as unavailable instead of converted into reassuring zeroes.</p>
                   </div>
                 </div>
               </div>

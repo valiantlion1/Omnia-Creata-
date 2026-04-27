@@ -1,1 +1,0 @@
-# Placeholder for emergency_handler.py

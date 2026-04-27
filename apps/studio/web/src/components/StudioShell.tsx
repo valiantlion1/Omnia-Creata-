@@ -105,9 +105,9 @@ function Section({
   return (
     <div className="mb-4">
       {title && !collapsed ? (
-        <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-zinc-500">{title}</div>
+        <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8c7f68]">{title}</div>
       ) : title ? (
-        <div className="mx-auto mb-2 h-px w-5 bg-white/[0.06]" />
+        <div className="mx-auto mb-2 h-px w-5 bg-[#d7ae68]/15" />
       ) : null}
       <div className="space-y-1">
         {items.map((item) => {
@@ -120,11 +120,11 @@ function Section({
           const historyChildren = childItems.filter((child) => child.kind === 'history')
           const rowClasses = `group/nav relative flex min-w-0 items-center rounded-[14px] px-3 py-2.5 text-[13px] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97] ${
             active
-              ? 'bg-[linear-gradient(135deg,rgba(188,209,229,0.16),rgba(188,209,229,0.05))] text-white font-semibold ring-1 ring-white/[0.08]'
-              : 'text-zinc-400 hover:bg-white/[0.03] hover:text-zinc-100 font-medium'
+              ? 'bg-[linear-gradient(135deg,rgba(229,173,86,0.19),rgba(229,173,86,0.055))] text-[#fff2d2] font-semibold ring-1 ring-[#d7ae68]/22 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+              : 'text-[#a39a8b] hover:bg-[rgba(215,174,104,0.07)] hover:text-[#f4e7cf] font-medium'
           }`
           const activeBar = active ? (
-            <div className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-[rgb(var(--accent-light))]" />
+            <div className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-[#e5ad56]" />
           ) : null
           return (
             <div key={item.to}>
@@ -200,7 +200,7 @@ function Section({
                         to={child.to}
                         onClick={onNavigate}
                         className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] transition ${
-                          childActive ? 'bg-white/[0.07] text-white shadow-[inset_1.5px_0_0_rgba(224,234,244,0.5)]' : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-100'
+                      childActive ? 'bg-[#e5ad56]/10 text-[#fff2d2] shadow-[inset_1.5px_0_0_rgba(229,173,86,0.55)]' : 'text-[#8c8376] hover:bg-[rgba(215,174,104,0.06)] hover:text-[#f4e7cf]'
                         }`}
                       >
                         <ChildIcon className="h-3.5 w-3.5 shrink-0" />
@@ -209,7 +209,7 @@ function Section({
                     )
                   })}
 
-                  {historyChildren.length ? <div className="px-3 pt-1 text-[9px] uppercase tracking-[0.22em] text-zinc-600">History</div> : null}
+                  {historyChildren.length ? <div className="px-3 pt-1 text-[9px] uppercase tracking-[0.22em] text-[#776b5a]">History</div> : null}
 
                   {historyChildren.map((child) => {
                     const ChildIcon = child.icon
@@ -220,7 +220,7 @@ function Section({
                           to={child.to}
                           onClick={onNavigate}
                           className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 text-[12px] transition ${
-                          childActive ? 'bg-white/[0.07] text-white shadow-[inset_1.5px_0_0_rgba(224,234,244,0.5)]' : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-100'
+                          childActive ? 'bg-[#e5ad56]/10 text-[#fff2d2] shadow-[inset_1.5px_0_0_rgba(229,173,86,0.55)]' : 'text-[#8c8376] hover:bg-[rgba(215,174,104,0.06)] hover:text-[#f4e7cf]'
                           }`}
                         >
                           <ChildIcon className="h-3.5 w-3.5 shrink-0" />
@@ -345,10 +345,20 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     allowance: auth.plan.monthly_credits,
     credits_remaining: auth.credits.remaining,
     plan_label: auth.plan.label,
+    reset_at: null,
     progress_percent: auth.plan.monthly_credits > 0 ? ((auth.plan.monthly_credits - auth.credits.monthly_remaining) / auth.plan.monthly_credits) * 100 : 0
   } : undefined)
   const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
   const usagePercent = usageSummary ? Math.max(0, 100 - usageSummary.progress_percent) : 0
+  const usageResetLabel = (() => {
+    if (!usageSummary?.reset_at) return 'Resets with billing'
+    const resetTime = new Date(usageSummary.reset_at).getTime()
+    if (Number.isNaN(resetTime)) return 'Resets with billing'
+    const days = Math.max(0, Math.ceil((resetTime - Date.now()) / 86_400_000))
+    if (days === 0) return 'Resets today'
+    if (days === 1) return 'Resets tomorrow'
+    return `Resets in ${days} days`
+  })()
   const mobileBottomNav: NavItem[] = [
     primaryNav[0],
     primaryNav[1],
@@ -387,16 +397,16 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   const rail = (collapsed: boolean) => (
     <>
-      <div className={`flex h-[78px] items-center border-b border-white/[0.04] ${collapsed ? 'justify-center px-2' : 'px-5'}`}>
+      <div className={`flex h-[78px] items-center border-b border-[#d7ae68]/10 ${collapsed ? 'justify-center px-2' : 'px-5'}`}>
         <Link to="/landing" className={`group flex items-center transition-all ${collapsed ? 'justify-center' : 'gap-3.5'}`} title="Open Omnia Creata landing page">
-          <div className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[12px] bg-[linear-gradient(180deg,rgba(224,234,244,0.12),rgba(224,234,244,0.02))] p-0.5 shadow-[0_10px_26px_rgba(4,10,18,0.18)] ring-1 ring-white/[0.08] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105">
-            <div className="absolute inset-0 rounded-[12px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_54%)]" />
+          <div className="relative flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] bg-[linear-gradient(180deg,rgba(231,179,90,0.16),rgba(10,9,7,0.78))] p-0.5 shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_24px_rgba(229,173,86,0.08)] ring-1 ring-[#d7ae68]/20 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[14px] bg-[radial-gradient(ellipse_at_top,rgba(255,221,157,0.16),transparent_56%)]" />
             <img src="/omnia-crest.png" alt="Omnia Creata" className="relative z-10 h-6 w-6 object-contain drop-shadow-md" />
           </div>
           {!collapsed ? (
             <div className="min-w-0 overflow-hidden">
               <div className="whitespace-nowrap text-sm font-semibold tracking-tight text-white/95">Omnia Creata</div>
-              <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">Studio</div>
+              <div className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b4935d]">Studio</div>
             </div>
           ) : null}
         </Link>
@@ -426,18 +436,36 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         />
       </div>
 
-      <div className="relative overflow-hidden border-t border-white/[0.03] p-3">
+      <div className="relative overflow-hidden border-t border-[#d7ae68]/10 p-3">
         {/* Usage bar — always visible for logged-in users */}
         {!isGuestShell && !collapsed && usageSummary && !hasInternalAccess ? (
-            <div className="mb-3 space-y-1.5 px-1">
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08] shadow-inner">
-                <div className="h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: usagePercent > 5 ? '0 0 10px rgba(188,209,229,0.28)' : 'none' }} />
+          <Link
+            to="/subscription"
+            className="mb-3 block rounded-[14px] border border-[#d7ae68]/18 bg-[linear-gradient(180deg,rgba(229,173,86,0.08),rgba(12,10,7,0.72))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-[#f1bf67]/30 hover:bg-[#d7ae68]/[0.08]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9f927e]">Credits</div>
+                <div className="mt-1 text-xl font-semibold tracking-[-0.04em] text-white">
+                  {(usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0).toLocaleString()}
+                </div>
+                <div className="mt-0.5 text-[11px] text-[#8c8376]">{usageResetLabel}</div>
               </div>
-            <div className="flex items-center justify-between text-[10px] text-zinc-600">
-              <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>
-              <span>{usageSummary.allowance} monthly</span>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d7ae68]/22 bg-[#d7ae68]/10 text-[#f1bf67]">
+                <CreditCard className="h-4 w-4" />
+              </div>
             </div>
-          </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#d7ae68]/10">
+              <div
+                className="h-full rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, #e5ad56, #f1c16d)', boxShadow: usagePercent > 5 ? '0 0 12px rgba(229,173,86,0.28)' : 'none' }}
+              />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between text-[10px] text-[#776b5a]">
+              <span>{usageSummary.allowance.toLocaleString()} monthly</span>
+              <span>{Math.round(usageSummary.progress_percent)}% used</span>
+            </div>
+          </Link>
         ) : null}
         {/* User row */}
         {/* User row */}
@@ -450,7 +478,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               }`}
               title={isGuestShell ? 'Create an account' : 'Open profile'}
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[rgba(188,209,229,0.3)] to-[rgba(146,184,214,0.26)] text-sm font-bold text-white ring-1 ring-white/[0.15] shadow-[0_12px_24px_rgba(4,10,18,0.18)] transition-all duration-500 group-hover/user:ring-white/[0.26]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[rgba(229,173,86,0.34)] to-[rgba(45,38,27,0.86)] text-sm font-bold text-white ring-1 ring-[#d7ae68]/25 shadow-[0_12px_24px_rgba(0,0,0,0.28)] transition-all duration-500 group-hover/user:ring-[#f1bf67]/40">
                 {auth?.identity?.avatar_url ? (
                   <img src={auth.identity.avatar_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover/user:scale-110" />
                 ) : (
@@ -460,7 +488,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
               {!collapsed ? (
                 <div className="min-w-0">
                   <div className="flex items-center truncate text-[13px] font-semibold text-white/95">{auth?.identity.display_name ?? 'Guest'}<InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} /></div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
+                  <div className="mt-0.5 text-[11px] text-[#8c8376]">
                     {isGuestShell
                       ? 'Public explore'
                       : `${usageSummary?.plan_label ?? auth?.plan.label ?? 'Free'}`}
@@ -496,7 +524,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative flex h-screen overflow-hidden bg-[#0f1318] text-white"
+      className="relative flex h-screen overflow-hidden bg-[#070706] text-white"
       style={{ '--studio-sidebar-width': desktopCollapsed ? '76px' : '260px' } as CSSProperties}
     >
       <div className="fx-layer">
@@ -512,14 +540,14 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       >
         {rail(desktopCollapsed)}
         <div
-          className={`pointer-events-none absolute inset-y-6 right-0 w-px bg-gradient-to-b from-transparent via-white/[0.08] to-transparent transition-opacity duration-300 ${
+          className={`pointer-events-none absolute inset-y-6 right-0 w-px bg-gradient-to-b from-transparent via-[#d7ae68]/18 to-transparent transition-opacity duration-300 ${
             showDesktopToggle ? 'opacity-100' : 'opacity-50'
           }`}
         />
         {/* Edge toggle button — floats on sidebar border, visible on hover */}
         <button
           onClick={() => setDesktopCollapsed((value) => !value)}
-          className={`absolute top-[34px] z-40 flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.12] bg-[#20252d]/94 text-zinc-300 shadow-[0_8px_24px_rgba(4,10,18,0.24)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/[0.18] hover:bg-[#2a313b] hover:text-white hover:scale-110 ${
+          className={`absolute top-[34px] z-40 flex h-9 w-9 items-center justify-center rounded-full border border-[#d7ae68]/24 bg-[#17130d]/94 text-[#d9c09a] shadow-[0_10px_28px_rgba(0,0,0,0.34)] transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#f1bf67]/38 hover:bg-[#21180d] hover:text-[#fff2d2] hover:scale-110 ${
             showDesktopToggle
               ? 'right-[-16px] translate-x-0 opacity-100'
               : 'right-[-18px] translate-x-1 opacity-45'
@@ -531,11 +559,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-30 border-b border-white/[0.04] bg-[#141a22]/92 px-4 py-3 backdrop-blur-xl md:px-5 lg:hidden">
+        <header className="sticky top-0 z-30 border-b border-[#d7ae68]/10 bg-[#0d0b08]/92 px-4 py-3 backdrop-blur-xl md:px-5 lg:hidden">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.04] text-zinc-300 ring-1 ring-white/8 transition hover:bg-white/[0.07] lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#d7ae68]/10 text-[#d9c09a] ring-1 ring-[#d7ae68]/12 transition hover:bg-[#d7ae68]/15 lg:hidden"
             >
               <Menu className="h-4.5 w-4.5" />
             </button>
@@ -543,7 +571,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         </header>
 
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(188,209,229,0.08),transparent_24%),linear-gradient(180deg,#0f141b_0%,#11171f_42%,#10151c_100%)]">
+          <main className="h-full overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(229,173,86,0.1),transparent_24%),radial-gradient(circle_at_bottom_right,rgba(39,79,62,0.13),transparent_34%),linear-gradient(180deg,#080706_0%,#0d0b08_42%,#060605_100%)]">
             <div className="flex min-h-full flex-col">
               <div className="flex-1">{children}</div>
               {hideLegalFooter ? null : <LegalFooter className="mx-auto w-full max-w-[1520px] px-4 pb-6 md:px-5 xl:px-6" />}
@@ -551,15 +579,15 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </main>
         </div>
 
-        <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-white/[0.06] bg-[#141a22]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 20px rgba(4,10,18,0.24)' }}>
+        <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-[#d7ae68]/12 bg-[#0d0b08]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 24px rgba(0,0,0,0.32)' }}>
           {mobileBottomNav.map((item) => {
             const Icon = item.icon
             const active = isActive(location.pathname, item)
             return (
-              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] transition-all duration-300 active:scale-95 ${active ? 'text-white' : 'text-zinc-500'}`}>
+              <Link key={item.to} to={item.to} className={`flex flex-col items-center justify-center gap-1 text-[11px] transition-all duration-300 active:scale-95 ${active ? 'text-[#fff2d2]' : 'text-[#8c8376]'}`}>
                 <Icon className="h-4.5 w-4.5" />
                 {item.label}
-                {active ? <div className="h-[3px] w-6 rounded-full bg-[rgb(var(--accent-light))]" /> : <div className="h-[3px]" />}
+                {active ? <div className="h-[3px] w-6 rounded-full bg-[#e5ad56]" /> : <div className="h-[3px]" />}
               </Link>
             )
           })}
@@ -569,18 +597,18 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute bottom-0 left-0 top-0 flex w-[272px] flex-col bg-[#161c24] shadow-[0_28px_80px_rgba(4,10,18,0.34),inset_-1px_0_0_rgba(255,255,255,0.03)]">
-            <div className="flex items-center justify-between border-b border-white/[0.02] px-5 py-4">
+          <aside className="absolute bottom-0 left-0 top-0 flex w-[272px] flex-col bg-[#0d0b08] shadow-[0_28px_80px_rgba(0,0,0,0.44),inset_-1px_0_0_rgba(215,174,104,0.1)]">
+            <div className="flex items-center justify-between border-b border-[#d7ae68]/10 px-5 py-4">
               <Link to="/landing" className="flex items-center gap-3" onClick={() => setMobileOpen(false)}>
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl">
                   <img src="/omnia-crest.png" alt="Omnia Creata" className="h-8 w-8 object-contain" />
                 </div>
                 <div>
                   <div className="text-sm font-semibold text-white">Omnia Creata</div>
-                  <div className="text-xs text-zinc-500">Studio</div>
+                  <div className="text-xs text-[#b4935d]">Studio</div>
                 </div>
               </Link>
-              <button onClick={() => setMobileOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/[0.04] ring-1 ring-white/8">
+              <button onClick={() => setMobileOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#d7ae68]/10 ring-1 ring-[#d7ae68]/14">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -607,12 +635,12 @@ export default function StudioShell({ children }: { children: ReactNode }) {
                 getOpenTarget={getOpenTarget}
               />
             </div>
-            <div className="border-t border-white/[0.02] px-4 py-3">
+            <div className="border-t border-[#d7ae68]/10 px-4 py-3">
               {/* Usage bar — mobile */}
               {!isGuestShell && usageSummary && !hasInternalAccess ? (
                 <div className="mb-3 space-y-1.5">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))' }} />
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[#d7ae68]/10">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePercent}%`, background: 'linear-gradient(90deg, #e5ad56, #f1c16d)' }} />
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-zinc-600">
                     <span>{usageSummary.credits_remaining ?? auth?.credits.remaining ?? 0} credits left</span>

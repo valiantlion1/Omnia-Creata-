@@ -29,7 +29,7 @@ function getWorkflowSteps(locale: LocaleCode) {
         slug: "omniapixels",
         name: "OmniaPixels",
         description:
-          "Gorsel uretim ve iyilestirme akislarini ana sistemle bagli tutar.",
+          "Telefondaki fotograf duzenleme ve upscale akisini sade tutar.",
       },
       {
         id: "04",
@@ -68,7 +68,7 @@ function getWorkflowSteps(locale: LocaleCode) {
       slug: "omniapixels",
       name: "OmniaPixels",
       description:
-        "Generate, refine, and deliver visuals without breaking the wider product flow.",
+        "Edit, upscale, and export phone photos without turning the flow into a cloud dashboard.",
     },
     {
       id: "04",
