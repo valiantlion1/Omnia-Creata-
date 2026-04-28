@@ -15,12 +15,12 @@ export function Footer({ locale, messages }: FooterProps) {
 
   return (
     <footer className="px-6 pb-10 pt-14 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1180px] border-t border-white/[0.06] pt-8">
+      <div className="mx-auto max-w-[1340px] border-t border-white/[0.09] pt-8">
         <div className="grid gap-10 lg:grid-cols-[1.1fr_repeat(2,minmax(0,0.9fr))]">
           <div className="space-y-5">
             <BrandMark locale={locale} />
             <p className="max-w-md text-sm leading-7 text-foreground-soft">
-              Start with Studio. The rest can wait until it is real.
+              Creative software for image work with taste. Studio leads the ecosystem.
             </p>
           </div>
 
@@ -64,6 +64,12 @@ export function Footer({ locale, messages }: FooterProps) {
             >
               {copy.nav.terms}
             </Link>
+            <Link
+              className="text-sm text-foreground-soft transition hover:text-foreground"
+              href={withLocalePrefix(locale, "/refund-policy") as Route}
+            >
+              Refund Policy
+            </Link>
             <a
               className="text-sm text-foreground-soft transition hover:text-foreground"
               href="mailto:hello@omniacreata.com"
@@ -74,7 +80,7 @@ export function Footer({ locale, messages }: FooterProps) {
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/[0.06] pt-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>(c) 2026 Omnia Creata.</p>
+          <p>(c) 2026 OmniaCreata.</p>
           <p>omniacreata.com</p>
         </div>
       </div>

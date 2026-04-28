@@ -14,11 +14,8 @@ export function BrandMark({
   compact = false,
   className,
 }: BrandMarkProps) {
-  const topLabel = locale === "tr" ? "Image work" : "Image work";
-  const subLabel =
-    locale === "tr"
-      ? "Studio once"
-      : "Studio first";
+  const topLabel = locale === "tr" ? "Public HQ" : "Public HQ";
+  const subLabel = locale === "tr" ? "omniacreata.com" : "omniacreata.com";
 
   return (
     <Link
@@ -42,7 +39,7 @@ export function BrandMark({
         />
       </div>
       <div className="min-w-0 flex flex-col">
-        <span className={cn("text-[10px] font-semibold uppercase tracking-[0.32em] text-accent", compact ? "hidden sm:block" : "")}>
+        <span className={cn("text-[10px] font-semibold uppercase tracking-[0.32em] text-accent", compact ? "hidden" : "")}>
           {topLabel}
         </span>
         <span
@@ -51,9 +48,9 @@ export function BrandMark({
             compact ? "text-sm font-medium" : "text-lg font-semibold tracking-[-0.03em]",
           )}
         >
-          Omnia Creata
+          OmniaCreata
         </span>
-        <span className={cn("mt-1 text-muted", compact ? "hidden md:block text-xs" : "text-sm")}>
+        <span className={cn("mt-1 text-muted", compact ? "hidden" : "text-sm")}>
           {compact ? "omniacreata.com" : subLabel}
         </span>
       </div>

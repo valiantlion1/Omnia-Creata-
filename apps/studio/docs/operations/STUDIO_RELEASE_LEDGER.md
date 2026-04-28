@@ -18,6 +18,76 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.27.232`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The corrected reference-led pass is continuing one screen at a time. Account needed to behave less like a plain public-profile gallery and more like the generated Account reference: profile identity, public preview, plan/credits, visibility, data export, and gallery/activity all visible without pulling Settings into the same redesign.
+- What:
+  `.232` rebuilds `/account` while preserving the existing Studio sidebar and backend contracts. The page now has an Account header, a profile summary, a central gallery/activity workspace, and a right rail with public profile preview, real default-visibility controls through `updateMyProfile`, real billing navigation, real profile export through `/profiles/me/export`, and the same support-mediated deletion request used by Settings. Existing edit-profile, featured artwork picker, public profile route, and lightbox behavior remain intact.
+  Verification on `.232` covers the focused Account path. From `apps/studio/web`, `npm run test:ci -- Account.test.tsx` passes with 3 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/account` desktop and mobile both pass with zero failed routes and zero console errors/warnings. Additional mobile scroll screenshots confirm the Account rail and data actions are reachable above the bottom navigation. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/account-reference-232-final-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/account-reference-232-final-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.27.231`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The corrected reference-led pass is moving one screen at a time after Library Images. Projects needed to keep its real Studio project actions while adopting the generated Projects reference: selectable workspaces, dense visual previews, and a right-side Details rail instead of a loose card grid.
+- What:
+  `.231` rebuilds `/library/projects` around a selectable Projects workspace while preserving the existing Studio sidebar and backend contracts. Project cards and list rows now select a project for Details instead of treating every click as navigation, while explicit actions still do the real work: open project, create here, edit details, export archive, and delete empty project. The desktop Details rail is driven by the selected project, uses real project/assets metadata, and avoids decorative fake share/collaboration controls.
+  Verification on `.231` covers the focused data-backed Projects path. From `apps/studio/web`, `npm run test:ci -- MediaLibrary.test.tsx` passes with 6 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/library/projects` desktop and mobile both pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/projects-reference-231-final-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/projects-reference-231-final-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.27.230`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The broad `.229` pass was too close to a theme polish and did not sufficiently match the generated references. The next page-by-page wave starts with Library Images so each remaining surface is rebuilt around its own UX job instead of being recolored in bulk.
+- What:
+  `.230` rebuilds `/library/images` as the reference-led asset workspace while preserving the existing Studio sidebar navigation. The page now opens as `Library` with local `Images / Likes / Removed` tabs, search/sort/view controls, dense selectable image sets, and a desktop Details rail driven by the selected image set. Card clicks update Details instead of jumping straight into a modal, while real actions remain available: open preview, open in Create, create variations, edit in Chat, copy prompt, download, share, move to project, and move to Removed items. Empty-library state keeps the same workspace structure instead of collapsing back into a loose centered placeholder.
+  Verification on `.230` covers both data-backed and live empty states. From `apps/studio/web`, `npm run test:ci -- MediaLibrary.test.tsx` passes with 6 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/library/images` desktop and mobile both pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/library-reference-230-images-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/library-reference-230-images-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.27.229`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The generated references established the Studio direction for Landing, Create, and Explore, but the remaining signed-in surfaces still carried older slate/blue and loose dashboard styling. The left sidebar is the stable navigation frame and must stay intact, so this wave applies the reference direction only to the page workspaces while keeping live API-backed controls honest.
+- What:
+  `.229` brings Library, Project detail, Account, Settings, Subscription, and Help onto the same black-and-gold Foundation workspace language. Shared Studio primitives, glass cards, theme tokens, Billing plan/credit surfaces, Account profile/artwork fallback, Settings console shell, Media Library toolbar/action labels, Project detail header/actions, and shell Help reading surfaces were tightened. The existing sidebar/navigation structure was not redesigned, and backend contracts were preserved: billing checkout/summary, settings bootstrap/session controls, profile/artwork actions, library/project actions, Community/Explore APIs, and Studio API client wiring were not replaced with fake controls.
+  Verification on `.229` is frontend plus focused backend-contract proof. From `apps/studio/web`, `npm run test:ci -- Account.test.tsx Billing.test.tsx Settings.test.tsx MediaLibrary.test.tsx Project.test.tsx Documentation.test.tsx Dashboard.test.tsx StudioShell.test.tsx` passes with 8 files / 24 tests, `npm run test:ci -- studioApi.test.ts` passes, `npm run type-check` passes, and `npm run build` passes. From `apps/studio/backend`, focused settings/billing/profile contract tests pass: `python -m pytest tests/test_backend_spine_ops.py -q -k "settings_bootstrap or signed_in_shell"` (`2 passed, 16 deselected`), `python -m pytest tests/test_billing_ops.py -q -k "public_plans or billing_summary or checkout"` (`5 passed, 39 deselected`), and `python -m pytest tests/test_service_regressions.py -q -k "settings_and_billing_summary_include_resolved_entitlements or export_identity_data_uses_store_snapshot"` (`2 passed, 89 deselected`). Browser proof used the existing `127.0.0.1:5173` host without opening a new server: auth-core desktop/mobile, auth-library desktop/mobile, auth-full desktop/mobile with seeded project detail, and shell `/help` desktop/mobile all pass with zero failed routes and zero console errors/warnings. Key manifests were written to `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-auth-core-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-auth-core-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-auth-library-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-auth-library-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-project-detail-only-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-project-detail-only-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-help-shell-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/all-ui-reference-pass-229-help-shell-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.27.228`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Paddle onboarding exposed that billing will be one of the next public boundaries, even before live checkout is activated. The backend already failed closed when Paddle checkout was not configured outside development, but the public Paddle webhook route still accepted request bodies without a dedicated webhook-size cap and let malformed but signed billing events bubble through service errors too close to a generic server failure.
+- What:
+  `.228` hardens the backend-only Paddle webhook boundary. `/v1/webhooks/paddle` now returns `503` when the webhook secret is not configured, rejects non-JSON content with `415`, rejects invalid content-length or over-limit bodies before processing, enforces a dedicated `PADDLE_WEBHOOK_MAX_BODY_BYTES` cap, rejects non-object JSON payloads, and maps malformed billing event processing errors to `400` instead of a generic failure. This does not claim Paddle is live or that checkout is approved; it only makes the backend callback surface safer for the eventual Paddle connection.
+  Verification on `.228` is backend proof and no live Paddle/provider proof. From `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "paddle_webhook or billing_checkout"` passes (`5 passed, 80 deselected`), `python -m pytest tests/test_billing_ops.py -q -k "paddle or checkout or billing_summary"` passes (`6 passed, 38 deselected`), `python -m pytest tests/test_launch_readiness.py tests/test_runtime_topology.py tests/test_provider_truth.py -q` passes (`75 passed`), and `python -m compileall config security studio_platform` passes. Live Paddle checkout/webhook delivery, provider smoke, Turnstile activation, and protected staging closure remain unrun because they require external account/secrets/operator setup.
+
+### `0.6.0-alpha` / build `2026.04.27.227`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Signed-in Studio routes were doing too much repeated auth work during normal protected-page loads. A single signed-in screen can request auth, profile, projects, assets, generations, billing, settings, models, and community data in parallel; with Supabase tokens this made the backend call Supabase `/auth/v1/user` repeatedly for the same bearer token and showed up as multi-second bootstrap latency in local logs. This was a no-spend hardening target because it improves the product feel without requiring Runware, fal, Paddle, Turnstile, or other paid-service activation.
+- What:
+  `.227` adds a short, token-expiry-aware Supabase auth-user cache behind `get_current_user`, with per-token single-flight protection so parallel protected-route requests collapse into one Supabase user verification. The cache stores only successful user payloads, can be disabled through `SUPABASE_AUTH_USER_CACHE_TTL_SECONDS=0`, clears on auth setup, and still runs Studio's persistent access-session revocation check on every request after the cached identity is resolved. This reduces repeated external auth calls without weakening server-authoritative session revocation.
+  Verification on `.227` is backend proof and no paid-provider proof. From `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "get_current_user or auth_me or signup or login_captcha"` passes (`16 passed, 67 deselected`), `python -m pytest tests/test_launch_readiness.py tests/test_runtime_topology.py tests/test_provider_truth.py -q` passes (`75 passed`), and `python -m compileall security config studio_platform` passes. Live paid provider smoke, Paddle checkout, Turnstile activation, and protected staging closure were intentionally not run because they require external service credentials, credits, or owner-token/operator inputs.
+
+### `0.6.0-alpha` / build `2026.04.27.226`
+- Date: `2026-04-27`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The `.225` Explore reference-fit pass left one trust-breaking detail in the right-side Details drawer: the desktop close-looking `X` was rendered as a static icon instead of a real control. The same drawer also had a `Follow` affordance for curated Studio references even though there is no real follow action behind those references.
+- What:
+  `.226` hardens the Explore Details drawer without changing backend contracts. The desktop `X` is now a real accessible button that collapses the Details panel, the collapsed state keeps a visible `Details closed` affordance, selecting another gallery tile reopens the panel, icon actions now carry accessible labels, and the misleading curated-reference `Follow` button is replaced by non-interactive `Curated` status. Community feed fetching, like/profile invalidation, and usage/sidebar contracts were not changed.
+  Verification on `.226` is frontend proof. From `apps/studio/web`, `npm run test:ci -- Dashboard.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof against `127.0.0.1:5173` passes for guest `/explore` desktop/mobile with zero failed routes and zero console errors/warnings. A focused desktop interaction proof clicked the Details close button, confirmed the collapsed state, selected `Cel shading`, confirmed the Details drawer reopened, and ended with zero console errors/warnings. Proof artifacts were written to `apps/studio/web/output/playwright/studio-proof/explore-details-close-226-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/explore-details-close-226-mobile-mobile-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/explore-details-close-226-interaction-desktop.png`.
+
 ### `0.6.0-alpha` / build `2026.04.26.225`
 - Date: `2026-04-26`
 - Codename: `Foundation`

@@ -42,6 +42,13 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: /select anime showcase piece/i }))
     expect(screen.getByTestId('curated-inspector')).toHaveTextContent('Anime')
 
+    await user.click(screen.getByRole('button', { name: /close details panel/i }))
+    expect(screen.queryByTestId('curated-inspector')).not.toBeInTheDocument()
+    expect(screen.getByTestId('curated-inspector-collapsed')).toHaveTextContent('Details closed')
+
+    await user.click(screen.getByRole('button', { name: /select cel shading showcase piece/i }))
+    expect(screen.getByTestId('curated-inspector')).toHaveTextContent('Cel shading')
+
     const layouts = new Set(
       Array.from(container.querySelectorAll('[data-showcase-layout]'))
         .map((node) => node.getAttribute('data-showcase-layout'))

@@ -46,15 +46,18 @@ flutter build apk --release
 
 Only upload the APK after the emulator-visible build label is correct.
 
-## Phone smoke
+## Device smoke
 
-For the Poco X6 Pro pass, record these observations:
+For every real-device pass, record the device model, Android version, RAM class if known, refresh-rate setting, and these observations:
 
 - Gallery open time.
 - Fast scroll behavior in a 25k+ photo library.
 - Album switching.
 - Photo selection time.
 - Slider drag smoothness.
+- Brush draw, text add, sticker add, undo/redo, and export result.
 - Crop/rotate preview time.
 - Save/share result.
 - Settings > Diagnostics values after the run.
+
+The Poco X6 Pro is useful as a high-refresh local device, but it is not enough by itself. Keep adding lower-memory and different Android-version devices before Play Store confidence claims.

@@ -2,7 +2,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Grid2X2, ImagePlus, List, PenSquare, Settings, X } from 'lucide-react'
+import {
+  ChevronRight,
+  CreditCard,
+  Download,
+  ExternalLink,
+  Globe2,
+  Grid2X2,
+  ImagePlus,
+  List,
+  Lock,
+  PenSquare,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react'
 
 import { useLightbox } from '@/components/Lightbox'
 import { EmptyState, StatusPill, Surface } from '@/components/StudioPrimitives'
@@ -56,6 +70,65 @@ function collectProfileAssets(posts: PublicPost[]) {
   }
 
   return assets
+}
+
+function formatProfileDate(value: string | null | undefined) {
+  if (!value) return null
+  return new Date(value).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function ActivityRow({
+  post,
+  ownProfile,
+  onOpenPost,
+}: {
+  post: PublicPost
+  ownProfile: boolean
+  onOpenPost: (post: PublicPost) => void
+}) {
+  const asset = postPrimaryAsset(post)
+  const preview = assetPreviewSource(asset)
+
+  return (
+    <article className="grid grid-cols-[58px_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/[0.06] py-3 last:border-b-0">
+      <button
+        type="button"
+        disabled={!preview}
+        onClick={() => onOpenPost(post)}
+        className="overflow-hidden rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.08] transition hover:ring-[rgb(var(--primary-light))]/[0.26] disabled:cursor-default"
+        aria-label={`Open ${post.title} preview`}
+      >
+        {preview ? (
+          <img src={preview} alt={post.title} className="aspect-square w-full object-cover" />
+        ) : (
+          <div className="aspect-square w-full bg-white/[0.04]" />
+        )}
+      </button>
+      <div className="min-w-0">
+        <button
+          type="button"
+          onClick={() => onOpenPost(post)}
+          className="block w-full truncate text-left text-[13px] font-semibold text-white transition hover:text-[rgb(var(--primary-light))]"
+        >
+          {post.title}
+        </button>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+          <span>{formatProfileDate(post.created_at) ?? 'Published'}</span>
+          {ownProfile ? (
+            <>
+              <span className="h-1 w-1 rounded-full bg-zinc-700" />
+              <span>{post.visibility === 'public' ? 'Public' : 'Private'}</span>
+            </>
+          ) : null}
+        </div>
+      </div>
+      <StatusPill tone="neutral">{post.like_count} likes</StatusPill>
+    </article>
+  )
 }
 
 function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (next: ViewMode) => void }) {
@@ -174,7 +247,7 @@ function ProfileEditorDialog({
               className="rounded-full px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))' }}
             >
-              {busy ? 'Saving…' : 'Save profile'}
+              {busy ? 'Saving...' : 'Save profile'}
             </button>
           </div>
         </div>
@@ -330,7 +403,7 @@ function ArtworkPickerDialog({
                 onClick={() => setDraftAssetId(asset.id)}
                 aria-label={`Preview ${asset.display_title ?? asset.title} as profile artwork`}
                 className={`group overflow-hidden rounded-[22px] border text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  selected ? 'border-[rgba(124,58,237,0.6)] ring-2 ring-[rgba(124,58,237,0.3)]' : 'border-white/[0.08] hover:border-white/[0.18]'
+                  selected ? 'border-[rgb(var(--primary-light))]/70 ring-2 ring-[rgb(var(--primary-light))]/25' : 'border-white/[0.08] hover:border-white/[0.18]'
                 }`}
               >
                 <div className="relative aspect-[4/5] overflow-hidden bg-white/[0.03]">
@@ -489,14 +562,265 @@ function GalleryGrid({
   )
 }
 
+function PublicProfilePreview({
+  payload,
+  featuredPreview,
+  featuredAsset,
+  galleryAssets,
+  onOpenArtwork,
+}: {
+  payload: ProfilePayload
+  featuredPreview: string | null
+  featuredAsset: MediaAsset | null
+  galleryAssets: MediaAsset[]
+  onOpenArtwork: () => void
+}) {
+  const displayInitial = (payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()
+
+  return (
+    <section className="overflow-hidden rounded-[24px] border border-[rgb(var(--primary-light))]/[0.12] bg-[#0c0d10]/88 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+      <div className="flex items-center justify-between gap-3 px-4 py-4">
+        <h2 className="text-[14px] font-semibold text-white">Public profile preview</h2>
+        <Link
+          to={`/u/${payload.profile.username}`}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-zinc-400 transition hover:bg-white/[0.07] hover:text-white"
+          title="Open public profile"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      <button
+        type="button"
+        onClick={onOpenArtwork}
+        disabled={!featuredPreview}
+        className="relative mx-4 block aspect-[2.1] w-[calc(100%-2rem)] overflow-visible rounded-[18px] bg-white/[0.035] ring-1 ring-white/[0.08] disabled:cursor-default"
+      >
+        {featuredPreview ? (
+          <img
+            src={featuredPreview}
+            alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name}
+            className="h-full w-full rounded-[18px] object-cover"
+            style={{ objectPosition: artworkObjectPosition(payload.profile.featured_asset_position) }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center rounded-[18px] text-zinc-600">
+            <ImagePlus className="h-7 w-7" />
+          </div>
+        )}
+        <div className="absolute inset-0 rounded-[18px] bg-gradient-to-t from-black/78 via-black/18 to-transparent" />
+        <div className="absolute -bottom-7 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border border-[rgb(var(--primary-light))]/60 bg-[#141006] text-2xl font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+          {payload.profile.avatar_url ? <img src={payload.profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayInitial}
+        </div>
+      </button>
+
+      <div className="px-5 pb-5 pt-10 text-center">
+        <div className="text-lg font-semibold tracking-[-0.03em] text-white">
+          {payload.profile.display_name}
+        </div>
+        <div className="mt-1 text-[13px] text-zinc-400">@{payload.profile.username}</div>
+        {payload.profile.bio ? (
+          <p className="mx-auto mt-3 max-w-[18rem] text-[13px] leading-6 text-zinc-400">
+            {payload.profile.bio}
+          </p>
+        ) : (
+          <p className="mx-auto mt-3 max-w-[18rem] text-[13px] leading-6 text-zinc-500">
+            Public profile copy appears here after you add a bio.
+          </p>
+        )}
+
+        {galleryAssets.length ? (
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {galleryAssets.slice(0, 4).map((asset) => {
+              const preview = assetPreviewSource(asset)
+              return (
+                <div key={asset.id} className="overflow-hidden rounded-[12px] bg-white/[0.04] ring-1 ring-white/[0.08]">
+                  {preview ? <img src={preview} alt={asset.display_title ?? asset.title} className="aspect-square w-full object-cover" /> : <div className="aspect-square" />}
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function AccountSideRail({
+  payload,
+  usage,
+  usageLabel,
+  featuredPreview,
+  featuredAsset,
+  galleryAssets,
+  visibilityBusy,
+  exportBusy,
+  exportState,
+  onOpenArtwork,
+  onVisibilityChange,
+  onExportProfile,
+}: {
+  payload: ProfilePayload
+  usage: ProfilePayload['profile']['usage_summary']
+  usageLabel: string | null
+  featuredPreview: string | null
+  featuredAsset: MediaAsset | null
+  galleryAssets: MediaAsset[]
+  visibilityBusy: boolean
+  exportBusy: boolean
+  exportState: string | null
+  onOpenArtwork: () => void
+  onVisibilityChange: (visibility: 'public' | 'private') => void
+  onExportProfile: () => void
+}) {
+  const activeDefaultVisibility = payload.profile.default_visibility ?? 'private'
+  const planLabel = usage?.plan_label ?? payload.profile.plan.toUpperCase()
+
+  return (
+    <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+      <PublicProfilePreview
+        payload={payload}
+        featuredPreview={featuredPreview}
+        featuredAsset={featuredAsset}
+        galleryAssets={galleryAssets}
+        onOpenArtwork={onOpenArtwork}
+      />
+
+      {payload.own_profile ? (
+        <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-[14px] font-semibold text-white">Profile visibility</h2>
+              <p className="mt-1 text-[12px] leading-5 text-zinc-500">
+                New published work follows this default.
+              </p>
+            </div>
+            <div className="flex rounded-full border border-white/[0.08] bg-black/35 p-1">
+              <button
+                type="button"
+                disabled={visibilityBusy}
+                onClick={() => onVisibilityChange('public')}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  activeDefaultVisibility === 'public'
+                    ? 'bg-[rgb(var(--primary-light))] text-black'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Globe2 className="h-3 w-3" />
+                Public
+              </button>
+              <button
+                type="button"
+                disabled={visibilityBusy}
+                onClick={() => onVisibilityChange('private')}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  activeDefaultVisibility === 'private'
+                    ? 'bg-white text-black'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Lock className="h-3 w-3" />
+                Private
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[14px] font-semibold text-white">Plan & billing</h2>
+          <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>
+            {planLabel}
+          </StatusPill>
+        </div>
+        {usage ? (
+          <div className="mt-4">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-[12px] text-zinc-500">Credits balance</div>
+                <div className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-white">
+                  {usage.credits_remaining.toLocaleString()}
+                </div>
+              </div>
+              <Link
+                to="/billing"
+                className="inline-flex items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Manage plan
+              </Link>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+              <div
+                className="h-full rounded-full bg-[rgb(var(--primary-light))]"
+                style={{ width: `${Math.max(4, 100 - usage.progress_percent)}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500">
+              <span>{usage.allowance.toLocaleString()} included</span>
+              {usageLabel ? <span>Resets {usageLabel}</span> : null}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-[13px] leading-6 text-zinc-500">
+            Billing details are private to this account.
+          </p>
+        )}
+      </section>
+
+      {payload.own_profile ? (
+        <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+          <h2 className="text-[14px] font-semibold text-white">Account</h2>
+          <div className="mt-3 divide-y divide-white/[0.06]">
+            <button
+              type="button"
+              onClick={onExportProfile}
+              disabled={exportBusy}
+              className="flex w-full items-center justify-between gap-3 py-3 text-left transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex min-w-0 items-start gap-3">
+                <Download className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                <span>
+                  <span className="block text-[13px] font-semibold text-zinc-100">Export my data</span>
+                  <span className="mt-1 block text-[12px] text-zinc-500">
+                    {exportState ?? 'Download your profile archive.'}
+                  </span>
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
+            </button>
+            <a
+              href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
+              className="flex items-center justify-between gap-3 py-3 text-left transition hover:text-white"
+            >
+              <span className="flex min-w-0 items-start gap-3">
+                <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
+                <span>
+                  <span className="block text-[13px] font-semibold text-red-200">Delete account</span>
+                  <span className="mt-1 block text-[12px] text-zinc-500">
+                    Request deletion with billing and exports handled cleanly.
+                  </span>
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
+            </a>
+          </div>
+        </section>
+      ) : null}
+    </aside>
+  )
+}
+
 export default function AccountPage() {
-  usePageMeta('Profile', 'Your Omnia Creata Studio profile and public creations.')
+  usePageMeta('Account', 'Your Omnia Creata Studio profile, plan, and public creations.')
   const { username } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const { openLightbox } = useLightbox()
   const [view, setView] = useState<ViewMode>('grid')
   const [profileEditorOpen, setProfileEditorOpen] = useState(false)
   const [artworkPickerOpen, setArtworkPickerOpen] = useState(false)
+  const [exportState, setExportState] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const ownAccount = !username
@@ -546,6 +870,10 @@ export default function AccountPage() {
     },
   })
 
+  const exportProfileMutation = useMutation({
+    mutationFn: () => studioApi.exportProfile(),
+  })
+
   const profileQuery = useQuery({
     queryKey: ['profile', username ?? 'me'],
     queryFn: () => (username ? studioApi.getProfile(username) : studioApi.getMyProfile()),
@@ -565,6 +893,16 @@ export default function AccountPage() {
   const featuredPreview = assetPreviewSource(featuredAsset)
   const activeDefaultVisibility = payload?.profile.default_visibility ?? null
 
+  const openFeaturedArtwork = () => {
+    if (!featuredPreview || !featuredAsset || !payload) return
+    openLightbox(featuredPreview, featuredAsset.display_title ?? featuredAsset.title, {
+      title: featuredAsset.display_title ?? featuredAsset.title,
+      prompt: featuredAsset.prompt,
+      authorName: payload.profile.display_name,
+      authorUsername: payload.profile.username,
+    })
+  }
+
   const openPostPreview = (post: PublicPost) => {
     const previewAsset = postPrimaryAsset(post)
     const preview = assetPreviewSource(previewAsset)
@@ -578,12 +916,39 @@ export default function AccountPage() {
     })
   }
 
+  const handleVisibilityChange = async (visibility: 'public' | 'private') => {
+    if (!payload?.own_profile) return
+    if (payload.profile.default_visibility === visibility) return
+    await updateProfileMutation.mutateAsync({ default_visibility: visibility })
+  }
+
+  const handleExportProfile = async () => {
+    try {
+      setExportState(null)
+      const data = await exportProfileMutation.mutateAsync()
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `omnia-creata-export-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      setExportState('Export downloaded.')
+    } catch {
+      setExportState('Export failed. Try again from Settings.')
+    }
+  }
+
   if (ownAccount && isLoading && !payload) {
-    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile…</div>
+    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile...</div>
   }
 
   if (profileQuery.isLoading && !payload) {
-    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile…</div>
+    return <div className="flex items-center gap-3 px-6 py-10 text-sm text-zinc-500"><div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />Loading your profile...</div>
   }
 
   if (!payload) {
@@ -591,8 +956,8 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col pb-10">
-      <div className="relative isolate min-h-[220px] overflow-hidden border-b border-white/[0.05]">
+    <div className="flex min-h-full flex-col pb-28 md:pb-8">
+      <div className="relative isolate min-h-[300px] overflow-hidden border-b border-[rgb(var(--primary-light))]/[0.08]">
         {featuredPreview ? (
           <>
             <img
@@ -604,11 +969,19 @@ export default function AccountPage() {
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,8,12,0.18),rgba(6,8,12,0.48)_28%,rgba(6,8,12,0.88)_78%,#090a0d)]" />
           </>
         ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(110,74,255,0.22),transparent_42%),linear-gradient(135deg,#11172a,#090a0d_72%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(241,191,103,0.18),transparent_42%),linear-gradient(135deg,#171109,#090806_72%)]" />
         )}
-        <div className="absolute inset-0 opacity-[0.1] mix-blend-screen [background-image:radial-gradient(circle_at_top,rgba(255,255,255,0.22)_0,transparent_55%)]" />
+        <div className="absolute inset-0 opacity-[0.14] mix-blend-screen [background-image:radial-gradient(circle_at_top,rgba(241,191,103,0.22)_0,transparent_55%)]" />
 
-        <div className="relative mx-auto flex h-full min-h-[220px] w-full max-w-[1180px] flex-col px-4 pb-6 pt-5 md:px-8">
+        <div className="relative mx-auto flex h-full min-h-[300px] w-full max-w-[1480px] flex-col px-4 pb-6 pt-5 md:px-5 xl:px-6">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
+              Account
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+              Your creative home for profile, plan, and public presence.
+            </p>
+          </div>
           <div className="mt-auto flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
               <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-400">
@@ -638,7 +1011,7 @@ export default function AccountPage() {
                 <button
                   type="button"
                   onClick={() => setProfileEditorOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-black/30 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/[0.08]"
+                  className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/[0.22] bg-black/35 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-[rgb(var(--primary-light))]/[0.1]"
                 >
                   <PenSquare className="h-4 w-4" />
                   Edit profile
@@ -647,7 +1020,7 @@ export default function AccountPage() {
                   type="button"
                   onClick={() => setArtworkPickerOpen(true)}
                   disabled={!galleryAssets.length}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-black/30 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/[0.22] bg-black/35 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-[rgb(var(--primary-light))]/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <ImagePlus className="h-4 w-4" />
                   {featuredPreview ? 'Change artwork' : 'Choose artwork'}
@@ -658,8 +1031,8 @@ export default function AccountPage() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1180px] px-4 pt-6 md:px-8">
-        <section className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="mx-auto w-full max-w-[1480px] px-4 pt-5 md:px-5 xl:px-6">
+        <section className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_370px]">
           <aside className="xl:sticky xl:top-5 xl:self-start">
             <Surface tone="raised" className="space-y-5">
               <div className="flex items-start justify-between gap-4">
@@ -673,12 +1046,7 @@ export default function AccountPage() {
                   {featuredPreview ? (
                     <button
                       type="button"
-                      onClick={() => featuredAsset && openLightbox(featuredPreview, featuredAsset.display_title ?? featuredAsset.title, {
-                        title: featuredAsset.display_title ?? featuredAsset.title,
-                        prompt: featuredAsset.prompt,
-                        authorName: payload.profile.display_name,
-                        authorUsername: payload.profile.username,
-                      })}
+                      onClick={openFeaturedArtwork}
                       className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] transition hover:border-white/[0.18]"
                       title="Open profile artwork"
                     >
@@ -765,7 +1133,46 @@ export default function AccountPage() {
             </div>
 
             <GalleryGrid posts={payload.posts} ownProfile={payload.own_profile} view={view} onOpenPost={openPostPreview} />
+            {payload.posts.length ? (
+              <section className="border-t border-white/[0.06] pt-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-[15px] font-semibold text-white">Recent activity</h2>
+                  <span className="text-[12px] text-zinc-500">
+                    {payload.posts.length} published item{payload.posts.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  {payload.posts.slice(0, 5).map((post) => (
+                    <ActivityRow
+                      key={post.id}
+                      post={post}
+                      ownProfile={payload.own_profile}
+                      onOpenPost={openPostPreview}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </Surface>
+
+          <AccountSideRail
+            payload={payload}
+            usage={usage ?? null}
+            usageLabel={usageLabel}
+            featuredPreview={featuredPreview}
+            featuredAsset={featuredAsset}
+            galleryAssets={galleryAssets}
+            visibilityBusy={updateProfileMutation.isPending}
+            exportBusy={exportProfileMutation.isPending}
+            exportState={exportState}
+            onOpenArtwork={openFeaturedArtwork}
+            onVisibilityChange={(visibility) => {
+              void handleVisibilityChange(visibility)
+            }}
+            onExportProfile={() => {
+              void handleExportProfile()
+            }}
+          />
         </section>
       </div>
 

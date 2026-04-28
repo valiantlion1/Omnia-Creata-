@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Depends, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import asyncio
 import jwt
 import hashlib
 import logging
@@ -346,6 +347,8 @@ class JWTManager:
 # Global JWT manager instance
 _jwt_manager: Optional[JWTManager] = None
 _supabase_auth_client: Optional[SupabaseAuthClient] = None
+_supabase_user_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_supabase_user_cache_locks: Dict[str, asyncio.Lock] = {}
 
 
 def _build_supabase_auth_client_from_settings() -> Optional[SupabaseAuthClient]:
@@ -386,6 +389,7 @@ def setup_auth(config: Optional[AuthConfig] = None) -> JWTManager:
     
     _jwt_manager = JWTManager(config)
     _supabase_auth_client = _build_supabase_auth_client_from_settings()
+    _clear_supabase_user_cache()
     logger.info("Authentication system initialized")
     
     return _jwt_manager
@@ -512,6 +516,65 @@ def _token_fingerprint(token: str | None) -> str | None:
     return hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:16]
 
 
+def _clear_supabase_user_cache() -> None:
+    _supabase_user_cache.clear()
+    _supabase_user_cache_locks.clear()
+
+
+def _supabase_user_cache_key(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def _supabase_user_cache_expiry(token: str, ttl_seconds: float) -> float:
+    now = time.time()
+    expiry = now + max(0.0, ttl_seconds)
+    session_context = extract_unverified_session_context(token)
+    token_expires_at = session_context.get("session_expires_at")
+    if isinstance(token_expires_at, (int, float)) and token_expires_at > 0:
+        expiry = min(expiry, float(token_expires_at))
+    return expiry
+
+
+def _prune_supabase_user_cache(now: float) -> None:
+    stale_keys = [
+        key for key, (expires_at, _) in _supabase_user_cache.items()
+        if expires_at <= now
+    ]
+    for key in stale_keys:
+        _supabase_user_cache.pop(key, None)
+        _supabase_user_cache_locks.pop(key, None)
+
+
+async def _get_supabase_user_payload(
+    supabase_client: SupabaseAuthClient,
+    token: str,
+) -> dict[str, Any]:
+    settings = get_settings()
+    ttl_seconds = max(0.0, float(getattr(settings, "supabase_auth_user_cache_ttl_seconds", 0.0) or 0.0))
+    if ttl_seconds <= 0:
+        return await supabase_client.get_user(token)
+
+    now = time.time()
+    _prune_supabase_user_cache(now)
+    cache_key = _supabase_user_cache_key(token)
+    cached = _supabase_user_cache.get(cache_key)
+    if cached and cached[0] > now:
+        return dict(cached[1])
+
+    lock = _supabase_user_cache_locks.setdefault(cache_key, asyncio.Lock())
+    async with lock:
+        now = time.time()
+        cached = _supabase_user_cache.get(cache_key)
+        if cached and cached[0] > now:
+            return dict(cached[1])
+
+        payload = await supabase_client.get_user(token)
+        expires_at = _supabase_user_cache_expiry(token, ttl_seconds)
+        if expires_at > time.time():
+            _supabase_user_cache[cache_key] = (expires_at, dict(payload))
+        return dict(payload)
+
+
 def _get_studio_service_from_request(request: Request):
     app = request.scope.get("app")
     state = getattr(app, "state", None)
@@ -577,7 +640,7 @@ async def get_current_user(
             logger.warning("auth_token_rejected_without_supabase_fallback", extra={"path": str(request.url.path)})
             return None
         try:
-            payload = await supabase_client.get_user(token)
+            payload = await _get_supabase_user_payload(supabase_client, token)
             settings = get_settings()
             user_metadata = payload.get("user_metadata") or {}
             app_metadata = payload.get("app_metadata") or {}

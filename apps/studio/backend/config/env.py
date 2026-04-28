@@ -278,6 +278,7 @@ class Settings(BaseSettings):
     captcha_verification_enabled: bool = False
     turnstile_site_key: Optional[str] = None
     turnstile_secret_key: Optional[SecretStr] = None
+    supabase_auth_user_cache_ttl_seconds: float = 15.0
     enable_api_docs: Optional[bool] = None
     enable_metrics_endpoint: bool = True
     enable_demo_auth: Optional[bool] = None
@@ -293,6 +294,7 @@ class Settings(BaseSettings):
     paddle_webhook_secret: Optional[SecretStr] = None
     paddle_checkout_base_url: Optional[str] = None
     paddle_environment: str = "sandbox"
+    paddle_webhook_max_body_bytes: int = 256 * 1024
 
     # Legacy LemonSqueezy Configuration (deprecated; preserved for migration reads only)
     lemonsqueezy_api_key: Optional[SecretStr] = None

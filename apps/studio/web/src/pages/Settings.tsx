@@ -44,7 +44,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
       aria-checked={checked}
       onClick={onChange}
       className={`relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none ${
-        checked ? 'bg-[rgb(var(--primary-light))] shadow-[0_0_16px_rgb(var(--primary)/0.6)]' : 'bg-white/10 hover:bg-white/[0.15]'
+        checked ? 'bg-[rgb(var(--primary-light))] shadow-[0_0_16px_rgba(241,191,103,0.38)]' : 'bg-white/10 hover:bg-white/[0.15]'
       }`}
     >
       <span className="sr-only">Toggle</span>
@@ -62,7 +62,7 @@ function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?
     <div className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 p-5 transition-all duration-500 hover:bg-white/[0.02]`}>
       <div className="flex items-start sm:items-center gap-4">
         {Icon && (
-          <div className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[14px] transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${danger ? 'bg-red-500/10 text-red-400 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-white/[0.03] text-zinc-400 group-hover:bg-white/[0.06] group-hover:text-white group-hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]'}`}>
+          <div className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[14px] transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${danger ? 'bg-red-500/10 text-red-400 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-[rgb(var(--primary-light))]/[0.06] text-[rgb(var(--primary-light))]/80 group-hover:bg-[rgb(var(--primary-light))]/[0.1] group-hover:text-[rgb(var(--primary-light))] group-hover:shadow-[0_0_20px_rgba(241,191,103,0.12)]'}`}>
             <Icon className="h-5 w-5 relative z-10" />
             <div className={`absolute inset-0 rounded-[14px] opacity-0 transition-opacity duration-500 group-hover:opacity-100 ${danger ? 'ring-1 ring-red-500/30' : 'ring-1 ring-white/10'}`} />
           </div>
@@ -79,7 +79,7 @@ function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?
 
 function SettingsCard({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   return (
-    <div className={`relative overflow-hidden rounded-[22px] ring-1 ring-white/[0.055] bg-white/[0.025] backdrop-blur-2xl shadow-[0_20px_60px_-24px_rgba(0,0,0,0.75)] before:absolute before:inset-0 before:rounded-[22px] before:shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] before:pointer-events-none ${compact ? '' : 'divide-y divide-white/[0.045]'}`}>
+    <div className={`relative overflow-hidden rounded-[22px] ring-1 ring-[rgb(var(--primary-light))]/[0.07] bg-black/[0.18] backdrop-blur-2xl shadow-[0_20px_60px_-24px_rgba(0,0,0,0.75)] before:absolute before:inset-0 before:rounded-[22px] before:shadow-[inset_0_1px_0_rgba(241,191,103,0.045)] before:pointer-events-none ${compact ? '' : 'divide-y divide-white/[0.045]'}`}>
       <div className="relative z-10 w-full h-full">
         {children}
       </div>
@@ -923,17 +923,21 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppPage className="flex flex-col items-center py-10 px-4 md:px-8">
+    <AppPage className="max-w-[1480px] py-5 md:py-6">
       {/* Header */}
-      <header className="w-full max-w-[1080px] mb-8">
-        <h1 className="text-[2rem] font-bold tracking-tight text-white drop-shadow-sm">Settings</h1>
+      <header className="w-full rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.82),rgba(9,8,7,0.95))] px-5 py-5 shadow-[0_24px_72px_rgba(0,0,0,0.32)] md:px-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[rgb(var(--primary-light))]/70">Workspace controls</div>
+        <h1 className="mt-2 text-[2rem] font-bold tracking-tight text-white drop-shadow-sm">Settings</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+          Account, appearance, security, and owner tools share one backend-backed control surface.
+        </p>
       </header>
 
       {/* Main Layout Grid */}
-      <div className="flex flex-col gap-10 md:flex-row md:items-start md:gap-12 w-full max-w-[1080px]">
+      <div className="flex w-full flex-col gap-5 md:flex-row md:items-start">
         
         {/* Sidebar Navigation */}
-        <aside className="scrollbar-hide flex w-full shrink-0 snap-x snap-mandatory flex-row gap-2 overflow-x-auto pb-4 md:w-56 md:flex-col md:overflow-visible md:pb-0">
+        <aside className="scrollbar-hide flex w-full shrink-0 snap-x snap-mandatory flex-row gap-2 overflow-x-auto rounded-[24px] border border-white/[0.06] bg-black/20 p-2 md:sticky md:top-5 md:w-60 md:flex-col md:overflow-visible">
           {settingsTabs.map((tab) => {
             const isActive = activeTab === tab.id
             return (
@@ -942,7 +946,7 @@ export default function SettingsPage() {
                   onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`group relative flex shrink-0 snap-start items-center gap-3 whitespace-nowrap rounded-[16px] px-4 py-3 text-[13px] font-bold tracking-wide transition-all duration-400 md:px-5 md:py-3.5 md:text-[14px] md:whitespace-normal ${
                     isActive 
-                      ? 'bg-gradient-to-r from-[rgb(var(--primary-light)/0.1)] to-transparent text-white' 
+                      ? 'bg-[rgb(var(--primary-light))]/[0.1] text-white ring-1 ring-[rgb(var(--primary-light))]/[0.14]'
                       : 'text-zinc-500 hover:bg-white/[0.02] hover:text-zinc-300'
                   }`}
                 >
@@ -971,9 +975,9 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
               
               {/* Hero Account Card */}
-              <div className="group relative overflow-hidden rounded-[28px] bg-[#0c0d12] ring-1 ring-white/[0.08] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] p-8 md:p-10 isolation-auto">
-                <div className="absolute inset-0 opacity-[0.25] mix-blend-screen bg-gradient-to-br from-[rgb(var(--primary))/0.5] via-transparent to-[rgb(var(--accent))/0.5] transition-opacity duration-1000 group-hover:opacity-[0.35]" />
-                <div className="absolute -top-[50%] -right-[20%] w-[100%] h-[150%] bg-[radial-gradient(ellipse_at_center,rgba(var(--primary-light),0.15)_0%,transparent_50%)] animate-pulse-slow pointer-events-none" />
+              <div className="group relative overflow-hidden rounded-[28px] bg-[#0d0b08] ring-1 ring-[rgb(var(--primary-light))]/[0.12] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] p-6 md:p-8 isolation-auto">
+                <div className="absolute inset-0 opacity-[0.2] mix-blend-screen bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.5] via-transparent to-[rgb(var(--primary))]/[0.3] transition-opacity duration-1000 group-hover:opacity-[0.28]" />
+                <div className="absolute -top-[50%] -right-[20%] w-[100%] h-[150%] bg-[radial-gradient(ellipse_at_center,rgba(241,191,103,0.12)_0%,transparent_50%)] animate-pulse-slow pointer-events-none" />
                 <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-[rgb(var(--primary-light)/0.5)] to-transparent opacity-50" />
                 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">

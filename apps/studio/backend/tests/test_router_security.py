@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 import hashlib
 import hmac
 import json
@@ -1083,6 +1084,59 @@ async def test_get_current_user_logs_token_fingerprint_without_bearer_preview(
     assert "token_preview" not in extra
     assert extra["token_fingerprint"] == hashlib.sha256(secret_token.encode("utf-8")).hexdigest()[:16]
     assert secret_token not in repr(extra)
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_collapses_parallel_supabase_user_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_auth()
+    settings = get_settings()
+    original_ttl = settings.supabase_auth_user_cache_ttl_seconds
+    settings.supabase_auth_user_cache_ttl_seconds = 30.0
+    calls = 0
+
+    class _SlowSupabaseClient:
+        async def get_user(self, access_token: str) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0.01)
+            return {
+                "id": "supabase-user-1",
+                "email": "supabase-user@example.com",
+                "email_confirmed_at": "2026-04-27T08:00:00+00:00",
+                "user_metadata": {"display_name": "Supabase User"},
+                "app_metadata": {},
+            }
+
+    monkeypatch.setattr(auth_module, "get_supabase_auth_client", lambda: _SlowSupabaseClient())
+    token = "supabase-access-token"
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    async def resolve_user() -> User | None:
+        request = StarletteRequest(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/auth/me",
+                "headers": [],
+                "query_string": b"",
+                "client": ("127.0.0.1", 12345),
+                "server": ("testserver", 80),
+                "scheme": "http",
+            }
+        )
+        return await get_current_user(request, credentials)
+
+    try:
+        users = await asyncio.gather(*(resolve_user() for _ in range(5)))
+    finally:
+        settings.supabase_auth_user_cache_ttl_seconds = original_ttl
+        auth_module._clear_supabase_user_cache()
+
+    assert calls == 1
+    assert all(user is not None for user in users)
+    assert {user.id for user in users if user is not None} == {"supabase-user-1"}
 
 
 def test_create_user_tokens_share_one_session_family_across_access_and_refresh_tokens() -> None:
@@ -2711,6 +2765,89 @@ async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
 
         assert response.status_code == 200
         assert received_payloads == [payload]
+    finally:
+        settings.paddle_webhook_secret = original_secret
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_rejects_oversized_payload_before_processing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_secret = settings.paddle_webhook_secret
+    original_limit = settings.paddle_webhook_max_body_bytes
+    settings.paddle_webhook_secret = SecretStr("whsec_test")
+    settings.paddle_webhook_max_body_bytes = 24
+    process_called = False
+
+    async def fake_process_paddle_webhook(payload: dict) -> None:
+        nonlocal process_called
+        process_called = True
+
+    monkeypatch.setattr(service, "process_paddle_webhook", fake_process_paddle_webhook)
+    payload_bytes = json.dumps({"event_id": "evt_1", "event_type": "transaction.completed"}).encode("utf-8")
+    timestamp = "1713139200"
+    signature = hmac.new(b"whsec_test", timestamp.encode("utf-8") + b":" + payload_bytes, hashlib.sha256).hexdigest()
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/webhooks/paddle",
+                content=payload_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "Paddle-Signature": f"ts={timestamp};h1={signature}",
+                },
+            )
+
+        assert response.status_code == 413
+        assert response.text == "Webhook payload too large"
+        assert process_called is False
+    finally:
+        settings.paddle_webhook_secret = original_secret
+        settings.paddle_webhook_max_body_bytes = original_limit
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_maps_processing_validation_errors_to_bad_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_secret = settings.paddle_webhook_secret
+    settings.paddle_webhook_secret = SecretStr("whsec_test")
+
+    async def fake_process_paddle_webhook(payload: dict) -> None:
+        raise ValueError("Paddle webhook is missing identity_id custom_data.")
+
+    monkeypatch.setattr(service, "process_paddle_webhook", fake_process_paddle_webhook)
+    payload = {"event_id": "evt_1", "event_type": "transaction.completed", "data": {"id": "txn-1"}}
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    timestamp = "1713139200"
+    signature = hmac.new(b"whsec_test", timestamp.encode("utf-8") + b":" + payload_bytes, hashlib.sha256).hexdigest()
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/webhooks/paddle",
+                content=payload_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "Paddle-Signature": f"ts={timestamp};h1={signature}",
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.text == "Paddle webhook is missing identity_id custom_data."
     finally:
         settings.paddle_webhook_secret = original_secret
         await service.shutdown()

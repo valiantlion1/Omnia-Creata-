@@ -91,7 +91,7 @@ export default async function ContactPage({
 
   return (
     <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1180px]">
+      <div className="mx-auto max-w-[1340px]">
         <div className="max-w-[860px] space-y-5">
           <p className="site-kicker">Contact</p>
           <h1 className="site-title max-w-[8ch]">Talk to us.</h1>

@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft,
   ChevronRight,
+  Copy,
+  Download,
   Folder,
   Grid2X2,
   Heart,
@@ -13,6 +15,7 @@ import {
   List,
   Lock,
   MoreHorizontal,
+  Share2,
   RotateCcw,
   Search,
   Sparkles,
@@ -110,7 +113,7 @@ const imageFilters: Array<{ id: ImageFilter; label: string }> = [
 ]
 
 const collectionFilters: Array<{ id: CollectionFilter; label: string }> = [
-  { id: 'all', label: 'All' },
+  { id: 'all', label: 'All projects' },
   { id: 'with-work', label: 'With work' },
   { id: 'empty', label: 'Empty' },
 ]
@@ -1205,6 +1208,415 @@ function BrowseBadgeRow({
   )
 }
 
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-4 border-b border-white/[0.05] py-3 last:border-b-0">
+      <div className="text-[12px] text-zinc-500">{label}</div>
+      <div className="min-w-0 text-[12.5px] font-medium text-zinc-200">{value}</div>
+    </div>
+  )
+}
+
+function LibraryImageDetails({
+  group,
+  onOpen,
+  onCopyPrompt,
+  onReusePrompt,
+  onCreateVariations,
+  onEditInChat,
+  onMoveToProject,
+  onTrash,
+  onShare,
+}: {
+  group: AssetGroup | null
+  onOpen: (group: AssetGroup, index?: number) => void
+  onCopyPrompt: (group: AssetGroup) => void
+  onReusePrompt: (group: AssetGroup) => void
+  onCreateVariations: (group: AssetGroup) => void
+  onEditInChat: (group: AssetGroup) => void
+  onMoveToProject: (group: AssetGroup) => void
+  onTrash: (group: AssetGroup) => void
+  onShare: (group: AssetGroup) => void
+}) {
+  const leadAsset = group?.items[0] ?? null
+  const leadUrl = leadAsset ? assetPreviewUrl(leadAsset) : null
+  const leadMetadata = (leadAsset?.metadata ?? {}) as Record<string, unknown>
+  const aspectRatio = metadataString(leadMetadata, 'aspect_ratio') ?? metadataString(leadMetadata, 'aspectRatio')
+  const resolution =
+    typeof leadMetadata.width === 'number' && typeof leadMetadata.height === 'number'
+      ? `${leadMetadata.width} x ${leadMetadata.height}`
+      : metadataString(leadMetadata, 'resolution') ?? 'Saved output'
+  const seed =
+    typeof leadMetadata.seed === 'number'
+      ? String(leadMetadata.seed)
+      : metadataString(leadMetadata, 'seed') ?? 'Not stored'
+
+  return (
+    <aside className="hidden xl:block">
+      <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] min-h-[620px] flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--primary-light))]/[0.12] bg-[linear-gradient(180deg,rgba(11,12,13,0.94),rgba(7,8,9,0.98))] shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <h2 className="text-[15px] font-semibold text-white">Details</h2>
+          <StatusPill tone={group ? 'brand' : 'neutral'}>
+            {group ? `${group.items.length} image${group.items.length === 1 ? '' : 's'}` : 'No selection'}
+          </StatusPill>
+        </div>
+
+        {group && leadAsset ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+            <button
+              type="button"
+              onClick={() => onOpen(group, 0)}
+              className="group relative overflow-hidden rounded-[22px] bg-[#0b0c0d] ring-1 ring-[rgb(var(--primary-light))]/[0.14] transition hover:ring-[rgb(var(--primary-light))]/[0.28]"
+            >
+              <ProtectedAssetImage
+                sources={assetPreviewSources(leadAsset)}
+                alt={assetDisplayTitle(leadAsset)}
+                className="aspect-[1.18] w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+                fallbackClassName="flex aspect-[1.18] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-80" />
+              <div className="absolute bottom-3 left-3 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.1]">
+                Open preview
+              </div>
+            </button>
+
+            {group.items.length > 1 ? (
+              <div className="mt-3 grid grid-cols-5 gap-2">
+                {group.items.slice(0, 5).map((asset, index) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    onClick={() => onOpen(group, index)}
+                    className="overflow-hidden rounded-[12px] bg-[#0b0c0d] ring-1 ring-white/[0.08] transition hover:ring-[rgb(var(--primary-light))]/[0.28]"
+                    title={`Open variation ${index + 1}`}
+                  >
+                    <ProtectedAssetImage
+                      sources={assetPreviewSources(asset)}
+                      alt={assetDisplayTitle(asset)}
+                      className="aspect-square w-full object-cover"
+                      fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-5">
+              <h3 className="line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-white">
+                {group.title}
+              </h3>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-zinc-500">
+                <span>{group.projectTitle}</span>
+                <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                <span>{formatCardTimestamp(group.createdAt)}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onReusePrompt(group)}
+                className="rounded-[14px] bg-[rgb(var(--primary-light))] px-3 py-2.5 text-[12px] font-semibold text-black transition hover:bg-[rgb(var(--accent-light))]"
+              >
+                Open in Create
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditInChat(group)}
+                className="rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                Edit in Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => onCreateVariations(group)}
+                className="rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                Variations
+              </button>
+              {leadUrl ? (
+                <a
+                  href={leadUrl}
+                  download
+                  className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-[12px] font-semibold text-zinc-600"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </button>
+              )}
+            </div>
+
+            <section className="mt-5 border-t border-white/[0.06] pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-[13px] font-semibold text-white">Prompt</h4>
+                <button
+                  type="button"
+                  onClick={() => onCopyPrompt(group)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition hover:bg-white/[0.07] hover:text-white"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </button>
+              </div>
+              <p className="mt-3 line-clamp-5 text-[13px] leading-6 text-zinc-400">
+                {group.prompt}
+              </p>
+            </section>
+
+            <section className="mt-5 border-t border-white/[0.06] pt-5">
+              <DetailRow label="Model" value={group.modelLabel} />
+              <DetailRow label="Aspect" value={aspectRatio ?? 'Original'} />
+              <DetailRow label="Resolution" value={resolution} />
+              <DetailRow label="Seed" value={seed} />
+              <DetailRow label="Project" value={group.projectTitle} />
+            </section>
+
+            <section className="mt-5 border-t border-white/[0.06] pt-5">
+              <div className="mb-3 text-[13px] font-semibold text-white">Tags</div>
+              <div className="flex flex-wrap gap-2">
+                {buildBrowseBadges(group, 8).map((tag) => (
+                  <span key={tag} className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-zinc-300">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </section>
+
+            <div className="mt-auto border-t border-white/[0.06] pt-5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onMoveToProject(group)}
+                  className="rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  Move to project
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onShare(group)}
+                  className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  Share
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => onTrash(group)}
+                className="mt-2 w-full rounded-[14px] border border-red-400/20 bg-red-500/10 px-3 py-2.5 text-[12px] font-semibold text-red-200 transition hover:bg-red-500/15"
+              >
+                Move to Removed
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/[0.04] text-zinc-500 ring-1 ring-white/[0.08]">
+              <ImageIcon className="h-6 w-6" />
+            </div>
+            <h3 className="mt-5 text-lg font-semibold text-white">No image selected</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">
+              Finished images will show prompt, model, project, and reuse actions here.
+            </p>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+function ProjectDetailsRail({
+  project,
+  assets,
+  setCount,
+  onOpenProject,
+  onCreateHere,
+  onEditDetails,
+  onExport,
+  onDeleteEmpty,
+  exportPending,
+  busy,
+}: {
+  project: Project | null
+  assets: MediaAsset[]
+  setCount: number
+  onOpenProject: (project: Project) => void
+  onCreateHere: (project: Project) => void
+  onEditDetails: (project: Project) => void
+  onExport: (project: Project) => void
+  onDeleteEmpty: (project: Project) => void
+  exportPending: boolean
+  busy: boolean
+}) {
+  const previewAssets = assets.slice(0, 4)
+  const cover = previewAssets[0] ?? null
+  const description = project ? cleanedProjectDescription(project) : null
+  const latestActivity = cover?.created_at ?? project?.updated_at ?? ''
+
+  return (
+    <aside className="hidden xl:block">
+      <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] min-h-[620px] flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--primary-light))]/[0.12] bg-[linear-gradient(180deg,rgba(11,12,13,0.94),rgba(7,8,9,0.98))] shadow-[0_24px_80px_rgba(0,0,0,0.42)]">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <h2 className="text-[15px] font-semibold text-white">Details</h2>
+          <StatusPill tone={project ? 'brand' : 'neutral'}>
+            {project ? `${assets.length} image${assets.length === 1 ? '' : 's'}` : 'No selection'}
+          </StatusPill>
+        </div>
+
+        {project ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+            <button
+              type="button"
+              onClick={() => onOpenProject(project)}
+              className="group relative overflow-hidden rounded-[22px] bg-[#0b0c0d] ring-1 ring-[rgb(var(--primary-light))]/[0.14] transition hover:ring-[rgb(var(--primary-light))]/[0.28]"
+            >
+              {cover ? (
+                <ProtectedAssetImage
+                  sources={assetPreviewSources(cover)}
+                  alt={project.title}
+                  className="aspect-[1.35] w-full object-cover transition duration-500 group-hover:scale-[1.025]"
+                  fallbackClassName="flex aspect-[1.35] w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                />
+              ) : (
+                <div className="flex aspect-[1.35] w-full flex-col items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_60%)] text-zinc-500">
+                  <Folder className="h-8 w-8" />
+                  <span className="mt-3 text-[12px] font-semibold text-zinc-400">
+                    Empty project
+                  </span>
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+              <div className="absolute bottom-3 left-3 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white/90 backdrop-blur-md ring-1 ring-white/[0.1]">
+                Open project
+              </div>
+            </button>
+
+            {previewAssets.length > 1 ? (
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {previewAssets.map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    onClick={() => onOpenProject(project)}
+                    className="overflow-hidden rounded-[12px] bg-[#0b0c0d] ring-1 ring-white/[0.08] transition hover:ring-[rgb(var(--primary-light))]/[0.28]"
+                    title={`Open ${assetDisplayTitle(asset)}`}
+                  >
+                    <ProtectedAssetImage
+                      sources={assetPreviewSources(asset)}
+                      alt={assetDisplayTitle(asset)}
+                      className="aspect-square w-full object-cover"
+                      fallbackClassName="flex aspect-square w-full items-center justify-center bg-white/[0.04] text-zinc-600"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-5">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                <span>{project.surface === 'chat' ? 'Chat project' : 'Create project'}</span>
+                {latestActivity ? (
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-zinc-700" />
+                    <span>Updated {formatRelativeDate(latestActivity)}</span>
+                  </>
+                ) : null}
+              </div>
+              <h3 className="mt-2 line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-white">
+                {project.title}
+              </h3>
+              {description ? (
+                <p className="mt-3 line-clamp-4 text-[13px] leading-6 text-zinc-400">
+                  {description}
+                </p>
+              ) : (
+                <p className="mt-3 text-[13px] leading-6 text-zinc-500">
+                  A focused space for the image sets saved into this project.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenProject(project)}
+                className="rounded-[14px] bg-[rgb(var(--primary-light))] px-3 py-2.5 text-[12px] font-semibold text-black transition hover:bg-[rgb(var(--accent-light))]"
+              >
+                Open project
+              </button>
+              <button
+                type="button"
+                onClick={() => onCreateHere(project)}
+                className="rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                Create here
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditDetails(project)}
+                disabled={busy}
+                className="rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Edit details
+              </button>
+              <button
+                type="button"
+                onClick={() => onExport(project)}
+                disabled={exportPending || assets.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/[0.1] bg-white/[0.04] px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+              </button>
+            </div>
+
+            <section className="mt-5 border-t border-white/[0.06] pt-5">
+              <DetailRow label="Image sets" value={`${setCount}`} />
+              <DetailRow label="Images" value={`${assets.length}`} />
+              <DetailRow
+                label="Surface"
+                value={project.surface === 'chat' ? 'Chat' : 'Create'}
+              />
+              <DetailRow label="Created" value={formatCardTimestamp(project.created_at)} />
+              <DetailRow label="Updated" value={formatCardTimestamp(project.updated_at)} />
+            </section>
+
+            <div className="mt-auto border-t border-white/[0.06] pt-5">
+              <button
+                type="button"
+                onClick={() => onDeleteEmpty(project)}
+                disabled={busy}
+                className="w-full rounded-[14px] border border-red-400/20 bg-red-500/10 px-3 py-2.5 text-[12px] font-semibold text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete empty project
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col justify-center px-5 py-8 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/[0.04] text-zinc-500 ring-1 ring-white/[0.08]">
+              <Folder className="h-6 w-6" />
+            </div>
+            <h3 className="mt-5 text-lg font-semibold text-white">No project selected</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">
+              Select a project to inspect images, status, and project actions.
+            </p>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 function LightboxMetaTile({
   label,
   value,
@@ -1259,12 +1671,12 @@ function FilterBar<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.04] bg-white/[0.02] p-1 backdrop-blur-md">
+    <div className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--primary-light))]/[0.08] bg-black/20 p-1 backdrop-blur-md">
       {options.map((option) => (
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`relative rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-all duration-300 ${value === option.id ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'}`}
+          className={`relative rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-all duration-300 ${value === option.id ? 'bg-[rgb(var(--primary-light))] text-black shadow-[0_0_20px_rgba(241,191,103,0.2)]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_0_15px_rgba(255,255,255,0.05)]'}`}
         >
           {option.label}
         </button>
@@ -1283,7 +1695,7 @@ function SortControl<T extends string>({
   onChange: (value: T) => void
 }) {
   return (
-    <label className="flex items-center gap-2 rounded-full border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-[12px] text-zinc-400 backdrop-blur-md">
+    <label className="flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/[0.08] bg-black/20 px-3 py-2 text-[12px] text-zinc-400 backdrop-blur-md">
       <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
         Sort
       </span>
@@ -1343,7 +1755,7 @@ function Toolbar({
   }, [searchRef])
 
   return (
-    <section className="pb-4 pt-2">
+    <section className="rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.72),rgba(9,8,7,0.88))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:p-5">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
           <div className="min-w-0 flex-1">
@@ -1358,7 +1770,7 @@ function Toolbar({
             <div className="flex w-full flex-col gap-2 2xl:max-w-[760px] 2xl:items-end">
               {!hideSearch ? (
                 <div className="flex w-full items-center">
-                  <label className="group/search flex min-w-[220px] flex-1 items-center gap-2.5 rounded-2xl bg-white/[0.03] px-3.5 py-2 text-[12px] text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 focus-within:bg-white/[0.05] focus-within:ring-white/[0.15] focus-within:shadow-[0_0_20px_rgba(255,255,255,0.03)] 2xl:max-w-[320px] 2xl:flex-none">
+                  <label className="group/search flex min-w-[220px] flex-1 items-center gap-2.5 rounded-2xl bg-black/25 px-3.5 py-2 text-[12px] text-zinc-400 ring-1 ring-[rgb(var(--primary-light))]/[0.08] transition-all duration-300 focus-within:bg-black/35 focus-within:ring-[rgb(var(--primary-light))]/[0.22] focus-within:shadow-[0_0_20px_rgba(241,191,103,0.08)] 2xl:max-w-[320px] 2xl:flex-none">
                     <Search className="h-3.5 w-3.5 text-zinc-500 transition-colors group-focus-within/search:text-zinc-300" />
                     <input
                       id="studio-library-search"
@@ -1689,6 +2101,8 @@ export default function MediaLibraryPage() {
   const [noticeState, setNoticeState] = useState<NoticeState>(null)
   const [renameState, setRenameState] = useState<RenameState>(null)
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set())
+  const [selectedInspectorGroupId, setSelectedInspectorGroupId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const deferredSearch = useDeferredValue(search)
 
   const section = useMemo<LibrarySection>(() => {
@@ -2164,6 +2578,13 @@ export default function MediaLibraryPage() {
       ),
     [imagePage, sortedImageGroups],
   )
+  const selectedInspectorGroup = useMemo(
+    () =>
+      sortedImageGroups.find((group) => group.id === selectedInspectorGroupId) ??
+      sortedImageGroups[0] ??
+      null,
+    [selectedInspectorGroupId, sortedImageGroups],
+  )
   const pagedProjects = useMemo(
     () =>
       sortedProjects.slice(
@@ -2172,6 +2593,19 @@ export default function MediaLibraryPage() {
       ),
     [projectPage, sortedProjects],
   )
+  const selectedProject = useMemo(
+    () =>
+      sortedProjects.find((project) => project.id === selectedProjectId) ??
+      sortedProjects[0] ??
+      null,
+    [selectedProjectId, sortedProjects],
+  )
+  const selectedProjectAssets = selectedProject
+    ? assetsByProject.get(selectedProject.id) ?? []
+    : []
+  const selectedProjectSetCount = selectedProject
+    ? projectGroupCounts.get(selectedProject.id) ?? 0
+    : 0
   const projectGridLayoutClass =
     pagedProjects.length <= 1
       ? 'max-w-[520px] grid-cols-1'
@@ -2218,6 +2652,28 @@ export default function MediaLibraryPage() {
       setProjectPage(projectTotalPages)
     }
   }, [projectPage, projectTotalPages])
+
+  useEffect(() => {
+    if (section !== 'images') return
+    if (!sortedImageGroups.length) {
+      if (selectedInspectorGroupId) setSelectedInspectorGroupId(null)
+      return
+    }
+    if (!selectedInspectorGroupId || !sortedImageGroups.some((group) => group.id === selectedInspectorGroupId)) {
+      setSelectedInspectorGroupId(sortedImageGroups[0].id)
+    }
+  }, [section, selectedInspectorGroupId, sortedImageGroups])
+
+  useEffect(() => {
+    if (section !== 'collections') return
+    if (!sortedProjects.length) {
+      if (selectedProjectId) setSelectedProjectId(null)
+      return
+    }
+    if (!selectedProjectId || !sortedProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(sortedProjects[0].id)
+    }
+  }, [section, selectedProjectId, sortedProjects])
 
   const openComposeWith = (params: Record<string, string>) => {
     const next = new URLSearchParams(params)
@@ -2392,6 +2848,56 @@ export default function MediaLibraryPage() {
     navigate(`/projects/${projectId}/create`)
   }
 
+  const selectProject = (projectId: string) => {
+    setActionMenu(null)
+    setSelectedProjectId(projectId)
+  }
+
+  const openSelectedProject = (project: Project) => {
+    setActionMenu(null)
+    setSelectedProjectId(project.id)
+    navigate(`/projects/${project.id}`)
+  }
+
+  const createInSelectedProject = (project: Project) => {
+    setActionMenu(null)
+    setSelectedProjectId(project.id)
+    openProjectComposer(project.id)
+  }
+
+  const exportSelectedProject = async (project: Project) => {
+    const projectAssets = assetsByProject.get(project.id) ?? []
+    if (!projectAssets.length) return
+    try {
+      setSelectedProjectId(project.id)
+      await exportProjectMutation.mutateAsync({
+        projectId: project.id,
+        title: project.title,
+      })
+      setActionMenu(null)
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const deleteEmptySelectedProject = (project: Project) => {
+    const projectAssets = assetsByProject.get(project.id) ?? []
+    setSelectedProjectId(project.id)
+    setActionMenu(null)
+    if (projectAssets.length > 0) {
+      setNoticeState({
+        title: 'Project still has work inside',
+        body: 'Move or remove every image set before deleting this project.',
+      })
+      return
+    }
+    setConfirmState({
+      kind: 'delete-project',
+      projectId: project.id,
+      title: project.title,
+    })
+  }
+
   const openProjectEditor = (
     project: Pick<Project, 'id' | 'title' | 'description'>,
     mode: 'create' | 'edit' = 'edit',
@@ -2479,7 +2985,43 @@ export default function MediaLibraryPage() {
 
   const openPreview = (group: AssetGroup, index: number) => {
     setActionMenu(null)
+    setSelectedInspectorGroupId(group.id)
     setPreviewState({ group, index })
+  }
+
+  const selectInspectorGroup = (group: AssetGroup) => {
+    setActionMenu(null)
+    setSelectedInspectorGroupId(group.id)
+  }
+
+  const copyGroupPrompt = async (group: AssetGroup) => {
+    try {
+      await navigator.clipboard.writeText(group.prompt)
+      setNoticeState({
+        title: 'Prompt copied',
+        body: `"${group.title}" is ready to reuse in Create or Chat.`,
+      })
+    } catch (error) {
+      handleMenuError(error)
+    }
+  }
+
+  const shareGroup = async (group: AssetGroup) => {
+    const leadAsset = group.items[0]
+    const shareUrl = assetPreviewUrl(leadAsset) ?? window.location.href
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: group.title, text: group.prompt, url: shareUrl })
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        setNoticeState({
+          title: 'Share link copied',
+          body: `"${group.title}" is ready to paste anywhere.`,
+        })
+      }
+    } catch (error) {
+      handleMenuError(error)
+    }
   }
 
   const toggleGroupSelect = (id: string) => {
@@ -2540,24 +3082,38 @@ export default function MediaLibraryPage() {
 
   return (
     <>
-      <AppPage className="max-w-[1700px] gap-3 py-3">
+      <AppPage className="max-w-[1780px] gap-4 py-4 md:py-5">
         {section === 'images' ? (
           <>
             <Toolbar
-              title="My images"
+              title="Library"
               description={imageViewDescription}
               search={search}
               onSearchChange={setSearch}
+              searchPlaceholder="Search your library..."
               view={activeView}
               onViewChange={(view) =>
                 setViews((current) => ({ ...current, images: view }))
               }
               filters={
-                <FilterBar
-                  options={imageFilters}
-                  value={imageFilter}
-                  onChange={setImageFilter}
-                />
+                <div className="flex w-full flex-col gap-3">
+                  <nav className="flex flex-wrap items-center gap-5 border-b border-white/[0.06] pb-2 text-[13px] font-medium">
+                    <Link to="/library/images" className="border-b border-[rgb(var(--primary-light))] pb-2 text-[rgb(var(--primary-light))]">
+                      Images
+                    </Link>
+                    <Link to="/library/likes" className="pb-2 text-zinc-400 transition hover:text-white">
+                      Likes
+                    </Link>
+                    <Link to="/library/trash" className="pb-2 text-zinc-400 transition hover:text-white">
+                      Removed
+                    </Link>
+                  </nav>
+                  <FilterBar
+                    options={imageFilters}
+                    value={imageFilter}
+                    onChange={setImageFilter}
+                  />
+                </div>
               }
               actions={
                 <SortControl
@@ -2568,6 +3124,8 @@ export default function MediaLibraryPage() {
               }
             />
 
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
+              <div className="min-w-0 space-y-4">
             {imageFilter === 'processing' && pendingGenerations.length ? (
               <section className="border-b border-white/[0.05] pb-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -2718,6 +3276,7 @@ export default function MediaLibraryPage() {
                   {pagedImageGroups.map((group) => {
                     const leadAsset = group.items[0]
                     const isSelected = selectedGroups.has(group.id)
+                    const isInspectorSelected = selectedInspectorGroup?.id === group.id
                     const menuId = `post:${group.id}`
                     const projectContext = imageGroupProjectContext(group)
 
@@ -2725,7 +3284,9 @@ export default function MediaLibraryPage() {
                       <article
                         key={group.id}
                         className={`group relative rounded-[22px] bg-[#0f1015] ring-1 transition-[transform,box-shadow,border-color] duration-300 [content-visibility:auto] [contain-intrinsic-size:340px] ${
-                          isSelected
+                          isInspectorSelected
+                            ? 'ring-[rgb(var(--primary-light))]/50 shadow-[0_22px_50px_rgba(0,0,0,0.34)]'
+                            : isSelected
                             ? 'ring-white/[0.16] shadow-[0_22px_50px_rgba(0,0,0,0.32)]'
                             : 'ring-white/[0.06] shadow-[0_16px_38px_rgba(0,0,0,0.24)] hover:-translate-y-0.5 hover:ring-white/[0.1] hover:shadow-[0_22px_50px_rgba(0,0,0,0.3)]'
                         }`}
@@ -2887,7 +3448,7 @@ export default function MediaLibraryPage() {
                         </div>
 
                         <button
-                          onClick={() => openPreview(group, 0)}
+                          onClick={() => selectInspectorGroup(group)}
                           className="block w-full text-left"
                         >
                           <div className="relative aspect-[1.08] overflow-hidden rounded-[22px] bg-[#0c0d12] md:aspect-[1.02] xl:aspect-[0.96]">
@@ -2942,6 +3503,7 @@ export default function MediaLibraryPage() {
                   {pagedImageGroups.map((group) => {
                     const leadAsset = group.items[0]
                     const isSelected = selectedGroups.has(group.id)
+                    const isInspectorSelected = selectedInspectorGroup?.id === group.id
                     const menuId = `post:${group.id}`
                     const listPreviewAssets = group.items.slice(0, 3)
                     const remainingPreviewCount = Math.max(
@@ -2956,7 +3518,13 @@ export default function MediaLibraryPage() {
                         className="border-b border-white/[0.05] py-2"
                       >
                         <div
-                          className={`flex items-center gap-3 rounded-[22px] px-2 py-2.5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${isSelected ? 'bg-white/[0.04] ring-1 ring-white/[0.12]' : 'ring-1 ring-transparent hover:bg-white/[0.03] hover:ring-white/[0.08]'}`}
+                          className={`flex items-center gap-3 rounded-[22px] px-2 py-2.5 transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                            isInspectorSelected
+                              ? 'bg-[rgb(var(--primary-light))]/[0.06] ring-1 ring-[rgb(var(--primary-light))]/[0.22]'
+                              : isSelected
+                              ? 'bg-white/[0.04] ring-1 ring-white/[0.12]'
+                              : 'ring-1 ring-transparent hover:bg-white/[0.03] hover:ring-white/[0.08]'
+                          }`}
                         >
                           <button
                             onClick={() => toggleGroupSelect(group.id)}
@@ -2979,7 +3547,7 @@ export default function MediaLibraryPage() {
                           </button>
 
                           <button
-                            onClick={() => openPreview(group, 0)}
+                            onClick={() => selectInspectorGroup(group)}
                             className="group/list-set flex min-w-0 flex-1 items-center gap-4 rounded-[20px] text-left transition-transform duration-300 active:scale-[0.99]"
                           >
                             <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-[18px] bg-[#0c0d12] shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08]">
@@ -3270,6 +3838,43 @@ export default function MediaLibraryPage() {
                 </div>
               </div>
             )}
+              </div>
+              <LibraryImageDetails
+                group={selectedInspectorGroup}
+                onOpen={(group, index = 0) => openPreview(group, index)}
+                onCopyPrompt={copyGroupPrompt}
+                onReusePrompt={(group) =>
+                  openComposeWith({
+                    prompt: group.prompt,
+                    model: group.model,
+                    projectId: group.projectId,
+                  })
+                }
+                onCreateVariations={(group) =>
+                  openComposeWith({
+                    prompt: group.prompt,
+                    model: group.model,
+                    projectId: group.projectId,
+                    reference_asset_id: group.items[0]?.id ?? '',
+                    reference_mode: 'optional',
+                    source: 'library',
+                  })
+                }
+                onEditInChat={(group) => openChatWithAsset(group)}
+                onMoveToProject={(group) =>
+                  setMoveState({
+                    postIds: [group.id],
+                    currentProjectId: group.projectId,
+                    title: group.title,
+                    count: 1,
+                  })
+                }
+                onTrash={(group) => {
+                  void handleTrashGroup(group.id, group.title)
+                }}
+                onShare={shareGroup}
+              />
+            </div>
           </>
         ) : null}
 
@@ -3315,6 +3920,8 @@ export default function MediaLibraryPage() {
               }
             />
 
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
+              <div className="min-w-0 space-y-5">
             {sortedProjects.length ? (
               activeView === 'grid' ? (
                 <section className={`grid items-start gap-x-4 gap-y-6 md:gap-x-6 md:gap-y-8 ${projectGridLayoutClass}`}>
@@ -3326,17 +3933,33 @@ export default function MediaLibraryPage() {
                     const hasAssets = projectAssets.length > 0
                     const latestActivity = cover?.created_at ?? project.updated_at
                     const projectDescription = cleanedProjectDescription(project)
+                    const isSelected = selectedProject?.id === project.id
                     return (
                       <article
                         key={project.id}
-                        className="group flex h-full flex-col gap-3"
+                        tabIndex={0}
+                        aria-label={`Select ${project.title}`}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement | null
+                          if (target?.closest('a,button,[data-library-menu-root="true"]')) return
+                          selectProject(project.id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          const target = event.target as HTMLElement | null
+                          if (target?.closest('a,button,[data-library-menu-root="true"]')) return
+                          event.preventDefault()
+                          selectProject(project.id)
+                        }}
+                        className={`group flex h-full flex-col gap-3 rounded-[24px] outline-none transition ${isSelected ? 'bg-[rgb(var(--primary-light))]/[0.04] ring-1 ring-[rgb(var(--primary-light))]/[0.28]' : 'ring-1 ring-transparent focus-visible:ring-white/[0.16]'}`}
                       >
                         <div className="relative" data-library-menu-root="true">
                           <div className="overflow-hidden rounded-[22px] bg-[#0c0d12] p-1 ring-1 ring-white/[0.05] transition-all duration-500 group-hover:ring-white/[0.12] group-hover:shadow-[0_18px_34px_rgba(0,0,0,0.3)] md:p-1.5">
                             {cover ? (
-                              <Link
-                                to={`/projects/${project.id}`}
-                                className="grid aspect-[1.62] grid-cols-[minmax(0,1fr)_72px] gap-1 sm:grid-cols-[minmax(0,1fr)_84px]"
+                              <button
+                                type="button"
+                                onClick={() => selectProject(project.id)}
+                                className="grid aspect-[1.62] w-full grid-cols-[minmax(0,1fr)_72px] gap-1 text-left sm:grid-cols-[minmax(0,1fr)_84px]"
                               >
                                   <div className="h-full overflow-hidden rounded-[14px] bg-[#0c0d12] ring-1 ring-white/[0.04]">
                                     <ProtectedAssetImage
@@ -3371,11 +3994,12 @@ export default function MediaLibraryPage() {
                                     )
                                   })}
                                 </div>
-                              </Link>
+                              </button>
                             ) : (
-                              <Link
-                                to={`/projects/${project.id}`}
-                                className="flex aspect-[16/10] flex-col items-center justify-center rounded-[18px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
+                              <button
+                                type="button"
+                                onClick={() => selectProject(project.id)}
+                                className="flex aspect-[16/10] w-full flex-col items-center justify-center rounded-[18px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_60%)] bg-[#0c0d12] ring-1 ring-white/[0.04] text-center transition-all duration-500 group-hover:bg-[#111216]"
                               >
                                 <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-white/[0.03] ring-1 ring-white/[0.08] shadow-[0_0_20px_rgba(255,255,255,0.02)] transition-transform duration-500 group-hover:scale-110">
                                   <Folder className="h-5 w-5 text-zinc-500 transition-colors group-hover:text-zinc-300" />
@@ -3386,21 +4010,22 @@ export default function MediaLibraryPage() {
                                 <div className="mt-1.5 max-w-[14rem] text-[11px] leading-5 text-zinc-500">
                                   Ready for the first set.
                                 </div>
-                              </Link>
+                              </button>
                             )}
                           </div>
                           <div className="absolute right-3.5 top-3.5 z-20" data-library-menu-root="true">
                             <button
-                              onClick={() =>
-                                setActionMenu((current) =>
-                                  current === `project:${project.id}`
-                                    ? null
-                                    : `project:${project.id}`,
-                                )
-                              }
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-zinc-300 opacity-0 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/80 hover:text-white hover:ring-white/30 group-hover:opacity-100"
-                              title="Project actions"
-                            >
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === `project:${project.id}`
+                                  ? null
+                                  : `project:${project.id}`,
+                              )
+                            }
+                            aria-label={`Open actions for ${project.title}`}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-zinc-300 opacity-0 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/80 hover:text-white hover:ring-white/30 group-hover:opacity-100"
+                            title="Project actions"
+                          >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                             {renderProjectMenu(project, projectAssets)}
@@ -3434,12 +4059,13 @@ export default function MediaLibraryPage() {
                           <div className="flex items-center gap-2">
                             <Link
                               to={`/projects/${project.id}`}
+                              onClick={() => setSelectedProjectId(project.id)}
                               className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
                             >
                               Open
                             </Link>
                             <button
-                              onClick={() => openProjectComposer(project.id)}
+                              onClick={() => createInSelectedProject(project)}
                               className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
                             >
                               Create here
@@ -3459,15 +4085,31 @@ export default function MediaLibraryPage() {
                     const hasAssets = projectAssets.length > 0
                     const latestActivity = cover?.created_at ?? project.updated_at
                     const projectDescription = cleanedProjectDescription(project)
+                    const isSelected = selectedProject?.id === project.id
 
                     return (
                       <article
                         key={project.id}
-                        className="group flex items-center gap-4 rounded-[22px] border border-white/[0.04] bg-[#0c0d12]/78 px-3.5 py-3.5 transition-all duration-300 hover:border-white/[0.08] hover:bg-white/[0.03]"
+                        tabIndex={0}
+                        aria-label={`Select ${project.title}`}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement | null
+                          if (target?.closest('a,button,[data-library-menu-root="true"]')) return
+                          selectProject(project.id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          const target = event.target as HTMLElement | null
+                          if (target?.closest('a,button,[data-library-menu-root="true"]')) return
+                          event.preventDefault()
+                          selectProject(project.id)
+                        }}
+                        className={`group flex items-center gap-4 rounded-[22px] border px-3.5 py-3.5 outline-none transition-all duration-300 hover:border-white/[0.08] hover:bg-white/[0.03] ${isSelected ? 'border-[rgb(var(--primary-light))]/[0.26] bg-[rgb(var(--primary-light))]/[0.04]' : 'border-white/[0.04] bg-[#0c0d12]/78 focus-visible:border-white/[0.16]'}`}
                       >
-                        <Link
-                          to={`/projects/${project.id}`}
-                          className="relative h-20 w-28 shrink-0 overflow-hidden rounded-[16px] bg-[#111216] ring-1 ring-white/[0.06] shadow-md"
+                        <button
+                          type="button"
+                          onClick={() => selectProject(project.id)}
+                          className="relative h-20 w-28 shrink-0 overflow-hidden rounded-[16px] bg-[#111216] text-left ring-1 ring-white/[0.06] shadow-md"
                         >
                           {cover ? (
                             <ProtectedAssetImage
@@ -3481,11 +4123,8 @@ export default function MediaLibraryPage() {
                               <Folder className="h-4 w-4 text-zinc-600" />
                             </div>
                           )}
-                        </Link>
-                        <Link
-                          to={`/projects/${project.id}`}
-                          className="min-w-0 flex-1"
-                        >
+                        </button>
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-zinc-300">
                               {hasAssets ? 'With work' : 'Empty'}
@@ -3509,17 +4148,18 @@ export default function MediaLibraryPage() {
                             </span>
                             <span>Updated {formatRelativeDate(latestActivity)}</span>
                           </div>
-                        </Link>
+                        </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <div className="hidden xl:flex items-center gap-2">
                             <Link
                               to={`/projects/${project.id}`}
+                              onClick={() => setSelectedProjectId(project.id)}
                               className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11.5px] font-medium text-zinc-200 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
                             >
                               Open
                             </Link>
                             <button
-                              onClick={() => openProjectComposer(project.id)}
+                              onClick={() => createInSelectedProject(project)}
                               className="rounded-full bg-white px-3 py-1.5 text-[11.5px] font-semibold text-black transition hover:bg-zinc-200"
                             >
                               Create here
@@ -3530,15 +4170,16 @@ export default function MediaLibraryPage() {
                             data-library-menu-root="true"
                           >
                             <button
-                              onClick={() =>
-                                setActionMenu((current) =>
-                                  current === `project:${project.id}`
-                                    ? null
-                                    : `project:${project.id}`,
-                                )
-                              }
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition-all duration-300 hover:bg-white/[0.06] hover:text-white"
-                            >
+                            onClick={() =>
+                              setActionMenu((current) =>
+                                current === `project:${project.id}`
+                                  ? null
+                                  : `project:${project.id}`,
+                              )
+                            }
+                            aria-label={`Open actions for ${project.title}`}
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 transition-all duration-300 hover:bg-white/[0.06] hover:text-white"
+                          >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                             {renderProjectMenu(project, projectAssets)}
@@ -3550,7 +4191,7 @@ export default function MediaLibraryPage() {
                 </section>
               )
             ) : (
-              <section className="group relative flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.04] bg-[#0c0d12]/50 px-8 py-20 text-center backdrop-blur-sm transition-all duration-700 hover:border-white/[0.08] hover:bg-[#101116]/80 hover:shadow-[0_0_80px_rgba(0,0,0,0.5)]">
+              <section className="group relative mb-28 flex flex-col items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.04] bg-[#0c0d12]/50 px-8 py-20 text-center backdrop-blur-sm transition-all duration-700 hover:border-white/[0.08] hover:bg-[#101116]/80 hover:shadow-[0_0_80px_rgba(0,0,0,0.5)] xl:mb-0">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02),transparent_50%)] opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
                 <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-[#1c1d24]/90 to-[#0c0d12]/80 text-zinc-400 ring-1 ring-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-all duration-700 group-hover:scale-110 group-hover:text-white group-hover:ring-white/[0.18] group-hover:shadow-[0_0_30px_rgba(124,58,237,0.15)]">
                   <div className="absolute inset-0 rounded-[22px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_50%)]" />
@@ -3592,6 +4233,25 @@ export default function MediaLibraryPage() {
               totalPages={projectTotalPages}
               onPageChange={setProjectPage}
             />
+              </div>
+              <ProjectDetailsRail
+                project={selectedProject}
+                assets={selectedProjectAssets}
+                setCount={selectedProjectSetCount}
+                onOpenProject={openSelectedProject}
+                onCreateHere={createInSelectedProject}
+                onEditDetails={(project) => {
+                  setSelectedProjectId(project.id)
+                  openProjectEditor(project)
+                }}
+                onExport={(project) => {
+                  void exportSelectedProject(project)
+                }}
+                onDeleteEmpty={deleteEmptySelectedProject}
+                exportPending={exportProjectMutation.isPending}
+                busy={menuBusy}
+              />
+            </div>
           </>
         ) : null}
 

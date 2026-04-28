@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import 'editor/edit_models.dart';
 import 'editor/diagnostics.dart';
 import 'editor/image_renderer.dart';
+import 'editor/markup_models.dart';
 import 'editor/upscale_engine.dart';
 
 void main() {
@@ -24,7 +25,7 @@ void main() {
 const _accent = Color(0xFF5EEAD4);
 const _bg = Color(0xFF090A0F);
 const _surface = Color(0xFF101116);
-const _versionLabel = '0.3.3+11';
+const _versionLabel = '0.3.6+14';
 const _galleryPageSize = 60;
 const _galleryPrecacheCount = 90;
 const _maxThumbnailCacheEntries = 180;
@@ -74,6 +75,13 @@ class OmniaPixelsShell extends StatefulWidget {
   State<OmniaPixelsShell> createState() => _OmniaPixelsShellState();
 }
 
+class _EditorSnapshot {
+  const _EditorSnapshot({required this.edit, required this.markups});
+
+  final EditValues edit;
+  final List<MarkupLayer> markups;
+}
+
 class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   bool _entered = false;
   int _tab = 0;
@@ -96,9 +104,17 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   EditValues _edit = const EditValues();
   EditorTool _tool = EditorTool.light;
   UpscaleMode _upscaleMode = UpscaleMode.fastLocal;
+  List<MarkupLayer> _markups = const [];
+  MarkupLayer? _draftMarkup;
+  int _markupColorValue = 0xFFFFFFFF;
+  double _brushSize = 0.026;
+  String _textTemplate = 'Omnia';
+  String _stickerTemplate = 'WOW';
   Timer? _previewDebounce;
-  final List<EditValues> _undoStack = [];
-  final List<EditValues> _redoStack = [];
+  Timer? _busyTicker;
+  DateTime? _busyStartedAt;
+  final List<_EditorSnapshot> _undoStack = [];
+  final List<_EditorSnapshot> _redoStack = [];
   EditValues? _gestureStartEdit;
   bool _showOriginal = false;
   final List<DiagnosticsEntry> _diagnostics = [];
@@ -144,6 +160,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     SchedulerBinding.instance.removeTimingsCallback(_handleFrameTimings);
     unawaited(PhotoCachingManager().cancelCacheRequest());
     _previewDebounce?.cancel();
+    _busyTicker?.cancel();
     super.dispose();
   }
 
@@ -424,6 +441,8 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _previewBytes = preview;
         _upscaledBytes = null;
         _edit = const EditValues();
+        _markups = const [];
+        _draftMarkup = null;
         _undoStack.clear();
         _redoStack.clear();
         _gestureStartEdit = null;
@@ -458,6 +477,8 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _previewBytes = preview;
         _upscaledBytes = null;
         _edit = const EditValues();
+        _markups = const [];
+        _draftMarkup = null;
         _undoStack.clear();
         _redoStack.clear();
         _gestureStartEdit = null;
@@ -483,7 +504,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     final startEdit = _gestureStartEdit;
     _gestureStartEdit = null;
     if (startEdit != null && startEdit != _edit) {
-      _pushUndo(startEdit);
+      _pushUndo(_snapshot(edit: startEdit));
       _redoStack.clear();
       unawaited(HapticFeedback.selectionClick());
       if (mounted) {
@@ -494,7 +515,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
 
   void _commitEdit(EditValues edit, {bool immediate = false, String? status}) {
     if (edit != _edit) {
-      _pushUndo(_edit);
+      _pushUndo(_snapshot());
       _redoStack.clear();
       unawaited(HapticFeedback.selectionClick());
     }
@@ -510,6 +531,19 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   }
 
   void _resetTool(EditorTool tool) {
+    if (tool == EditorTool.brush) {
+      _removeMarkupType(MarkupLayerType.brush, status: 'Brush reset');
+      return;
+    }
+    if (tool == EditorTool.text) {
+      _removeMarkupType(MarkupLayerType.text, status: 'Text reset');
+      return;
+    }
+    if (tool == EditorTool.sticker) {
+      _removeMarkupType(MarkupLayerType.sticker, status: 'Sticker reset');
+      return;
+    }
+
     final next = switch (tool) {
       EditorTool.crop => _edit.copyWith(cropMode: CropMode.original),
       EditorTool.rotate => _edit.copyWith(rotationTurns: 0),
@@ -521,6 +555,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       EditorTool.color => _edit.copyWith(saturation: 1, warmth: 0, tint: 0),
       EditorTool.detail => _edit.copyWith(detail: 0.35, clarity: 0),
       EditorTool.fx => _edit.copyWith(fade: 0, vignette: 0),
+      EditorTool.brush || EditorTool.text || EditorTool.sticker => _edit,
     };
     _commitEdit(
       next,
@@ -529,14 +564,53 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     );
   }
 
-  void _pushUndo(EditValues edit) {
-    if (_undoStack.isNotEmpty && _undoStack.last == edit) {
+  void _resetAllEdits() {
+    if (_edit.isDefault && _markups.isEmpty) {
       return;
     }
-    _undoStack.add(edit);
+    _pushUndo(_snapshot());
+    _redoStack.clear();
+    setState(() {
+      _edit = const EditValues();
+      _markups = const [];
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = 'All edits reset';
+    });
+    unawaited(_refreshPreview());
+  }
+
+  _EditorSnapshot _snapshot({EditValues? edit, List<MarkupLayer>? markups}) {
+    return _EditorSnapshot(
+      edit: edit ?? _edit,
+      markups: List.unmodifiable(markups ?? _markups),
+    );
+  }
+
+  void _pushUndo(_EditorSnapshot snapshot) {
+    if (_undoStack.isNotEmpty && _sameSnapshot(_undoStack.last, snapshot)) {
+      return;
+    }
+    _undoStack.add(snapshot);
     if (_undoStack.length > 30) {
       _undoStack.removeAt(0);
     }
+  }
+
+  bool _sameSnapshot(_EditorSnapshot a, _EditorSnapshot b) {
+    return a.edit == b.edit && _sameMarkupList(a.markups, b.markups);
+  }
+
+  bool _sameMarkupList(List<MarkupLayer> a, List<MarkupLayer> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _undoEdit() {
@@ -544,9 +618,9 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       return;
     }
     final previous = _undoStack.removeLast();
-    _redoStack.add(_edit);
+    _redoStack.add(_snapshot());
     unawaited(HapticFeedback.selectionClick());
-    _updateEdit(previous, immediate: true, status: 'Undo');
+    _restoreSnapshot(previous, status: 'Undo');
   }
 
   void _redoEdit() {
@@ -554,9 +628,20 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       return;
     }
     final next = _redoStack.removeLast();
-    _undoStack.add(_edit);
+    _undoStack.add(_snapshot());
     unawaited(HapticFeedback.selectionClick());
-    _updateEdit(next, immediate: true, status: 'Redo');
+    _restoreSnapshot(next, status: 'Redo');
+  }
+
+  void _restoreSnapshot(_EditorSnapshot snapshot, {required String status}) {
+    setState(() {
+      _edit = snapshot.edit;
+      _markups = List.unmodifiable(snapshot.markups);
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = status;
+    });
+    unawaited(_refreshPreview());
   }
 
   void _updateEdit(EditValues edit, {bool immediate = false, String? status}) {
@@ -565,6 +650,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         edit.cropMode != _edit.cropMode;
     setState(() {
       _edit = edit;
+      _draftMarkup = null;
       _upscaledBytes = null;
       _status =
           status ?? (geometryChanged ? 'Preview updating...' : 'Live preview');
@@ -573,6 +659,142 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     if (immediate || geometryChanged) {
       unawaited(_refreshPreview());
     }
+  }
+
+  void _setMarkupColor(int colorValue) {
+    setState(() => _markupColorValue = colorValue);
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _setBrushSize(double value) {
+    setState(() => _brushSize = value.clamp(0.012, 0.07).toDouble());
+  }
+
+  void _setTextTemplate(String value) {
+    setState(() => _textTemplate = value);
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _setStickerTemplate(String value) {
+    setState(() => _stickerTemplate = value);
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _beginBrushStroke(MarkupPoint point) {
+    if (_sourceBytes == null) {
+      return;
+    }
+    setState(() {
+      _draftMarkup = MarkupLayer.brush(
+        points: [point],
+        colorValue: _markupColorValue,
+        size: _brushSize,
+      );
+      _status = 'Brush drawing';
+    });
+  }
+
+  void _appendBrushStroke(MarkupPoint point) {
+    final draft = _draftMarkup;
+    if (draft == null || draft.type != MarkupLayerType.brush) {
+      _beginBrushStroke(point);
+      return;
+    }
+    final last = draft.points.last;
+    if ((last.x - point.x).abs() + (last.y - point.y).abs() < 0.004) {
+      return;
+    }
+    setState(() {
+      _draftMarkup = MarkupLayer.brush(
+        points: [...draft.points, point],
+        colorValue: draft.colorValue,
+        size: draft.size,
+      );
+    });
+  }
+
+  void _endBrushStroke() {
+    final draft = _draftMarkup;
+    if (draft == null || draft.type != MarkupLayerType.brush) {
+      return;
+    }
+    _pushUndo(_snapshot());
+    _redoStack.clear();
+    setState(() {
+      _markups = List.unmodifiable([..._markups, draft]);
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = 'Brush added';
+    });
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _addTextMarkup(MarkupPoint point) {
+    _addPlacedMarkup(
+      MarkupLayer.text(
+        text: _textTemplate.trim().isEmpty ? 'Text' : _textTemplate.trim(),
+        x: point.x,
+        y: point.y,
+        colorValue: _markupColorValue,
+        size: 0.12,
+      ),
+      status: 'Text added',
+    );
+  }
+
+  void _addStickerMarkup(MarkupPoint point) {
+    _addPlacedMarkup(
+      MarkupLayer.sticker(
+        text: _stickerTemplate.trim().isEmpty ? 'WOW' : _stickerTemplate.trim(),
+        x: point.x,
+        y: point.y,
+        colorValue: _markupColorValue,
+        size: 0.14,
+      ),
+      status: 'Sticker added',
+    );
+  }
+
+  void _addCenteredTextMarkup() {
+    _addTextMarkup(const MarkupPoint(x: 0.5, y: 0.5));
+  }
+
+  void _addCenteredStickerMarkup() {
+    _addStickerMarkup(const MarkupPoint(x: 0.5, y: 0.5));
+  }
+
+  void _addPlacedMarkup(MarkupLayer markup, {required String status}) {
+    if (_sourceBytes == null) {
+      _showSnack('Choose a photo first.');
+      return;
+    }
+    _pushUndo(_snapshot());
+    _redoStack.clear();
+    setState(() {
+      _markups = List.unmodifiable([..._markups, markup]);
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = status;
+    });
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _removeMarkupType(MarkupLayerType type, {required String status}) {
+    final next = _markups
+        .where((markup) => markup.type != type)
+        .toList(growable: false);
+    if (next.length == _markups.length) {
+      return;
+    }
+    _pushUndo(_snapshot());
+    _redoStack.clear();
+    setState(() {
+      _markups = List.unmodifiable(next);
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = status;
+    });
+    unawaited(HapticFeedback.selectionClick());
   }
 
   Future<void> _refreshPreview() async {
@@ -595,18 +817,25 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   }
 
   Future<void> _runUpscale() async {
-    final bytes = _sourceBytes;
-    if (bytes == null) {
+    if (_sourceBytes == null &&
+        _pickedOriginalBytes == null &&
+        _selectedAsset == null) {
       _showSnack('Choose a photo first.');
       return;
     }
-    await _runBusy('${_upscaleMode.label} 2x...', () async {
+    await _runBusy(_upscaleMode.runningLabel, () async {
+      final bytes = await _bestAvailableSourceBytes();
+      if (bytes == null) {
+        setState(() => _status = 'Could not read source photo');
+        return;
+      }
       final result = await _measure(
         '${_upscaleMode.label} engine',
         () => const UpscaleEngine().run(
           bytes: bytes,
           edit: _edit,
           mode: _upscaleMode,
+          markups: _markups,
         ),
       );
       setState(() {
@@ -614,6 +843,19 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _status = result.status;
       });
     });
+  }
+
+  Future<Uint8List?> _bestAvailableSourceBytes() async {
+    final picked = _pickedOriginalBytes;
+    if (picked != null) {
+      return picked;
+    }
+    final asset = _selectedAsset;
+    if (asset != null) {
+      final original = await asset.originBytes;
+      return original ?? _sourceBytes;
+    }
+    return _sourceBytes;
   }
 
   Future<void> _saveToGallery() async {
@@ -672,19 +914,26 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         return null;
       }
       return _upscaledBytes ??
-          _render(bytes: bytes, edit: _edit, maxLongEdge: 4096);
+          _render(
+            bytes: bytes,
+            edit: _edit,
+            markups: _markups,
+            maxLongEdge: 4096,
+          );
     });
   }
 
   Future<Uint8List> _render({
     required Uint8List bytes,
     required EditValues edit,
+    List<MarkupLayer> markups = const [],
     bool upscale = false,
     int? maxLongEdge,
   }) {
     return renderEditedImage(
       bytes: bytes,
       edit: edit,
+      markups: markups,
       upscale: upscale,
       maxLongEdge: maxLongEdge,
     );
@@ -697,6 +946,13 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     setState(() {
       _busy = true;
       _status = status;
+      _busyStartedAt = DateTime.now();
+    });
+    _busyTicker?.cancel();
+    _busyTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _busy) {
+        setState(() {});
+      }
     });
     try {
       await _measure(status.replaceAll('...', '').trim(), action);
@@ -704,8 +960,13 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       setState(() => _status = 'Something went wrong');
       _showSnack(error.toString());
     } finally {
+      _busyTicker?.cancel();
+      _busyTicker = null;
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _busyStartedAt = null;
+        });
       }
     }
   }
@@ -749,20 +1010,39 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         bytes: _previewBytes ?? _sourceBytes,
         originalBytes: _sourceBytes,
         edit: _edit,
+        markups: _markups,
+        draftMarkup: _draftMarkup,
         tool: _tool,
         status: _status,
         isBusy: _busy,
         canUndo: _canUndo,
         canRedo: _canRedo,
+        canResetAll: !_edit.isDefault || _markups.isNotEmpty,
         showOriginal: _showOriginal,
+        markupColorValue: _markupColorValue,
+        brushSize: _brushSize,
+        textTemplate: _textTemplate,
+        stickerTemplate: _stickerTemplate,
         onLiveEditChanged: _updateEdit,
         onCommittedEditChanged: _commitEdit,
         onEditGestureStart: _beginEditGesture,
         onEditGestureEnd: _endEditGesture,
         onUndo: _undoEdit,
         onRedo: _redoEdit,
+        onResetAll: _resetAllEdits,
         onPresetSelected: _applyPreset,
         onResetTool: _resetTool,
+        onMarkupColorChanged: _setMarkupColor,
+        onBrushSizeChanged: _setBrushSize,
+        onTextTemplateChanged: _setTextTemplate,
+        onStickerTemplateChanged: _setStickerTemplate,
+        onBrushStart: _beginBrushStroke,
+        onBrushUpdate: _appendBrushStroke,
+        onBrushEnd: _endBrushStroke,
+        onTextTap: _addTextMarkup,
+        onStickerTap: _addStickerMarkup,
+        onAddCenteredText: _addCenteredTextMarkup,
+        onAddCenteredSticker: _addCenteredStickerMarkup,
         onCompareChanged: (value) => setState(() => _showOriginal = value),
         onToolSelected: _changeTool,
         onOpenGallery: () => setState(() => _tab = 0),
@@ -787,6 +1067,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       ExportScreen(
         bytes: _currentBytes,
         edit: _upscaledBytes == null ? _edit : const EditValues(),
+        markups: _upscaledBytes == null ? _markups : const [],
         isBusy: _busy,
         status: _status,
         onSave: _saveToGallery,
@@ -817,13 +1098,11 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
             child: screens[_tab],
           ),
           if (_busy)
-            const Positioned.fill(
+            Positioned.fill(
               child: IgnorePointer(
-                child: ColoredBox(
-                  color: Color(0x66000000),
-                  child: Center(
-                    child: CircularProgressIndicator(color: _accent),
-                  ),
+                child: _ProcessingOverlay(
+                  status: _status,
+                  startedAt: _busyStartedAt,
                 ),
               ),
             ),
@@ -1231,20 +1510,39 @@ class EditorScreen extends StatelessWidget {
     required this.bytes,
     required this.originalBytes,
     required this.edit,
+    required this.markups,
+    required this.draftMarkup,
     required this.tool,
     required this.status,
     required this.isBusy,
     required this.canUndo,
     required this.canRedo,
+    required this.canResetAll,
     required this.showOriginal,
+    required this.markupColorValue,
+    required this.brushSize,
+    required this.textTemplate,
+    required this.stickerTemplate,
     required this.onLiveEditChanged,
     required this.onCommittedEditChanged,
     required this.onEditGestureStart,
     required this.onEditGestureEnd,
     required this.onUndo,
     required this.onRedo,
+    required this.onResetAll,
     required this.onPresetSelected,
     required this.onResetTool,
+    required this.onMarkupColorChanged,
+    required this.onBrushSizeChanged,
+    required this.onTextTemplateChanged,
+    required this.onStickerTemplateChanged,
+    required this.onBrushStart,
+    required this.onBrushUpdate,
+    required this.onBrushEnd,
+    required this.onTextTap,
+    required this.onStickerTap,
+    required this.onAddCenteredText,
+    required this.onAddCenteredSticker,
     required this.onCompareChanged,
     required this.onToolSelected,
     required this.onOpenGallery,
@@ -1254,20 +1552,39 @@ class EditorScreen extends StatelessWidget {
   final Uint8List? bytes;
   final Uint8List? originalBytes;
   final EditValues edit;
+  final List<MarkupLayer> markups;
+  final MarkupLayer? draftMarkup;
   final EditorTool tool;
   final String status;
   final bool isBusy;
   final bool canUndo;
   final bool canRedo;
+  final bool canResetAll;
   final bool showOriginal;
+  final int markupColorValue;
+  final double brushSize;
+  final String textTemplate;
+  final String stickerTemplate;
   final ValueChanged<EditValues> onLiveEditChanged;
   final ValueChanged<EditValues> onCommittedEditChanged;
   final VoidCallback onEditGestureStart;
   final VoidCallback onEditGestureEnd;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
+  final VoidCallback onResetAll;
   final ValueChanged<EditPreset> onPresetSelected;
   final ValueChanged<EditorTool> onResetTool;
+  final ValueChanged<int> onMarkupColorChanged;
+  final ValueChanged<double> onBrushSizeChanged;
+  final ValueChanged<String> onTextTemplateChanged;
+  final ValueChanged<String> onStickerTemplateChanged;
+  final ValueChanged<MarkupPoint> onBrushStart;
+  final ValueChanged<MarkupPoint> onBrushUpdate;
+  final VoidCallback onBrushEnd;
+  final ValueChanged<MarkupPoint> onTextTap;
+  final ValueChanged<MarkupPoint> onStickerTap;
+  final VoidCallback onAddCenteredText;
+  final VoidCallback onAddCenteredSticker;
   final ValueChanged<bool> onCompareChanged;
   final ValueChanged<EditorTool> onToolSelected;
   final VoidCallback onOpenGallery;
@@ -1289,6 +1606,9 @@ class EditorScreen extends StatelessWidget {
             child: PhotoPreview(
               bytes: displayBytes,
               edit: showOriginal ? const EditValues() : edit,
+              markups: showOriginal ? const [] : markups,
+              draftMarkup: showOriginal ? null : draftMarkup,
+              activeTool: showOriginal ? null : tool,
               label: displayBytes == null
                   ? 'Choose a photo'
                   : showOriginal
@@ -1296,6 +1616,11 @@ class EditorScreen extends StatelessWidget {
                   : 'Edited preview',
               compareEnabled: bytes != null,
               showOriginal: showOriginal,
+              onBrushStart: onBrushStart,
+              onBrushUpdate: onBrushUpdate,
+              onBrushEnd: onBrushEnd,
+              onTextTap: onTextTap,
+              onStickerTap: onStickerTap,
               onCompareChanged: onCompareChanged,
             ),
           ),
@@ -1304,22 +1629,40 @@ class EditorScreen extends StatelessWidget {
             status: status,
             canUndo: canUndo,
             canRedo: canRedo,
+            canResetAll: canResetAll,
             onUndo: onUndo,
             onRedo: onRedo,
+            onResetAll: onResetAll,
           ),
           const SizedBox(height: 12),
-          PresetStrip(onPresetSelected: onPresetSelected),
+          PresetStrip(edit: edit, onPresetSelected: onPresetSelected),
           const SizedBox(height: 10),
-          ToolRail(active: tool, edit: edit, onSelect: onToolSelected),
+          ToolRail(
+            active: tool,
+            edit: edit,
+            markups: markups,
+            onSelect: onToolSelected,
+          ),
           const SizedBox(height: 8),
           EditorControlDock(
             tool: tool,
             edit: edit,
+            markups: markups,
+            markupColorValue: markupColorValue,
+            brushSize: brushSize,
+            textTemplate: textTemplate,
+            stickerTemplate: stickerTemplate,
             onLiveChanged: onLiveEditChanged,
             onCommittedChanged: onCommittedEditChanged,
             onGestureStart: onEditGestureStart,
             onGestureEnd: onEditGestureEnd,
             onResetTool: () => onResetTool(tool),
+            onMarkupColorChanged: onMarkupColorChanged,
+            onBrushSizeChanged: onBrushSizeChanged,
+            onTextTemplateChanged: onTextTemplateChanged,
+            onStickerTemplateChanged: onStickerTemplateChanged,
+            onAddCenteredText: onAddCenteredText,
+            onAddCenteredSticker: onAddCenteredSticker,
           ),
         ],
       ),
@@ -1332,15 +1675,19 @@ class _EditorQuickActions extends StatelessWidget {
     required this.status,
     required this.canUndo,
     required this.canRedo,
+    required this.canResetAll,
     required this.onUndo,
     required this.onRedo,
+    required this.onResetAll,
   });
 
   final String status;
   final bool canUndo;
   final bool canRedo;
+  final bool canResetAll;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
+  final VoidCallback onResetAll;
 
   @override
   Widget build(BuildContext context) {
@@ -1348,17 +1695,39 @@ class _EditorQuickActions extends StatelessWidget {
       children: [
         Expanded(child: _StatusLine(status: status)),
         const SizedBox(width: 8),
-        _TinyIconButton(icon: Icons.undo, enabled: canUndo, onTap: onUndo),
+        _TinyIconButton(
+          icon: Icons.undo,
+          tooltip: 'Undo',
+          enabled: canUndo,
+          onTap: onUndo,
+        ),
         const SizedBox(width: 8),
-        _TinyIconButton(icon: Icons.redo, enabled: canRedo, onTap: onRedo),
+        _TinyIconButton(
+          icon: Icons.redo,
+          tooltip: 'Redo',
+          enabled: canRedo,
+          onTap: onRedo,
+        ),
+        const SizedBox(width: 8),
+        _TinyIconButton(
+          icon: Icons.restart_alt,
+          tooltip: 'Reset all',
+          enabled: canResetAll,
+          onTap: onResetAll,
+        ),
       ],
     );
   }
 }
 
 class PresetStrip extends StatelessWidget {
-  const PresetStrip({super.key, required this.onPresetSelected});
+  const PresetStrip({
+    super.key,
+    required this.edit,
+    required this.onPresetSelected,
+  });
 
+  final EditValues edit;
   final ValueChanged<EditPreset> onPresetSelected;
 
   @override
@@ -1373,7 +1742,7 @@ class PresetStrip extends StatelessWidget {
           final preset = editPresets[index];
           return _ModeChip(
             label: preset.label,
-            selected: false,
+            selected: edit.sameAdjustmentsAs(preset.values),
             onTap: () => onPresetSelected(preset),
           );
         },
@@ -1387,20 +1756,42 @@ class EditorControlDock extends StatelessWidget {
     super.key,
     required this.tool,
     required this.edit,
+    required this.markups,
+    required this.markupColorValue,
+    required this.brushSize,
+    required this.textTemplate,
+    required this.stickerTemplate,
     required this.onLiveChanged,
     required this.onCommittedChanged,
     required this.onGestureStart,
     required this.onGestureEnd,
     required this.onResetTool,
+    required this.onMarkupColorChanged,
+    required this.onBrushSizeChanged,
+    required this.onTextTemplateChanged,
+    required this.onStickerTemplateChanged,
+    required this.onAddCenteredText,
+    required this.onAddCenteredSticker,
   });
 
   final EditorTool tool;
   final EditValues edit;
+  final List<MarkupLayer> markups;
+  final int markupColorValue;
+  final double brushSize;
+  final String textTemplate;
+  final String stickerTemplate;
   final ValueChanged<EditValues> onLiveChanged;
   final ValueChanged<EditValues> onCommittedChanged;
   final VoidCallback onGestureStart;
   final VoidCallback onGestureEnd;
   final VoidCallback onResetTool;
+  final ValueChanged<int> onMarkupColorChanged;
+  final ValueChanged<double> onBrushSizeChanged;
+  final ValueChanged<String> onTextTemplateChanged;
+  final ValueChanged<String> onStickerTemplateChanged;
+  final VoidCallback onAddCenteredText;
+  final VoidCallback onAddCenteredSticker;
 
   @override
   Widget build(BuildContext context) {
@@ -1575,6 +1966,7 @@ class EditorControlDock extends StatelessWidget {
                   value: edit.detail,
                   min: 0,
                   max: 1,
+                  neutral: 0.35,
                   onChangeStart: onGestureStart,
                   onChangeEnd: onGestureEnd,
                   onChanged: (v) => onLiveChanged(edit.copyWith(detail: v)),
@@ -1614,11 +2006,126 @@ class EditorControlDock extends StatelessWidget {
                 _ResetControlButton(onTap: onResetTool),
               ],
             ),
+            EditorTool.brush => _ControlPanel(
+              children: [
+                _MarkupColorSwatches(
+                  selected: markupColorValue,
+                  onChanged: onMarkupColorChanged,
+                ),
+                _SliderRow(
+                  label: 'Size',
+                  value: brushSize,
+                  min: 0.012,
+                  max: 0.07,
+                  onChangeStart: onGestureStart,
+                  onChangeEnd: onGestureEnd,
+                  onChanged: onBrushSizeChanged,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniPill(
+                        label: _markupCountLabel(
+                          markups,
+                          MarkupLayerType.brush,
+                          'stroke',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.cleaning_services_outlined,
+                        label: 'Clear',
+                        onTap: onResetTool,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            EditorTool.text => _ControlPanel(
+              children: [
+                _TemplatePicker(
+                  values: const ['Omnia', 'Glow', 'Clean', 'Shot'],
+                  selected: textTemplate,
+                  onChanged: onTextTemplateChanged,
+                ),
+                const SizedBox(height: 10),
+                _MarkupColorSwatches(
+                  selected: markupColorValue,
+                  onChanged: onMarkupColorChanged,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.add,
+                        label: 'Add',
+                        onTap: onAddCenteredText,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.cleaning_services_outlined,
+                        label: 'Clear',
+                        onTap: onResetTool,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            EditorTool.sticker => _ControlPanel(
+              children: [
+                _TemplatePicker(
+                  values: const ['WOW', 'NEW', 'VIBE', 'SALE'],
+                  selected: stickerTemplate,
+                  onChanged: onStickerTemplateChanged,
+                ),
+                const SizedBox(height: 10),
+                _MarkupColorSwatches(
+                  selected: markupColorValue,
+                  onChanged: onMarkupColorChanged,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.add_reaction_outlined,
+                        label: 'Add',
+                        onTap: onAddCenteredSticker,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.cleaning_services_outlined,
+                        label: 'Clear',
+                        onTap: onResetTool,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           },
         ),
       ),
     );
   }
+}
+
+String _markupCountLabel(
+  List<MarkupLayer> markups,
+  MarkupLayerType type,
+  String singular,
+) {
+  final count = markups.where((markup) => markup.type == type).length;
+  return count == 1 ? '1 $singular' : '$count ${singular}s';
 }
 
 class _ControlPanel extends StatelessWidget {
@@ -1661,6 +2168,95 @@ class _CropModePicker extends StatelessWidget {
             onTap: () => onChanged(mode),
           ),
       ],
+    );
+  }
+}
+
+class _MarkupColorSwatches extends StatelessWidget {
+  const _MarkupColorSwatches({required this.selected, required this.onChanged});
+
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  static const _colors = [
+    0xFFFFFFFF,
+    0xFF5EEAD4,
+    0xFFFDE047,
+    0xFFFF6B6B,
+    0xFF93C5FD,
+    0xFF111827,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _colors.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 9),
+        itemBuilder: (context, index) {
+          final colorValue = _colors[index];
+          final isSelected = colorValue == selected;
+          return Tooltip(
+            message: 'Color ${index + 1}',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => onChanged(colorValue),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(colorValue),
+                  border: Border.all(
+                    color: isSelected ? _accent : Colors.white24,
+                    width: isSelected ? 3 : 1,
+                  ),
+                  boxShadow: isSelected
+                      ? const [
+                          BoxShadow(color: Color(0x445EEAD4), blurRadius: 14),
+                        ]
+                      : null,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TemplatePicker extends StatelessWidget {
+  const _TemplatePicker({
+    required this.values,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<String> values;
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final value = values[index];
+          return _ModeChip(
+            label: value,
+            selected: value == selected,
+            onTap: () => onChanged(value),
+          );
+        },
+      ),
     );
   }
 }
@@ -1713,35 +2309,40 @@ class _ModeChip extends StatelessWidget {
 class _TinyIconButton extends StatelessWidget {
   const _TinyIconButton({
     required this.icon,
+    required this.tooltip,
     required this.enabled,
     required this.onTap,
   });
 
   final IconData icon;
+  final String tooltip;
   final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(13),
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        width: 40,
-        height: 36,
-        decoration: BoxDecoration(
-          color: enabled
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.035),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: enabled ? _accent : Colors.white.withValues(alpha: 0.28),
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          width: 40,
+          height: 36,
+          decoration: BoxDecoration(
+            color: enabled
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.035),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: enabled ? _accent : Colors.white.withValues(alpha: 0.28),
+          ),
         ),
       ),
     );
@@ -1898,11 +2499,15 @@ class EditorControls extends StatelessWidget {
               value: edit.detail,
               min: 0,
               max: 1,
+              neutral: 0.35,
               onChanged: (v) => onChanged(edit.copyWith(detail: v)),
             ),
           ],
         ),
         EditorTool.fx => const SizedBox.shrink(),
+        EditorTool.brush => const SizedBox.shrink(),
+        EditorTool.text => const SizedBox.shrink(),
+        EditorTool.sticker => const SizedBox.shrink(),
       },
     );
   }
@@ -1984,6 +2589,7 @@ class UpscaleScreen extends StatelessWidget {
             value: detail,
             min: 0,
             max: 1,
+            neutral: 0.35,
             onChanged: onDetailChanged,
           ),
           const SizedBox(height: 8),
@@ -2041,6 +2647,7 @@ class ExportScreen extends StatelessWidget {
     super.key,
     required this.bytes,
     required this.edit,
+    required this.markups,
     required this.isBusy,
     required this.status,
     required this.onSave,
@@ -2049,6 +2656,7 @@ class ExportScreen extends StatelessWidget {
 
   final Uint8List? bytes;
   final EditValues edit;
+  final List<MarkupLayer> markups;
   final bool isBusy;
   final String status;
   final VoidCallback onSave;
@@ -2068,6 +2676,7 @@ class ExportScreen extends StatelessWidget {
             child: PhotoPreview(
               bytes: bytes,
               edit: edit,
+              markups: markups,
               label: bytes == null ? 'No export yet' : 'Final image',
             ),
           ),
@@ -2152,26 +2761,29 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           const _SettingsLogo(),
           const SizedBox(height: 22),
-          const _SettingsSwitch(
+          const _SettingsSectionLabel(label: 'Device'),
+          const _SettingsRow(
             icon: Icons.phone_iphone,
-            label: 'Local processing',
-            value: true,
+            label: 'Photo access',
+            value: 'System picker + albums',
           ),
           const _SettingsRow(
-            icon: Icons.auto_awesome,
-            label: 'Default upscale',
-            value: '2x capped',
+            icon: Icons.memory_outlined,
+            label: 'Preview budget',
+            value: '1600 px',
           ),
           const _SettingsRow(
-            icon: Icons.image_outlined,
-            label: 'Export format',
-            value: 'JPG',
+            icon: Icons.high_quality_outlined,
+            label: 'Upscale engine',
+            value: 'Local 2x',
           ),
-          const _SettingsSwitch(
+          const _SettingsRow(
             icon: Icons.copy_all_outlined,
-            label: 'Save original',
-            value: true,
+            label: 'Export rule',
+            value: 'New copy',
           ),
+          const SizedBox(height: 10),
+          const _SettingsSectionLabel(label: 'Library'),
           _SettingsRow(
             icon: Icons.photo_library_outlined,
             label: 'Loaded photos',
@@ -2194,6 +2806,8 @@ class SettingsScreen extends StatelessWidget {
             label: 'Current photo',
             value: hasSelection ? 'Ready' : 'None',
           ),
+          const SizedBox(height: 10),
+          const _SettingsSectionLabel(label: 'Build'),
           _SettingsRow(
             icon: Icons.info_outline,
             label: 'UI build',
@@ -2209,12 +2823,9 @@ class SettingsScreen extends StatelessWidget {
             label: 'Build check',
             value: buildCheckLabel,
           ),
-          _SettingsRow(
-            icon: Icons.sync_problem,
-            label: 'Neural model',
-            value: 'Planned',
-          ),
           const SizedBox(height: 14),
+          const _SettingsSectionLabel(label: 'Performance'),
+          const SizedBox(height: 6),
           DiagnosticsPanel(
             entries: diagnostics,
             frameSnapshot: frameSnapshot,
@@ -2280,22 +2891,107 @@ class AppSurface extends StatelessWidget {
   }
 }
 
+class _ProcessingOverlay extends StatelessWidget {
+  const _ProcessingOverlay({required this.status, required this.startedAt});
+
+  final String status;
+  final DateTime? startedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = startedAt == null
+        ? 0
+        : DateTime.now().difference(startedAt!).inSeconds;
+
+    return ColoredBox(
+      color: const Color(0x99000000),
+      child: Center(
+        child: Container(
+          width: 310,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xF20D1017),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: _accent,
+                  strokeWidth: 3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                status,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Local render - ${elapsed}s',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.62),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: const LinearProgressIndicator(
+                  minHeight: 4,
+                  color: _accent,
+                  backgroundColor: Color(0x33FFFFFF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PhotoPreview extends StatelessWidget {
   const PhotoPreview({
     super.key,
     required this.bytes,
     required this.label,
     this.edit = const EditValues(),
+    this.markups = const [],
+    this.draftMarkup,
+    this.activeTool,
     this.compareEnabled = false,
     this.showOriginal = false,
+    this.onBrushStart,
+    this.onBrushUpdate,
+    this.onBrushEnd,
+    this.onTextTap,
+    this.onStickerTap,
     this.onCompareChanged,
   });
 
   final Uint8List? bytes;
   final String label;
   final EditValues edit;
+  final List<MarkupLayer> markups;
+  final MarkupLayer? draftMarkup;
+  final EditorTool? activeTool;
   final bool compareEnabled;
   final bool showOriginal;
+  final ValueChanged<MarkupPoint>? onBrushStart;
+  final ValueChanged<MarkupPoint>? onBrushUpdate;
+  final VoidCallback? onBrushEnd;
+  final ValueChanged<MarkupPoint>? onTextTap;
+  final ValueChanged<MarkupPoint>? onStickerTap;
   final ValueChanged<bool>? onCompareChanged;
 
   @override
@@ -2358,6 +3054,20 @@ class PhotoPreview extends StatelessWidget {
                 ),
               ),
             ),
+          if (bytes != null && !showOriginal)
+            Positioned.fill(
+              child: _MarkupOverlayStage(
+                bytes: bytes!,
+                activeTool: activeTool,
+                markups: markups,
+                draftMarkup: draftMarkup,
+                onBrushStart: onBrushStart,
+                onBrushUpdate: onBrushUpdate,
+                onBrushEnd: onBrushEnd,
+                onTextTap: onTextTap,
+                onStickerTap: onStickerTap,
+              ),
+            ),
           if (bytes != null &&
               !showOriginal &&
               edit.cropMode != CropMode.original)
@@ -2417,6 +3127,293 @@ class PhotoPreview extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _MarkupOverlayStage extends StatefulWidget {
+  const _MarkupOverlayStage({
+    required this.bytes,
+    required this.markups,
+    required this.activeTool,
+    this.draftMarkup,
+    this.onBrushStart,
+    this.onBrushUpdate,
+    this.onBrushEnd,
+    this.onTextTap,
+    this.onStickerTap,
+  });
+
+  final Uint8List bytes;
+  final List<MarkupLayer> markups;
+  final MarkupLayer? draftMarkup;
+  final EditorTool? activeTool;
+  final ValueChanged<MarkupPoint>? onBrushStart;
+  final ValueChanged<MarkupPoint>? onBrushUpdate;
+  final VoidCallback? onBrushEnd;
+  final ValueChanged<MarkupPoint>? onTextTap;
+  final ValueChanged<MarkupPoint>? onStickerTap;
+
+  @override
+  State<_MarkupOverlayStage> createState() => _MarkupOverlayStageState();
+}
+
+class _MarkupOverlayStageState extends State<_MarkupOverlayStage> {
+  ImageStream? _imageStream;
+  ImageStreamListener? _imageListener;
+  Size? _imageSize;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveImage();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MarkupOverlayStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bytes != widget.bytes) {
+      _resolveImage();
+    }
+  }
+
+  @override
+  void dispose() {
+    final listener = _imageListener;
+    if (listener != null) {
+      _imageStream?.removeListener(listener);
+    }
+    super.dispose();
+  }
+
+  void _resolveImage() {
+    final listener = _imageListener;
+    if (listener != null) {
+      _imageStream?.removeListener(listener);
+    }
+
+    final provider = MemoryImage(widget.bytes);
+    final stream = provider.resolve(createLocalImageConfiguration(context));
+    _imageListener = ImageStreamListener((info, _) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _imageSize = Size(
+          info.image.width.toDouble(),
+          info.image.height.toDouble(),
+        );
+      });
+    });
+    _imageStream = stream;
+    stream.addListener(_imageListener!);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final interactive = switch (widget.activeTool) {
+      EditorTool.brush => widget.onBrushStart != null,
+      EditorTool.text => widget.onTextTap != null,
+      EditorTool.sticker => widget.onStickerTap != null,
+      _ => false,
+    };
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final imageRect = _imageRectFor(size);
+        final painter = SizedBox.expand(
+          child: CustomPaint(
+            painter: _MarkupPainter(
+              markups: widget.markups,
+              draftMarkup: widget.draftMarkup,
+              imageRect: imageRect,
+            ),
+          ),
+        );
+
+        if (!interactive) {
+          return IgnorePointer(child: painter);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onPanStart: widget.activeTool == EditorTool.brush
+              ? (details) {
+                  final point = _normalise(details.localPosition, imageRect);
+                  if (point != null) {
+                    widget.onBrushStart?.call(point);
+                  }
+                }
+              : null,
+          onPanUpdate: widget.activeTool == EditorTool.brush
+              ? (details) {
+                  final point = _normalise(details.localPosition, imageRect);
+                  if (point != null) {
+                    widget.onBrushUpdate?.call(point);
+                  }
+                }
+              : null,
+          onPanEnd: widget.activeTool == EditorTool.brush
+              ? (_) => widget.onBrushEnd?.call()
+              : null,
+          onPanCancel: widget.activeTool == EditorTool.brush
+              ? widget.onBrushEnd
+              : null,
+          onTapUp:
+              widget.activeTool == EditorTool.text ||
+                  widget.activeTool == EditorTool.sticker
+              ? (details) {
+                  final point = _normalise(details.localPosition, imageRect);
+                  if (point == null) {
+                    return;
+                  }
+                  if (widget.activeTool == EditorTool.text) {
+                    widget.onTextTap?.call(point);
+                  } else {
+                    widget.onStickerTap?.call(point);
+                  }
+                }
+              : null,
+          child: painter,
+        );
+      },
+    );
+  }
+
+  Rect _imageRectFor(Size stageSize) {
+    final imageSize = _imageSize;
+    if (imageSize == null ||
+        imageSize.width <= 0 ||
+        imageSize.height <= 0 ||
+        stageSize.width <= 0 ||
+        stageSize.height <= 0) {
+      return Offset.zero & stageSize;
+    }
+    final fitted = applyBoxFit(BoxFit.contain, imageSize, stageSize);
+    return Alignment.center.inscribe(
+      fitted.destination,
+      Offset.zero & stageSize,
+    );
+  }
+
+  MarkupPoint? _normalise(Offset position, Rect imageRect) {
+    if (!imageRect.contains(position) ||
+        imageRect.width <= 0 ||
+        imageRect.height <= 0) {
+      return null;
+    }
+    return MarkupPoint(
+      x: ((position.dx - imageRect.left) / imageRect.width)
+          .clamp(0.0, 1.0)
+          .toDouble(),
+      y: ((position.dy - imageRect.top) / imageRect.height)
+          .clamp(0.0, 1.0)
+          .toDouble(),
+    );
+  }
+}
+
+class _MarkupPainter extends CustomPainter {
+  const _MarkupPainter({
+    required this.markups,
+    required this.imageRect,
+    this.draftMarkup,
+  });
+
+  final List<MarkupLayer> markups;
+  final MarkupLayer? draftMarkup;
+  final Rect imageRect;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(imageRect);
+    final layers = [...markups, if (draftMarkup != null) draftMarkup!];
+    for (final markup in layers) {
+      switch (markup.type) {
+        case MarkupLayerType.brush:
+          _drawBrush(canvas, markup);
+        case MarkupLayerType.text:
+          _drawText(canvas, markup, isSticker: false);
+        case MarkupLayerType.sticker:
+          _drawText(canvas, markup, isSticker: true);
+      }
+    }
+    canvas.restore();
+  }
+
+  void _drawBrush(Canvas canvas, MarkupLayer markup) {
+    final points = markup.points;
+    if (points.isEmpty) {
+      return;
+    }
+    final paint = Paint()
+      ..color = Color(markup.colorValue)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (markup.size * imageRect.shortestSide).clamp(2.0, 42.0)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    if (points.length == 1) {
+      canvas.drawCircle(_point(points.first), paint.strokeWidth / 2, paint);
+      return;
+    }
+    final path = Path()
+      ..moveTo(_point(points.first).dx, _point(points.first).dy);
+    for (var i = 1; i < points.length; i++) {
+      final point = _point(points[i]);
+      path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawText(Canvas canvas, MarkupLayer markup, {required bool isSticker}) {
+    final text = markup.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    final point = _point(MarkupPoint(x: markup.x, y: markup.y));
+    final fontSize = (markup.size * imageRect.shortestSide).clamp(
+      isSticker ? 24.0 : 18.0,
+      isSticker ? 62.0 : 54.0,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: isSticker ? text.toUpperCase() : text,
+        style: TextStyle(
+          color: Color(markup.colorValue),
+          fontSize: fontSize,
+          fontWeight: isSticker ? FontWeight.w900 : FontWeight.w800,
+          shadows: const [
+            Shadow(
+              color: Color(0xAA000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: imageRect.width);
+    final offset = Offset(
+      point.dx - painter.width / 2,
+      point.dy - painter.height / 2,
+    );
+    painter.paint(canvas, offset);
+  }
+
+  Offset _point(MarkupPoint point) {
+    return Offset(
+      imageRect.left + imageRect.width * point.x.clamp(0.0, 1.0).toDouble(),
+      imageRect.top + imageRect.height * point.y.clamp(0.0, 1.0).toDouble(),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkupPainter oldDelegate) {
+    return oldDelegate.markups != markups ||
+        oldDelegate.draftMarkup != draftMarkup ||
+        oldDelegate.imageRect != imageRect;
   }
 }
 
@@ -2566,11 +3563,13 @@ class ToolRail extends StatelessWidget {
     super.key,
     required this.active,
     required this.edit,
+    required this.markups,
     required this.onSelect,
   });
 
   final EditorTool active;
   final EditValues edit;
+  final List<MarkupLayer> markups;
   final ValueChanged<EditorTool> onSelect;
 
   @override
@@ -2585,6 +3584,7 @@ class ToolRail extends StatelessWidget {
         itemBuilder: (context, index) {
           final tool = tools[index];
           final isActive = tool == active;
+          final hasEdits = _toolHasEdits(tool, edit, markups);
           return TweenAnimationBuilder<double>(
             tween: Tween(begin: 1, end: isActive ? 1.04 : 1),
             duration: const Duration(milliseconds: 140),
@@ -2594,41 +3594,57 @@ class ToolRail extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(15),
               onTap: () => onSelect(tool),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOutCubic,
-                width: 58,
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? _accent.withValues(alpha: 0.17)
-                      : Colors.white.withValues(alpha: 0.055),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: isActive
-                        ? _accent
-                        : Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _toolIcon(tool),
-                      size: 18,
-                      color: isActive ? _accent : Colors.white70,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _toolLabel(tool),
-                      maxLines: 1,
-                      overflow: TextOverflow.fade,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
+              child: Stack(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOutCubic,
+                    width: 58,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? _accent.withValues(alpha: 0.17)
+                          : Colors.white.withValues(alpha: 0.055),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: isActive
+                            ? _accent
+                            : Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
-                  ],
-                ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _toolIcon(tool),
+                          size: 18,
+                          color: isActive ? _accent : Colors.white70,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _toolLabel(tool),
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasEdits)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: _accent,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const SizedBox(width: 7, height: 7),
+                      ),
+                    ),
+                ],
               ),
             ),
           );
@@ -2645,6 +3661,9 @@ class ToolRail extends StatelessWidget {
       EditorTool.color => Icons.palette_outlined,
       EditorTool.detail => Icons.grain,
       EditorTool.fx => Icons.blur_on,
+      EditorTool.brush => Icons.brush_outlined,
+      EditorTool.text => Icons.title,
+      EditorTool.sticker => Icons.add_reaction_outlined,
     };
   }
 
@@ -2656,6 +3675,35 @@ class ToolRail extends StatelessWidget {
       EditorTool.color => 'Color',
       EditorTool.detail => 'Detail',
       EditorTool.fx => 'FX',
+      EditorTool.brush => 'Brush',
+      EditorTool.text => 'Text',
+      EditorTool.sticker => 'Sticker',
+    };
+  }
+
+  bool _toolHasEdits(
+    EditorTool tool,
+    EditValues edit,
+    List<MarkupLayer> markups,
+  ) {
+    return switch (tool) {
+      EditorTool.crop => edit.cropMode != CropMode.original,
+      EditorTool.rotate => edit.rotationTurns != 0,
+      EditorTool.light =>
+        edit.exposure != 0 || edit.brightness != 1 || edit.contrast != 1,
+      EditorTool.color =>
+        edit.saturation != 1 || edit.warmth != 0 || edit.tint != 0,
+      EditorTool.detail => edit.detail != 0.35 || edit.clarity != 0,
+      EditorTool.fx => edit.fade != 0 || edit.vignette != 0,
+      EditorTool.brush => markups.any(
+        (markup) => markup.type == MarkupLayerType.brush,
+      ),
+      EditorTool.text => markups.any(
+        (markup) => markup.type == MarkupLayerType.text,
+      ),
+      EditorTool.sticker => markups.any(
+        (markup) => markup.type == MarkupLayerType.sticker,
+      ),
     };
   }
 }
@@ -2702,6 +3750,7 @@ class _SliderRow extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    this.neutral,
     this.onChangeStart,
     this.onChangeEnd,
   });
@@ -2711,12 +3760,13 @@ class _SliderRow extends StatelessWidget {
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
+  final double? neutral;
   final VoidCallback? onChangeStart;
   final VoidCallback? onChangeEnd;
 
   @override
   Widget build(BuildContext context) {
-    final normalized = ((value - min) / (max - min)).clamp(0.0, 1.0);
+    final valueLabel = _sliderValueLabel();
     return Row(
       children: [
         SizedBox(
@@ -2739,9 +3789,9 @@ class _SliderRow extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 34,
+          width: 44,
           child: Text(
-            '${(normalized * 100).round()}',
+            valueLabel,
             textAlign: TextAlign.right,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.55),
@@ -2752,6 +3802,31 @@ class _SliderRow extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _sliderValueLabel() {
+    final anchor =
+        neutral ??
+        (min < 0 && max > 0
+            ? 0.0
+            : min < 1 && max > 1
+            ? 1.0
+            : null);
+
+    if (anchor == null) {
+      return '${(value.clamp(min, max) * 100).round()}';
+    }
+
+    final delta = value - anchor;
+    if (delta.abs() < 0.005) {
+      return '0';
+    }
+
+    final scaled = (delta * 100).round();
+    if (scaled == 0) {
+      return '0';
+    }
+    return scaled > 0 ? '+$scaled' : '$scaled';
   }
 }
 
@@ -3181,6 +4256,28 @@ class _SettingsLogo extends StatelessWidget {
   }
 }
 
+class _SettingsSectionLabel extends StatelessWidget {
+  const _SettingsSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.5),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
@@ -3208,29 +4305,6 @@ class _SettingsRow extends StatelessWidget {
           const Icon(Icons.chevron_right),
         ],
       ),
-    );
-  }
-}
-
-class _SettingsSwitch extends StatelessWidget {
-  const _SettingsSwitch({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool value;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      value: value,
-      onChanged: (_) {},
-      secondary: Icon(icon, color: _accent),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      activeThumbColor: _accent,
     );
   }
 }

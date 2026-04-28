@@ -6,7 +6,7 @@ OmniaPixels is being rebuilt from zero as a local-first mobile photo editor and 
 
 - Product surface: Flutter mobile app
 - Package id: `com.omniacreata.omniapixels`
-- Current development version: `0.3.3+11`
+- Current development version: `0.3.6+14`
 - Launch target: Play Store only after the edit, upscale, export, versioning, privacy, and release checks are stable
 
 ## Product promise
@@ -27,5 +27,7 @@ mobile/flutter/  Active Flutter application
 2. `docs/VERSIONING.md`
 3. `docs/ROADMAP.md`
 4. `docs/QA_WORKFLOW.md`
-5. `docs/RELEASE_CHECKLIST.md`
-6. `mobile/flutter/`
+5. `docs/ANDROID_DEVICE_MATRIX.md`
+6. `docs/EDITOR_MARKET_RESEARCH.md`
+7. `docs/RELEASE_CHECKLIST.md`
+8. `mobile/flutter/`

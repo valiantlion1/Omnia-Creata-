@@ -38,21 +38,21 @@ const notoSansSc = Noto_Sans_SC({
 export const metadata: Metadata = {
   metadataBase: new URL("https://omniacreata.com"),
   title: {
-    default: "Omnia Creata | Image work, with taste",
-    template: "%s | Omnia Creata",
+    default: "OmniaCreata | Creative software ecosystem",
+    template: "%s | OmniaCreata",
   },
   description:
-    "Omnia Creata builds creative software for image work, starting with Studio.",
-  applicationName: "Omnia Creata",
+    "OmniaCreata is the public home for creative software, starting with OmniaCreata Studio.",
+  applicationName: "OmniaCreata",
   alternates: {
     canonical: `/${defaultLocale}`,
   },
   openGraph: {
-    title: "Omnia Creata",
+    title: "OmniaCreata",
     description:
-      "Creative software for image work, starting with Studio.",
+      "Creative software ecosystem, starting with OmniaCreata Studio.",
     url: absoluteUrl(`/${defaultLocale}`),
-    siteName: "Omnia Creata",
+    siteName: "OmniaCreata",
     locale: "en_US",
     type: "website",
     images: [
@@ -60,15 +60,15 @@ export const metadata: Metadata = {
         url: absoluteUrl("/opengraph-image"),
         width: 1200,
         height: 630,
-        alt: "Omnia Creata",
+        alt: "OmniaCreata",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Omnia Creata",
+    title: "OmniaCreata",
     description:
-      "Creative software for image work, starting with Studio.",
+      "Creative software ecosystem, starting with OmniaCreata Studio.",
     images: [absoluteUrl("/opengraph-image")],
   },
   icons: {
@@ -76,7 +76,7 @@ export const metadata: Metadata = {
     apple: "/brand/logo-transparent.png",
   },
   keywords: [
-    "Omnia Creata",
+    "OmniaCreata",
     "omniacreata.com",
     "creative software",
     "OmniaCreata Studio",

@@ -1,14 +1,20 @@
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
 
 import 'edit_models.dart';
 import 'image_renderer.dart';
+import 'markup_models.dart';
 
-enum UpscaleMode { fastLocal, aiExperimental }
+enum UpscaleMode { fastLocal, enhancedLocal }
 
 extension UpscaleModeCopy on UpscaleMode {
   String get label => switch (this) {
-    UpscaleMode.fastLocal => 'Fast',
-    UpscaleMode.aiExperimental => 'AI Experimental',
+    UpscaleMode.fastLocal => 'Fast 2x',
+    UpscaleMode.enhancedLocal => 'Enhanced 2x',
+  };
+
+  String get runningLabel => switch (this) {
+    UpscaleMode.fastLocal => 'Rendering Fast 2x locally...',
+    UpscaleMode.enhancedLocal => 'Rendering Enhanced 2x locally...',
   };
 }
 
@@ -31,11 +37,13 @@ class UpscaleEngine {
     required Uint8List bytes,
     required EditValues edit,
     required UpscaleMode mode,
+    List<MarkupLayer> markups = const [],
   }) async {
     if (mode == UpscaleMode.fastLocal) {
       final result = await renderEditedImage(
         bytes: bytes,
         edit: edit,
+        markups: markups,
         upscale: true,
         maxLongEdge: 4096,
       );
@@ -46,7 +54,6 @@ class UpscaleEngine {
       );
     }
 
-    final modelAvailable = await _hasBundledModel();
     final boostedEdit = edit.copyWith(
       detail: edit.detail < 0.78 ? 0.78 : edit.detail,
       clarity: edit.clarity < 0.22 ? 0.22 : edit.clarity,
@@ -54,25 +61,15 @@ class UpscaleEngine {
     final result = await renderEditedImage(
       bytes: bytes,
       edit: boostedEdit,
+      markups: markups,
       upscale: true,
       maxLongEdge: 4096,
     );
 
     return UpscaleResult(
       bytes: result,
-      status: modelAvailable
-          ? 'AI 2x rendered'
-          : 'AI model not bundled yet; enhanced 2x fallback ready',
-      usedAiModel: modelAvailable,
+      status: 'Enhanced local 2x ready',
+      usedAiModel: false,
     );
-  }
-
-  Future<bool> _hasBundledModel() async {
-    try {
-      await rootBundle.load('assets/models/esrgan_2x.tflite');
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 }

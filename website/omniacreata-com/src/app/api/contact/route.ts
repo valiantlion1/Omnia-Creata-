@@ -6,25 +6,75 @@ type ContactPayload = {
   company?: string;
   interest: string;
   message: string;
+  website?: string;
 };
+
+const maxBodyBytes = 16 * 1024;
+const maxLengths = {
+  name: 120,
+  email: 254,
+  company: 160,
+  interest: 160,
+  message: 2500,
+};
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function sanitize(payload: ContactPayload) {
+function sanitize(payload: Partial<ContactPayload>) {
   return {
-    name: payload.name.trim(),
-    email: payload.email.trim().toLowerCase(),
-    company: payload.company?.trim() ?? "",
-    interest: payload.interest.trim(),
-    message: payload.message.trim(),
+    name: asString(payload.name).trim().slice(0, maxLengths.name + 1),
+    email: asString(payload.email).trim().toLowerCase().slice(0, maxLengths.email + 1),
+    company: asString(payload.company).trim().slice(0, maxLengths.company + 1),
+    interest: asString(payload.interest).trim().slice(0, maxLengths.interest + 1),
+    message: asString(payload.message).trim().slice(0, maxLengths.message + 1),
+    website: asString(payload.website).trim(),
   };
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as ContactPayload;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return NextResponse.json(
+      { message: "Please submit the contact form as JSON." },
+      { status: 415 },
+    );
+  }
+
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+    return NextResponse.json(
+      { message: "Please keep your message shorter." },
+      { status: 413 },
+    );
+  }
+
+  let body: Partial<ContactPayload>;
+  try {
+    body = (await request.json()) as Partial<ContactPayload>;
+  } catch {
+    return NextResponse.json(
+      { message: "Please submit a valid contact request." },
+      { status: 400 },
+    );
+  }
+
   const payload = sanitize(body);
+
+  if (payload.website) {
+    return NextResponse.json(
+      {
+        message:
+          "Your inquiry has been received. The Omnia Creata team will follow up through the official omniacreata.com contact channels.",
+      },
+      { status: 200 },
+    );
+  }
 
   if (!payload.name || payload.name.length < 2) {
     return NextResponse.json(
@@ -33,9 +83,20 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isValidEmail(payload.email)) {
+  if (!isValidEmail(payload.email) || payload.email.length > maxLengths.email) {
     return NextResponse.json(
       { message: "Please provide a valid email address." },
+      { status: 400 },
+    );
+  }
+
+  if (
+    payload.name.length > maxLengths.name ||
+    payload.company.length > maxLengths.company ||
+    payload.interest.length > maxLengths.interest
+  ) {
+    return NextResponse.json(
+      { message: "Please shorten the contact details and try again." },
       { status: 400 },
     );
   }
@@ -54,8 +115,19 @@ export async function POST(request: Request) {
     );
   }
 
+  if (payload.message.length > maxLengths.message) {
+    return NextResponse.json(
+      { message: "Please keep your message shorter." },
+      { status: 400 },
+    );
+  }
+
   const enrichedPayload = {
-    ...payload,
+    name: payload.name,
+    email: payload.email,
+    company: payload.company,
+    interest: payload.interest,
+    message: payload.message,
     source: "omniacreata.com",
     receivedAt: new Date().toISOString(),
   };
@@ -76,7 +148,12 @@ export async function POST(request: Request) {
         throw new Error("Webhook delivery failed.");
       }
     } else {
-      console.info("Omnia Creata contact inquiry", enrichedPayload);
+      console.info("Omnia Creata contact inquiry", {
+        source: enrichedPayload.source,
+        receivedAt: enrichedPayload.receivedAt,
+        interest: enrichedPayload.interest,
+        hasCompany: Boolean(enrichedPayload.company),
+      });
     }
   } catch (error) {
     console.error("Contact form delivery error", error);

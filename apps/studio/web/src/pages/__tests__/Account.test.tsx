@@ -92,6 +92,7 @@ const mockState = vi.hoisted(() => {
       ],
     }),
     getProfile: vi.fn(),
+    exportProfile: vi.fn().mockResolvedValue({ profile: { username: 'ghostsofter12' }, posts: [] }),
     updateMyProfile: vi.fn().mockResolvedValue({
       profile: {
         display_name: 'valiantlion',
@@ -152,6 +153,7 @@ vi.mock('@/lib/studioApi', () => ({
   studioApi: {
     getMyProfile: mockState.getMyProfile,
     getProfile: mockState.getProfile,
+    exportProfile: mockState.exportProfile,
     updateMyProfile: mockState.updateMyProfile,
   },
 }))
@@ -176,6 +178,7 @@ describe('AccountPage', () => {
   afterEach(() => {
     mockState.getMyProfile.mockClear()
     mockState.getProfile.mockClear()
+    mockState.exportProfile.mockClear()
     mockState.updateMyProfile.mockClear()
   })
 
@@ -195,9 +198,37 @@ describe('AccountPage', () => {
   it('opens gallery images in the shared lightbox', async () => {
     renderWithProviders(<AccountPage />, { route: '/account' })
 
-    await userEvent.click(await screen.findByRole('button', { name: /open anime tarzinda preview/i }))
+    const previewButtons = await screen.findAllByRole('button', { name: /open anime tarzinda preview/i })
+    await userEvent.click(previewButtons[0])
 
     expect(await screen.findByTitle('Close (ESC)')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /copy prompt/i })).toBeInTheDocument()
+  })
+
+  it('keeps account rail actions wired to profile APIs', async () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:profile-export'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+
+    renderWithProviders(<AccountPage />, { route: '/account' })
+
+    await userEvent.click(await screen.findByRole('button', { name: /^private$/i }))
+    await waitFor(() => {
+      expect(mockState.updateMyProfile).toHaveBeenCalledWith({ default_visibility: 'private' })
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /export my data/i }))
+    await waitFor(() => {
+      expect(mockState.exportProfile).toHaveBeenCalled()
+    })
+    anchorClick.mockRestore()
   })
 })

@@ -84,7 +84,7 @@ export function LegalDocumentPage({
                 )}
               </div>
 
-              <div className="overflow-hidden rounded-[36px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,23,31,0.92),rgba(9,13,18,0.98))] p-7 shadow-[0_26px_80px_rgba(3,10,18,0.24)] sm:p-8">
+              <div className="overflow-hidden rounded-[36px] border border-[rgba(216,181,109,0.13)] bg-[linear-gradient(180deg,rgba(24,24,20,0.92),rgba(9,10,9,0.98))] p-7 shadow-[0_26px_80px_rgba(0,0,0,0.28)] sm:p-8">
                 <div className="border-b border-white/[0.08] pb-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
                     {summaryTitle}
@@ -121,7 +121,7 @@ export function LegalDocumentPage({
                 title={documentTitle}
               />
 
-              <article className="overflow-hidden rounded-[32px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(16,23,31,0.82),rgba(9,13,18,0.96))] p-6 shadow-[0_24px_72px_rgba(3,10,18,0.2)] sm:p-8">
+              <article className="overflow-hidden rounded-[32px] border border-[rgba(216,181,109,0.12)] bg-[linear-gradient(180deg,rgba(24,24,20,0.82),rgba(9,10,9,0.96))] p-6 shadow-[0_24px_72px_rgba(0,0,0,0.24)] sm:p-8">
                 <div className="legal-copy">
                   {sections.map((section, index) => (
                     <section

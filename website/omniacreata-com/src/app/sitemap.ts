@@ -10,6 +10,7 @@ const staticPages = [
   "/contact",
   "/privacy-policy",
   "/terms-of-service",
+  "/refund-policy",
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {

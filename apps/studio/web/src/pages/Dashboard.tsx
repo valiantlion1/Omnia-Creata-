@@ -583,11 +583,17 @@ function CuratedInspector({
   copied,
   onCopy,
   onOpen,
+  onClose,
+  onReopen,
+  open,
 }: {
   item: ShowcaseReference | null
   copied: boolean
   onCopy: (item: ShowcaseReference) => void
   onOpen: (item: ShowcaseReference) => void
+  onClose: () => void
+  onReopen: () => void
+  open: boolean
 }) {
   if (!item) return null
 
@@ -611,6 +617,40 @@ function CuratedInspector({
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(shareUrl).catch(() => undefined)
     }
+  }
+
+  if (!open) {
+    return (
+      <aside
+        data-testid="curated-inspector-collapsed"
+        className="order-1 xl:order-2 xl:sticky xl:top-5 xl:self-start"
+        aria-label="Selected reference details closed"
+      >
+        <button
+          type="button"
+          onClick={onReopen}
+          aria-label={`Show details for ${item.label}`}
+          className="hidden w-full rounded-[22px] border border-[#d7ae68]/16 bg-[linear-gradient(180deg,rgba(17,14,10,0.92),rgba(7,7,6,0.96))] p-3 text-left shadow-[0_20px_70px_-54px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:border-[#f1bf67]/32 hover:bg-[#14100b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1bf67]/30 xl:block"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[16px] bg-[#0a0908]">
+              <img
+                src={item.src}
+                alt=""
+                loading="eager"
+                style={item.focus ? { objectPosition: item.focus } : undefined}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#e4b765]">Details closed</div>
+              <div className="mt-1 truncate text-sm font-semibold text-white">{item.label}</div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[#f1bf67]" />
+          </div>
+        </button>
+      </aside>
+    )
   }
 
   return (
@@ -657,9 +697,14 @@ function CuratedInspector({
       <div className="relative hidden overflow-hidden rounded-[26px] border border-[#d7ae68]/18 bg-[linear-gradient(180deg,rgba(17,14,10,0.96),rgba(7,7,6,0.98))] p-4 shadow-[0_30px_90px_-54px_rgba(0,0,0,0.95),inset_0_1px_0_rgba(255,255,255,0.045)] xl:block">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold tracking-[-0.02em] text-white">Details</h2>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] text-zinc-500">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details panel"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] text-zinc-500 transition hover:border-[#f1bf67]/32 hover:bg-[#1c150c] hover:text-[#f6ddaa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f1bf67]/30"
+          >
             <X className="h-4 w-4" />
-          </span>
+          </button>
         </div>
 
         <button
@@ -689,6 +734,7 @@ function CuratedInspector({
             onClick={() => onCopy(item)}
             className="flex h-10 items-center justify-center rounded-xl border border-[#d7ae68]/13 bg-[#14100b] text-[#f1bf67] transition hover:border-[#f1bf67]/32 hover:bg-[#1c150c]"
             title="Copy prompt"
+            aria-label="Copy prompt"
           >
             <Copy className="h-4 w-4" />
           </button>
@@ -697,6 +743,7 @@ function CuratedInspector({
             download={`${item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'omnia-reference'}.png`}
             className="flex h-10 items-center justify-center rounded-xl border border-[#d7ae68]/13 bg-[#14100b] text-[#f1bf67] transition hover:border-[#f1bf67]/32 hover:bg-[#1c150c]"
             title="Download image"
+            aria-label="Download image"
           >
             <Download className="h-4 w-4" />
           </a>
@@ -705,6 +752,7 @@ function CuratedInspector({
             onClick={shareReference}
             className="flex h-10 items-center justify-center rounded-xl border border-[#d7ae68]/13 bg-[#14100b] text-[#f1bf67] transition hover:border-[#f1bf67]/32 hover:bg-[#1c150c]"
             title="Share reference"
+            aria-label="Share reference"
           >
             <Share2 className="h-4 w-4" />
           </button>
@@ -713,6 +761,7 @@ function CuratedInspector({
             onClick={() => onOpen(item)}
             className="flex h-10 items-center justify-center rounded-xl border border-[#d7ae68]/13 bg-[#14100b] text-[#f1bf67] transition hover:border-[#f1bf67]/32 hover:bg-[#1c150c]"
             title="More details"
+            aria-label="Open more details"
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
@@ -759,13 +808,9 @@ function CuratedInspector({
                 <div className="mt-0.5 text-[11px] text-zinc-500">{item.likes.toLocaleString()} saves</div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => onCopy(item)}
-              className="rounded-lg border border-[#d7ae68]/18 px-3 py-1.5 text-[11px] font-semibold text-[#e4b765] transition hover:bg-[#d7ae68]/10"
-            >
-              Follow
-            </button>
+            <span className="rounded-lg border border-[#d7ae68]/18 px-3 py-1.5 text-[11px] font-semibold text-[#e4b765]">
+              Curated
+            </span>
           </div>
           <div className="mt-3 flex items-center gap-4 text-[11px] text-zinc-500">
             <span className="inline-flex items-center gap-1.5">
@@ -816,6 +861,7 @@ export default function DashboardPage() {
   const [curatedLayout, setCuratedLayout] = useState<'mosaic' | 'dense'>('mosaic')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedReferenceId, setSelectedReferenceId] = useState(showcaseReferences[0]?.id ?? '')
+  const [isCuratedInspectorOpen, setIsCuratedInspectorOpen] = useState(true)
   const [copiedReferenceId, setCopiedReferenceId] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<PublicPost | null>(null)
   const [authPromptOpen, setAuthPromptOpen] = useState(false)
@@ -907,8 +953,14 @@ export default function DashboardPage() {
     setGalleryTab(tab)
     setSearchQuery('')
     setCopiedReferenceId(null)
+    setIsCuratedInspectorOpen(true)
     if (tab === 'showcase') setSelectedReferenceId(showcaseReferences[0]?.id ?? '')
     if (tab === 'atmospheres') setSelectedReferenceId(atmosphereReferences[0]?.id ?? '')
+  }
+
+  const selectReference = (item: ShowcaseReference) => {
+    setSelectedReferenceId(item.id)
+    setIsCuratedInspectorOpen(true)
   }
 
   const openReferenceDetails = (item: ShowcaseReference) => {
@@ -1214,6 +1266,9 @@ export default function DashboardPage() {
             copied={copiedReferenceId === selectedReference?.id}
             onCopy={copyReferencePrompt}
             onOpen={openReferenceDetails}
+            onClose={() => setIsCuratedInspectorOpen(false)}
+            onReopen={() => setIsCuratedInspectorOpen(true)}
+            open={isCuratedInspectorOpen}
           />
 
           <div className="order-2 min-w-0 overflow-hidden rounded-[28px] border border-[#d7ae68]/16 bg-[linear-gradient(180deg,rgba(10,9,7,0.9),rgba(4,4,3,0.94))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] xl:order-1">
@@ -1243,7 +1298,7 @@ export default function DashboardPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedReferenceId(item.id)}
+                  onClick={() => selectReference(item)}
                   onDoubleClick={() => openReferenceDetails(item)}
                   aria-label={`Select ${item.label} ${galleryTab === 'atmospheres' ? 'atmosphere' : 'showcase'} piece`}
                   aria-pressed={isSelected}

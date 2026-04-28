@@ -2,7 +2,7 @@
 
 ## Current version
 
-`0.3.3+11`
+`0.3.6+14`
 
 ## Scheme
 

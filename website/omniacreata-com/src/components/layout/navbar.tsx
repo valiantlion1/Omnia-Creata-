@@ -29,17 +29,19 @@ export function Navbar({ locale, messages }: NavbarProps) {
   const navigation = useMemo(
     () => [
       { id: "studio", label: "Studio", href: studioPageHref(locale) },
+      { id: "products", label: copy.nav.products, href: withLocalePrefix(locale, "/products") },
+      { id: "pricing", label: copy.nav.pricing, href: withLocalePrefix(locale, "/pricing") },
       { id: "about", label: copy.nav.about, href: withLocalePrefix(locale, "/about") },
       { id: "contact", label: copy.nav.contact, href: withLocalePrefix(locale, "/contact") },
     ],
-    [copy.nav.about, copy.nav.contact, locale],
+    [copy.nav.about, copy.nav.contact, copy.nav.pricing, copy.nav.products, locale],
   );
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1180px]">
-        <div className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[rgba(8,12,18,0.82)] shadow-[0_20px_64px_rgba(3,10,18,0.26)] backdrop-blur-2xl">
-          <div className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.09] bg-[rgba(7,7,6,0.7)] px-4 backdrop-blur-2xl sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1340px]">
+        <div className="overflow-hidden">
+          <div className="flex h-20 items-center justify-between gap-4">
             <BrandMark compact locale={locale} />
 
             <nav className="hidden items-center gap-1 lg:flex">
@@ -50,10 +52,10 @@ export function Navbar({ locale, messages }: NavbarProps) {
                   <Link
                     key={item.id}
                     className={cn(
-                      "rounded-full px-4 py-2.5 text-sm transition duration-300",
+                      "rounded-full px-4 py-2.5 text-sm text-foreground-soft transition duration-300",
                       active
-                        ? "bg-white/[0.08] text-foreground"
-                        : "text-foreground-soft hover:bg-white/[0.04] hover:text-foreground",
+                        ? "bg-white/[0.06] text-foreground"
+                        : "hover:bg-white/[0.035] hover:text-foreground",
                     )}
                     href={item.href as Route}
                   >
@@ -73,7 +75,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
               aria-controls="mobile-nav"
               aria-expanded={mobileOpen}
               aria-label="Toggle navigation"
-              className="inline-flex min-w-[84px] items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground transition hover:border-white/[0.16] hover:bg-white/[0.06] lg:hidden"
+              className="inline-flex min-w-[84px] items-center justify-center rounded-full border border-[rgba(216,181,109,0.32)] bg-white/[0.03] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground transition hover:border-[rgba(216,181,109,0.5)] hover:bg-white/[0.06] lg:hidden"
               onClick={() => setMobileOpen((value) => !value)}
               type="button"
             >
@@ -88,7 +90,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
             )}
             id="mobile-nav"
           >
-            <div className="space-y-4 border-t border-white/8 px-4 pt-4 sm:px-5">
+            <div className="space-y-4 border-t border-white/8 pb-4 pt-4">
               <div className="grid gap-2">
                 {navigation.map((item) => (
                   <Link

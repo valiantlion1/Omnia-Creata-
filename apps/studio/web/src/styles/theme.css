@@ -48,15 +48,15 @@
   --duration-slower: 600ms;
 
   /* ── Glow & Lighting ────────────────────── */
-  --glow-primary: 0 24px 72px -36px rgba(126, 156, 191, 0.32);
-  --glow-accent: 0 24px 72px -40px rgba(176, 205, 228, 0.24);
+  --glow-primary: 0 24px 72px -36px rgba(229, 173, 86, 0.34);
+  --glow-accent: 0 24px 72px -40px rgba(215, 174, 104, 0.25);
   --glow-white: 0 20px 42px -26px rgba(255, 255, 255, 0.14);
   --border-glow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(255, 255, 255, 0.02);
 
   /* ── Base dark background ───────────────── */
-  --bg: 12 16 21;
-  --bg-secondary: 18 23 30;
-  --bg-tertiary: 24 31 40;
+  --bg: 8 7 6;
+  --bg-secondary: 14 12 9;
+  --bg-tertiary: 24 19 12;
   --fg: 241 245 249;
   --fg-secondary: 212 220 229;
   --fg-muted: 125 135 149;
@@ -74,25 +74,25 @@
   --border-strong: rgba(255,255,255, 0.12);
   --border-focus: rgba(255,255,255, 0.20);
 
-  /* Default: Slate (graphite + mist blue) */
-  --primary: 111 137 165;
-  /* mist slate */
-  --primary-light: 188 209 229;
-  /* pale sky */
-  --primary-dark: 61 79 99;
-  /* graphite slate */
-  --accent: 146 184 214;
-  /* cool mist */
-  --accent-light: 224 234 244;
-  /* soft cloud */
+  /* Default: Foundation (black + warm gold) */
+  --primary: 229 173 86;
+  /* studio gold */
+  --primary-light: 241 191 103;
+  /* lit gold */
+  --primary-dark: 126 85 33;
+  /* aged bronze */
+  --accent: 215 174 104;
+  /* champagne */
+  --accent-light: 246 221 170;
+  /* soft gold */
 
   /* Gradient stops */
-  --gradient-from: 111 137 165;
-  /* mist slate */
-  --gradient-via: 146 184 214;
-  /* cool mist */
-  --gradient-to: 185 211 225;
-  /* pale powder */
+  --gradient-from: 229 173 86;
+  /* studio gold */
+  --gradient-via: 215 174 104;
+  /* champagne */
+  --gradient-to: 246 221 170;
+  /* soft gold */
 
   /* Success/Error */
   --success: 34 197 94;
@@ -100,8 +100,8 @@
   --warning: 250 204 21;
 
   /* Legacy support */
-  --goldA: 174 192 255;
-  --goldB: 118 195 255;
+  --goldA: 229 173 86;
+  --goldB: 241 191 103;
 }
 
 /* ── Theme: Cyberpunk ────────────────────── */
@@ -295,6 +295,6 @@ body {
 
 /* ── Selection Color ─────────────────────── */
 ::selection {
-  background: rgba(118,195,255,0.2);
+  background: rgba(241,191,103,0.22);
   color: white;
 }

@@ -250,7 +250,9 @@ describe('MediaLibraryPage final image library', () => {
   it('keeps My Images focused on final results and hides processing-only surfaces', async () => {
     renderWithProviders(<MediaLibraryPage />, { route: '/library/images' })
 
-    expect(await screen.findByText(/Golden portrait/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/Golden portrait/i)).length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: /Details/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Open in Create/i })).toBeInTheDocument()
     expect(screen.queryByText(/Retry portrait/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Held portrait/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Processing$/i })).not.toBeInTheDocument()
@@ -305,9 +307,11 @@ describe('MediaLibraryPage final image library', () => {
     renderWithProviders(<MediaLibraryPage />, { route: '/library/projects' })
 
     expect(await screen.findByText(/^Projects$/i)).toBeInTheDocument()
-    expect(await screen.findByText(/Portraits/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/Portraits/i))[0]).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Details/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /New project/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Create here/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Create here/i }).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Open project/i).length).toBeGreaterThan(0)
     expect(screen.getByDisplayValue(/Updated/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/Search projects/i)).toBeInTheDocument()
     expect(screen.queryByText(/kept together/i)).not.toBeInTheDocument()

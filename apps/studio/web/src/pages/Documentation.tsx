@@ -853,10 +853,10 @@ export default function DocumentationPage() {
         </header>
       )}
 
-      <AppPage className="max-w-[1260px] gap-8 py-8">
-        <section className="border-b border-white/[0.06] pb-8">
+      <AppPage className="max-w-[1480px] gap-5 py-5 md:py-6">
+        <section className="rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.78),rgba(9,8,7,0.94))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.32)] md:p-6">
           <div className="max-w-3xl">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[rgb(var(--primary-light))]/70">
               {isLearnSurface ? 'Studio manual' : 'Help center'}
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-[44px] text-balance">
@@ -866,7 +866,7 @@ export default function DocumentationPage() {
               {activeSection.intro}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              <Link to={isLearnSurface ? "/help" : "/learn/prompt-craft"} className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-medium text-black transition hover:bg-zinc-200">
+              <Link to={isLearnSurface ? "/help" : "/learn/prompt-craft"} className="rounded-full bg-[rgb(var(--primary-light))] px-3.5 py-1.5 text-[12px] font-medium text-black transition hover:bg-[rgb(var(--accent-light))]">
                 {isLearnSurface ? 'Back to Help' : 'Studio manual'}
               </Link>
               {activeSectionsList.map((section) => (
@@ -875,7 +875,7 @@ export default function DocumentationPage() {
                   to={`/${isLearnSurface ? 'learn' : 'help'}/${section.id}`}
                   className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium ring-1 transition ${
                     section.id === activeSection.id
-                      ? 'bg-white text-black ring-white'
+                      ? 'bg-[rgb(var(--primary-light))] text-black ring-[rgb(var(--primary-light))]'
                       : 'bg-white/[0.05] text-zinc-200 ring-white/10 hover:bg-white/[0.08]'
                   }`}
                 >
@@ -887,7 +887,7 @@ export default function DocumentationPage() {
         </section>
 
         <div className="xl:hidden">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgb(var(--primary-light))]/60">
             {isLearnSurface ? 'Manual sections' : 'Help topics'}
           </div>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -897,7 +897,7 @@ export default function DocumentationPage() {
                 to={`/${isLearnSurface ? 'learn' : 'help'}/${section.id}`}
                 className={`shrink-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium transition ${
                   section.id === activeSection.id
-                    ? 'border-white bg-white text-black'
+                    ? 'border-[rgb(var(--primary-light))] bg-[rgb(var(--primary-light))] text-black'
                     : 'border-white/[0.06] bg-[#0c0d12] text-zinc-300 hover:border-white/[0.12] hover:text-white'
                 }`}
               >
@@ -941,11 +941,11 @@ export default function DocumentationPage() {
             </div>
           </aside>
 
-          <div className="space-y-8">
+          <div className="space-y-8 rounded-[28px] border border-white/[0.05] bg-black/15 p-5 md:p-6">
               <>
                 <section className="border-b border-white/[0.06] pb-8">
                   <div className="flex items-start gap-3.5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.03]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[rgb(var(--primary-light))]/[0.08] ring-1 ring-[rgb(var(--primary-light))]/[0.12]">
                       {(() => {
                         const Icon = sectionIcons[activeSection.id]
                         return <Icon className="h-4 w-4 text-zinc-200" />
@@ -1022,14 +1022,14 @@ export default function DocumentationPage() {
                     {nextSection ? (
                       <Link
                         to={`/${isLearnSurface ? 'learn' : 'help'}/${nextSection.id}`}
-                        className="rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                        className="rounded-full bg-[rgb(var(--primary-light))] px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-[rgb(var(--accent-light))]"
                       >
                         Next: {nextSection.label}
                       </Link>
                     ) : (
                       <Link
                         to={isLearnSurface ? "/help" : "/learn/prompt-craft"}
-                        className="rounded-full bg-white px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-zinc-200"
+                        className="rounded-full bg-[rgb(var(--primary-light))] px-4 py-2 text-[12px] font-semibold text-black transition hover:bg-[rgb(var(--accent-light))]"
                       >
                         {isLearnSurface ? 'Back to Help' : 'Studio manual'}
                       </Link>

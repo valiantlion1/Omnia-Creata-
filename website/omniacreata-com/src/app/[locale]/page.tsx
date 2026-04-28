@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
-import { StudioMotionScene } from "@/components/site/studio-motion-scene";
-import { UseCaseStrip } from "@/components/site/use-case-strip";
 import { ButtonLink } from "@/components/ui/button";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
 import {
-  studioAccessHref,
-  studioAccessLabel,
   studioPrimaryHref,
   studioPrimaryLabel,
   withLocalePrefix,
@@ -21,16 +18,25 @@ type HomePageProps = {
 
 const workflowPoints = [
   {
-    title: "Shape the idea",
-    description: "Start with prompts, references, and direction instead of a blank box.",
+    title: "Studio",
+    label: "First product",
+    description: "Shape direction, generate, keep the selects, and return to the work.",
+    href: "/products/omnia-creata-studio",
+    cta: "Open Studio",
   },
   {
-    title: "Generate with intent",
-    description: "Move through variations without losing the visual thread of the project.",
+    title: "Products",
+    label: "What is next",
+    description: "More creative tools can join the system when they are ready.",
+    href: "/products",
+    cta: "View products",
   },
   {
-    title: "Keep the selects",
-    description: "Save the outputs and decisions worth building on.",
+    title: "Ecosystem",
+    label: "Connected",
+    description: "Assets, prompts, accounts, and future products can work together.",
+    href: "/about",
+    cta: "Explore ecosystem",
   },
 ];
 
@@ -46,9 +52,9 @@ export async function generateMetadata({
   return createPageMetadata({
     locale,
     path: "/",
-    title: "Omnia Creata",
+    title: "OmniaCreata",
     description:
-      "Omnia Creata builds creative software for image work, starting with Studio.",
+      "OmniaCreata is the public home for creative software, starting with OmniaCreata Studio.",
   });
 }
 
@@ -61,83 +67,65 @@ export default async function HomePage({ params }: HomePageProps) {
 
   return (
     <>
-      <section className="relative px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-[1180px]">
-          <div className="grid gap-10 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
-            <div className="space-y-7">
-              <p className="site-kicker">Creative software</p>
-              <h1 className="site-display max-w-[11ch]">
-                Omnia Creata
-                <br />
-                for image work with taste.
-              </h1>
-              <p className="site-copy">
-                Studio keeps prompts, references, runs, and selects in one visual workspace.
-              </p>
+      <section className="home-showcase relative overflow-hidden px-6 pb-8 pt-16 sm:px-8 lg:px-10">
+        <div className="home-showcase__glow" />
+        <div className="relative mx-auto grid max-w-[1340px] gap-12 lg:min-h-[650px] lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
+          <div className="home-showcase__copy">
+            <p className="site-kicker">Creative software ecosystem</p>
+            <h1 className="home-wordmark mt-7">OmniaCreata</h1>
+            <p className="mt-8 max-w-xl text-[2rem] leading-[1.25] text-foreground-soft sm:text-[2.45rem]">
+              Software for image work with taste.
+            </p>
+            <p className="mt-7 max-w-lg text-base leading-8 text-foreground-soft">
+              Studio is where the work starts.
+            </p>
 
-              <div className="flex flex-wrap gap-3">
-                <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
-                  {studioPrimaryLabel()}
-                </ButtonLink>
-                <ButtonLink href={withLocalePrefix(locale, "/contact")} size="lg" variant="secondary">
-                  Contact
-                </ButtonLink>
-              </div>
+            <div className="mt-9 flex flex-wrap gap-4">
+              <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
+                {studioPrimaryLabel()}
+              </ButtonLink>
+              <ButtonLink href={withLocalePrefix(locale, "/products")} size="lg" variant="secondary">
+                Explore ecosystem
+              </ButtonLink>
             </div>
-
-            <StudioMotionScene />
           </div>
 
-          <div className="mt-10">
-            <UseCaseStrip
-              items={[
-                "Character and portrait work",
-                "Concept art and key visuals",
-                "Product and editorial imagery",
-                "Moodboards and visual exploration",
-              ]}
+          <div className="home-hero-art">
+            <Image
+              alt="OmniaCreata Studio and ecosystem visual"
+              className="home-hero-art__image"
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 58vw"
+              src="/images/omnia-home-hero-art-v1.png"
             />
           </div>
         </div>
       </section>
 
-      <section className="px-6 py-12 sm:px-8 lg:px-10">
-        <div className="site-rule mx-auto grid max-w-[1180px] gap-10 pt-8 lg:grid-cols-[0.86fr_1.14fr]">
+      <section className="home-ecosystem px-6 pb-16 pt-12 sm:px-8 lg:px-10">
+        <div className="mx-auto grid max-w-[1340px] gap-12 border-t border-white/[0.1] pt-10 lg:grid-cols-[0.34fr_0.66fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Studio</p>
-            <h2 className="site-title max-w-[12ch]">Studio is where the work starts.</h2>
-            <p className="site-copy">
-              Shape direction. Generate. Keep the selects. Come back to the work with context.
-            </p>
+            <p className="site-kicker">The ecosystem</p>
+            <h2 className="site-title max-w-[12ch]">Built for a creative operating system.</h2>
+            <p className="site-copy">One place for direction, creation, and everything around it.</p>
           </div>
 
-          <div className="site-line-list">
+          <div className="home-ecosystem-grid">
             {workflowPoints.map((item) => (
-              <article className="site-line-item" key={item.title}>
-                <strong>{item.title}</strong>
-                <span>{item.description}</span>
+              <article className="home-ecosystem-card" key={item.title}>
+                <div className="home-ecosystem-card__icon" />
+                <div>
+                  <p>{item.title}</p>
+                  <span>{item.label}</span>
+                </div>
+                <div className="home-ecosystem-card__rule" />
+                <p className="home-ecosystem-card__copy">{item.description}</p>
+                <ButtonLink href={withLocalePrefix(locale, item.href)} size="md" variant="ghost">
+                  {item.cta}
+                </ButtonLink>
               </article>
             ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-6 pb-12 pt-2 sm:px-8 lg:px-10">
-        <div className="site-rule mx-auto grid max-w-[1180px] gap-6 pt-8 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div className="space-y-4">
-            <p className="site-kicker">Current access</p>
-            <h2 className="site-title max-w-[10ch]">One product now. More when they are ready.</h2>
-            <p className="site-copy">
-              Studio is the live route. The rest can earn space later.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <ButtonLink href={withLocalePrefix(locale, "/products/omnia-creata-studio")} size="lg" variant="secondary">
-              See Studio
-            </ButtonLink>
-            <ButtonLink href={studioAccessHref(locale)} size="lg" variant="primary">
-              {studioAccessLabel()}
-            </ButtonLink>
           </div>
         </div>
       </section>

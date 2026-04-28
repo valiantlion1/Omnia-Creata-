@@ -207,18 +207,18 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
    ═══════════════════════════════════════════════════ */
 
 .glass-card {
-  background: linear-gradient(180deg, rgba(20, 26, 34, 0.84) 0%, rgba(16, 21, 28, 0.9) 100%);
+  background: linear-gradient(180deg, rgba(21, 17, 11, 0.88) 0%, rgba(13, 11, 9, 0.94) 100%);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   -webkit-transform: translateZ(0);
   transform: translate3d(0, 0, 0);
   will-change: transform, backdrop-filter;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(215, 174, 104, 0.08);
   border-radius: 20px;
-  box-shadow: var(--border-glow), 0 18px 42px rgba(4,10,18,0.28);
+  box-shadow: var(--border-glow), 0 18px 42px rgba(0,0,0,0.34);
   transition: border-color .3s, box-shadow .3s;
 }
-.glass-card:hover { border-color: rgba(255,255,255,0.09); box-shadow: var(--border-glow), 0 22px 46px rgba(4,10,18,0.32); }
+.glass-card:hover { border-color: rgba(241,191,103,0.14); box-shadow: var(--border-glow), 0 22px 46px rgba(0,0,0,0.42); }
 
 .glass-sidebar {
   background: linear-gradient(180deg, rgba(14,13,10,0.97) 0%, rgba(8,8,7,0.99) 100%);

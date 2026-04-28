@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.26.225",
+  "build": "2026.04.27.232",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-26",
-  "notes": "Explore reference-fit polish tightens the page toward the selected premium gallery direction with a denser masonry wall, searchable curated references, black-and-gold filter chrome, a richer right-side details drawer, and a clearer signed-in sidebar Credits card while preserving the live Community feed."
+  "releaseDate": "2026-04-27",
+  "notes": "Account continues the corrected page-by-page reference pass with profile, public preview, billing, visibility, export, and gallery actions kept real while preserving the existing Studio sidebar navigation."
 }

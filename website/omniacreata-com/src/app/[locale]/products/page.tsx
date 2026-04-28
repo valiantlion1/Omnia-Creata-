@@ -45,7 +45,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
 
   return (
     <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1180px]">
+      <div className="mx-auto max-w-[1340px]">
         <div className="grid gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
           <div className="space-y-5">
             <p className="site-kicker">Products</p>

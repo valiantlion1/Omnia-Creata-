@@ -68,6 +68,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         company: String(formData.get("company") ?? ""),
         interest: String(formData.get("interest") ?? ""),
         message: String(formData.get("message") ?? ""),
+        website: String(formData.get("website") ?? ""),
       };
 
       const response = await fetch("/api/contact", {
@@ -98,11 +99,19 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
+      <input
+        autoComplete="off"
+        className="hidden"
+        name="website"
+        tabIndex={-1}
+        type="text"
+      />
       <div className="grid gap-5 sm:grid-cols-2">
         <Field
           autoComplete="name"
           defaultValue={prefill?.name}
           label={resolvedCopy.labels.name}
+          maxLength={120}
           name="name"
           placeholder={resolvedCopy.placeholders.name}
           required
@@ -111,6 +120,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
           autoComplete="email"
           defaultValue={prefill?.email}
           label={resolvedCopy.labels.email}
+          maxLength={254}
           name="email"
           placeholder={resolvedCopy.placeholders.email}
           required
@@ -123,12 +133,14 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
           autoComplete="organization"
           defaultValue={prefill?.company}
           label={resolvedCopy.labels.company}
+          maxLength={160}
           name="company"
           placeholder={resolvedCopy.placeholders.company}
         />
         <Field
           defaultValue={prefill?.interest}
           label={resolvedCopy.labels.interest}
+          maxLength={160}
           name="interest"
           placeholder={resolvedCopy.placeholders.interest}
           required
@@ -140,8 +152,9 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
           {resolvedCopy.labels.message}
         </span>
         <textarea
-          className="min-h-40 w-full rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(188,209,229,0.26)]"
+          className="min-h-40 w-full rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(216,181,109,0.42)]"
           defaultValue={prefill?.message}
+          maxLength={2500}
           name="message"
           placeholder={resolvedCopy.placeholders.message}
           required
@@ -168,6 +181,7 @@ type FieldProps = {
   autoComplete?: string;
   defaultValue?: string;
   label: string;
+  maxLength?: number;
   name: string;
   placeholder: string;
   required?: boolean;
@@ -178,6 +192,7 @@ function Field({
   autoComplete,
   defaultValue,
   label,
+  maxLength,
   name,
   placeholder,
   required = false,
@@ -188,8 +203,9 @@ function Field({
       <span className="text-sm font-medium text-foreground">{label}</span>
       <input
         autoComplete={autoComplete}
-        className="h-[52px] w-full rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(188,209,229,0.26)]"
+        className="h-[52px] w-full rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(216,181,109,0.42)]"
         defaultValue={defaultValue}
+        maxLength={maxLength}
         name={name}
         placeholder={placeholder}
         required={required}

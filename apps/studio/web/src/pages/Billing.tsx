@@ -173,22 +173,24 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-14 px-4 py-12 md:px-6">
+    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 md:px-5 xl:px-6">
       {/* ─── Hero ─── */}
-      <section className="flex flex-col items-center text-center space-y-4">
-        <div className="flex items-center gap-2 rounded-full border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/[0.06] px-3.5 py-1 text-xs font-semibold text-[rgb(var(--primary))] uppercase tracking-wider">
+      <section className="grid gap-4 rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.84),rgba(9,8,7,0.96))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)] md:p-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-end">
+        <div>
+        <div className="flex w-fit items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/25 bg-[rgb(var(--primary-light))]/[0.08] px-3.5 py-1 text-xs font-semibold text-[rgb(var(--primary-light))] uppercase tracking-wider">
           <CreditCard className="h-3.5 w-3.5" />
           <span>Subscription</span>
         </div>
-        <h1 className="font-[family-name:var(--font-display)] text-4xl md:text-5xl font-bold tracking-tight text-white">
+        <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-white md:text-4xl">
           Your subscription
         </h1>
-        <p className="text-zinc-500 max-w-xl text-[15px] leading-relaxed">
+        <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-zinc-400">
           Manage your plan, track credits, and unlock more from Studio.
         </p>
-        <p className="max-w-xl text-sm leading-relaxed text-zinc-400">
+        </div>
+        <p className="rounded-[20px] border border-white/[0.06] bg-black/25 p-4 text-sm leading-relaxed text-zinc-400">
           Billing questions, cancellations, and refund expectations are documented in the{' '}
-          <Link to="/legal/refunds" className="text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white">
+          <Link to="/legal/refunds" className="text-[rgb(var(--primary-light))] underline decoration-[rgb(var(--primary-light))]/30 underline-offset-4 transition hover:decoration-[rgb(var(--primary-light))]">
             Refund Policy
           </Link>
           .
@@ -196,7 +198,7 @@ export default function BillingPage() {
       </section>
 
       {isRoot && (
-        <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 text-zinc-300">
+        <div className="flex items-center justify-center gap-3 rounded-2xl border border-[rgb(var(--primary-light))]/[0.1] bg-[rgb(var(--primary-light))]/[0.05] p-4 text-zinc-300">
           <ShieldCheck className="h-5 w-5 text-zinc-200" />
           <p className="font-semibold text-sm">
             Owner access mirrors the public subscription surface without charging this account like a customer account.
@@ -263,8 +265,8 @@ export default function BillingPage() {
       {billing && !loading ? (
         <section className="grid gap-4 md:grid-cols-3">
           {/* Credits */}
-          <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition hover:border-white/[0.1]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary))]/[0.04] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
+            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Access state' : 'Credits available'}
@@ -283,8 +285,8 @@ export default function BillingPage() {
           </div>
 
           {/* Plan */}
-          <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition hover:border-white/[0.1]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--accent))]/[0.04] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
+            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--accent))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Shell plan mirror' : 'Current plan'}
@@ -306,8 +308,8 @@ export default function BillingPage() {
           </div>
 
           {/* Allowance */}
-          <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition hover:border-white/[0.1]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary))]/[0.04] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
+            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Metering mode' : 'Monthly allowance'}
@@ -358,12 +360,12 @@ export default function BillingPage() {
                 key={plan.id}
                 className={`relative flex flex-col rounded-2xl p-7 transition-all duration-300 ${
                   plan.recommended
-                    ? 'border border-[rgb(var(--primary))]/40 bg-gradient-to-b from-[rgb(var(--primary))]/[0.06] to-transparent shadow-[0_0_60px_-15px_rgb(var(--primary)/0.2)]'
-                    : 'border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1]'
+                    ? 'border border-[rgb(var(--primary-light))]/35 bg-gradient-to-b from-[rgb(var(--primary-light))]/[0.12] to-black/[0.14] shadow-[0_0_60px_-18px_rgba(241,191,103,0.45)]'
+                    : 'border border-white/[0.06] bg-black/[0.16] hover:border-[rgb(var(--primary-light))]/[0.14]'
                 }`}
               >
                 {plan.recommended ? (
-                  <div className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider shadow-lg">
+                  <div className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary-light))] px-3 py-0.5 text-[10px] font-bold text-black uppercase tracking-wider shadow-lg">
                     Recommended
                   </div>
                 ) : null}
@@ -397,7 +399,7 @@ export default function BillingPage() {
                       to="/signup"
                       className={`w-full rounded-xl py-3 px-6 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                         plan.recommended
-                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-white shadow-[0_0_20px_rgb(var(--primary)/0.3)] hover:shadow-[0_0_30px_rgb(var(--primary)/0.5)] hover:scale-[1.01]'
+                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary-light))] text-black shadow-[0_0_20px_rgba(241,191,103,0.24)] hover:shadow-[0_0_30px_rgba(241,191,103,0.36)] hover:scale-[1.01]'
                           : 'bg-white/[0.06] text-white hover:bg-white/[0.1]'
                       }`}
                     >
@@ -413,7 +415,7 @@ export default function BillingPage() {
                       disabled={isCurrentPlan || !checkoutEnabled || isCheckoutPending}
                       className={`w-full rounded-xl py-3 px-6 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                         plan.recommended
-                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-white shadow-[0_0_20px_rgb(var(--primary)/0.3)] hover:shadow-[0_0_30px_rgb(var(--primary)/0.5)] hover:scale-[1.01] disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100'
+                          ? 'bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary-light))] text-black shadow-[0_0_20px_rgba(241,191,103,0.24)] hover:shadow-[0_0_30px_rgba(241,191,103,0.36)] hover:scale-[1.01] disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100'
                           : 'bg-white/[0.06] text-white hover:bg-white/[0.1] disabled:opacity-30'
                       }`}
                     >

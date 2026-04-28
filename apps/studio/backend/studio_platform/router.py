@@ -2157,9 +2157,25 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         settings = get_settings()
         secret = reveal_secret_with_audit("PADDLE_WEBHOOK_SECRET", settings.paddle_webhook_secret).strip()
         if not secret:
-            return Response("Webhook secret not configured", status_code=500)
+            return Response("Webhook secret not configured", status_code=503)
+
+        content_type = str(request.headers.get("content-type") or "").strip().lower()
+        if content_type and "application/json" not in content_type:
+            return Response("Unsupported content type", status_code=415)
+
+        max_body_bytes = max(1, int(getattr(settings, "paddle_webhook_max_body_bytes", 256 * 1024) or 256 * 1024))
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > max_body_bytes:
+                    return Response("Webhook payload too large", status_code=413)
+            except ValueError:
+                return Response("Invalid content length", status_code=400)
 
         payload_bytes = await request.body()
+        if len(payload_bytes) > max_body_bytes:
+            return Response("Webhook payload too large", status_code=413)
+
         signature = request.headers.get("Paddle-Signature") or request.headers.get("paddle-signature")
 
         if not signature:
@@ -2172,8 +2188,15 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             payload = json.loads(payload_bytes)
         except json.JSONDecodeError:
             return Response("Invalid JSON", status_code=400)
+        if not isinstance(payload, dict):
+            return Response("Invalid JSON payload", status_code=400)
 
-        await service.process_paddle_webhook(payload)
+        try:
+            await service.process_paddle_webhook(payload)
+        except ValueError as exc:
+            return Response(str(exc), status_code=400)
+        except KeyError as exc:
+            return Response(f"Webhook target not found: {exc}", status_code=400)
         return {"status": "ok"}
 
     @router.post("/webhooks/lemonsqueezy")

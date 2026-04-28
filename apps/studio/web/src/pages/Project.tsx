@@ -252,16 +252,16 @@ export default function ProjectPage() {
   )
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 md:px-6">
+    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 md:px-5 xl:px-6">
       <Link
         to="/library/projects"
-        className="group flex w-fit items-center gap-1.5 rounded-full bg-white/[0.03] px-3.5 py-1.5 text-[12px] font-semibold text-zinc-400 ring-1 ring-white/[0.06] transition-all duration-300 hover:bg-white/[0.06] hover:text-white hover:ring-white/[0.1]"
+        className="group flex w-fit items-center gap-1.5 rounded-full bg-black/25 px-3.5 py-1.5 text-[12px] font-semibold text-zinc-400 ring-1 ring-[rgb(var(--primary-light))]/[0.08] transition-all duration-300 hover:bg-[rgb(var(--primary-light))]/[0.08] hover:text-white hover:ring-[rgb(var(--primary-light))]/[0.16]"
       >
         <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-x-0.5" />
         Projects
       </Link>
 
-      <section className="flex flex-col gap-5 rounded-[30px] border border-white/[0.06] bg-white/[0.025] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl md:p-6 xl:flex-row xl:items-end xl:justify-between">
+      <section className="flex flex-col gap-5 rounded-[30px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.84),rgba(9,8,7,0.96))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)] backdrop-blur-xl md:p-6 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
           <h1 className="truncate text-[30px] font-semibold tracking-[-0.05em] text-white md:text-[38px]">
             {project.title}
@@ -280,7 +280,7 @@ export default function ProjectPage() {
           {!isChatSurface ? (
             <Link
               to={`/create?projectId=${project.id}`}
-              className="group inline-flex items-center gap-2 rounded-[20px] bg-white px-5 py-3 text-sm font-semibold text-black transition-all duration-300 hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+              className="group inline-flex items-center gap-2 rounded-[20px] bg-[rgb(var(--primary-light))] px-5 py-3 text-sm font-semibold text-black transition-all duration-300 hover:bg-[rgb(var(--accent-light))] hover:scale-[1.02] active:scale-95 shadow-[0_0_20px_rgba(241,191,103,0.18)] hover:shadow-[0_0_30px_rgba(241,191,103,0.28)]"
             >
               Open Create
             </Link>
@@ -289,7 +289,7 @@ export default function ProjectPage() {
             <button
               onClick={() => exportMutation.mutate()}
               disabled={exportMutation.isPending}
-              className="group rounded-[20px] border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-white/[0.02] disabled:hover:border-white/10"
+            className="group rounded-[20px] border border-[rgb(var(--primary-light))]/[0.12] bg-black/[0.18] px-4 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-[rgb(var(--primary-light))]/[0.08] hover:border-[rgb(var(--primary-light))]/[0.22] hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-black/[0.18]"
             >
               <span className="inline-flex items-center gap-2">
                 <Download className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
@@ -299,14 +299,14 @@ export default function ProjectPage() {
           ) : null}
           <button
             onClick={() => shareMutation.mutate()}
-            className="group rounded-[20px] border border-white/10 bg-white/[0.02] px-4 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] active:scale-95"
+            className="group rounded-[20px] border border-[rgb(var(--primary-light))]/[0.12] bg-black/[0.18] px-4 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-[rgb(var(--primary-light))]/[0.08] hover:border-[rgb(var(--primary-light))]/[0.22] hover:scale-[1.02] active:scale-95"
           >
             Share
           </button>
         </div>
       </section>
 
-      {shareMessage ? <p className="text-sm text-cyan-200/85">{shareMessage}</p> : null}
+      {shareMessage ? <p className="text-sm text-[rgb(var(--primary-light))]/85">{shareMessage}</p> : null}
 
       <section className="min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.05] pb-5">

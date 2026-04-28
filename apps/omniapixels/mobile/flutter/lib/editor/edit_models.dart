@@ -33,10 +33,12 @@ class EditValues {
     const lumB = 0.072;
     final saturationValue = saturation.clamp(0.0, 2.0);
     final fadeValue = fade.clamp(0.0, 1.0);
-    final clarityValue = 1 + clarity.clamp(-1.0, 1.0) * 0.16;
+    final detailLift = ((detail.clamp(0.0, 1.0) - 0.5).clamp(0.0, 0.5)) * 0.24;
+    final clarityValue = 1 + clarity.clamp(-1.0, 1.0) * 0.16 + detailLift;
     final brightnessValue = brightness.clamp(0.65, 1.35);
     final contrastValue =
-        contrast.clamp(0.4, 1.8) * (1 - fadeValue * 0.28) * clarityValue;
+        (contrast.clamp(0.4, 1.8) * (1 - fadeValue * 0.28) * clarityValue)
+            .clamp(0.35, 1.95);
     final offset =
         128 * (1 - contrastValue) +
         exposure.clamp(-1.0, 1.0) * 90 +
@@ -99,6 +101,21 @@ class EditValues {
     );
   }
 
+  bool get isDefault => this == const EditValues();
+
+  bool sameAdjustmentsAs(EditValues other) {
+    return other.exposure == exposure &&
+        other.brightness == brightness &&
+        other.contrast == contrast &&
+        other.saturation == saturation &&
+        other.warmth == warmth &&
+        other.tint == tint &&
+        other.detail == detail &&
+        other.clarity == clarity &&
+        other.fade == fade &&
+        other.vignette == vignette;
+  }
+
   @override
   bool operator ==(Object other) {
     return other is EditValues &&
@@ -133,7 +150,7 @@ class EditValues {
   );
 }
 
-enum EditorTool { crop, rotate, light, color, detail, fx }
+enum EditorTool { crop, rotate, light, color, detail, fx, brush, text, sticker }
 
 extension EditorToolLabel on EditorTool {
   String get label => switch (this) {
@@ -143,6 +160,9 @@ extension EditorToolLabel on EditorTool {
     EditorTool.color => 'Color',
     EditorTool.detail => 'Detail',
     EditorTool.fx => 'FX',
+    EditorTool.brush => 'Brush',
+    EditorTool.text => 'Text',
+    EditorTool.sticker => 'Sticker',
   };
 }
 

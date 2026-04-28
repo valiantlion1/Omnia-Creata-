@@ -53,4 +53,4 @@ Every release-test APK must follow the same loop:
 
 ## Current next priority
 
-After `0.3.3+11`, test gallery and editor performance on the local emulator and Poco X6 Pro. The next implementation wave should be based on visible UI proof, `Build check`, and Settings > Diagnostics numbers, not guesswork.
+After `0.3.6+14`, test the new Brush, Text, and Sticker editor tools on emulator and real Android devices. The next implementation wave should improve direct manipulation: drag/scale text, manual crop handles, brush opacity/eraser, and gallery/editor performance proof through Settings > Diagnostics.
