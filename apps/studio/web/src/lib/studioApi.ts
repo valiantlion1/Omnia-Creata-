@@ -351,7 +351,18 @@ export function isTerminalJobStatus(status: JobStatus) {
   return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
 }
 
-type CreativeProfileKey = 'fast' | 'standard' | 'premium' | 'signature' | 'studio-default'
+type CreativeProfileKey =
+  | 'gpt-image-2'
+  | 'nano-banana'
+  | 'nano-banana-2'
+  | 'grok-imagine-image-pro'
+  | 'wan-2-7-image-pro'
+  | 'flux-2-max'
+  | 'fast'
+  | 'standard'
+  | 'premium'
+  | 'signature'
+  | 'studio-default'
 
 function cleanCreativeProfileLabel(value: string) {
   return value
@@ -368,6 +379,24 @@ function cleanCreativeProfileLabel(value: string) {
 
 export function getCreativeProfileKey(modelId: string | null | undefined): CreativeProfileKey {
   const normalized = modelId?.trim().toLowerCase() ?? ''
+  if (normalized.includes('gpt-image-2') || normalized.includes('openai:5@2')) {
+    return 'gpt-image-2'
+  }
+  if (normalized.includes('nano-banana-2') || normalized.includes('nano banana 2') || normalized.includes('google:4@3')) {
+    return 'nano-banana-2'
+  }
+  if (normalized.includes('nano-banana') || normalized.includes('nano banana') || normalized.includes('google:4@1')) {
+    return 'nano-banana'
+  }
+  if (normalized.includes('grok-imagine-image-pro') || normalized.includes('grok imagine image pro') || normalized.includes('xai:1@1')) {
+    return 'grok-imagine-image-pro'
+  }
+  if (normalized.includes('wan-2-7-image-pro') || normalized.includes('wan-2.7-image-pro') || normalized.includes('wan 2.7') || normalized.includes('alibaba:wan@2.7-image-pro')) {
+    return 'wan-2-7-image-pro'
+  }
+  if (normalized.includes('flux-2-max') || normalized.includes('flux.2 max') || normalized.includes('bfl:7@1')) {
+    return 'flux-2-max'
+  }
   if (
     normalized.includes('flux-2-klein') ||
     normalized.includes('flux.2-klein') ||
@@ -407,6 +436,18 @@ export function getCreativeProfileKey(modelId: string | null | undefined): Creat
 
 export function getCreativeProfileLabel(modelId: string | null | undefined, fallbackLabel?: string | null) {
   switch (getCreativeProfileKey(modelId)) {
+    case 'gpt-image-2':
+      return 'GPT Image 2'
+    case 'nano-banana':
+      return 'Nano Banana'
+    case 'nano-banana-2':
+      return 'Nano Banana 2'
+    case 'grok-imagine-image-pro':
+      return 'Grok Imagine Image Pro'
+    case 'wan-2-7-image-pro':
+      return 'Wan 2.7 Image Pro'
+    case 'flux-2-max':
+      return 'FLUX.2 Max'
     case 'fast':
       return 'Fast'
     case 'standard':
@@ -425,6 +466,15 @@ export function getCreativeProfileLabel(modelId: string | null | undefined, fall
 function getStudioModelFamilyName(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase()
   if (!normalized) return null
+  if (normalized.includes('gpt-image-2') || normalized.includes('gpt image 2') || normalized.includes('openai:5@2')) {
+    return 'GPT Image 2'
+  }
+  if (normalized.includes('grok-imagine-image-pro') || normalized.includes('grok imagine image pro') || normalized.includes('xai:1@1')) {
+    return 'Grok Imagine Image Pro'
+  }
+  if (normalized.includes('wan-2-7-image-pro') || normalized.includes('wan 2.7') || normalized.includes('alibaba:wan@2.7-image-pro')) {
+    return 'Wan 2.7 Image Pro'
+  }
   if (normalized.includes('flux-2-max') || normalized.includes('flux.2 max') || normalized.includes('flux 2 max')) {
     return 'FLUX.2 Max'
   }
@@ -499,6 +549,18 @@ export function getCreativeProfileDescription(
   fallbackDescription?: string | null,
 ) {
   switch (getCreativeProfileKey(modelId)) {
+    case 'gpt-image-2':
+      return 'Modern OpenAI image generation through Runware for fast starts, edits, and everyday Studio work.'
+    case 'nano-banana':
+      return 'Polished everyday generation for clean social, product, and chat-led creative work.'
+    case 'nano-banana-2':
+      return 'A higher-quality Nano Banana lane for final picks and premium creative output.'
+    case 'grok-imagine-image-pro':
+      return 'A premium pro lane for cinematic, social, and campaign-style outputs.'
+    case 'wan-2-7-image-pro':
+      return 'A high-end Wan image lane for explicit premium selections and stronger final-generation workflows.'
+    case 'flux-2-max':
+      return 'The strongest FLUX lane in the launch catalog for premium campaign visuals and reference-heavy final picks.'
     case 'fast':
       return 'Quick starts for ideas, composition tests, and fast modern variations.'
     case 'standard':
@@ -514,6 +576,18 @@ export function getCreativeProfileDescription(
 
 export function getCreativeProfileBadge(modelId: string | null | undefined) {
   switch (getCreativeProfileKey(modelId)) {
+    case 'gpt-image-2':
+      return 'Modern base'
+    case 'nano-banana':
+      return 'Everyday polish'
+    case 'nano-banana-2':
+      return 'Premium polish'
+    case 'grok-imagine-image-pro':
+      return 'Image Pro'
+    case 'wan-2-7-image-pro':
+      return 'Image Pro'
+    case 'flux-2-max':
+      return 'Strongest FLUX'
     case 'fast':
       return 'Quick starts'
     case 'standard':
@@ -864,6 +938,16 @@ export type ModelCatalogEntry = {
   id: string
   label: string
   description: string
+  display_label?: string | null
+  display_badge?: string | null
+  display_description?: string | null
+  creative_profile?: {
+    id: string
+    label: string
+    badge: string
+    description: string
+    default_lane: GenerationPricingLane | string
+  } | null
   min_plan: IdentityPlan
   credit_cost: number
   estimated_cost: number
@@ -875,6 +959,12 @@ export type ModelCatalogEntry = {
   provider_hint: string | null
   source_id?: string | null
   license_reference?: string | null
+}
+
+export type ModelsResponse = {
+  default_model_id?: string | null
+  launch_model_ids?: string[]
+  models: ModelCatalogEntry[]
 }
 
 export type LocalRuntimeSummary = {
@@ -1200,7 +1290,7 @@ export const studioApi = {
     apiFetch<Project>(`/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteProject: (projectId: string) =>
     apiFetch<{ project_id: string; status: string }>(`/projects/${projectId}`, { method: 'DELETE' }),
-  listModels: () => apiFetch<{ models: ModelCatalogEntry[] }>('/models'),
+  listModels: () => apiFetch<ModelsResponse>('/models'),
   listPresets: () => apiFetch<{ presets: PresetEntry[] }>('/presets'),
   getBillingSummary: () => apiFetch<BillingSummary>('/billing/summary'),
   checkout: (kind: CheckoutKind) =>

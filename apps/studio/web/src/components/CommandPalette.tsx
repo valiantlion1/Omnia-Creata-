@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Sparkles, MessageCircle, Library, LayoutDashboard, Settings as SettingsIcon, BookOpen } from 'lucide-react'
+import { IS_CHAT_ENABLED } from '@/lib/featureFlags'
 
 type CommandInfo = {
   id: string
@@ -58,13 +59,17 @@ export function CommandPalette() {
       category: 'Actions',
       action: () => navigate('/create'),
     },
-    {
-      id: 'nav-chat',
-      label: 'Open Chat',
-      icon: MessageCircle,
-      category: 'Actions',
-      action: () => navigate('/chat'),
-    },
+    ...(IS_CHAT_ENABLED
+      ? [
+          {
+            id: 'nav-chat',
+            label: 'Open Chat',
+            icon: MessageCircle,
+            category: 'Actions' as const,
+            action: () => navigate('/chat'),
+          },
+        ]
+      : []),
     {
       id: 'nav-library',
       label: 'Open Library',

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/i18n/config";
+import { contactChannels } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
 import { withLocalePrefix } from "@/lib/utils";
 
@@ -49,7 +50,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "2. Bilgilerin kullanim amaci",
           content:
-            "Toplanan bilgiler talepleri yanitlamak, urun uygunlugunu degerlendirmek, destek surecini yonetmek ve ekosistem guvenligini korumak icin kullanilir.",
+            "Toplanan bilgiler talepleri yanitlamak, urun uygunlugunu degerlendirmek, destek surecini yonetmek ve hizmet guvenligini korumak icin kullanilir.",
         },
         {
           title: "3. Iletisim formu islemleri",
@@ -64,7 +65,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "5. Paylasim ve ifsa",
           content:
-            "Omnia Creata, website uzerinden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
+            "OmniaCreata, website uzerinden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
         },
         {
           title: "6. Veri saklama",
@@ -74,7 +75,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "7. Kullanici talepleri",
           content:
-            "Erisim, duzeltme veya silme talepleri icin privacy@omniacreata.com adresi uzerinden bize ulasabilirsiniz.",
+            `Erisim, duzeltme veya silme talepleri icin ${contactChannels.legal} adresi uzerinden bize ulasabilirsiniz.`,
         },
       ]
     : [
@@ -101,7 +102,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "5. Sharing and disclosure",
           content:
-            "Omnia Creata does not sell personal information submitted through the website. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
+            "OmniaCreata does not sell personal information submitted through the website. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
         },
         {
           title: "6. Data retention",
@@ -111,7 +112,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "7. Your requests",
           content:
-            "If you have privacy questions or want to request access, correction, or deletion where applicable, contact privacy@omniacreata.com.",
+            `If you have privacy questions or want to request access, correction, or deletion where applicable, contact ${contactChannels.legal}.`,
         },
       ];
 
@@ -135,7 +136,7 @@ export default async function PrivacyPolicyPage({
       }
       documentDescription={
         isTurkish
-          ? "Temel basliklari tarayip ilgili konuda bize dogrudan privacy@omniacreata.com uzerinden ulasabilirsiniz."
+          ? `Temel basliklari tarayip ilgili konuda bize dogrudan ${contactChannels.legal} uzerinden ulasabilirsiniz.`
           : "Review the sections below for the main privacy commitments and contact us directly if you need a specific answer."
       }
       documentEyebrow={isTurkish ? "Belge" : "Document"}

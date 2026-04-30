@@ -86,7 +86,7 @@ export default function PrivacyPolicy() {
         <p>
           Where we are required to register with a data protection authority or appoint a representative — including
           under Article 27 GDPR for EU representation or VERBIS registration in Turkiye - the designated contact point
-          will be published here.
+          will be listed here.
         </p>
       </LegalSection>
 

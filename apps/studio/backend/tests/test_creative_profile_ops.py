@@ -5,8 +5,8 @@ from studio_platform.models import IdentityPlan, ModelCatalogEntry
 def test_resolve_creative_profile_prefers_model_specific_mapping() -> None:
     profile = resolve_creative_profile(model_id="realvis-xl", pricing_lane="fallback")
 
-    assert profile.id == "premium"
-    assert profile.label == "Premium"
+    assert profile.id == "nano-banana-2"
+    assert profile.label == "Nano Banana 2"
     assert profile.default_lane == "final"
 
 
@@ -33,5 +33,5 @@ def test_attach_creative_profile_enriches_model_catalog_entry() -> None:
     enriched = attach_creative_profile(model)
 
     assert enriched.creative_profile is not None
-    assert enriched.creative_profile.id == "fast"
-    assert enriched.creative_profile.badge == "Quick starts"
+    assert enriched.creative_profile.id == "gpt-image-2"
+    assert enriched.creative_profile.badge == "Modern base"

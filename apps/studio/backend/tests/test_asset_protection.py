@@ -205,7 +205,7 @@ async def test_clean_export_requires_pro_owner(tmp_path: Path) -> None:
     )
     await store.mutate(lambda state: state.assets.__setitem__(asset.id, asset))
 
-    with pytest.raises(PermissionError, match="requires Pro"):
+    with pytest.raises(PermissionError, match="requires Premium"):
         await service.resolve_clean_asset_export(asset.id, free_identity.id)
 
     with pytest.raises(PermissionError, match="asset owner"):

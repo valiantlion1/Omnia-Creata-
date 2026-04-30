@@ -45,8 +45,8 @@ describe('LoginPage', () => {
     renderWithProviders(<LoginPage />, { route: '/login?next=%2Fsubscription' })
 
     await userEvent.type(screen.getByLabelText(/email/i), 'founder@omniacreata.com')
-    await userEvent.type(screen.getByLabelText(/password/i), 'correct-password')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'correct-password')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(signInMock).toHaveBeenCalledTimes(1)
     expect(consumeRedirectAfterAuthMock).toHaveBeenCalledTimes(1)
@@ -59,8 +59,8 @@ describe('LoginPage', () => {
     renderWithProviders(<LoginPage />, { route: '/login' })
 
     await userEvent.type(screen.getByLabelText(/email/i), 'founder@omniacreata.com')
-    await userEvent.type(screen.getByLabelText(/password/i), 'wrong-password')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'wrong-password')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(await screen.findByText(/Invalid email or password/i)).toBeInTheDocument()
     expect(signInMock).toHaveBeenCalledTimes(1)
@@ -73,8 +73,8 @@ describe('LoginPage', () => {
     renderWithProviders(<LoginPage />, { route: '/login' })
 
     await userEvent.type(screen.getByLabelText(/email/i), 'founder@omniacreata.com')
-    await userEvent.type(screen.getByLabelText(/password/i), 'correct-password')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'correct-password')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(signInMock).toHaveBeenCalledTimes(1)
     expect(navigateMock).toHaveBeenCalledWith('/create', { replace: true })
@@ -86,8 +86,8 @@ describe('LoginPage', () => {
     renderWithProviders(<LoginPage />, { route: '/login' })
 
     await userEvent.type(screen.getByLabelText(/email/i), 'founder@omniacreata.com')
-    await userEvent.type(screen.getByLabelText(/password/i), 'pw')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'pw')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(await screen.findByText(/Unable to log in right now/i)).toBeInTheDocument()
   })

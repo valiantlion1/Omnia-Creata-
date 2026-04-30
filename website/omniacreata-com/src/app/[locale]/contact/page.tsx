@@ -5,7 +5,9 @@ import { ButtonLink } from "@/components/ui/button";
 import { getProducts } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { contactChannels, mailto } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
+import { isContactDeliveryConfigured } from "@/lib/server/contact-delivery";
 import { studioPrimaryHref, studioPrimaryLabel, withLocalePrefix } from "@/lib/utils";
 
 type ContactPageProps = {
@@ -34,7 +36,7 @@ export async function generateMetadata({
     path: "/contact",
     title: "Contact",
     description:
-      "Talk to Omnia Creata about Studio, access, pricing, partnerships, privacy, and legal questions.",
+      "Talk to OmniaCreata about Studio, access, pricing, partnerships, privacy, and legal questions.",
   });
 }
 
@@ -55,12 +57,13 @@ export default async function ContactPage({
   const platform = pickFirst(query.platform);
   const intent = pickFirst(query.intent);
   const productName = products.find((item) => item.slug === productSlug)?.name;
+  const contactFormReady = isContactDeliveryConfigured();
 
   const prefilledInterest = productName ? `${productName} conversation` : "";
   const prefilledMessage =
     productName || platform || intent
       ? [
-          "Hello Omnia Creata team,",
+          "Hello OmniaCreata team,",
           "",
           "I would like to talk about:",
           productName ? `Product: ${productName}` : "",
@@ -73,47 +76,79 @@ export default async function ContactPage({
 
   const routes = [
     {
+      title: "General",
+      address: contactChannels.general,
+      description: "The main contact address for OmniaCreata.",
+    },
+    {
       title: "Studio",
-      address: "hello@omniacreata.com",
-      description: "Questions about Studio, access, and the product itself.",
+      address: contactChannels.studio,
+      description: "Studio access and product questions.",
+    },
+    {
+      title: "Support",
+      address: contactChannels.support,
+      description: "Account, access, and product support.",
+    },
+    {
+      title: "Billing",
+      address: contactChannels.billing,
+      description: "Pricing, payments, credits, and refund questions.",
+    },
+    {
+      title: "Legal",
+      address: contactChannels.legal,
+      description: "Privacy, terms, and formal requests.",
     },
     {
       title: "Partnerships",
-      address: "partnerships@omniacreata.com",
-      description: "Collaborations, business conversations, and commercial inquiries.",
-    },
-    {
-      title: "Privacy and legal",
-      address: "privacy@omniacreata.com",
-      description: "Privacy, policy, and legal matters.",
+      address: contactChannels.partnerships,
+      description: "Partnership and business conversations.",
     },
   ];
 
   return (
-    <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1340px]">
-        <div className="max-w-[860px] space-y-5">
-          <p className="site-kicker">Contact</p>
-          <h1 className="site-title max-w-[8ch]">Talk to us.</h1>
-          <p className="site-copy">
-            Studio, pricing, partnerships, or legal. Pick the inbox that fits, or send one note
-            and we will route it.
-          </p>
+    <section className="site-page">
+      <div className="site-page-inner">
+        <div className="site-page-hero site-page-hero--compact lg:grid-cols-[0.88fr_1.12fr]">
+          <div className="site-page-copy">
+            <p className="site-kicker">Contact</p>
+            <h1 className="site-page-title">
+              Talk to <strong>OmniaCreata.</strong>
+            </h1>
+            <p className="site-page-lede">
+              One direct address for Studio access, pricing, billing, partnerships, privacy, and legal
+              questions.
+            </p>
 
-          <div className="flex flex-wrap gap-3">
-            <ButtonLink href="mailto:hello@omniacreata.com" size="lg" variant="primary">
-              Email us
-            </ButtonLink>
-            <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="secondary">
-              {studioPrimaryLabel()}
-            </ButtonLink>
+            <div className="site-page-actions">
+              <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
+                Email us
+              </ButtonLink>
+              <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="secondary">
+                {studioPrimaryLabel()}
+              </ButtonLink>
+            </div>
+          </div>
+
+          <div className="site-premium-card p-6 sm:p-8">
+            <p className="site-kicker">Direct contact</p>
+            <p className="mt-5 break-all text-xl font-semibold leading-tight text-foreground sm:text-3xl">
+              {contactChannels.general}
+            </p>
+            <p className="mt-5 text-sm leading-7 text-foreground-soft">
+              For the fastest response, email us directly.
+            </p>
           </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Email</p>
-            <h2 className="site-title max-w-[10ch]">Start with the right inbox.</h2>
+            <p className="site-kicker">Best way</p>
+            <h2 className="site-title max-w-[10ch]">Send one clear note.</h2>
+            <p className="site-copy">
+              Mention Studio access, billing, partnership, privacy, legal, or product support.
+            </p>
           </div>
 
           <div className="site-line-list">
@@ -127,33 +162,58 @@ export default async function ContactPage({
           </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
-          <div className="space-y-4">
-            <p className="site-kicker">Contact form</p>
-            <h2 className="site-title max-w-[9ch]">Or send one note.</h2>
-            <p className="site-copy">Short, clear, human.</p>
+        {contactFormReady ? (
+          <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
+            <div className="space-y-4">
+              <p className="site-kicker">Contact form</p>
+              <h2 className="site-title max-w-[9ch]">Use the form.</h2>
+              <p className="site-copy">Short, clear, human.</p>
+            </div>
+
+            <ContactForm
+              copy={messages.contactForm}
+              prefill={{
+                interest: prefilledInterest,
+                message: prefilledMessage,
+              }}
+            />
           </div>
+        ) : (
+          <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
+            <div className="space-y-4">
+              <p className="site-kicker">Email</p>
+              <h2 className="site-title max-w-[9ch]">Email us directly.</h2>
+              <p className="site-copy">
+                Use this address for Studio, billing, privacy, legal, partnerships, and product
+                questions.
+              </p>
+            </div>
 
-          <ContactForm
-            copy={messages.contactForm}
-            prefill={{
-              interest: prefilledInterest,
-              message: prefilledMessage,
-            }}
-          />
-        </div>
+            <article className="site-line-item">
+              <strong>Email</strong>
+              <span className="break-all text-foreground">{contactChannels.general}</span>
+              <div className="pt-2">
+                <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
+                  Email us
+                </ButtonLink>
+              </div>
+            </article>
+          </div>
+        )}
 
-        <div className="site-rule mt-12 grid gap-6 pt-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="site-band lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="site-kicker">Next step</p>
-            <p className="site-copy mt-4">If you want to stay in the product flow, go to Studio.</p>
+            <p className="site-copy mt-4">
+              For product context, start with Studio. For access or billing, email us.
+            </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href={withLocalePrefix(locale, "/products/omnia-creata-studio")} size="lg" variant="secondary">
-              See Studio
+            <ButtonLink href={withLocalePrefix(locale, "/about")} size="lg" variant="secondary">
+              About
             </ButtonLink>
-            <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
-              {studioPrimaryLabel()}
+            <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
+              Email us
             </ButtonLink>
           </div>
         </div>

@@ -91,6 +91,16 @@ class FakeGateway:
             estimated_cost_usd=0.001,
         )
 
+    async def _chat_with_runware(self, **_: object) -> LLMResult | None:
+        if self._error is not None:
+            raise self._error
+        return LLMResult(
+            text=self._text,
+            provider="runware",
+            model="zai:glm@5.1",
+            estimated_cost_usd=0.0,
+        )
+
 
 def test_build_default_smoke_cases_filters_selected_provider() -> None:
     cases = build_default_smoke_cases(selected_provider="runware", include_failure_probe=False)

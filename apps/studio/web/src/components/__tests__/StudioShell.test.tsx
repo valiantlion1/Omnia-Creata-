@@ -25,7 +25,7 @@ const mockState = vi.hoisted(() => ({
   getMyProfile: vi.fn().mockResolvedValue({
     profile: {
       usage_summary: {
-        plan_label: 'Pro',
+        plan_label: 'Premium',
         credits_remaining: 240,
         allowance: 1200,
         progress_percent: 20,
@@ -97,7 +97,7 @@ describe('StudioShell', () => {
         avatar_url: null,
       },
       plan: {
-        label: 'Pro',
+        label: 'Premium',
         monthly_credits: 1200,
         can_generate: true,
       },

@@ -1,6 +1,11 @@
 # Studio Production Roadmap
 
-Status baseline: `0.6.0-alpha` / build `2026.04.19.160` / channel `alpha` / status `prelaunch`
+Status baseline: `0.6.0-alpha` / build `2026.04.29.244` / channel `alpha` / status `prelaunch`
+
+Doctrine baseline (2026-04-29):
+- v1 launch surface is `Create` only, gated to image generation on Runware FLUX.2 across `Fast`, `Standard`, and `Premium` lanes.
+- `Chat` is deferred for v1 and must stay hidden in the public product until a chat provider is reintroduced.
+- Build `.244` carries the doctrine/copy shift but has not yet been re-proofed; the regression, build, local verify, provider smoke, and staging loops below remain the gating proof for any public paid exit.
 
 This document is the canonical hardening roadmap for taking Studio from the current alpha-prelaunch stack to a production platform that can eventually sustain `1M+` concurrent active users with `99.9%` availability. Future Codex sessions should implement numbered packages from this document instead of creating parallel roadmap variants.
 

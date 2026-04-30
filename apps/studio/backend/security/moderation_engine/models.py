@@ -104,6 +104,55 @@ class LlmModerationAnalysis:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageModerationAnalysis:
+    """Result of analyzing a generated image with a vision-capable model.
+
+    Mirrors the prompt-side `LlmModerationAnalysis` vocabulary so the
+    decision engine can apply the same balanced action ladder
+    (allow / log / review / soft_block / hard_block) without learning
+    a second taxonomy for image post-checks.
+    """
+
+    risk_score: int = 0
+    recommended_action: ModerationAction = ModerationAction.ALLOW
+    reason_code: str | None = None
+    age_ambiguity: AgeAmbiguity = AgeAmbiguity.UNKNOWN
+    sexual_intent: SexualIntent = SexualIntent.NONE
+    context_type: ContextType = ContextType.UNKNOWN
+    explanation: str = ""
+    signals: tuple[str, ...] = ()
+    model: str | None = None
+    skipped: bool = False
+    skipped_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ImageModerationDecision:
+    """Final decision applied to a generated image asset.
+
+    `library_state_override` is what the asset's library_state should be set to
+    if the analysis demands it (e.g. "blocked" or "needs_review"); a value of
+    None means the existing pipeline default stays.
+    """
+
+    result: ModerationResult = ModerationResult.SAFE
+    action: ModerationAction = ModerationAction.ALLOW
+    risk_level: PromptRiskLevel = PromptRiskLevel.LOW
+    risk_score: int = 0
+    reason: str | None = None
+    library_state_override: str | None = None
+    age_ambiguity: AgeAmbiguity = AgeAmbiguity.UNKNOWN
+    sexual_intent: SexualIntent = SexualIntent.NONE
+    context_type: ContextType = ContextType.UNKNOWN
+    signals: tuple[str, ...] = ()
+    explanation: str = ""
+    analyzer_used: bool = False
+    analyzer_model: str | None = None
+    analyzer_skipped: bool = False
+    analyzer_skipped_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class PromptModerationDecision:
     result: ModerationResult = ModerationResult.SAFE
     action: ModerationAction = ModerationAction.ALLOW

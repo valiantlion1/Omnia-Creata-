@@ -12,7 +12,7 @@ export type AccessLink = {
 };
 
 export type HubSection = {
-  id: "overview" | "access" | "capabilities" | "ecosystem-role";
+  id: "overview" | "access" | "capabilities" | "role";
   title: string;
   description: string;
 };
@@ -40,7 +40,7 @@ export type ProductRecord = {
     title: string;
     description: string;
   }>;
-  ecosystemPoints: Array<{
+  rolePoints: Array<{
     title: string;
     description: string;
   }>;
@@ -52,68 +52,48 @@ export const products: ProductRecord[] = [
     slug: "omnia-creata-studio",
     name: "OmniaCreata Studio",
     shortDescription:
-      "Prompts, references, runs, and selects in one visual workspace.",
+      "Image generation, editing, review, and saved selects in one workspace.",
     summary:
-      "Studio keeps visual direction, generation, review, and saved history in one place.",
-    status: "preview",
+      "Studio is being prepared as a focused workspace for image work.",
+    status: "planned",
     badge: "Studio",
-    headline: "Image work, with taste.",
-    subheadline: "Built for people who want more than a lucky reroll.",
+    headline: "Image work that stays organized.",
+    subheadline: "Built for people who need more than a lucky reroll.",
     roleTitle: "Studio comes first.",
     roleDescription:
-      "It is the first public expression of Omnia Creata.",
+      "Public access details will be published when Studio is ready.",
     platformMatrix: [
       {
         platform: "web",
-        status: "preview",
-        note: "Open now.",
-      },
-      {
-        platform: "pwa",
-        status: "preview",
-        note: "Same workspace, installable later.",
-      },
-      {
-        platform: "desktop",
-        status: "preview",
-        note: "Desktop is not public yet.",
-      },
-      {
-        platform: "ios",
         status: "planned",
-        note: "iOS is not public yet.",
-      },
-      {
-        platform: "android",
-        status: "planned",
-        note: "Android is not public yet.",
+        note: "Web access will be published when Studio is ready.",
       },
     ],
     primaryCTA: {
-      href: "/products/omnia-creata-studio",
-      label: "See Studio",
+      href: "/contact",
+      label: "Contact",
     },
     accessLinks: [],
     hubNav: [
       {
         id: "overview",
         title: "Overview",
-        description: "What Studio is and why it matters first.",
+        description: "What Studio does for image work.",
       },
       {
         id: "access",
         title: "Access",
-        description: "How Studio is being opened up.",
+        description: "When Studio access will be available.",
       },
       {
         id: "capabilities",
         title: "Capabilities",
-        description: "The core jobs Studio is built to handle.",
+        description: "The core jobs Studio handles.",
       },
       {
-        id: "ecosystem-role",
+        id: "role",
         title: "Role",
-        description: "Why Studio is the first Omnia Creata product in public view.",
+        description: "Why Studio stays focused.",
       },
     ],
     surfaceType: ["web", "pwa", "desktop"],
@@ -121,34 +101,34 @@ export const products: ProductRecord[] = [
       {
         title: "Shape the brief",
         description:
-          "Keep prompts, references, and direction together before the first run.",
+          "Keep the goal, prompt, reference, and direction together before a run.",
       },
       {
-        title: "Generate in context",
+        title: "Generate and edit",
         description:
-          "Move through variations without losing the thread of the project.",
+          "Move through variations, edits, and refinements without switching tools.",
       },
       {
-        title: "Keep the selects",
+        title: "Review and keep selects",
         description:
-          "Save the outputs and decisions worth building on.",
+          "Save the outputs and decisions worth returning to later.",
       },
     ],
-    ecosystemPoints: [
+    rolePoints: [
       {
-        title: "The company becomes real through the product",
+        title: "The product stays focused",
         description:
-          "Studio is the clearest expression of what Omnia Creata is building.",
+          "Studio is being prepared around a clear image workflow.",
       },
       {
-        title: "The launch stays honest",
+        title: "The public site stays honest",
         description:
-          "Only the product that is close enough to matter should take center stage.",
+          "Access, pricing, and product details are published only when ready.",
       },
       {
-        title: "Future products can arrive later",
+        title: "New surfaces come later",
         description:
-          "The rest of the Omnia Creata line can earn space when it is ready to stand on its own.",
+          "Additional products are added only when they have a clear job.",
       },
     ],
     companionSlugs: [],

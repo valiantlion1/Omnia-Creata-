@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { StudioMotionScene } from "@/components/site/studio-motion-scene";
 import { ButtonLink } from "@/components/ui/button";
 import { isLocale } from "@/i18n/config";
+import { contactChannels } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
-import { studioPrimaryHref, studioPrimaryLabel, withLocalePrefix } from "@/lib/utils";
+import {
+  studioPrimaryHref,
+  studioPrimaryLabel,
+  withLocalePrefix,
+} from "@/lib/utils";
 
 type AboutPageProps = {
   params: Promise<{
@@ -14,16 +18,16 @@ type AboutPageProps = {
 
 const principles = [
   {
-    title: "Taste matters",
-    description: "The tool should help the work look intentional, not generic.",
+    title: "Focused first",
+    description: "The company is preparing one useful product before adding more surfaces.",
   },
   {
-    title: "Workflow matters",
-    description: "Direction, generation, review, and reuse belong to the same surface.",
+    title: "Useful before loud",
+    description: "The product should help creative work move forward, not hide weak workflow behind style.",
   },
   {
-    title: "Timing matters",
-    description: "We would rather show one real product than five unfinished ones.",
+    title: "Honest public details",
+    description: "Access, pricing, and model details are published only when they are ready.",
   },
 ];
 
@@ -41,7 +45,7 @@ export async function generateMetadata({
     path: "/about",
     title: "About",
     description:
-      "Omnia Creata builds creative software for image work, starting with Studio.",
+      "OmniaCreata builds creative software for image work, starting with Studio.",
   });
 }
 
@@ -53,33 +57,40 @@ export default async function AboutPage({ params }: AboutPageProps) {
   }
 
   return (
-    <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1340px]">
-        <div className="grid gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
-          <div className="space-y-5">
+    <section className="site-page">
+      <div className="site-page-inner">
+        <div className="site-page-hero lg:grid-cols-[0.84fr_1.16fr]">
+          <div className="site-page-copy">
             <p className="site-kicker">About</p>
-            <h1 className="site-title max-w-[10ch]">We make creative software for image work.</h1>
-            <p className="site-copy">
-              Studio comes first. The rest can wait until it is real, useful, and ready to stand
-              on its own.
+            <h1 className="site-page-title">
+              A software company for <strong>image work.</strong>
+            </h1>
+            <p className="site-page-lede">
+              OmniaCreata builds creative software for image work. Studio is being prepared, and
+              product access will be published when it is ready.
             </p>
-            <div className="flex flex-wrap gap-3">
-              <ButtonLink href={withLocalePrefix(locale, "/products/omnia-creata-studio")} size="lg" variant="secondary">
-                See Studio
-              </ButtonLink>
+            <div className="site-page-actions">
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
                 {studioPrimaryLabel()}
+              </ButtonLink>
+              <ButtonLink href={withLocalePrefix(locale, "/contact")} size="lg" variant="secondary">
+                Contact
               </ButtonLink>
             </div>
           </div>
 
-          <StudioMotionScene variant="compact" />
+          <div className="site-page-visual">
+            <div className="site-page-visual__caption">
+              <span>Company</span>
+              <strong>A focused software company for serious creative workflows.</strong>
+            </div>
+          </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">What matters</p>
-            <h2 className="site-title max-w-[11ch]">Taste, workflow, and timing.</h2>
+            <h2 className="site-title max-w-[11ch]">A focused product.</h2>
           </div>
 
           <div className="site-line-list">
@@ -89,6 +100,26 @@ export default async function AboutPage({ params }: AboutPageProps) {
                 <span>{item.description}</span>
               </article>
             ))}
+          </div>
+        </div>
+
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
+          <div className="space-y-4">
+            <p className="site-kicker">Company contact</p>
+            <h2 className="site-title max-w-[10ch]">Reach OmniaCreata.</h2>
+          </div>
+
+          <div className="site-line-item">
+            <strong>{contactChannels.general}</strong>
+            <span>
+              Use this address for Studio access, pricing, billing, privacy, legal, product,
+              and partnership questions.
+            </span>
+            <div className="pt-2">
+              <ButtonLink href={withLocalePrefix(locale, "/contact")} size="lg" variant="secondary">
+                Contact
+              </ButtonLink>
+            </div>
           </div>
         </div>
       </div>

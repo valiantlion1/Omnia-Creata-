@@ -18,7 +18,7 @@ from ..versioning import load_version_info
 # Constants
 # ---------------------------------------------------------------------------
 
-CHAT_LAUNCH_GRADE_PROVIDERS = frozenset({"gemini", "openrouter", "openai"})
+CHAT_LAUNCH_GRADE_PROVIDERS = frozenset({"gemini", "openrouter", "runware", "openai"})
 IMAGE_LAUNCH_GRADE_PROVIDERS = frozenset({"openai", "fal", "runware"})
 IMAGE_FALLBACK_ONLY_PROVIDERS = frozenset({"huggingface", "pollinations"})
 IMAGE_DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
@@ -29,10 +29,10 @@ IMAGE_DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
 
 
 def _protected_beta_chat_provider(settings: Settings) -> str:
-    value = str(getattr(settings, "protected_beta_chat_provider", "gemini") or "").strip().lower()
+    value = str(getattr(settings, "protected_beta_chat_provider", "runware") or "").strip().lower()
     if value in CHAT_LAUNCH_GRADE_PROVIDERS:
         return value
-    return "gemini"
+    return "runware"
 
 
 def _protected_beta_image_provider(settings: Settings) -> str:
@@ -307,6 +307,8 @@ def chat_provider_is_configured(*, settings: Settings, provider: str) -> bool:
         return has_configured_secret(settings.gemini_api_key)
     if normalized == "openrouter":
         return has_configured_secret(settings.openrouter_api_key)
+    if normalized == "runware":
+        return has_configured_secret(settings.runware_api_key)
     if normalized == "openai":
         return has_configured_secret(settings.openai_api_key)
     return False
@@ -318,6 +320,8 @@ def _chat_provider_default_model(*, settings: Settings, provider: str) -> str | 
         return str(settings.gemini_model or "").strip() or None
     if normalized == "openrouter":
         return str(settings.openrouter_model or "").strip() or None
+    if normalized == "runware":
+        return str(settings.runware_chat_model or "").strip() or None
     if normalized == "openai":
         return str(settings.openai_model or "").strip() or None
     return None
@@ -329,6 +333,8 @@ def _chat_provider_premium_model(*, settings: Settings, provider: str) -> str | 
         return str(settings.gemini_premium_model or "").strip() or None
     if normalized == "openrouter":
         return str(settings.openrouter_premium_model or "").strip() or None
+    if normalized == "runware":
+        return str(settings.runware_chat_premium_model or "").strip() or None
     if normalized == "openai":
         return str(settings.openai_premium_model or "").strip() or None
     return None
@@ -351,6 +357,8 @@ def chat_provider_service_tier(*, settings: Settings, provider: str) -> str:
         return str(settings.gemini_service_tier or "free").strip().lower() or "free"
     if normalized == "openrouter":
         return str(settings.openrouter_service_tier or "paid").strip().lower() or "paid"
+    if normalized == "runware":
+        return str(settings.runware_service_tier or "paid").strip().lower() or "paid"
     if normalized == "openai":
         return str(settings.openai_service_tier or "paid").strip().lower() or "paid"
     return "paid"
@@ -667,7 +675,7 @@ def _build_chat_provider_truth(
     provider_states: list[dict[str, Any]] = []
 
     if isinstance(providers_payload, dict):
-        for provider_name in ("gemini", "openrouter", "openai"):
+        for provider_name in ("gemini", "openrouter", "runware", "openai"):
             payload = providers_payload.get(provider_name)
             if not isinstance(payload, dict):
                 continue
@@ -681,7 +689,7 @@ def _build_chat_provider_truth(
             )
 
     if not provider_states:
-        for provider_name in ("gemini", "openrouter", "openai"):
+        for provider_name in ("gemini", "openrouter", "runware", "openai"):
             configured = chat_provider_is_configured(settings=settings, provider=provider_name)
             provider_states.append(
                 _serialize_chat_provider_state(

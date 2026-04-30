@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { Link } from 'react-router-dom'
-import { APP_BUILD_LABEL, APP_VERSION_LABEL } from '@/lib/appVersion'
 import { useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 
 export function AppPage({
@@ -204,34 +203,17 @@ export function StatusPill({
 export function LegalFooter({
   className,
   showCookiePreferences = true,
-  showBuildInfo = false,
 }: {
   className?: string
   showCookiePreferences?: boolean
-  showBuildInfo?: boolean
 }) {
   const { openPreferences } = useStudioCookiePreferences()
 
   return (
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="hidden flex-wrap items-center gap-x-3 gap-y-1">
-          <span>© OmniaCreata 2026</span>
-          <span className="text-zinc-600">·</span>
-          <span className="hidden text-zinc-600" />
-          <span className="text-zinc-600">·</span>
-          <span className="hidden text-zinc-600" />
-        </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>OmniaCreata 2026</span>
-          {showBuildInfo ? (
-            <>
-              <span className="text-zinc-700">·</span>
-              <span className="text-zinc-500">{APP_VERSION_LABEL}</span>
-              <span className="text-zinc-700">·</span>
-              <span className="text-zinc-500">build {APP_BUILD_LABEL}</span>
-            </>
-          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link to="/legal/terms" className="transition hover:text-white">
@@ -240,8 +222,8 @@ export function LegalFooter({
           <Link to="/legal/privacy" className="transition hover:text-white">
             Privacy
           </Link>
-          <Link to="/legal/acceptable-use" className="transition hover:text-white">
-            Acceptable Use
+          <Link to="/legal/refunds" className="transition hover:text-white">
+            Refunds
           </Link>
           <Link to="/legal/cookies" className="transition hover:text-white">
             Cookies
@@ -251,9 +233,6 @@ export function LegalFooter({
               Cookie preferences
             </button>
           ) : null}
-          <Link to="/help#faq" className="transition hover:text-white">
-            FAQ
-          </Link>
         </div>
       </div>
     </footer>

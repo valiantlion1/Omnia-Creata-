@@ -1,10 +1,7 @@
 import { isLocale } from "@/i18n/config";
 
 export const STUDIO_PREVIEW_URL =
-  process.env.NEXT_PUBLIC_STUDIO_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://127.0.0.1:5173"
-    : "");
+  process.env.NEXT_PUBLIC_STUDIO_URL || "";
 
 export const STUDIO_PREVIEW_AVAILABLE = Boolean(STUDIO_PREVIEW_URL);
 
@@ -46,17 +43,17 @@ export function studioPageHref(locale: string) {
 }
 
 export function studioPrimaryHref(locale: string) {
-  return STUDIO_PREVIEW_AVAILABLE ? studioUrl("/") : studioPageHref(locale);
+  return STUDIO_PREVIEW_AVAILABLE ? studioUrl("/") : withLocalePrefix(locale, "/contact");
 }
 
 export function studioPrimaryLabel() {
-  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "See Studio";
+  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "Contact";
 }
 
 export function studioAccessHref(locale: string) {
   return STUDIO_PREVIEW_AVAILABLE
     ? studioUrl("/")
-    : `${withLocalePrefix(locale, "/contact")}?intent=studio_preview`;
+    : `${withLocalePrefix(locale, "/contact")}?intent=studio_access`;
 }
 
 export function studioAccessLabel() {

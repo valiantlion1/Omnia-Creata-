@@ -32,7 +32,7 @@ describe('ChatPage (guest mode)', () => {
     renderWithProviders(<ChatPage />, { route: '/chat' })
 
     expect(
-      screen.getByRole('heading', { name: /chat lives inside paid studio plans/i }),
+      screen.getByRole('heading', { name: /chat unlocks on essential and premium/i }),
     ).toBeInTheDocument()
 
     const cta = screen.getByRole('link', { name: /create account/i })

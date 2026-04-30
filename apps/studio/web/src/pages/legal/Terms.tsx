@@ -108,7 +108,7 @@ export default function TermsPage() {
           you are not located in, under the control of, or a national or resident of any country subject
           to comprehensive sanctions, and that you are not on any restricted-person list administered by
           the United Nations, the European Union, the United Kingdom, the United States, or the Republic
-          of TÃ¼rkiye.
+          of Turkiye.
         </p>
       </LegalSection>
 
@@ -436,7 +436,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="s19" title="19. Consumer rights (EU, UK, TÃ¼rkiye)">
+      <LegalSection id="s19" title="19. Consumer rights (EU, UK, Turkiye)">
         <p>
           <strong className="text-white">19.1 EU/UK right of withdrawal.</strong> If you are a
           consumer located in the European Union or the United Kingdom, you may have a statutory
@@ -447,8 +447,8 @@ export default function TermsPage() {
           supplied.
         </p>
         <p>
-          <strong className="text-white">19.2 TÃ¼rkiye.</strong> If you are a consumer resident in
-          TÃ¼rkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
+          <strong className="text-white">19.2 Turkiye.</strong> If you are a consumer resident in
+          Turkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
           on Distance Contracts apply and are not limited by these Terms. Nothing in these Terms
           removes any non-waivable consumer right available to you under Turkish law.
         </p>
@@ -527,7 +527,7 @@ export default function TermsPage() {
         <p>
           These Terms and any dispute arising out of or relating to them or the Service are governed
           by the laws of the{' '}
-          <LegalPlaceholder>Governing Jurisdiction â€” e.g. Republic of TÃ¼rkiye</LegalPlaceholder>,
+          <LegalPlaceholder>Governing Jurisdiction - e.g. Republic of Turkiye</LegalPlaceholder>,
           without regard to its conflict of laws principles. The United Nations Convention on
           Contracts for the International Sale of Goods does not apply. This choice of law does not
           deprive consumers of the protection of mandatory provisions of the law of their country of

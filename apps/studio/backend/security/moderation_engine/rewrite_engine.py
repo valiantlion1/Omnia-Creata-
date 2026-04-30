@@ -5,6 +5,10 @@ import re
 from .models import AgeAmbiguity, ContextAnalysis, ContextType, SexualIntent
 
 _AGE_REPLACEMENTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # NOTE: We deliberately do NOT rewrite "young woman/man/women/men" here
+    # anymore — those phrases are now in ADULT_TERMS and read as CLEAR_ADULT,
+    # so they do not reach this rewrite step. Only the genuinely-ambiguous
+    # tokens ("girl", "boy", and "young girl/boy" + plurals) get hardened.
     (re.compile(r"\byoung girls\b", re.IGNORECASE), "adult women"),
     (re.compile(r"\byoung boys\b", re.IGNORECASE), "adult men"),
     (re.compile(r"\byoung girl\b", re.IGNORECASE), "adult woman"),

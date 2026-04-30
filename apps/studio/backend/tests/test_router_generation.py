@@ -22,6 +22,7 @@ from studio_platform.models import (
 from studio_platform.providers import ProviderRegistry
 from studio_platform.router import create_router
 from studio_platform.service import GenerationCapacityError, StudioService
+from studio_platform.studio_model_contract import STUDIO_FAST_MODEL_ID, STUDIO_LAUNCH_MODEL_IDS
 from studio_platform.store import StudioStateStore
 
 
@@ -50,16 +51,16 @@ def _build_generation_job(**overrides: object) -> GenerationJob:
         estimated_cost=0.0,
         estimated_cost_source="catalog_fallback",
         pricing_lane="fallback",
-        credit_cost=6,
-        reserved_credit_cost=3,
+        credit_cost=80,
+        reserved_credit_cost=40,
         credit_status="reserved",
         output_count=1,
         prompt_snapshot=PromptSnapshot(
             prompt="test prompt",
             negative_prompt="",
             model="flux-schnell",
-            width=1024,
-            height=1024,
+            width=1536,
+            height=1536,
             steps=28,
             cfg_scale=6.5,
             seed=1,
@@ -94,6 +95,37 @@ async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMem
     app.dependency_overrides[router_module.get_current_user] = _current_user
     app.include_router(create_router(service, rate_limiter))
     return app, service, rate_limiter
+
+
+@pytest.mark.asyncio
+async def test_models_endpoint_exposes_launch_catalog_contract(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/v1/models", headers={"X-Test-User": "user-1"})
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["default_model_id"] == STUDIO_FAST_MODEL_ID
+        assert payload["launch_model_ids"] == list(STUDIO_LAUNCH_MODEL_IDS)
+        assert [model["id"] for model in payload["models"]] == list(STUDIO_LAUNCH_MODEL_IDS)
+        assert [model["label"] for model in payload["models"]] == [
+            "GPT Image 2",
+            "Nano Banana",
+            "Nano Banana 2",
+            "Grok Imagine Image Pro",
+            "Wan 2.7 Image Pro",
+            "FLUX.2 Max",
+        ]
+        assert all(model["provider_hint"] == "runware" for model in payload["models"])
+        assert payload["models"][0]["route_preview"]["planned_provider"]
+        assert payload["models"][0]["render_experience"]["state"] in {"ready", "fallback", "blocked"}
+        assert "flux-2-klein" not in {model["id"] for model in payload["models"]}
+        assert "qwen-image-2512" not in {model["id"] for model in payload["models"]}
+    finally:
+        await service.shutdown()
 
 
 @pytest.mark.asyncio
@@ -228,14 +260,14 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["routing_strategy"] == "free-first"
         assert payload["routing_reason"] == "free_standard_default"
         assert payload["prompt_profile"] == "generic"
-        assert payload["reserved_credit_cost"] == 3
+        assert payload["reserved_credit_cost"] == 40
         assert payload["final_credit_cost"] is None
         assert payload["credit_charge_policy"] == "none"
         assert payload["credit_status"] == "reserved"
         assert payload["pricing_lane"] == "fallback"
         assert payload["estimated_cost_source"] == "catalog_fallback"
-        assert payload["creative_profile"]["id"] == "fast"
-        assert payload["creative_profile"]["label"] == "Fast"
+        assert payload["creative_profile"]["id"] == "gpt-image-2"
+        assert payload["creative_profile"]["label"] == "GPT Image 2"
         assert payload["render_experience"]["state"] == "fallback"
     finally:
         await service.shutdown()

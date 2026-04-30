@@ -1,8 +1,5 @@
-import type { Route } from "next";
-import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
 import { defaultLocale } from "@/i18n/config";
-import { studioUrl } from "@/lib/utils";
 
 export default function NotFound() {
   return (
@@ -15,29 +12,19 @@ export default function NotFound() {
               Page not found
             </p>
             <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-foreground sm:text-6xl">
-              The page you requested is not part of the public Omnia Creata site.
+              This page is not part of OmniaCreata.
             </h1>
             <p className="max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
-              Return to the main site, browse the product map, or move directly into Studio.
+              Return to the main site or contact OmniaCreata directly.
             </p>
             <div className="flex flex-wrap gap-3">
               <ButtonLink href={`/${defaultLocale}`} variant="primary">
                 Back to home
               </ButtonLink>
-              <ButtonLink href={studioUrl("/")} variant="secondary">
-                Open Studio
+              <ButtonLink href={`/${defaultLocale}/contact`} variant="secondary">
+                Contact
               </ButtonLink>
             </div>
-            <p className="text-sm text-muted">
-              Looking for a specific page? Browse the{" "}
-              <Link
-                className="text-accent transition hover:text-accent-strong"
-                href={`/${defaultLocale}/products` as Route}
-              >
-                Products overview
-              </Link>
-              .
-            </p>
           </div>
         </div>
       </div>

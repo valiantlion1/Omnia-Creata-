@@ -2,6 +2,7 @@
 
 import logging
 import os
+import ipaddress
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
@@ -113,18 +114,49 @@ def is_known_development_secret_value(value: SecretStr | str | None) -> bool:
     return normalized == _DEVELOPMENT_JWT_FALLBACK
 
 
+def is_launch_safe_public_hostname(value: str | None) -> bool:
+    """Return True only for public DNS hostnames or public IP literals."""
+    hostname = str(value or "").strip().lower().rstrip(".")
+    if not hostname:
+        return False
+    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
+        return False
+    try:
+        parsed_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        parsed_ip = None
+    if parsed_ip is not None:
+        return parsed_ip.is_global
+    blocked_markers = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+    if any(marker in hostname for marker in blocked_markers):
+        return False
+    return "." in hostname
+
+
 def is_launch_safe_public_url(value: str | None) -> bool:
     normalized = str(value or "").strip()
     if not normalized or is_placeholder_secret_value(normalized):
         return False
     parsed = urlparse(normalized)
-    host = str(parsed.netloc or "").lower()
-    return (
-        parsed.scheme == "https"
-        and bool(host)
-        and "localhost" not in host
-        and "127.0.0.1" not in host
-    )
+    return parsed.scheme == "https" and is_launch_safe_public_hostname(parsed.hostname)
+
+
+def is_launch_safe_cors_origin(value: str | None) -> bool:
+    """Return True only for HTTPS origins that aren't localhost/loopback."""
+    normalized = str(value or "").strip()
+    if not normalized or normalized == "*":
+        return False
+    parsed = urlparse(normalized)
+    return parsed.scheme == "https" and is_launch_safe_public_hostname(parsed.hostname)
+
+
+def is_launch_safe_allowed_host(value: str | None) -> bool:
+    """Return True only for concrete public hostnames accepted in launch environments."""
+    normalized = str(value or "").strip().lower().rstrip(".")
+    if not normalized or normalized == "*" or "/" in normalized or ":" in normalized:
+        return False
+    hostname = normalized[2:] if normalized.startswith("*.") else normalized
+    return is_launch_safe_public_hostname(hostname)
 
 
 class Environment(str, Enum):
@@ -160,18 +192,21 @@ class Settings(BaseSettings):
     gemini_premium_model: str = "gemini-2.5-pro"
     openrouter_model: str = "google/gemini-2.5-flash"
     openrouter_premium_model: str = "google/gemini-2.5-pro"
+    runware_chat_model: str = "zai:glm@5.1"
+    runware_chat_premium_model: str = "zai:glm@5.1"
     openai_model: str = "gpt-4o-mini"
     openai_premium_model: str = "gpt-5.4"
     openai_image_draft_model: str = "gpt-image-1-mini"
     openai_image_model: str = "gpt-image-1.5"
     openai_image_premium_qa_enabled: bool = False
-    chat_primary_provider: str = "openrouter"
-    chat_fallback_provider: str = "openai"
-    protected_beta_chat_provider: str = "openrouter"
+    chat_primary_provider: str = "runware"
+    chat_fallback_provider: str = "heuristic"
+    protected_beta_chat_provider: str = "runware"
     protected_beta_image_provider: str = "runware"
     protected_beta_image_require_final_lane: bool = False
     gemini_service_tier: str = "paid"
     openrouter_service_tier: str = "paid"
+    runware_service_tier: str = "paid"
     openai_service_tier: str = "paid"
     generation_provider_strategy: str = "managed-first"
     development_fast_zero_cost_mode_enabled: bool = True
@@ -202,10 +237,10 @@ class Settings(BaseSettings):
     public_paid_provider_economics_ready: bool = False
     public_paid_provider_economics_ready_build: Optional[str] = None
     public_paid_provider_economics_ready_note: Optional[str] = None
-    creator_monthly_credits: int = 400
-    pro_monthly_credits: int = 1200
-    credit_pack_small_credits: int = 200
-    credit_pack_large_credits: int = 800
+    creator_monthly_credits: int = 4000
+    pro_monthly_credits: int = 12000
+    credit_pack_small_credits: int = 2000
+    credit_pack_large_credits: int = 8000
     creator_monthly_price_usd: float = 12.0
     pro_monthly_price_usd: float = 24.0
     credit_pack_small_price_usd: float = 8.0
@@ -545,16 +580,16 @@ class Settings(BaseSettings):
     @classmethod
     def validate_chat_provider(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"gemini", "openrouter", "openai", "heuristic"}:
-            raise ValueError("Chat providers must be gemini, openrouter, openai, or heuristic")
+        if normalized not in {"gemini", "openrouter", "runware", "openai", "heuristic"}:
+            raise ValueError("Chat providers must be gemini, openrouter, runware, openai, or heuristic")
         return normalized
 
     @field_validator("protected_beta_chat_provider")
     @classmethod
     def validate_protected_beta_chat_provider(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"gemini", "openrouter", "openai"}:
-            raise ValueError("PROTECTED_BETA_CHAT_PROVIDER must be gemini, openrouter, or openai")
+        if normalized not in {"gemini", "openrouter", "runware", "openai"}:
+            raise ValueError("PROTECTED_BETA_CHAT_PROVIDER must be gemini, openrouter, runware, or openai")
         return normalized
 
     @field_validator("protected_beta_image_provider")
@@ -565,7 +600,7 @@ class Settings(BaseSettings):
             raise ValueError("PROTECTED_BETA_IMAGE_PROVIDER must be openai, fal, or runware")
         return normalized
 
-    @field_validator("gemini_service_tier", "openrouter_service_tier", "openai_service_tier")
+    @field_validator("gemini_service_tier", "openrouter_service_tier", "runware_service_tier", "openai_service_tier")
     @classmethod
     def validate_chat_service_tier(cls, value: str) -> str:
         normalized = value.strip().lower()
@@ -723,6 +758,36 @@ class Settings(BaseSettings):
             if not is_launch_safe_public_url(self.public_api_base_url):
                 raise ValueError(
                     "PUBLIC_API_BASE_URL must be a configured HTTPS non-local URL in staging and production environments"
+                )
+            if is_placeholder_secret_value(self.jwt_secret):
+                raise ValueError(
+                    "JWT_SECRET must not be a placeholder value (e.g. 'changeme', 'replace-me') in staging and production environments"
+                )
+            if "*" in self.cors_origins_list:
+                raise ValueError(
+                    "CORS_ORIGINS must not include wildcard '*' in staging and production environments"
+                )
+            launch_unsafe_cors = [
+                origin
+                for origin in self.cors_origins_list
+                if not is_launch_safe_cors_origin(origin)
+            ]
+            if launch_unsafe_cors:
+                raise ValueError(
+                    "CORS_ORIGINS must only contain HTTPS non-local origins in staging and production environments; offending values: "
+                    + ", ".join(launch_unsafe_cors)
+                )
+            if not self.allowed_hosts_list:
+                raise ValueError("ALLOWED_HOSTS must be configured in staging and production environments")
+            launch_unsafe_hosts = [
+                host
+                for host in self.allowed_hosts_list
+                if not is_launch_safe_allowed_host(host)
+            ]
+            if launch_unsafe_hosts:
+                raise ValueError(
+                    "ALLOWED_HOSTS must only contain public hostnames in staging and production environments; offending values: "
+                    + ", ".join(launch_unsafe_hosts)
                 )
 
     def validate_runtime(self) -> list[str]:

@@ -12,6 +12,14 @@ class EditValues {
     this.vignette = 0,
     this.rotationTurns = 0,
     this.cropMode = CropMode.original,
+    this.cropX = 0.5,
+    this.cropY = 0.5,
+    this.cropLeft = 0,
+    this.cropTop = 0,
+    this.cropWidth = 1,
+    this.cropHeight = 1,
+    this.straighten = 0,
+    this.flipHorizontal = false,
   });
 
   final double exposure;
@@ -26,6 +34,29 @@ class EditValues {
   final double vignette;
   final int rotationTurns;
   final CropMode cropMode;
+  final double cropX;
+  final double cropY;
+  final double cropLeft;
+  final double cropTop;
+  final double cropWidth;
+  final double cropHeight;
+  final double straighten;
+  final bool flipHorizontal;
+
+  bool get hasCropRect {
+    const epsilon = 0.001;
+    return cropLeft.abs() > epsilon ||
+        cropTop.abs() > epsilon ||
+        (1 - cropWidth).abs() > epsilon ||
+        (1 - cropHeight).abs() > epsilon;
+  }
+
+  bool get hasGeometryEdits =>
+      rotationTurns != 0 ||
+      flipHorizontal ||
+      straighten.abs() > 0.05 ||
+      cropMode != CropMode.original ||
+      hasCropRect;
 
   List<double> get previewMatrix {
     const lumR = 0.213;
@@ -84,6 +115,14 @@ class EditValues {
     double? vignette,
     int? rotationTurns,
     CropMode? cropMode,
+    double? cropX,
+    double? cropY,
+    double? cropLeft,
+    double? cropTop,
+    double? cropWidth,
+    double? cropHeight,
+    double? straighten,
+    bool? flipHorizontal,
   }) {
     return EditValues(
       exposure: exposure ?? this.exposure,
@@ -98,6 +137,14 @@ class EditValues {
       vignette: vignette ?? this.vignette,
       rotationTurns: rotationTurns ?? this.rotationTurns,
       cropMode: cropMode ?? this.cropMode,
+      cropX: cropX ?? this.cropX,
+      cropY: cropY ?? this.cropY,
+      cropLeft: cropLeft ?? this.cropLeft,
+      cropTop: cropTop ?? this.cropTop,
+      cropWidth: cropWidth ?? this.cropWidth,
+      cropHeight: cropHeight ?? this.cropHeight,
+      straighten: straighten ?? this.straighten,
+      flipHorizontal: flipHorizontal ?? this.flipHorizontal,
     );
   }
 
@@ -130,11 +177,19 @@ class EditValues {
         other.fade == fade &&
         other.vignette == vignette &&
         other.rotationTurns == rotationTurns &&
-        other.cropMode == cropMode;
+        other.cropMode == cropMode &&
+        other.cropX == cropX &&
+        other.cropY == cropY &&
+        other.cropLeft == cropLeft &&
+        other.cropTop == cropTop &&
+        other.cropWidth == cropWidth &&
+        other.cropHeight == cropHeight &&
+        other.straighten == straighten &&
+        other.flipHorizontal == flipHorizontal;
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     exposure,
     brightness,
     contrast,
@@ -147,7 +202,15 @@ class EditValues {
     vignette,
     rotationTurns,
     cropMode,
-  );
+    cropX,
+    cropY,
+    cropLeft,
+    cropTop,
+    cropWidth,
+    cropHeight,
+    straighten,
+    flipHorizontal,
+  ]);
 }
 
 enum EditorTool { crop, rotate, light, color, detail, fx, brush, text, sticker }
@@ -166,13 +229,24 @@ extension EditorToolLabel on EditorTool {
   };
 }
 
-enum CropMode { original, square, portrait45, landscape169 }
+enum CropMode {
+  original,
+  free,
+  square,
+  portrait45,
+  portrait916,
+  classic43,
+  landscape169,
+}
 
 extension CropModeLabel on CropMode {
   String get label => switch (this) {
     CropMode.original => 'Original',
+    CropMode.free => 'Free',
     CropMode.square => '1:1',
     CropMode.portrait45 => '4:5',
+    CropMode.portrait916 => '9:16',
+    CropMode.classic43 => '4:3',
     CropMode.landscape169 => '16:9',
   };
 }

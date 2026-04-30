@@ -131,18 +131,28 @@ def test_validate_model_for_identity_honors_effective_free_plan_when_subscriptio
         subscription_active=False,
     )
 
-    with pytest.raises(PermissionError, match="requires Pro"):
+    with pytest.raises(PermissionError, match="requires Premium"):
         validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
 
 
-def test_standard_model_contract_normalizes_legacy_aliases_to_qwen() -> None:
+def test_standard_model_contract_normalizes_legacy_aliases_to_nano_banana() -> None:
     model = get_model_catalog_entry_or_raise("flux-2-dev")
 
     assert model.id == STUDIO_STANDARD_MODEL_ID
-    assert model.estimated_cost == pytest.approx(0.0051)
+    assert model.estimated_cost == pytest.approx(0.039)
     assert normalize_studio_model_id("sdxl-base") == STUDIO_STANDARD_MODEL_ID
     assert normalize_studio_model_id("alibaba:qwen-image@2512") == STUDIO_STANDARD_MODEL_ID
-    assert resolve_runware_model_air_id("flux-2-dev") == "alibaba:qwen-image@2512"
+    assert resolve_runware_model_air_id("flux-2-dev") == "google:4@1"
+
+
+def test_launch_model_contract_uses_current_runware_air_ids() -> None:
+    assert normalize_studio_model_id("openai:gpt-image@2") == STUDIO_FAST_MODEL_ID
+    assert resolve_runware_model_air_id("gpt-image-2") == "openai:gpt-image@2"
+    assert normalize_studio_model_id("openai:5@2") == STUDIO_FAST_MODEL_ID
+
+    assert normalize_studio_model_id("xai:grok-imagine@image-pro") == "grok-imagine-image-pro"
+    assert resolve_runware_model_air_id("grok-imagine-image-pro") == "xai:grok-imagine@image-pro"
+    assert normalize_studio_model_id("xai:1@1") == "grok-imagine-image-pro"
 
 
 def test_premium_model_contract_normalizes_legacy_aliases_to_flux_max() -> None:

@@ -2,7 +2,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { defaultLocale, type LocaleCode } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
-import { studioPageHref, withLocalePrefix } from "@/lib/utils";
+import { contactChannels, mailto } from "@/lib/contact-channels";
+import { withLocalePrefix } from "@/lib/utils";
 import { BrandMark } from "./brand-mark";
 
 type FooterProps = {
@@ -20,28 +21,16 @@ export function Footer({ locale, messages }: FooterProps) {
           <div className="space-y-5">
             <BrandMark locale={locale} />
             <p className="max-w-md text-sm leading-7 text-foreground-soft">
-              Creative software for image work with taste. Studio leads the ecosystem.
+              Creative software company for image work.
             </p>
           </div>
 
           <FooterColumn title="Navigate">
             <Link
               className="text-sm text-foreground-soft transition hover:text-foreground"
-              href={studioPageHref(locale) as Route}
-            >
-              Studio
-            </Link>
-            <Link
-              className="text-sm text-foreground-soft transition hover:text-foreground"
               href={withLocalePrefix(locale, "/about") as Route}
             >
               {copy.nav.about}
-            </Link>
-            <Link
-              className="text-sm text-foreground-soft transition hover:text-foreground"
-              href={withLocalePrefix(locale, "/pricing") as Route}
-            >
-              {copy.nav.pricing}
             </Link>
             <Link
               className="text-sm text-foreground-soft transition hover:text-foreground"
@@ -72,15 +61,15 @@ export function Footer({ locale, messages }: FooterProps) {
             </Link>
             <a
               className="text-sm text-foreground-soft transition hover:text-foreground"
-              href="mailto:hello@omniacreata.com"
+              href={mailto(contactChannels.general)}
             >
-              hello@omniacreata.com
+              {contactChannels.general}
             </a>
           </FooterColumn>
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/[0.06] pt-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>(c) 2026 OmniaCreata.</p>
+          <p>Copyright 2026 OmniaCreata.</p>
           <p>omniacreata.com</p>
         </div>
       </div>

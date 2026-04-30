@@ -1,33 +1,42 @@
 import type { MetadataRoute } from "next";
+import {
+  buildLanguageAlternates,
+  defaultLocale,
+  getLocalizedPath,
+  localeRegistry,
+} from "@/i18n/config";
 import { products } from "@/content/products";
-import { defaultLocale, getLocalizedPath } from "@/i18n/config";
 
 const staticPages = [
-  "/",
-  "/products",
-  "/about",
-  "/pricing",
-  "/contact",
-  "/privacy-policy",
-  "/terms-of-service",
-  "/refund-policy",
+  { path: "/", priority: 1 },
+  { path: "/about", priority: 0.78 },
+  { path: "/contact", priority: 0.78 },
+  { path: "/products", priority: 0.82 },
+  { path: "/pricing", priority: 0.7 },
+  { path: "/privacy-policy", priority: 0.5 },
+  { path: "/terms-of-service", priority: 0.5 },
+  { path: "/refund-policy", priority: 0.5 },
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date("2026-03-14");
-  const localizedPages = staticPages.map((path) => ({
-    url: `https://omniacreata.com${getLocalizedPath(defaultLocale, path)}`,
-    lastModified,
-    changeFrequency: "weekly" as const,
-    priority: path === "/" ? 1 : 0.72,
+  const lastModified = new Date("2026-04-30");
+
+  const productPages = products.map((product) => ({
+    path: `/products/${product.slug}`,
+    priority: 0.74,
   }));
 
-  const localizedProducts = products.map((product) => ({
-    url: `https://omniacreata.com${getLocalizedPath(defaultLocale, `/products/${product.slug}`)}`,
-    lastModified,
-    changeFrequency: "weekly" as const,
-    priority: product.slug === "omnia-creata-studio" ? 0.95 : 0.82,
-  }));
+  const allPaths = [...staticPages, ...productPages];
 
-  return [...localizedPages, ...localizedProducts];
+  return allPaths.flatMap(({ path, priority }) => {
+    const alternates = buildLanguageAlternates(path);
+
+    return localeRegistry.map((locale) => ({
+      url: `https://omniacreata.com${getLocalizedPath(locale.code, path)}`,
+      lastModified,
+      changeFrequency: "weekly" as const,
+      priority: locale.code === defaultLocale ? priority : Math.max(priority - 0.05, 0.4),
+      alternates: { languages: alternates },
+    }));
+  });
 }

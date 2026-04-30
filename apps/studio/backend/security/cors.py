@@ -235,13 +235,15 @@ def create_default_cors_config(environment: str = "production") -> CORSConfig:
 def create_cors_config_from_env() -> CORSConfig:
     """Create CORS configuration from environment variables"""
     import os
-    
+
     # Get origins from environment
     origins_env = os.getenv("CORS_ORIGINS", "")
     if origins_env:
         origins = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
     else:
-        origins = ["*"]
+        # Refuse wildcard fallback by default — callers must supply CORS_ORIGINS.
+        # Safer to fail closed than to silently allow all origins.
+        origins = []
     
     # Get other settings
     allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"

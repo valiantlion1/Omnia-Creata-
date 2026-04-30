@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.04.27.232",
+  "build": "2026.04.30.250",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-04-27",
-  "notes": "Account continues the corrected page-by-page reference pass with profile, public preview, billing, visibility, export, and gallery actions kept real while preserving the existing Studio sidebar navigation."
+  "releaseDate": "2026-04-30",
+  "notes": "Turnstile setup guidance is now explicit in Studio env templates and production checklist, keeping the server secret out of browser-exposed Vite configuration."
 }

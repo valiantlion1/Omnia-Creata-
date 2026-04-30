@@ -3,8 +3,8 @@
  *
  * Tier mapping:
  *   Free    → subtle gray ring
- *   Pro     → blue filled checkmark
- *   Creator → purple gradient checkmark
+ *   Premium   → blue filled checkmark
+ *   Essential → purple gradient checkmark
  *   Owner   → gold diamond with glow (only for owner_mode accounts)
  */
 
@@ -93,7 +93,7 @@ export function VerificationBadge({ plan, ownerMode, size = 'sm', className = ''
     )
   }
 
-  // Pro (blue) or Creator (purple gradient)
+  // Premium (blue) or Essential (purple gradient)
   const isPro = tier === 'pro'
 
   return (

@@ -78,6 +78,16 @@
   100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
 }
 
+@keyframes oc-auth-wall-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-1.4%, -1.1%, 0) scale(1.018); }
+}
+
+@keyframes oc-auth-tile-in {
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.97); filter: blur(8px); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); }
+}
+
 @keyframes oc-toastEntry {
   from { opacity: 0; transform: translateY(12px) scale(0.96); filter: blur(4px); }
   to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
@@ -90,6 +100,15 @@
 .animate-fade-up { animation: oc-fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-scale-in { animation: oc-scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-toast { animation: oc-toastEntry 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.auth-wall-drift { animation: oc-auth-wall-drift 18s ease-in-out infinite; }
+.auth-art-tile { animation: oc-auth-tile-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-wall-drift,
+  .auth-art-tile {
+    animation: none;
+  }
+}
 
 /* Stagger delay utilities */
 .delay-75 { animation-delay: 75ms; }
@@ -537,4 +556,24 @@ input[type="range"].oc-slider::-webkit-slider-thumb:hover { transform: scale(1.1
     radial-gradient(circle at 50% 70%, rgba(255,255,255,0.06), transparent 38%);
   pointer-events: none;
   animation: oc-create-failure-flicker 2.6s ease-in-out infinite;
+}
+
+.legal-prose-light h2,
+.legal-prose-light h3,
+.legal-prose-light strong,
+.legal-prose-light .text-white {
+  color: #18181b !important;
+}
+
+.legal-prose-light .text-zinc-400,
+.legal-prose-light .text-zinc-300 {
+  color: #52525b !important;
+}
+
+.legal-prose-light .text-amber-100 {
+  color: #78350f !important;
+}
+
+.legal-prose-light a:hover {
+  color: #000 !important;
 }

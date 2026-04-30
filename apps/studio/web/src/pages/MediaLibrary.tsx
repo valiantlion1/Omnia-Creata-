@@ -2740,8 +2740,8 @@ export default function MediaLibraryPage() {
             : 'Image set is private',
         body:
           visibility === 'public'
-            ? 'This image set can now appear on public Studio surfaces.'
-            : 'This image set is now hidden from public Studio surfaces.',
+            ? 'This image set can now appear in public Studio areas.'
+            : 'This image set is now hidden from public Studio areas.',
       })
     } catch (error) {
       handleMenuError(error)

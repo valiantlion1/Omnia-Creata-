@@ -1513,6 +1513,7 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
 
     settings.studio_runtime_root = str(tmp_path / "runtime-root")
     settings.environment = Environment.STAGING
@@ -1522,6 +1523,7 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     try:
         startup_report, runtime_logs = _seed_operator_runtime_artifacts(
             settings,
@@ -1625,6 +1627,7 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
         assert public_paid_phase["warning_keys"] == ["provider_economics"]
     finally:
         settings.studio_runtime_root = original_runtime_root
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
 
 
 def test_launch_readiness_blocks_public_paid_when_captcha_verification_is_disabled(tmp_path: Path) -> None:
@@ -1637,6 +1640,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_verification_is_disabl
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -1650,6 +1654,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_verification_is_disabl
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
@@ -1761,6 +1766,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_verification_is_disabl
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
@@ -1777,6 +1783,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_keys_are_missing(tmp_p
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -1793,6 +1800,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_keys_are_missing(tmp_p
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
@@ -1907,6 +1915,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_keys_are_missing(tmp_p
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
@@ -1926,6 +1935,7 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -1938,6 +1948,7 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
@@ -2047,6 +2058,7 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
@@ -2062,6 +2074,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -2074,6 +2087,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
@@ -2180,6 +2194,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
@@ -2195,6 +2210,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -2207,6 +2223,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = ""
@@ -2317,6 +2334,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
@@ -2332,6 +2350,7 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
     original_openrouter_api_key = settings.openrouter_api_key
     original_openai_api_key = settings.openai_api_key
     original_fal_api_key = settings.fal_api_key
+    original_protected_beta_chat_provider = settings.protected_beta_chat_provider
     original_public_paid_provider_economics_ready = settings.public_paid_provider_economics_ready
     original_public_paid_provider_economics_ready_build = settings.public_paid_provider_economics_ready_build
     original_public_paid_provider_economics_ready_note = settings.public_paid_provider_economics_ready_note
@@ -2344,6 +2363,7 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
     settings.openrouter_api_key = "openrouter-key"
     settings.openai_api_key = "openai-key"
     settings.fal_api_key = "fal-key"
+    settings.protected_beta_chat_provider = "gemini"
     settings.public_paid_provider_economics_ready = True
     settings.public_paid_provider_economics_ready_build = load_version_info().build
     settings.public_paid_provider_economics_ready_note = "Founders signed off provider cost exposure for this build."
@@ -2469,6 +2489,7 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
         settings.openrouter_api_key = original_openrouter_api_key
         settings.openai_api_key = original_openai_api_key
         settings.fal_api_key = original_fal_api_key
+        settings.protected_beta_chat_provider = original_protected_beta_chat_provider
         settings.public_paid_provider_economics_ready = original_public_paid_provider_economics_ready
         settings.public_paid_provider_economics_ready_build = original_public_paid_provider_economics_ready_build
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note

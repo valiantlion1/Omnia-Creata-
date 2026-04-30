@@ -12,9 +12,7 @@ import { isTerminalJobStatus, normalizeJobStatus, studioApi, type ChatAttachment
 import {
   parseChatSuggestedActionPayload,
   resolveComposeModeFromSuggestion,
-  resolveCreatePrefillFromSuggestion,
   resolveSuggestedActionAttachments,
-  resolveSuggestedActionReferenceAssetId,
   resolveSuggestedDraft,
 } from '@/lib/chatActionBridge'
 import { useStudioAuth } from '@/lib/studioAuth'
@@ -558,30 +556,30 @@ function GenerationBlocked({
 /** Welcome / empty state when no messages */
 function ChatWelcome({ onHint }: { onHint: (v: string) => void }) {
   const suggestions = [
-    { Icon: Wand2, label: 'Create an image', value: 'Design a restrained studio portrait with soft side light and a dark background' },
+    { Icon: Wand2, label: 'Make an image', value: 'Design a restrained studio portrait with soft side light and a dark background' },
     { Icon: Paintbrush, label: 'Edit a photo', value: 'I want to revise an image - I will upload the reference first' },
     { Icon: Lightbulb, label: 'Help with a prompt', value: 'Help me write a prompt for a rain-soaked city street at blue hour' },
     { Icon: Search, label: 'Review an image', value: 'Review this image and tell me what is working' },
   ]
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 relative">
+    <div className="relative flex min-h-full flex-col items-center justify-center px-4 py-10">
       <div className="absolute inset-0 overflow-hidden pointer-events-none flex items-center justify-center">
         <div className="h-[32rem] w-[32rem] rounded-full bg-[radial-gradient(circle_at_center,rgb(var(--primary-light)/0.03),transparent_60%)] blur-[80px]" />
       </div>
 
-      <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/[0.04] ring-1 ring-white/[0.08] mb-6">
+      <div className="relative z-10 mb-6 flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/[0.04] ring-1 ring-white/[0.08]">
         <MessageCircle className="h-6 w-6 text-zinc-300" />
       </div>
 
       <h2 className="relative z-10 text-3xl font-semibold tracking-tight text-white md:text-[2.75rem] md:leading-[1.15]">
-        What would you like to create?
+        What should we make?
       </h2>
       <p className="relative z-10 mt-4 max-w-md text-center text-[15px] leading-relaxed text-zinc-400">
         Describe what you want to make, upload a reference to revise, or ask for prompt help.
       </p>
 
-      <div className="relative z-10 mt-10 flex flex-wrap justify-center gap-2.5 max-w-lg">
+      <div className="relative z-10 mt-9 flex max-w-lg flex-wrap justify-center gap-2.5">
         {suggestions.map((s) => (
           <button
             key={s.label}
@@ -908,27 +906,8 @@ export default function ChatPage() {
     const nextComposeMode = resolveComposeModeFromSuggestion(action)
     const payload = parseChatSuggestedActionPayload(action)
 
-    if (action.action === 'open_create') {
-      const prefill = resolveCreatePrefillFromSuggestion(action)
-      const params = new URLSearchParams()
-      if (prefill?.prompt) params.set('prompt', prefill.prompt)
-      if (prefill?.model) params.set('model', prefill.model)
-      if (prefill?.aspectRatio) params.set('aspect_ratio', prefill.aspectRatio)
-      if (prefill?.steps) params.set('steps', String(prefill.steps))
-      if (prefill?.cfgScale) params.set('cfg_scale', String(prefill.cfgScale))
-      if (prefill?.outputCount) params.set('output_count', String(prefill.outputCount))
-      if (prefill?.workflow) params.set('workflow', prefill.workflow)
-      if (prefill?.negativePrompt) params.set('negative_prompt', prefill.negativePrompt)
-      if (prefill?.referenceMode) params.set('reference_mode', prefill.referenceMode)
-      const referenceAssetId = prefill?.referenceAssetId || resolveSuggestedActionReferenceAssetId(messages, message, action)
-      if (referenceAssetId) params.set('reference_asset_id', referenceAssetId)
-      params.set('source', 'chat')
-      navigate(`/create?${params.toString()}`)
-      return
-    }
-
     const restoredAttachments =
-      nextComposeMode === 'Edit' || payload?.generation_bridge?.workflow === 'image_to_image' || payload?.intent === 'analyze_image'
+      action.action === 'open_create' || nextComposeMode === 'Edit' || payload?.generation_bridge?.workflow === 'image_to_image' || payload?.intent === 'analyze_image'
         ? resolveSuggestedActionAttachments(messages, message, action).map(toPendingAttachmentFromChat)
         : []
 
@@ -940,7 +919,7 @@ export default function ChatPage() {
     }
     setDraft(nextDraft)
     focusComposer()
-  }, [focusComposer, messages, navigate])
+  }, [focusComposer, messages])
 
   useEffect(() => {
     if (!canLoadPrivate || !isPageVisible || !pendingVisuals.length) return
@@ -1265,16 +1244,13 @@ export default function ChatPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/[0.05] ring-1 ring-white/[0.08]">
             <MessageCircle className="h-7 w-7 text-zinc-300" />
           </div>
-          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat lives inside paid Studio plans</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat unlocks on Essential and Premium</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Create your account to enter Studio. Free accounts can start in Create, and Creator or Pro unlock the chat surface when you want live guidance.
+            Create your account to enter Studio. Essential and Premium unlock the multimodal copilot when you want live guidance.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               Create account
-            </Link>
-            <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
-              Open Create
             </Link>
           </div>
         </section>
@@ -1291,14 +1267,11 @@ export default function ChatPage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat unlocks on paid plans</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Keep moving in Create today, or move onto Creator or Pro when you want multimodal guidance, editing help, and faster iteration inside Chat.
+            Move onto Essential or Premium when you want multimodal guidance, editing help, and faster iteration inside Chat.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/subscription" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               View Plans
-            </Link>
-            <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
-              Open Create
             </Link>
           </div>
         </section>
@@ -1310,13 +1283,19 @@ export default function ChatPage() {
 
   return (
     <AppPage className="h-full min-h-0 !max-w-full !gap-0 !py-0 !px-0">
-      <div className="flex h-[calc(100vh-8rem)] min-h-0 flex-col lg:h-full">
+      <div className="flex h-full min-h-0">
+        <div className="flex min-h-0 w-full flex-col overflow-hidden">
 
         {/* ── Minimal top bar ─────────────────────── */}
-        <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-5 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <MessageCircle className="h-4 w-4 shrink-0 text-zinc-500" />
-            <span className="truncate text-sm font-medium text-white">{activeConversation?.title || 'New chat'}</span>
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] bg-[#090907]/70 px-4 py-3 backdrop-blur-xl md:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[rgb(var(--primary-light))]/15 bg-[rgb(var(--primary-light))]/8 text-[rgb(var(--primary-light))]">
+              <MessageCircle className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--primary-light))]/65">Creative copilot</div>
+              <span className="block truncate text-sm font-semibold text-white">{activeConversation?.title || 'New chat'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {auth?.guest ? (
@@ -1363,7 +1342,7 @@ export default function ChatPage() {
         </div>
 
         {/* ── Messages area ───────────────────────── */}
-        <div ref={scrollViewportRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollViewportRef} className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(241,191,103,0.035),transparent_34%),#060605]">
           {conversationDetailQuery.isLoading ? (
             <div className="flex h-full items-center justify-center gap-3 text-sm text-zinc-400">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1396,7 +1375,7 @@ export default function ChatPage() {
               />
             </div>
           ) : timeline.length ? (
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pb-10 pt-6">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 pb-10 pt-6">
               {timeline.map((item) => {
                 if (item.kind === 'message') {
                   const msg = item.message
@@ -1437,6 +1416,15 @@ export default function ChatPage() {
                             />
                           ))}
                           <div className="flex items-center gap-3 text-sm">
+                            {visual.outputs[0]?.url ? (
+                              <a
+                                href={visual.outputs[0].url}
+                                download
+                                className="font-medium text-white transition hover:text-zinc-200"
+                              >
+                                Download
+                              </a>
+                            ) : null}
                             <Link to="/library/images" className="font-medium text-white transition hover:text-zinc-200">
                               Open in Library
                             </Link>
@@ -1463,8 +1451,8 @@ export default function ChatPage() {
         </div>
 
         {/* ── Composer bar ────────────────────────── */}
-        <div className="relative border-t border-white/[0.04] bg-[#0c0d12]/90 px-4 py-4 backdrop-blur-2xl">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="relative shrink-0 px-4 pb-5 pt-3 backdrop-blur-2xl md:px-6">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
           
           <div className="mx-auto w-full max-w-3xl">
             <div className="relative rounded-[24px] border border-white/[0.08] bg-[#111216]/90 shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all duration-300 focus-within:shadow-[0_8px_40px_rgb(var(--primary-light)/0.15)] focus-within:border-[rgb(var(--primary-light)/0.3)] focus-within:bg-[#15161c]">
@@ -1530,6 +1518,8 @@ export default function ChatPage() {
                   <Paperclip className="h-4 w-4" />
                 </button>
 
+                <div className="min-w-0 flex-1" />
+
                 <button
                   onClick={handleSend}
                   disabled={(!draft.trim() && !pendingAttachments.length) || !canLoadPrivate || sendMessageMutation.isPending || isConversationBootstrapPending}
@@ -1575,6 +1565,8 @@ export default function ChatPage() {
             </div>
           ) : null}
         </div>
+        </div>
+
       </div>
     </AppPage>
   )

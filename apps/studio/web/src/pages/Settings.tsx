@@ -36,6 +36,16 @@ import { useStudioUiPrefs, THEME_OPTIONS } from '@/lib/studioUi'
 
 /* ─── UI Primitives ──────────────────────────────────────────────────────── */
 
+type SettingsTabId = 'general' | 'appearance' | 'security' | 'data' | 'gm'
+
+type SettingsTab = {
+  id: SettingsTabId
+  icon: typeof User
+  label: string
+  mobileLabel: string
+  description: string
+}
+
 function Switch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <button
@@ -59,7 +69,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
 
 function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?: any, title: string, description?: string, action?: ReactNode, danger?: boolean }) {
   return (
-    <div className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 p-5 transition-all duration-500 hover:bg-white/[0.02]`}>
+    <div className={`group flex flex-col justify-between gap-3 p-4 transition-all duration-500 hover:bg-white/[0.02] sm:flex-row sm:items-center sm:gap-6 sm:p-5`}>
       <div className="flex items-start sm:items-center gap-4">
         {Icon && (
           <div className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[14px] transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${danger ? 'bg-red-500/10 text-red-400 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-[rgb(var(--primary-light))]/[0.06] text-[rgb(var(--primary-light))]/80 group-hover:bg-[rgb(var(--primary-light))]/[0.1] group-hover:text-[rgb(var(--primary-light))] group-hover:shadow-[0_0_20px_rgba(241,191,103,0.12)]'}`}>
@@ -72,7 +82,7 @@ function SettingsRow({ icon: Icon, title, description, action, danger }: { icon?
           {description && <div className="mt-1.5 text-[13px] leading-relaxed text-zinc-500 max-w-xl transition-colors duration-300 group-hover:text-zinc-400">{description}</div>}
         </div>
       </div>
-      {action && <div className="shrink-0 pt-2 sm:pt-0 w-full sm:w-auto opacity-90 transition-opacity duration-300 group-hover:opacity-100">{action}</div>}
+      {action && <div className="shrink-0 pt-1 sm:pt-0 w-full sm:w-auto opacity-90 transition-opacity duration-300 group-hover:opacity-100">{action}</div>}
     </div>
   )
 }
@@ -84,6 +94,47 @@ function SettingsCard({ children, compact = false }: { children: ReactNode; comp
         {children}
       </div>
     </div>
+  )
+}
+
+function SettingsSection({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="px-1">
+        <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[rgb(var(--primary-light))]/65">{eyebrow}</div>
+        <h2 className="mt-2 text-[1.3rem] font-bold tracking-tight text-white">{title}</h2>
+        {description ? <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function RailCard({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-[22px] border border-white/[0.07] bg-[#0c0b08]/80 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+      <h3 className="text-[15px] font-bold tracking-tight text-white">{title}</h3>
+      {description ? <p className="mt-1.5 text-[13px] leading-6 text-zinc-500">{description}</p> : null}
+      <div className="mt-4">{children}</div>
+    </section>
   )
 }
 
@@ -172,7 +223,7 @@ function getActiveSessionsDescription(payload?: ActiveSessionsPayload | null) {
     return 'Review the devices that accessed your Studio account recently.'
   }
   if (payload.other_session_count > 0) {
-    return `See this device and ${payload.other_session_count} other Studio access point${payload.other_session_count === 1 ? '' : 's'}.`
+    return `See this device and ${payload.other_session_count} other recent session${payload.other_session_count === 1 ? '' : 's'}.`
   }
   return 'This is the only Studio device we have seen recently.'
 }
@@ -438,7 +489,7 @@ function ProfileEditorDialog({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-[15px] font-semibold text-white">Public identity</h3>
-                    <p className="mt-1 text-sm leading-6 text-zinc-400">Keep the edit surface focused: visible name, short bio, and the default privacy for new work.</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-400">Edit the details people see: visible name, short bio, and the default privacy for new work.</p>
                   </div>
                   <StatusPill tone="neutral">@{identity.username ?? 'creator'}</StatusPill>
                 </div>
@@ -593,7 +644,7 @@ function CredentialsDialog({
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Account security</p>
               <h2 className="mt-2 text-[1.6rem] font-bold tracking-tight text-white">Sign-in & password</h2>
               <p className="mt-2 max-w-xl text-sm leading-7 text-zinc-400">
-                Profile editing lives in General Account. Use this surface to review the provider connected to Studio and update the password when Studio manages it.
+                Review your sign-in method and update your password when Studio manages it.
               </p>
             </div>
             <button
@@ -612,7 +663,7 @@ function CredentialsDialog({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-[15px] font-semibold text-white">Sign-in method</h3>
-                <p className="mt-1 text-sm leading-7 text-zinc-400">Studio keeps login rules tied to the provider that owns your credentials.</p>
+                <p className="mt-1 text-sm leading-7 text-zinc-400">Password changes depend on how you signed in.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill tone={showManagedProviderCopy ? 'neutral' : 'brand'}>{providerLabel}</StatusPill>
@@ -630,7 +681,7 @@ function CredentialsDialog({
             {showManagedProviderCopy ? (
               <div className="mt-4 rounded-[18px] border border-white/[0.06] bg-black/20 px-4 py-4">
                 <p className="text-sm leading-7 text-zinc-300">
-                  This account signs in with {providerLabel}. Password and recovery settings stay with that provider instead of living inside Studio.
+                  This account signs in with {providerLabel}. Password and recovery settings stay with {providerLabel}.
                 </p>
                 {providerManagementUrl ? (
                   <a
@@ -706,7 +757,7 @@ export default function SettingsPage() {
   const { openPreferences, preferences: cookiePreferences } = useStudioCookiePreferences()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
+  const [activeTab, setActiveTab] = useState<SettingsTabId>('general')
   const [notice, setNotice] = useState<{ tone: 'info' | 'success' | 'warning'; title: string; body: string } | null>(null)
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false)
@@ -715,13 +766,14 @@ export default function SettingsPage() {
   const activeDefaultVisibility = pendingVisibility ?? auth?.identity.default_visibility ?? 'public'
   const isGMMode = Boolean(auth?.identity.owner_mode)
   const hasInternalAccess = Boolean((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate)
-  const settingsTabs: Array<{ id: 'general' | 'appearance' | 'security' | 'gm'; icon: any; label: string; mobileLabel: string }> = [
-    { id: 'general', icon: User, label: 'General Account', mobileLabel: 'General' },
-    { id: 'appearance', icon: Palette, label: 'Appearance & UI', mobileLabel: 'Look' },
-    { id: 'security', icon: Shield, label: 'Privacy & Security', mobileLabel: 'Privacy' },
+  const settingsTabs: SettingsTab[] = [
+    { id: 'general', icon: User, label: 'General Account', mobileLabel: 'General', description: 'Profile, plan, and default publishing state.' },
+    { id: 'appearance', icon: Palette, label: 'Appearance & UI', mobileLabel: 'Look', description: 'Theme and guidance preferences for this browser.' },
+    { id: 'security', icon: Shield, label: 'Privacy & Security', mobileLabel: 'Privacy', description: 'Sign-in method, password, and active Studio sessions.' },
+    { id: 'data', icon: Database, label: 'Data & Billing', mobileLabel: 'Data', description: 'Export, cookies, billing, and deletion requests.' },
   ]
   if (isGMMode) {
-    settingsTabs.push({ id: 'gm', icon: Crown, label: 'Control Center', mobileLabel: 'Studio' })
+    settingsTabs.push({ id: 'gm', icon: Crown, label: 'Control Center', mobileLabel: 'Studio', description: 'Owner diagnostics and non-destructive operations.' })
   }
 
   const settingsBootstrapQuery = useQuery({
@@ -883,10 +935,15 @@ export default function SettingsPage() {
     primaryAuthProvider === 'email'
       ? 'Review the sign-in method for this account and update the password used for Studio email sign-in.'
       : primaryAuthProvider
-        ? `Review the provider linked to this account. Password and recovery changes stay with ${primaryAuthProviderLabel}.`
-        : 'Review the active sign-in provider and any password controls available for this account.'
+        ? `Review the sign-in method for this account. Password and recovery changes stay with ${primaryAuthProviderLabel}.`
+        : 'Review the active sign-in method and any password controls available for this account.'
   const activeSessionsDescription = getActiveSessionsDescription(activeSessions)
   const activeSessionsBadgeLabel = getActiveSessionsBadgeLabel(activeSessions)
+  const activeTabMeta = settingsTabs.find((tab) => tab.id === activeTab) ?? settingsTabs[0]
+  const recentSessions = activeSessions?.sessions?.slice(0, 3) ?? []
+  const latestSession = recentSessions[0]
+  const healthLabel = healthQuery.isFetching ? 'Checking' : health?.status ? health.status.replace(/_/g, ' ') : 'Ready'
+  const healthTone: 'neutral' | 'success' | 'brand' = health?.status === 'healthy' ? 'success' : healthQuery.isFetching ? 'neutral' : 'brand'
 
   const handleProfileSave = async (payload: { display_name: string; bio: string; default_visibility: Visibility }) => {
     await profileMutation.mutateAsync(payload)
@@ -923,46 +980,53 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppPage className="max-w-[1480px] py-5 md:py-6">
-      {/* Header */}
-      <header className="w-full rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.82),rgba(9,8,7,0.95))] px-5 py-5 shadow-[0_24px_72px_rgba(0,0,0,0.32)] md:px-6">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[rgb(var(--primary-light))]/70">Workspace controls</div>
-        <h1 className="mt-2 text-[2rem] font-bold tracking-tight text-white drop-shadow-sm">Settings</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-          Account, appearance, security, and owner tools share one backend-backed control surface.
-        </p>
+    <AppPage className="max-w-[1500px] py-5 md:py-6">
+      <header className="flex w-full flex-col gap-4 border-b border-white/[0.08] pb-5 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[rgb(var(--primary-light))]/70">Settings</div>
+          <h1 className="mt-2 text-[2rem] font-bold tracking-tight text-white drop-shadow-sm">Settings</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            Manage your account, security, data, and interface preferences.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone={healthTone}>{healthLabel}</StatusPill>
+          <StatusPill tone={activeDefaultVisibility === 'public' ? 'brand' : 'neutral'}>
+            {activeDefaultVisibility === 'public' ? 'Public default' : 'Private default'}
+          </StatusPill>
+        </div>
       </header>
 
-      {/* Main Layout Grid */}
-      <div className="flex w-full flex-col gap-5 md:flex-row md:items-start">
-        
-        {/* Sidebar Navigation */}
-        <aside className="scrollbar-hide flex w-full shrink-0 snap-x snap-mandatory flex-row gap-2 overflow-x-auto rounded-[24px] border border-white/[0.06] bg-black/20 p-2 md:sticky md:top-5 md:w-60 md:flex-col md:overflow-visible">
+      <div className="grid w-full gap-5 lg:grid-cols-[248px_minmax(0,1fr)_318px] lg:items-start">
+        <aside className="scrollbar-hide flex w-full shrink-0 snap-x snap-mandatory flex-row gap-2 overflow-x-auto border-b border-white/[0.06] pb-3 lg:sticky lg:top-5 lg:flex-col lg:overflow-visible lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
           {settingsTabs.map((tab) => {
             const isActive = activeTab === tab.id
             return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                  className={`group relative flex shrink-0 snap-start items-center gap-3 whitespace-nowrap rounded-[16px] px-4 py-3 text-[13px] font-bold tracking-wide transition-all duration-400 md:px-5 md:py-3.5 md:text-[14px] md:whitespace-normal ${
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`group relative flex shrink-0 snap-start items-start gap-2.5 whitespace-nowrap rounded-[16px] px-3 py-3 text-left text-[13px] font-bold tracking-wide transition-all duration-300 lg:w-full lg:gap-3 lg:px-4 lg:py-3.5 lg:text-[14px] lg:whitespace-normal ${
                     isActive 
-                      ? 'bg-[rgb(var(--primary-light))]/[0.1] text-white ring-1 ring-[rgb(var(--primary-light))]/[0.14]'
-                      : 'text-zinc-500 hover:bg-white/[0.02] hover:text-zinc-300'
+                      ? 'bg-[rgb(var(--primary-light))]/[0.1] text-white ring-1 ring-[rgb(var(--primary-light))]/[0.18]'
+                      : 'text-zinc-500 hover:bg-white/[0.035] hover:text-zinc-300'
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 h-2/3 w-[3px] -translate-y-1/2 rounded-r-full bg-[rgb(var(--primary-light))] shadow-[0_0_12px_rgb(var(--primary-light))]" />
+                    <div className="absolute left-0 top-1/2 hidden h-2/3 w-[3px] -translate-y-1/2 rounded-r-full bg-[rgb(var(--primary-light))] shadow-[0_0_12px_rgb(var(--primary-light))] lg:block" />
                   )}
-                  <tab.icon className={`relative z-10 h-5 w-5 transition-transform duration-400 ${isActive ? 'text-[rgb(var(--primary-light))] drop-shadow-[0_0_8px_rgba(var(--primary-light),0.5)] scale-110' : 'opacity-80 group-hover:scale-105'}`} />
-                  <span className="relative z-10 md:hidden">{tab.mobileLabel}</span>
-                  <span className="relative z-10 hidden md:inline">{tab.label}</span>
+                  <tab.icon className={`relative z-10 mt-0.5 h-5 w-5 shrink-0 transition-transform duration-300 ${isActive ? 'text-[rgb(var(--primary-light))] drop-shadow-[0_0_8px_rgba(var(--primary-light),0.5)] scale-110' : 'opacity-80 group-hover:scale-105'}`} />
+                  <span className="relative z-10 lg:hidden">{tab.mobileLabel}</span>
+                  <span className="relative z-10 hidden min-w-0 lg:block">
+                    <span className="block">{tab.label}</span>
+                    <span className="mt-1 block text-[12px] font-medium leading-5 tracking-normal text-zinc-500">{tab.description}</span>
+                  </span>
                 </button>
             )
           })}
         </aside>
 
-        {/* Content Area */}
-        <main className="flex-1 w-full min-w-0">
+        <main className="min-w-0">
           {notice ? (
             <div className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${noticeToneClasses}`}>
               <div className="font-semibold">{notice.title}</div>
@@ -970,70 +1034,108 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
+          <div className="mb-5 rounded-[24px] border border-white/[0.06] bg-[#0d0b08]/70 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{activeTabMeta.label}</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{activeTabMeta.description}</p>
+              </div>
+              <StatusPill tone={settingsBootstrapQuery.isFetching ? 'neutral' : 'brand'}>
+                {settingsBootstrapQuery.isFetching ? 'Syncing' : 'Synced'}
+              </StatusPill>
+            </div>
+          </div>
+
           {/* ════ GENERAL TAB ════ */}
           {activeTab === 'general' && (
-            <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
-              
-              {/* Hero Account Card */}
-              <div className="group relative overflow-hidden rounded-[28px] bg-[#0d0b08] ring-1 ring-[rgb(var(--primary-light))]/[0.12] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] p-6 md:p-8 isolation-auto">
-                <div className="absolute inset-0 opacity-[0.2] mix-blend-screen bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.5] via-transparent to-[rgb(var(--primary))]/[0.3] transition-opacity duration-1000 group-hover:opacity-[0.28]" />
-                <div className="absolute -top-[50%] -right-[20%] w-[100%] h-[150%] bg-[radial-gradient(ellipse_at_center,rgba(241,191,103,0.12)_0%,transparent_50%)] animate-pulse-slow pointer-events-none" />
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-[rgb(var(--primary-light)/0.5)] to-transparent opacity-50" />
-                
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                    <div className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-[24px] bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--accent))] text-3xl font-black text-white shadow-[0_0_40px_rgba(var(--primary),0.3)] ring-1 ring-white/20 isolate">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_58%)] opacity-30 mix-blend-overlay" />
-                      <span className="relative z-10 drop-shadow-md">{(auth?.identity.display_name ?? 'G').slice(0, 1).toUpperCase()}</span>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl sm:text-2xl font-bold text-white tracking-tight">{auth?.identity.display_name ?? 'Guest Workflow'}</span>
-                          <InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} />
-                        </div>
-                        <div className="mt-1 text-[13px] font-medium text-zinc-400">{auth?.identity.email || 'You are exploring securely'}</div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <StatusPill tone={auth?.guest ? 'neutral' : 'brand'}>{auth?.plan.label ?? 'Free Access'}</StatusPill>
-                          <span className="text-[12px] font-semibold tracking-wide text-zinc-500">
-                            {hasInternalAccess ? 'OWNER ACCESS' : `${auth?.credits.remaining ?? 0} CREDITS`}
-                          </span>
-                        </div>
-                    </div>
-                  </div>
-                    <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0 w-full md:w-auto">
-                      <button
-                        type="button"
-                        onClick={() => setProfileDialogOpen(true)}
-                        className="relative overflow-hidden flex items-center justify-center rounded-xl bg-white px-8 py-3.5 text-[14px] font-bold text-black shadow-[0_0_24px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_32px_rgba(255,255,255,0.4)]"
-                      >
-                        Edit Profile
-                      </button>
-                      {!auth?.guest && (
-                        <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3.5 text-[14px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.12] hover:text-white hover:border-white/[0.2] hover:shadow-lg">
-                          <LogOut className="h-[16px] w-[16px]" /> Sign Out
-                        </button>
-                      )}
-                    </div>
-                </div>
-              </div>
-
-              {/* Ecosystem Settings */}
-              <div className="space-y-3">
-                <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Workspace Details</h3>
+            <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <SettingsSection
+                eyebrow="Identity"
+                title="Account identity"
+                description="Review your profile, plan, and sign-in state in one place."
+              >
                 <SettingsCard>
-                  <SettingsRow 
-                    icon={CreditCard}
-                    title="Plan & Billing"
-                    description="Review your current plan, credits, and checkout availability."
+                  <SettingsRow
+                    icon={User}
+                    title={auth?.identity.display_name ?? 'Guest Workflow'}
+                    description={auth?.identity.email || 'You are exploring securely'}
                     action={
-                      <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <InlineBadge plan={auth?.identity.plan} ownerMode={auth?.identity.owner_mode} />
+                        <button
+                          type="button"
+                          onClick={() => setProfileDialogOpen(true)}
+                          className="group flex w-full items-center justify-center rounded-xl bg-white px-6 py-2.5 text-[13px] font-bold text-black transition hover:bg-zinc-200 sm:w-auto sm:py-3"
+                        >
+                          Edit Profile
+                        </button>
+                      </div>
+                    }
+                  />
+                  <SettingsRow
+                    icon={CreditCard}
+                    title="Plan and credits"
+                    description={hasInternalAccess ? 'Owner access is enabled for this account.' : `${auth?.credits.remaining ?? 0} credits available on ${auth?.plan.label ?? 'Free Access'}.`}
+                    action={
+                      <Link to="/subscription" className="group flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/[0.1] bg-white/[0.06] px-6 py-2.5 text-[13px] font-bold text-white transition-all duration-300 hover:border-white/[0.2] hover:bg-white/[0.12] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] sm:w-auto sm:py-3">
                         View Plans <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
                       </Link>
                     }
                   />
+                  {!auth?.guest ? (
+                    <SettingsRow
+                      icon={LogOut}
+                      title="Sign out"
+                      description="End the current Studio session on this device."
+                      action={
+                        <button onClick={signOut} className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/[0.1] bg-white/[0.06] px-6 py-2.5 text-[13px] font-bold text-zinc-300 transition-all duration-300 hover:border-white/[0.2] hover:bg-white/[0.12] hover:text-white sm:w-auto sm:py-3">
+                          Sign Out
+                        </button>
+                      }
+                    />
+                  ) : null}
                 </SettingsCard>
-              </div>
+              </SettingsSection>
+
+              <SettingsSection
+                eyebrow="Defaults"
+                title="Profile and defaults"
+                description="Set how your profile appears and how new work starts."
+              >
+                <SettingsCard>
+                  <SettingsRow
+                    icon={Globe}
+                    title="Default visibility"
+                    description="Choose how new work starts before you publish, share, or keep it private."
+                    action={
+                      <div className="flex items-center gap-1.5 rounded-[12px] bg-black/40 p-1 ring-1 ring-white/10 w-max">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingVisibility('public')
+                            discoverabilityMutation.mutate('public')
+                          }}
+                          disabled={discoverabilityMutation.isPending}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                        >
+                          {discoverabilityMutation.isPending && pendingVisibility === 'public' ? 'Saving...' : 'Public default'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingVisibility('private')
+                            discoverabilityMutation.mutate('private')
+                          }}
+                          disabled={discoverabilityMutation.isPending}
+                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                        >
+                          {discoverabilityMutation.isPending && pendingVisibility === 'private' ? 'Saving...' : 'Private default'}
+                        </button>
+                      </div>
+                    }
+                  />
+                </SettingsCard>
+              </SettingsSection>
             </div>
           )}
 
@@ -1115,69 +1217,24 @@ export default function SettingsPage() {
           {activeTab === 'security' && (
             <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
               
-              <div className="space-y-4">
-                <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Visibility & Data Rights</h3>
+              <SettingsSection
+                eyebrow="Protection"
+                title="Account safety"
+                description="Security controls stay tied to live Studio auth, session, and health checks."
+              >
                 <SettingsCard>
-                  <SettingsRow 
-                    icon={Globe}
-                    title="Global Discoverability"
-                    description="Set whether new creations and projects are public out of the box."
+                  <SettingsRow
+                    icon={ShieldCheck}
+                    title="Security check"
+                    description={latestSession ? `Most recent Studio access was ${formatSessionRelativeTime(latestSession.last_seen_at)}.` : 'Run the current Studio service and account safety check.'}
                     action={
-                      <div className="flex items-center gap-1.5 rounded-[12px] bg-black/40 p-1 ring-1 ring-white/10 w-max">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingVisibility('public')
-                            discoverabilityMutation.mutate('public')
-                          }}
-                          disabled={discoverabilityMutation.isPending}
-                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'public' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
-                        >
-                          {discoverabilityMutation.isPending && pendingVisibility === 'public' ? 'Saving...' : 'Public'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingVisibility('private')
-                            discoverabilityMutation.mutate('private')
-                          }}
-                          disabled={discoverabilityMutation.isPending}
-                          className={`rounded-[10px] px-5 py-2 text-[12px] font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${activeDefaultVisibility === 'private' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
-                        >
-                          {discoverabilityMutation.isPending && pendingVisibility === 'private' ? 'Saving...' : 'Private'}
-                        </button>
-                      </div>
-                    }
-                  />
-                  <SettingsRow 
-                    icon={HardDriveDownload}
-                    title="Download Archive"
-                    description="Export a full backup of your images, projects, and account history."
-                    action={
-                      <button type="button" onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                        Export Archive
+                      <button onClick={handleHealthRefresh} className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                        <RefreshCw className={`h-4 w-4 transition-transform duration-500 ${healthQuery.isFetching ? 'animate-spin' : 'group-hover:rotate-180'}`} /> Run check
                       </button>
                     }
                   />
-                  <SettingsRow 
-                    icon={Shield}
-                    title="Cookie preferences"
-                    description="Revisit analytics consent for this browser. Essential storage stays on; optional PostHog analytics only runs when you allow it."
-                    action={
-                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
-                        <StatusPill tone={cookiePreferences?.analytics ? 'brand' : 'neutral'}>{cookiePreferenceSummary}</StatusPill>
-                        <button
-                          type="button"
-                          onClick={openPreferences}
-                          className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                        >
-                          Manage cookies
-                        </button>
-                      </div>
-                    }
-                  />
                 </SettingsCard>
-              </div>
+              </SettingsSection>
 
               <div className="space-y-4">
                 <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Access Control</h3>
@@ -1219,14 +1276,69 @@ export default function SettingsPage() {
                 </SettingsCard>
               </div>
 
-              <div className="space-y-4">
-                <h3 className="px-2 text-xs font-bold uppercase tracking-wider text-red-500/60">Danger Zone</h3>
+            </div>
+          )}
+
+          {/* ════ DATA TAB ════ */}
+          {activeTab === 'data' && (
+            <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <SettingsSection
+                eyebrow="Data"
+                title="Archive and consent"
+                description="Export your data and manage cookie choices."
+              >
+                <SettingsCard>
+                  <SettingsRow
+                    icon={HardDriveDownload}
+                    title="Download Archive"
+                    description="Export a full backup of your images, projects, and account history."
+                    action={
+                      <button type="button" onClick={handleExport} className="group flex w-full sm:w-auto items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                        Export Archive
+                      </button>
+                    }
+                  />
+                  <SettingsRow
+                    icon={Shield}
+                    title="Cookie preferences"
+                    description="Essential storage stays on. Optional analytics run only when you allow them."
+                    action={
+                      <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <StatusPill tone={cookiePreferences?.analytics ? 'brand' : 'neutral'}>{cookiePreferenceSummary}</StatusPill>
+                        <button
+                          type="button"
+                          onClick={openPreferences}
+                          className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        >
+                          Manage cookies
+                        </button>
+                      </div>
+                    }
+                  />
+                  <SettingsRow
+                    icon={CreditCard}
+                    title="Billing"
+                    description="Review plans, credits, and purchases."
+                    action={
+                      <Link to="/subscription" className="group flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.12] hover:border-white/[0.2] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                        View Plans <ChevronRight className="h-4 w-4 opacity-50 transition-transform duration-300 group-hover:translate-x-1 group-hover:opacity-100" />
+                      </Link>
+                    }
+                  />
+                </SettingsCard>
+              </SettingsSection>
+
+              <SettingsSection
+                eyebrow="Deletion"
+                title="Account deletion"
+                description="Deletion requests go through support so billing, exports, and active work are handled cleanly."
+              >
                 <SettingsCard compact>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 md:p-8 bg-red-950/20">
                     <div className="min-w-0">
-                      <h4 className="text-[16px] font-bold text-red-400">Delete workspace</h4>
+                      <h4 className="text-[16px] font-bold text-red-400">Delete account</h4>
                       <p className="mt-1.5 text-[13px] leading-relaxed text-red-400/80 max-w-sm">
-                        For now, deletion requests go through support so billing, exports, and active workspace state can be handled cleanly.
+                        Send a deletion request after exporting anything you need to keep.
                       </p>
                     </div>
                     <a
@@ -1237,11 +1349,10 @@ export default function SettingsPage() {
                     </a>
                   </div>
                 </SettingsCard>
-              </div>
+              </SettingsSection>
             </div>
           )}
 
-          {/* ════ GM TAB ════ */}
           {isGM && activeTab === 'gm' && (
             <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
               
@@ -1300,19 +1411,19 @@ export default function SettingsPage() {
                   <SettingsRow
                     icon={Users}
                     title="Users & Moderation"
-                    description="Account review, user actions, and moderation queues stay in owner backoffice tooling until the in-shell console is wired."
-                    action={<StatusPill tone="neutral">Backoffice only</StatusPill>}
+                    description="Account review, user actions, and moderation queues are handled outside this page."
+                    action={<StatusPill tone="neutral">External tools</StatusPill>}
                   />
                   <SettingsRow
                     icon={BarChart3}
                     title="Growth & Spend"
-                    description="Adoption, cost, and provider-spend analytics remain external for now so this screen does not pretend to be a full admin system."
-                    action={<StatusPill tone="neutral">Not in shell</StatusPill>}
+                    description="Growth and spend analytics are reviewed in dedicated owner tools."
+                    action={<StatusPill tone="neutral">External tools</StatusPill>}
                   />
                   <SettingsRow
                     icon={Trash2}
-                    title="Clear Sandbox Data"
-                    description="Sandbox cleanup stays manual-only outside Studio to avoid destructive accidental clicks."
+                    title="Clear test data"
+                    description="Test-data cleanup stays manual to avoid accidental destructive actions."
                     action={<StatusPill tone="neutral">Manual only</StatusPill>}
                     danger
                   />
@@ -1323,6 +1434,86 @@ export default function SettingsPage() {
           )}
 
         </main>
+        <aside className="space-y-4 lg:sticky lg:top-5">
+          <RailCard title="Account safety" description="Recent access and account health.">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[rgb(var(--primary-light))]/25 bg-[rgb(var(--primary-light))]/10 text-[rgb(var(--primary-light))]">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <StatusPill tone={healthTone}>{healthLabel}</StatusPill>
+                <p className="mt-2 text-[12px] leading-5 text-zinc-500">
+                  {latestSession ? `Most recent access was ${formatSessionRelativeTime(latestSession.last_seen_at)}.` : 'Ready for the latest Studio check.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleHealthRefresh}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-white/[0.08]"
+            >
+              <RefreshCw className={`h-4 w-4 ${healthQuery.isFetching ? 'animate-spin' : ''}`} />
+              Run security check
+            </button>
+          </RailCard>
+
+          <RailCard title="Recent sessions" description={activeSessionsDescription}>
+            <div className="space-y-2">
+              {recentSessions.length > 0 ? recentSessions.map((session) => (
+                <div key={session.id} className="rounded-[16px] border border-white/[0.06] bg-black/25 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-bold text-white">{session.current ? 'This device' : session.surface_label}</div>
+                      <div className="mt-1 truncate text-[11px] text-zinc-500">{session.browser_label} - {session.os_label}</div>
+                    </div>
+                    {session.current ? <StatusPill tone="brand">This device</StatusPill> : null}
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-[16px] border border-white/[0.06] bg-black/25 px-3 py-3 text-[13px] leading-6 text-zinc-500">
+                  No recent sessions yet.
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveSessionsDialogOpen(true)}
+              className="mt-4 flex w-full items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-white/[0.08]"
+            >
+              View all sessions
+            </button>
+          </RailCard>
+
+          <RailCard title="Sign-in" description={credentialsDescription}>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone={primaryAuthProvider === 'email' ? 'brand' : 'neutral'}>{primaryAuthProviderLabel}</StatusPill>
+              <StatusPill tone={activeSessions?.can_sign_out_others ? 'brand' : 'neutral'}>{activeSessionsBadgeLabel}</StatusPill>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCredentialsDialogOpen(true)}
+              className="mt-4 flex w-full items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-white transition hover:bg-white/[0.08]"
+            >
+              Open sign-in settings
+            </button>
+          </RailCard>
+
+          <RailCard title="Plan" description="Plan and credits are on the billing screen.">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Credits</div>
+                <div className="mt-1 text-2xl font-bold tracking-tight text-white">{auth?.credits.remaining ?? 0}</div>
+              </div>
+              <StatusPill tone={auth?.guest ? 'neutral' : 'brand'}>{auth?.plan.label ?? 'Free Access'}</StatusPill>
+            </div>
+            <Link
+              to="/subscription"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-[rgb(var(--primary-light))]/25 bg-[rgb(var(--primary-light))]/10 px-4 py-2.5 text-[13px] font-bold text-[rgb(var(--primary-light))] transition hover:bg-[rgb(var(--primary-light))]/15"
+            >
+              View Plans <ChevronRight className="h-4 w-4" />
+            </Link>
+          </RailCard>
+        </aside>
       </div>
       <ProfileEditorDialog
         open={profileDialogOpen}

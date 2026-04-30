@@ -22,7 +22,9 @@ export function LocaleSwitcher({ locale, label }: LocaleSwitcherProps) {
   const pathWithoutLocale = useMemo(() => stripLocaleFromPath(pathname), [pathname]);
 
   function onChange(nextLocale: string) {
-    document.cookie = `${localeCookieName}=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    const secureCookie = window.location.protocol === "https:" ? "; Secure" : "";
+
+    document.cookie = `${localeCookieName}=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax${secureCookie}`;
     router.push(
       `/${nextLocale}${pathWithoutLocale === "/" ? "" : pathWithoutLocale}` as Route,
     );

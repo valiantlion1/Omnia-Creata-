@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Printer } from 'lucide-react'
 
 import { AppPage, LegalFooter } from '@/components/StudioPrimitives'
-import { LEGAL_PRELAUNCH_DISCLOSURE, resolveLegalPlaceholder } from '@/lib/legalConfig'
+import { resolveLegalPlaceholder } from '@/lib/legalConfig'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { usePageMeta } from '@/lib/usePageMeta'
 
@@ -144,37 +143,21 @@ export function LegalPage({
                 </span>
               </>
             ) : null}
-            <span className={isEmbedded ? 'text-zinc-300' : 'text-zinc-700'}>|</span>
-            <button
-              onClick={() => window.print()}
-              className={`inline-flex items-center gap-1.5 transition print:hidden ${isEmbedded ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-500 hover:text-zinc-200'}`}
-            >
-              <Printer className="h-3 w-3" />
-              Print
-            </button>
           </div>
           {normalizedSummary ? (
             <div className={`mt-6 rounded-[12px] p-4 print:border-zinc-400 ${isEmbedded ? 'border border-black/[0.06] bg-[#f7f4ee]' : 'border border-white/[0.06] bg-[#0c0d12]'}`}>
               <div className={`mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] ${isEmbedded ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                Plain-language summary
+                Summary
               </div>
               <div className={`text-[13.5px] leading-[1.75] ${isEmbedded ? 'text-zinc-700' : 'text-zinc-300'}`}>{normalizedSummary}</div>
             </div>
           ) : null}
-          <div className={`mt-3 rounded-[12px] p-4 print:border-zinc-400 ${isEmbedded ? 'border border-amber-400/25 bg-amber-100/70' : 'border border-amber-400/15 bg-amber-400/[0.08]'}`}>
-            <div className={`mb-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] ${isEmbedded ? 'text-amber-800' : 'text-amber-200'}`}>
-              Business status
-            </div>
-            <div className={`text-[13.5px] leading-[1.75] ${isEmbedded ? 'text-amber-950' : 'text-amber-50/90'}`}>
-              {normalizeLegalText(LEGAL_PRELAUNCH_DISCLOSURE)}
-            </div>
-          </div>
         </header>
 
         <div className="grid items-start gap-10 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className={`hidden print:hidden lg:block ${isEmbedded ? 'sticky top-6' : 'sticky top-24'}`}>
             <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
-              Contents
+              Sections
             </div>
             <nav className={`space-y-0.5 rounded-[12px] p-1.5 ${isEmbedded ? 'border border-black/[0.06] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.08)]' : 'border border-white/[0.04] bg-[#0c0d12]'}`}>
               {toc.map((item) => (
@@ -189,7 +172,7 @@ export function LegalPage({
             </nav>
           </aside>
 
-          <article className={`legal-prose text-[14.5px] leading-[1.8] ${isEmbedded ? 'rounded-[28px] border border-black/[0.06] bg-white px-8 py-8 text-zinc-700 shadow-[0_28px_70px_rgba(15,23,42,0.12)]' : 'text-zinc-300'}`}>{children}</article>
+          <article className={`legal-prose text-[14.5px] leading-[1.8] ${isEmbedded ? 'legal-prose-light rounded-[28px] border border-black/[0.06] bg-white px-8 py-8 text-zinc-700 shadow-[0_28px_70px_rgba(15,23,42,0.12)]' : 'legal-prose-dark text-zinc-300'}`}>{children}</article>
         </div>
 
         {!canRenderWithShell && !isEmbedded ? <LegalFooter /> : null}

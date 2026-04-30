@@ -47,14 +47,19 @@ def analyze_context(parsed: ParsedPrompt) -> ContextAnalysis:
         signals.append("explicit_minor_signal")
         risk_score += 85
         reason_code = reason_code or "minor_signal"
+    elif has_adult:
+        # An explicit adult signal ("adult woman", "young woman", "in her twenties",
+        # "girlfriend"...) takes precedence over a co-occurring ambiguous-youth
+        # token. This prevents false positives like "young woman in bikini" (which
+        # contains the substring "girl"-equivalent through token overlap) from
+        # getting locked into AMBIGUOUS just because both lexicons matched.
+        age_ambiguity = AgeAmbiguity.CLEAR_ADULT
+        signals.append("clear_adult_signal")
     elif has_ambiguous_youth and (has_swimwear or has_lingerie or has_suggestive or has_explicit_sexual):
         age_ambiguity = AgeAmbiguity.AMBIGUOUS
         signals.append("age_ambiguity_signal")
         risk_score += 35
         reason_code = reason_code or "age_ambiguity"
-    elif has_adult:
-        age_ambiguity = AgeAmbiguity.CLEAR_ADULT
-        signals.append("clear_adult_signal")
     elif has_ambiguous_youth:
         age_ambiguity = AgeAmbiguity.AMBIGUOUS
         signals.append("age_ambiguous_nonsexual_signal")
@@ -123,9 +128,19 @@ def analyze_context(parsed: ParsedPrompt) -> ContextAnalysis:
         signals.append("minor_with_sexual_context")
         risk_score = max(risk_score, 95)
         reason_code = "sexual_minors"
-    elif age_ambiguity == AgeAmbiguity.AMBIGUOUS and sexual_intent in {SexualIntent.MILD, SexualIntent.SUGGESTIVE, SexualIntent.EXPLICIT}:
+    elif age_ambiguity == AgeAmbiguity.AMBIGUOUS and sexual_intent != SexualIntent.NONE:
+        # Graduate the boost by intent severity — previously a flat +18 fired
+        # for MILD intent (e.g. swimwear without "sexy"), which over-flagged
+        # standard fashion/swimwear prompts. The image analyzer now provides
+        # a true post-generation vision check, so the lexicon only needs to
+        # surface review-worthy signal at the prompt stage, not pre-block.
         signals.append("age_ambiguity_with_sexual_context")
-        risk_score += 18
+        if sexual_intent == SexualIntent.MILD:
+            risk_score += 8
+        elif sexual_intent == SexualIntent.SUGGESTIVE:
+            risk_score += 18
+        else:  # EXPLICIT
+            risk_score += 30
         reason_code = reason_code or "age_ambiguity"
 
     explanation = ", ".join(signals) if signals else "no_significant_signals"

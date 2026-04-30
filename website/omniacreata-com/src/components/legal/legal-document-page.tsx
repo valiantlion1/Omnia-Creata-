@@ -53,23 +53,17 @@ export function LegalDocumentPage({
 }: LegalDocumentPageProps) {
   return (
     <>
-      <section className="relative px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-[1320px]">
+      <section className="site-page pb-0">
+        <div className="site-page-inner">
           <Reveal>
-            <div className="grid gap-10 xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
-              <div className="max-w-[44rem]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
-                  {eyebrow}
-                </p>
-                <h1 className="mt-5 text-[3.05rem] font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-[4rem] lg:text-[4.4rem]">
-                  {title}
-                </h1>
-                <p className="mt-5 max-w-2xl text-base leading-8 text-foreground-soft sm:text-lg">
-                  {description}
-                </p>
+            <div className="site-page-hero site-page-hero--compact xl:grid-cols-[0.88fr_1.12fr] xl:items-start">
+              <div className="site-page-copy">
+                <p className="site-kicker">{eyebrow}</p>
+                <h1 className="site-page-title">{title}</h1>
+                <p className="site-page-lede">{description}</p>
 
                 {!!actions.length && (
-                  <div className="mt-8 flex flex-wrap gap-3">
+                  <div className="site-page-actions">
                     {actions.map((action) => (
                       <ButtonLink
                         key={`${action.href}-${action.label}`}
@@ -84,11 +78,9 @@ export function LegalDocumentPage({
                 )}
               </div>
 
-              <div className="overflow-hidden rounded-[36px] border border-[rgba(216,181,109,0.13)] bg-[linear-gradient(180deg,rgba(24,24,20,0.92),rgba(9,10,9,0.98))] p-7 shadow-[0_26px_80px_rgba(0,0,0,0.28)] sm:p-8">
+              <div className="site-premium-card p-7 sm:p-8">
                 <div className="border-b border-white/[0.08] pb-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-accent">
-                    {summaryTitle}
-                  </p>
+                  <p className="site-kicker">{summaryTitle}</p>
                   <p className="mt-3 text-base leading-8 text-foreground-soft">{summary}</p>
                 </div>
 
@@ -111,17 +103,17 @@ export function LegalDocumentPage({
         </div>
       </section>
 
-      <section className="px-6 py-10 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-[1320px]">
+      <section className="site-page py-0">
+        <div className="site-page-inner">
           <Reveal>
-            <div className="grid gap-10 xl:grid-cols-[0.34fr_0.66fr] xl:items-start">
+            <div className="site-band xl:grid-cols-[0.34fr_0.66fr] xl:items-start">
               <SectionHeader
                 description={documentDescription}
                 eyebrow={documentEyebrow}
                 title={documentTitle}
               />
 
-              <article className="overflow-hidden rounded-[32px] border border-[rgba(216,181,109,0.12)] bg-[linear-gradient(180deg,rgba(24,24,20,0.82),rgba(9,10,9,0.96))] p-6 shadow-[0_24px_72px_rgba(0,0,0,0.24)] sm:p-8">
+              <article className="site-premium-card overflow-hidden p-6 sm:p-8">
                 <div className="legal-copy">
                   {sections.map((section, index) => (
                     <section
@@ -146,14 +138,12 @@ export function LegalDocumentPage({
         </div>
       </section>
 
-      <section className="px-6 pb-12 pt-6 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-[1320px]">
+      <section className="site-page pt-0">
+        <div className="site-page-inner">
           <Reveal>
-            <div className="grid gap-6 border-t border-white/[0.08] pt-8 lg:grid-cols-[1.06fr_0.94fr] lg:items-center">
+            <div className="site-band lg:grid-cols-[1.06fr_0.94fr] lg:items-center">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-accent">
-                  {footerEyebrow}
-                </p>
+                <p className="site-kicker">{footerEyebrow}</p>
                 <h2 className="mt-4 text-[2.1rem] font-semibold tracking-[-0.05em] text-foreground sm:text-[2.5rem]">
                   {footerTitle}
                 </h2>

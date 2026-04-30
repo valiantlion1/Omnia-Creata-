@@ -18,6 +18,185 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.04.30.250`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Turnstile setup was about to become live operator work, but the env templates did not make the split between public browser site key and server-only CAPTCHA secret explicit enough.
+- What:
+  `.250` adds Turnstile placeholders to the Studio backend, web, staging, and platform env templates, and updates the production env checklist so `TURNSTILE_SECRET_KEY` is clearly server-only while `VITE_TURNSTILE_SITE_KEY` remains the public browser value. This is documentation/config-template hardening only; no real secret values were added.
+
+### `0.6.0-alpha` / build `2026.04.30.249`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  A second security pass found that the launch URL/CORS checks had closed the obvious local cases but still accepted private IP literals such as `https://10.0.0.5`, `https://192.168.1.10`, or IPv6 loopback when written as HTTPS endpoints.
+- What:
+  `.249` centralizes launch-safe public host validation for Studio URLs, CORS origins, allowed hosts, and deployment preflight checks. Staging/production public web/API URLs and CORS origins now reject private, loopback, link-local, wildcard, and single-label hostnames instead of only blocking `localhost` and `127.0.0.1`. The public website contact webhook guard also rejects private/local IP literal targets outside local development.
+  Verification on `.249` covers the follow-up security slice. From `apps/studio/backend`, focused production/preflight coverage passes with 31 tests and `python -m compileall config studio_platform` passes. `python -m pip_audit -r apps/studio/backend/requirements.txt` still reports no known vulnerabilities. From `website/omniacreata-com`, `npm run typecheck`, `npm audit --audit-level=moderate`, and `npm run build` pass; the build generates 104 pages across 10 locales.
+
+### `0.6.0-alpha` / build `2026.04.30.248`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Security review found several launch-hardening gaps: staging/production could still inherit local host allowlist values, the new Chat message generation route was missing from the startup auth-policy coverage map, provider-returned result URLs were downloaded without a public-HTTPS guard, and dependency audits had stale vulnerable pins.
+- What:
+  `.248` requires staging/production `ALLOWED_HOSTS` to be explicit public hostnames, adds the Chat generate route to the authenticated auth policy contract, blocks fal/OpenAI provider result downloads unless the URL is HTTPS and resolves to public addresses, and updates Studio dependency pins so both web and backend audit checks are clean. Deployment preflight and env examples now surface the host allowlist requirement before runtime. The public website contact API also prefers the real `Host` header before forwarded host when checking same-origin form submissions.
+  Verification on `.248` covers the security slice. From `apps/studio/backend`, focused security/provider/preflight coverage passes with 58 tests, `python -m compileall config studio_platform` passes, and `python -m pip_audit -r apps/studio/backend/requirements.txt` reports no known vulnerabilities. From `apps/studio/web`, `npm audit --audit-level=moderate` reports zero vulnerabilities, `npm run type-check` passes, and `npm run build` passes. From `website/omniacreata-com`, `npm run typecheck` and `npm run build` pass.
+
+### `0.6.0-alpha` / build `2026.04.30.247`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught that `/chat` had grown two redundant workspace panels: an inner conversation-history rail duplicating the main Studio sidebar history, and a right visual-plan rail that pulled the Chat experience back toward Create handoff behavior.
+- What:
+  `.247` simplifies Chat into a single self-contained conversation workspace. The main Studio sidebar remains the only visible chat-history surface, the Chat route no longer shows the right Mode/References/Latest image/Continue in Create rail, visible mode switching is removed from the page chrome, and structured assistant suggestions stay inside Chat instead of navigating to Create. The simplified layout now uses the full available workspace instead of a leftover centered rail layout, hides the global legal footer on Chat like Create, and presents the composer as a compact dock. In-chat visual outputs remain in the conversation timeline and now include a direct download affordance beside the Library action.
+  Verification on `.247` covers the simplified Chat surface and layout cleanup. From `apps/studio/web`, `npm run test:ci -- Chat.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof against `127.0.0.1:5173` passes for `/chat` desktop and mobile with zero failed routes and zero console errors; snapshot text proof confirms `Search chats`, `Visual plan`, `Continue in Create`, `Open Create`, `Latest image run`, `Create an image`, and the older `What would you like to create?` copy are absent from the simplified Chat surface.
+
+### `0.6.0-alpha` / build `2026.04.30.246`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Review caught that `.245` interpreted the image-only launch drill too aggressively and made Chat disappear from the normal Studio shell even though Chat is an intentional first-class Studio surface with backend entitlements and tests still alive.
+- What:
+  `.246` restores Chat visibility by default. `IS_CHAT_ENABLED` now falls back to `true`, so the sidebar, mobile bottom nav, route, command palette, billing/help copy, and `/chat` path are visible without requiring `VITE_STUDIO_CHAT_ENABLED=1`. The flag remains available as `VITE_STUDIO_CHAT_ENABLED=0` for a deliberate image-only drill or emergency rollback.
+  Verification on `.246` covers the restored Chat surface. From `apps/studio/web`, `npm run test:ci -- Chat.test.tsx StudioShell.test.tsx Documentation.test.tsx Billing.test.tsx Dashboard.test.tsx` passes with 5 files / 10 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof against `127.0.0.1:5173` passes for `/chat` desktop and mobile with zero failed routes and zero console errors; snapshots confirm Chat appears in the desktop sidebar and mobile bottom nav.
+
+### `0.6.0-alpha` / build `2026.04.30.245`
+- Date: `2026-04-30`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Post-`.244` review found stale launch-truth copy that still described Studio as a FLUX.2 Fast/Standard/Premium lane product with Creator/Pro-era economics even though the current code and tests now use Free, Essential, Premium, 4000/12000 bundled credits, 2000/8000 credit packs, and the six-model Runware launch catalog.
+- What:
+  `.245` keeps the existing product shape and fixes the stale truth layer: backend public plan summaries now describe the current Runware launch image catalog, the default-hidden Chat copy on Explore/Help respects `IS_CHAT_ENABLED`, and the delivery status doc now matches the current catalog, plan names, and economics lock instead of the pre-`.243` packaging language.
+  Verification on `.245` covers the touched truth layer. From `apps/studio/backend`, the focused public-plan, billing-summary, and model-catalog regressions pass with 6 tests. From `apps/studio/web`, `npm run test:ci -- Dashboard.test.tsx Documentation.test.tsx Billing.test.tsx StudioShell.test.tsx` passes with 4 files / 9 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof against `127.0.0.1:5173` passes for `/help` and `/explore` on desktop and mobile with zero failed routes and zero console errors; the only console warnings are React Router v7 future-flag warnings from the Vite dev host.
+
+### `0.6.0-alpha` / build `2026.04.29.244`
+- Date: `2026-04-29`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught that `/account` had two profile surfaces facing each other: the left profile card and the right `Public profile preview` card repeated the same identity/artwork/avatar information with no clear separate job.
+- What:
+  `.244` removes the duplicate right-side public-profile preview from Account. The left card stays the profile identity/edit/artwork summary, the center remains the gallery, and the right rail now carries distinct owner actions: profile visibility, a compact `Open public profile` link, plan/billing, export, and deletion request. The left profile card no longer repeats the credits balance because the sidebar and Plan & billing rail already own that information. Public `/u/:username` routes also drop the extra right-side creator preview and render as a cleaner profile + public gallery layout.
+  Verification on `.244` covers the focused Account/public-profile layout path. From `apps/studio/web`, `npm run test:ci -- Account.test.tsx StudioShell.test.tsx` passes with 2 files / 6 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/account` demo Pro desktop/mobile and `/u/alierdincyigitaslan68` demo Pro desktop/mobile route proof pass with zero failed routes and zero console errors/warnings via `apps/studio/web/output/playwright/studio-proof/account-no-duplicate-profile-244-desktop-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/account-no-duplicate-profile-244-mobile-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/public-profile-no-duplicate-244-desktop-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/public-profile-no-duplicate-244-mobile-mobile-manifest.json`. Focused snapshot text proof confirms no `Public profile preview`, `Public profile copy appears here after you add a bio.`, duplicate right-side `Creator` heading, billing-private fallback copy, or disabled empty preview button remains in those Account/public-profile snapshots.
+
+### `0.6.0-alpha` / build `2026.04.29.243`
+- Date: `2026-04-29`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The public paid-plan names still read like raw internal tiers (`Free Account`, `Creator`, `Pro`) while the product needed cleaner market-facing names before launch. Live Runware docs also showed that two launch image routes were carrying older shorthand AIR ids instead of the current official model ids.
+- What:
+  `.243` changes the public plan labels to `Free`, `Essential`, and `Premium` across the backend catalog, Studio billing/create/chat surfaces, frontend test fixtures, website pricing page, and launch economics docs while keeping internal entitlement ids stable as `free`, `creator`, and `pro`. It also updates Runware outbound model ids for `GPT Image 2` to `openai:gpt-image@2` and `Grok Imagine Image Pro` to `xai:grok-imagine@image-pro`, preserving the old shorthand ids as inbound aliases only.
+  Verification on `.243` covers the focused plan/model path. From `apps/studio/backend`, targeted backend coverage passes with 58 tests, including public billing/catalog, generation forecast, asset protection, backend spine, Runware chat, deployment preflight, and the new Runware AIR-id contract test. From `apps/studio/web`, focused UI tests pass with 7 files / 15 tests, `npm run type-check` passes, and `npm run build` passes. From `website/omniacreata-com`, `npm run typecheck` and `npm run build` pass. Live API proof on `127.0.0.1:8000` confirms `/v1/public/plans` returns `Free`, `Essential`, and `Premium`; `/v1/models` returns the six Runware launch models. Browser proof confirms Studio `/subscription` and `/create` show the new names without old plan labels, and a clean website dev server on `127.0.0.1:4001` confirms `/en/pricing` shows `FREE`, `ESSENTIAL`, and `PREMIUM`.
+
+### `0.6.0-alpha` / build `2026.04.29.242`
+- Date: `2026-04-29`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught that a signed-in visit to a public creator URL such as `/u/alierdincyigitaslan68` could render the private Account workspace instead of a public creator profile. That exposed account-management framing such as billing, default visibility, exports, and private profile controls on a route that must stay public.
+- What:
+  `.242` locks `/u/:username` to public-profile behavior on both sides of the stack. The frontend now forces username routes into a public-only payload shape even if a stale backend response marks the viewer as the owner, filters out private posts and private featured artwork fallback, hides plan/billing/export/delete/default-visibility/account controls, updates the page title/header to `Creator profile`, and removes the disabled empty-artwork button state. The backend public profile route now passes `force_public=True` through the router, service wrapper, public service, and identity service so `/v1/profiles/{username}` never returns owner-only profile data just because the viewer is signed in as that owner.
+  Verification on `.242` covers the public profile route and backend profile contract. From `apps/studio/web`, `npm run test:ci -- Account.test.tsx StudioShell.test.tsx` passes with 2 files / 6 tests, `npm run type-check` passes, and `npm run build` passes. From `apps/studio/backend`, `python -m pytest -q tests/test_router_security.py -k "public_profile_route_hides_private_usage_and_visibility_defaults or public_profile_route_uses_explicit_rate_limits_and_limit_param"` passes with 2 tests / 83 deselected. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/u/alierdincyigitaslan68` demo Pro desktop and mobile route proof pass with zero failed routes and zero console errors/warnings via `apps/studio/web/output/playwright/studio-proof/public-profile-route-242-final-desktop-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/public-profile-route-242-final-mobile-mobile-manifest.json`. Focused snapshot text proof confirms no `Plan & billing`, `Default visibility`, edit/export/delete account controls, old Account helper copy, or disabled empty-artwork button is present on that public URL.
+
+### `0.6.0-alpha` / build `2026.04.29.241`
+- Date: `2026-04-29`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught that the public Cookie Policy was exposing exact cookie/storage names and security mechanism wording in the cookie inventory table. That level of implementation detail is not needed for user trust and should not become public documentation.
+- What:
+  `.241` rewrites the `/legal/cookies` inventory section into a category-level Browser storage overview. The policy still explains category, purpose, duration, and party for sign-in/security, cookie choices, interface preferences, optional analytics, checkout/payment security, and network protection, but no longer publishes exact internal cookie keys, wildcard provider key patterns, CSRF wording, or DDoS-specific language. A legal-page regression now blocks those internal names and security-mechanism phrases from returning.
+  Verification on `.241` covers the focused legal/cookie policy path. From `apps/studio/web`, `npm run test:ci -- LegalPages.test.tsx surfaceCopyHygiene.test.ts` passes with 2 files / 8 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/legal/cookies` desktop and mobile route proof pass with zero failed routes and zero console errors/warnings via `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-mobile-manifest.json`. Focused inventory proof confirms heading `5. Browser storage overview`, no raw internal-name/security-mechanism matches, no horizontal overflow on desktop or mobile, and zero console errors/warnings; artifacts are `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-focused-desktop.json`, `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-focused-desktop.png`, `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-focused-mobile.json`, and `apps/studio/web/output/playwright/studio-proof/cookie-policy-safe-inventory-241-final-focused-mobile.png`.
+
+### `0.6.0-alpha` / build `2026.04.29.240`
+- Date: `2026-04-29`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught that the Cookie preferences dialog inside `/settings` still felt like an internal settings/debug panel instead of a normal website consent center. The local analytics-unavailable state also made the old analytics controls look like inactive UI instead of an intentional product state.
+- What:
+  `.240` rebuilds the shared Cookie preferences dialog into a compact website-style consent center while preserving the existing Studio cookie preference store and PostHog consent contract. The modal now uses a smaller black-and-gold shell, shorter user-facing copy, a real optional-analytics switch when analytics is available, and a clean necessary-cookies-only state when analytics is not configured. Visible controls remain real: Save choices writes the local preference, Close and Escape dismiss the modal, Cookie Policy links to `/legal/cookies`, and unavailable analytics no longer shows dead Accept or Reject controls. The first-visit cookie banner copy was also tightened to match the same user-facing language.
+  Verification on `.240` covers the focused Settings/Cookie path. From `apps/studio/web`, `npm run test:ci -- Settings.test.tsx CookiePreferences.test.tsx StudioShell.test.tsx surfaceCopyHygiene.test.ts` passes with 4 files / 12 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/settings` demo Pro desktop and mobile route proof pass with zero failed routes and zero console errors/warnings via `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-settings-final-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-settings-final-mobile-manifest.json`. Focused modal interaction proof on the same host confirms Data tab -> Manage cookies -> modal open, no dead unavailable analytics controls, Save choices writes `analytics=false`, Close works, Escape works, and console errors/warnings stay at zero; proof artifacts are `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-modal-final2-desktop.json`, `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-modal-final2-desktop.png`, `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-modal-final2-mobile.json`, and `apps/studio/web/output/playwright/studio-proof/cookie-preferences-240-modal-final2-mobile.png`.
+
+### `0.6.0-alpha` / build `2026.04.28.239`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  A full UI copy review found developer-facing language, encoded text artifacts, stale implementation wording, and redundant footer/legal chrome across public and signed-in Studio surfaces. Legal/Cookies/Help were especially noisy, and the legal public header could overlap inside the shell on narrow screens.
+- What:
+  `.239` cleans visible copy across Login/Signup, Help/Docs/Learn, legal pages, Cookie preferences, Subscription, Settings, Create, Chat, Account, Library toasts, and owner Analytics without changing the underlying auth, billing, profile, cookie, library, generation, or telemetry API contracts. The shared footer no longer exposes build/version/debug-style details, shell-friendly legal pages hide the duplicate public header, and a copy-hygiene regression test now blocks the most obvious developer phrases from returning.
+  Verification on `.239` covers the broad frontend copy path. From `apps/studio/web`, `npm run test:ci -- Documentation.test.tsx LegalPages.test.tsx Analytics.test.tsx CookiePreferences.test.tsx Login.test.tsx Signup.test.tsx Billing.test.tsx Settings.test.tsx Create.test.tsx Chat.test.tsx Account.test.tsx MediaLibrary.test.tsx Project.test.tsx Dashboard.test.tsx StudioShell.test.tsx surfaceCopyHygiene.test.ts` passes with 16 files / 47 tests; focused follow-up legal/settings/copy tests also pass after final copy edits. `npm run type-check` passes and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: guest-core desktop/mobile, auth-core desktop/mobile, auth-library desktop/mobile, Help account desktop/mobile, Learn prompt craft desktop/mobile, Docs prompt craft desktop/mobile, all five legal pages desktop/mobile, and final Settings desktop/mobile all pass with zero failed routes and zero console errors/warnings. Key proof manifests include `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-guest-core-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-guest-core-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-auth-core-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-auth-core-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-auth-library-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-auth-library-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-help-account-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-help-account-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-docs-prompt-craft-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-docs-prompt-craft-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final-legal-cookies-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final-legal-cookies-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final2-legal-privacy-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final2-legal-privacy-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final3-legal-terms-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final3-legal-terms-mobile-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/copy-hygiene-239-final-settings-desktop-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.28.238`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Browser review caught an unnecessary internal product-doctrine line under the auth card: `OmniaCreata Studio keeps Create and Chat separate, fast, and controlled.` That kind of implementation framing does not belong on the user-facing sign-in surface.
+- What:
+  `.238` removes that footer line from the shared Login/Signup auth experience instead of replacing it with another explanatory message. The premium auth layout, animated visual wall, forms, Google/email behavior, legal dialog, and Turnstile/redirect contracts remain unchanged.
+  Verification on `.238` covers the focused auth UI path. From `apps/studio/web`, `npm run test:ci -- Login.test.tsx Signup.test.tsx StudioShell.test.tsx` passes with 3 files / 10 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/login` desktop/mobile and `/signup` desktop/mobile pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/auth-copy-cleanup-238-login-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/auth-copy-cleanup-238-login-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/auth-copy-cleanup-238-signup-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/auth-copy-cleanup-238-signup-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.28.237`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Login and Signup were the next public auth surfaces after Subscription. The generated reference called for a premium black-and-gold sign-in composition with a cinematic visual wall, but the implementation still needed to keep real auth behavior instead of becoming a decorative form mockup.
+- What:
+  `.237` rebuilds `/login` and `/signup` around a shared premium auth experience with the animated Studio image wall from existing Studio visual assets, compact account forms, mobile image strip, and reduced-motion support. Email/password auth, Google auth start, OAuth completion handling, redirect preservation, Turnstile checks, signup legal acceptance, legal-document dialog, and signup Create-welcome destination remain tied to the existing frontend/backend contracts.
+  Verification on `.237` covers the focused auth path. From `apps/studio/web`, `npm run test:ci -- Login.test.tsx Signup.test.tsx StudioShell.test.tsx` passes with 3 files / 10 tests, `npm run type-check` passes, and `npm run build` passes. From `apps/studio/backend`, focused auth/session backend coverage passes with 30 tests and 58 deselected via `python -m pytest -q tests/test_supabase_auth.py tests/test_router_security.py -k "auth_me or signup or login or access_sessions or session_context or revoked_session or tombstoned_authenticated_session"`. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/login` desktop/mobile and `/signup` desktop/mobile pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/auth-reference-237-final-login-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/auth-reference-237-final-login-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/auth-reference-237-final-signup-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/auth-reference-237-final-signup-mobile-manifest.json`. A full backend `python -m pytest -q` run was attempted and is not green in the pre-existing generation/billing area: 669 passed and 15 failed, with failures centered on credit reservation/routing/catalog expectations rather than this auth UI change.
+
+### `0.6.0-alpha` / build `2026.04.28.236`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Subscription was the next launch-critical surface after Chat. The billing route already used the right public-plan and billing-summary APIs, but the page still opened like a generic pricing hero plus card stack instead of a calm account billing workspace.
+- What:
+  `.236` rebuilds `/subscription` around current plan, credit balance, allowance, plan selection, credit packs, refund policy, and activity without changing the existing Studio sidebar. Backend-facing behavior remains tied to the existing `/v1/public/plans`, `/v1/billing/summary`, and checkout contracts. The plan-honesty cleanup stays intact: the public billing UI still does not advertise removed `max_resolution` or raw provider/model IDs as plan promises.
+  Verification on `.236` covers the focused Billing path. From `apps/studio/web`, `npm run test:ci -- Billing.test.tsx StudioShell.test.tsx` passes with 2 files / 5 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/subscription` desktop and mobile pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/billing-reference-236-final-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/billing-reference-236-final-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.28.235`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Chat was the next critical Studio surface after Landing, Create, Explore, Library, Account, and Settings. The route already had the right premium-chat backbone, but visually it still read too much like a generic single-column chatbot instead of the Studio multimodal creative copilot.
+- What:
+  `.235` rebuilds `/chat` around a reference-led creative copilot workspace while preserving the existing Studio sidebar and backend contracts. Desktop now has an internal conversation rail with search/new-chat controls, a central timeline and composer with Think/Vision/Edit mode controls, and a right visual-plan rail for references, latest image run context, Library handoff, and Create handoff. Mobile keeps the composer-first chat shape without adding side rails. Existing conversation creation, send, attachment upload, assistant actions, visual generation, lightbox, Library link, and Create handoff paths remain wired to the existing frontend/backend contracts.
+  Verification on `.235` covers the focused Chat path. From `apps/studio/web`, `npm run test:ci -- Chat.test.tsx StudioShell.test.tsx` passes with 2 files / 3 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/chat` desktop and mobile both pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/chat-reference-235-final3-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/chat-reference-235-final3-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.28.234`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Account and Settings needed a second reference-led pass after visual review. The first pass had the right backend wiring, but Account still read too much like an oversized public profile page and Settings was still mixing identity, preferences, security, and data controls in a way that felt more decorative than useful.
+- What:
+  `.234` rebuilds `/account` into a compact account workspace with profile identity, gallery state, public preview, visibility, plan, export, and deletion request actions kept together without the old hero takeover. `/settings` now separates account identity from workspace defaults, appearance, security, and data/billing controls with a clearer internal rail and right-side safety context. The existing Studio sidebar/navigation is unchanged, and visible controls remain tied to the existing profile, session, credential, cookie, export, billing, and support-mediated deletion flows.
+  Verification on `.234` covers both corrected surfaces. From `apps/studio/web`, `npm run test:ci -- Account.test.tsx Settings.test.tsx StudioShell.test.tsx` passes with 3 files / 10 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/account` desktop/mobile and `/settings` desktop/mobile all pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/account-settings-redo-234-final-account-desktop-manifest.json`, `apps/studio/web/output/playwright/studio-proof/account-settings-redo-234-final-account-mobile-manifest.json`, `apps/studio/web/output/playwright/studio-proof/account-settings-redo-234-final-settings-desktop-manifest.json`, and `apps/studio/web/output/playwright/studio-proof/account-settings-redo-234-final-settings-mobile-manifest.json`.
+
+### `0.6.0-alpha` / build `2026.04.28.233`
+- Date: `2026-04-28`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The corrected reference-led pass moved from Account to Settings. The generated Settings reference called for a tighter preferences/security workspace with a left category rail, central controls, and a right safety/session rail, but Studio could not afford fake settings or dead enterprise-style switches.
+- What:
+  `.233` rebuilds `/settings` around the real Studio account-control contract while preserving the existing app sidebar navigation. The page now has an internal settings rail for General Account, Appearance & UI, Privacy & Security, Data & Billing, and owner-only Control Center; a central workspace for profile defaults, theme/hints, credentials, sessions, export, cookies, billing, and deletion request; and a right safety rail with real health refresh, session dialog, sign-in dialog, and billing navigation. Backend-facing actions remain tied to existing `settings-bootstrap`, profile update, Supabase password/session controls, cookie preferences, profile export, and billing routes instead of decorative controls.
+  Verification on `.233` covers the focused Settings path. From `apps/studio/web`, `npm run test:ci -- Settings.test.tsx StudioShell.test.tsx` passes with 2 files / 7 tests, `npm run type-check` passes, and `npm run build` passes. Browser proof used the existing `127.0.0.1:5173` host without opening a new server: `/settings` desktop and mobile both pass with zero failed routes and zero console errors/warnings. Proof manifests were written to `apps/studio/web/output/playwright/studio-proof/settings-reference-233-final5-desktop-manifest.json` and `apps/studio/web/output/playwright/studio-proof/settings-reference-233-final5-mobile-manifest.json`.
+
 ### `0.6.0-alpha` / build `2026.04.27.232`
 - Date: `2026-04-27`
 - Codename: `Foundation`

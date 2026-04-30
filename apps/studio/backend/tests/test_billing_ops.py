@@ -327,8 +327,8 @@ async def test_billing_summary_reports_reserved_and_available_credits(
         serialized = service.serialize_generation_for_identity(job, identity.id)
 
         assert summary["credits"]["gross_remaining"] == 60
-        assert summary["credits"]["reserved_total"] == 3
-        assert summary["credits"]["available_to_spend"] == 57
+        assert summary["credits"]["reserved_total"] == 40
+        assert summary["credits"]["available_to_spend"] == 20
         assert summary["credits"]["spend_order"] == "monthly_then_extra"
         assert summary["credits"]["unlimited"] is False
         draft_guide = next(
@@ -336,23 +336,23 @@ async def test_billing_summary_reports_reserved_and_available_credits(
             for entry in summary["generation_credit_guide"]["lane_highlights"]
             if entry["pricing_lane"] == "fallback"
         )
-        assert job.estimated_cost == 0.001
+        assert job.estimated_cost == 0.006
         assert job.pricing_lane == "fallback"
         assert job.estimated_cost_source == "catalog_fallback"
-        assert serialized["reserved_credit_cost"] == 3
+        assert serialized["reserved_credit_cost"] == 40
         assert serialized["final_credit_cost"] is None
         assert serialized["credit_charge_policy"] == "none"
         assert serialized["credit_status"] == "reserved"
         assert serialized["pricing_lane"] == "fallback"
         assert serialized["estimated_cost_source"] == "catalog_fallback"
-        assert serialized["creative_profile"]["id"] == "fast"
-        assert serialized["creative_profile"]["label"] == "Fast"
+        assert serialized["creative_profile"]["id"] == "gpt-image-2"
+        assert serialized["creative_profile"]["label"] == "GPT Image 2"
         assert serialized["render_experience"]["state"] == "fallback"
-        assert draft_guide["quoted_credit_cost"] == 6
-        assert draft_guide["reserved_credit_cost"] == 3
-        assert draft_guide["settlement_credit_cost"] == 3
-        assert draft_guide["creative_profile"]["id"] == "fast"
-        assert draft_guide["creative_profile"]["badge"] == "Quick starts"
+        assert draft_guide["quoted_credit_cost"] == 80
+        assert draft_guide["reserved_credit_cost"] == 40
+        assert draft_guide["settlement_credit_cost"] == 40
+        assert draft_guide["creative_profile"]["id"] == "gpt-image-2"
+        assert draft_guide["creative_profile"]["badge"] == "Modern base"
         assert draft_guide["render_experience"]["state"] == "fallback"
         assert summary["refund_policy"]["request_window_days"] == 14
         assert summary["refund_policy"]["automatic_credit_reversal_supported"] is True
@@ -375,7 +375,7 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         pro = next(entry for entry in payload["subscriptions"] if entry["id"] == "pro")
 
         assert free_account["entitlement_plan"] == "free"
-        assert free_account["label"] == "Free Account"
+        assert free_account["label"] == "Free"
         assert free_account["price_usd"] == 0
         assert free_account["checkout_kind"] is None
         assert free_account["availability"] == "included"
@@ -384,14 +384,14 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         assert "max_resolution" not in free_account
 
         assert creator["entitlement_plan"] == "creator"
-        assert creator["label"] == "Creator"
+        assert creator["label"] == "Essential"
         assert creator["price_usd"] == 12
         assert creator["checkout_kind"] == CheckoutKind.CREATOR_MONTHLY.value
         assert creator["availability"] == "self_serve"
         assert "max_resolution" not in creator
 
         assert pro["entitlement_plan"] == "pro"
-        assert pro["label"] == "Pro"
+        assert pro["label"] == "Premium"
         assert pro["price_usd"] == 24
         assert pro["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
         assert pro["availability"] == "self_serve"
@@ -405,6 +405,10 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         assert {option["kind"] for option in payload["credit_packs"]} == {
             CheckoutKind.CREDIT_PACK_SMALL.value,
             CheckoutKind.CREDIT_PACK_LARGE.value,
+        }
+        assert {(option["label"], option["credits"], option["price_usd"]) for option in payload["credit_packs"]} == {
+            ("Credit pack 2,000", 2000, 8),
+            ("Credit pack 8,000", 8000, 24),
         }
     finally:
         await service.shutdown()
@@ -453,15 +457,15 @@ async def test_standard_lane_generation_reserves_and_settles_discounted_credits(
         updated_identity = snapshot.identities[identity.id]
 
         assert settled.status == JobStatus.SUCCEEDED
-        assert settled.reserved_credit_cost == 3
-        assert settled.final_credit_cost == 3
+        assert settled.reserved_credit_cost == 40
+        assert settled.final_credit_cost == 40
         assert settled.credit_charge_policy == "standard_discount"
         assert settled.credit_status == "settled"
         assert updated_identity.monthly_credits_remaining == 0
-        assert updated_identity.extra_credits == 57
+        assert updated_identity.extra_credits == 20
         assert not any(entry.entry_type == CreditEntryType.TOP_UP for entry in snapshot.credit_ledger.values())
         assert any(
-            entry.entry_type == CreditEntryType.GENERATION_SPEND and entry.amount == -3
+            entry.entry_type == CreditEntryType.GENERATION_SPEND and entry.amount == -40
             for entry in snapshot.credit_ledger.values()
         )
     finally:
@@ -487,9 +491,9 @@ async def test_managed_generation_consumes_monthly_then_extra_credits(
         identity, project = await _seed_identity_project(
             store,
             plan=IdentityPlan.PRO,
-            monthly_remaining=2,
-            monthly_allowance=1200,
-            extra_credits=10,
+            monthly_remaining=20,
+            monthly_allowance=12000,
+            extra_credits=250,
             subscription_status=SubscriptionStatus.ACTIVE,
         )
         job = await service.create_generation(
@@ -521,11 +525,11 @@ async def test_managed_generation_consumes_monthly_then_extra_credits(
         settled = snapshot.generations[job.id]
         updated_identity = snapshot.identities[identity.id]
 
-        assert job.reserved_credit_cost == 12
-        assert settled.final_credit_cost == 12
+        assert job.reserved_credit_cost == 220
+        assert settled.final_credit_cost == 220
         assert settled.credit_charge_policy == "managed_full"
         assert updated_identity.monthly_credits_remaining == 0
-        assert updated_identity.extra_credits == 0
+        assert updated_identity.extra_credits == 50
     finally:
         await service.shutdown()
 
@@ -552,7 +556,7 @@ async def test_wallet_backed_free_generation_prefers_runware_launch_lane_when_av
             plan=IdentityPlan.FREE,
             monthly_remaining=0,
             monthly_allowance=0,
-            extra_credits=60,
+            extra_credits=600,
         )
         job = await service.create_generation(
             identity_id=identity.id,
@@ -727,7 +731,7 @@ async def test_failed_generation_releases_reservation_without_spend(
         ]
         assert len(release_entries) == 1
         assert release_entries[0].amount == 0
-        assert release_entries[0].hold_amount == failed.reserved_credit_cost == 3
+        assert release_entries[0].hold_amount == failed.reserved_credit_cost == 40
         assert release_entries[0].job_id == failed.id
     finally:
         await service.shutdown()
@@ -775,7 +779,7 @@ async def test_billing_summary_surfaces_recent_automatic_credit_reversal_case(
         assert recent_case["kind"] == "generation_credit_reversal"
         assert recent_case["status"] == "automatic_resolved"
         assert recent_case["job_id"] == job.id
-        assert recent_case["hold_amount"] == 3
+        assert recent_case["hold_amount"] == 40
     finally:
         await service.shutdown()
 
@@ -1028,7 +1032,7 @@ async def test_retryable_failure_keeps_existing_reservation(
         retryable = snapshot.generations[job.id]
 
         assert retryable.status == JobStatus.RETRYABLE_FAILED
-        assert retryable.reserved_credit_cost == 3
+        assert retryable.reserved_credit_cost == 40
         assert retryable.credit_status == "reserved"
         assert retryable.final_credit_cost is None
     finally:
@@ -1528,7 +1532,7 @@ async def test_active_reservation_blocks_over_admission(
             plan=IdentityPlan.CREATOR,
             monthly_remaining=0,
             monthly_allowance=0,
-            extra_credits=5,
+            extra_credits=50,
         )
         first_job = await service.create_generation(
             identity_id=identity.id,
@@ -1546,7 +1550,7 @@ async def test_active_reservation_blocks_over_admission(
             output_count=1,
         )
 
-        assert first_job.reserved_credit_cost == 3
+        assert first_job.reserved_credit_cost == 40
         with pytest.raises(ValueError, match="Not enough credits"):
             await service.create_generation(
                 identity_id=identity.id,
@@ -1605,7 +1609,7 @@ async def test_generation_creation_records_reserve_audit_entry(
         reserve_entry = reserve_entries[0]
         assert reserve_entry.amount == 0
         assert reserve_entry.job_id == job.id
-        assert reserve_entry.hold_amount == job.reserved_credit_cost == 3
+        assert reserve_entry.hold_amount == job.reserved_credit_cost == 40
         assert reserve_entry.job_credit_status == "reserved"
         assert reserve_entry.provider_name == job.provider
         assert reserve_entry.final_credit_cost is None
@@ -1810,7 +1814,7 @@ async def test_inactive_paid_subscription_cannot_start_pro_only_generation_lane(
             subscription_status=SubscriptionStatus.CANCELED,
         )
 
-        with pytest.raises(PermissionError, match="This model requires Pro"):
+        with pytest.raises(PermissionError, match="This model requires Premium"):
             await service.create_generation(
                 identity_id=identity.id,
                 project_id=project.id,

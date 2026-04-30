@@ -41,28 +41,23 @@ describe('CreatePage model picker', () => {
     server.use(
       http.get('*/v1/models', () =>
         HttpResponse.json({
+          default_model_id: 'gpt-image-2',
+          launch_model_ids: [
+            'gpt-image-2',
+            'nano-banana',
+            'nano-banana-2',
+            'grok-imagine-image-pro',
+            'wan-2-7-image-pro',
+            'flux-2-max',
+          ],
           models: [
             {
-              id: 'flux-2-klein',
-              label: 'Fast',
-              description: 'Fast ideation lane',
+              id: 'gpt-image-2',
+              label: 'GPT Image 2',
+              description: 'Modern base lane',
               min_plan: 'free',
-              credit_cost: 6,
-              estimated_cost: 0.001,
-              max_width: 1024,
-              max_height: 1024,
-              featured: true,
-              runtime: 'cloud',
-              owner_only: false,
-              provider_hint: 'runware',
-            },
-            {
-              id: 'qwen-image-2512',
-              label: 'Standard',
-              description: 'Balanced detail lane',
-              min_plan: 'free',
-              credit_cost: 8,
-              estimated_cost: 0.0051,
+              credit_cost: 80,
+              estimated_cost: 0.006,
               max_width: 1536,
               max_height: 1536,
               featured: true,
@@ -71,11 +66,67 @@ describe('CreatePage model picker', () => {
               provider_hint: 'runware',
             },
             {
-              id: 'flux-2-max',
-              label: 'Premium',
-              description: 'Highest-end lane',
+              id: 'nano-banana',
+              label: 'Nano Banana',
+              description: 'Everyday polish lane',
+              min_plan: 'free',
+              credit_cost: 140,
+              estimated_cost: 0.039,
+              max_width: 1536,
+              max_height: 1536,
+              featured: false,
+              runtime: 'cloud',
+              owner_only: false,
+              provider_hint: 'runware',
+            },
+            {
+              id: 'nano-banana-2',
+              label: 'Nano Banana 2',
+              description: 'Premium polish lane',
               min_plan: 'creator',
-              credit_cost: 12,
+              credit_cost: 220,
+              estimated_cost: 0.069,
+              max_width: 2048,
+              max_height: 2048,
+              featured: true,
+              runtime: 'cloud',
+              owner_only: false,
+              provider_hint: 'runware',
+            },
+            {
+              id: 'grok-imagine-image-pro',
+              label: 'Grok Imagine Image Pro',
+              description: 'Image Pro lane',
+              min_plan: 'creator',
+              credit_cost: 220,
+              estimated_cost: 0.07,
+              max_width: 2048,
+              max_height: 2048,
+              featured: true,
+              runtime: 'cloud',
+              owner_only: false,
+              provider_hint: 'runware',
+            },
+            {
+              id: 'wan-2-7-image-pro',
+              label: 'Wan 2.7 Image Pro',
+              description: 'Wan Image Pro lane',
+              min_plan: 'pro',
+              credit_cost: 240,
+              estimated_cost: 0.075,
+              max_width: 2048,
+              max_height: 2048,
+              featured: false,
+              runtime: 'cloud',
+              owner_only: false,
+              provider_hint: 'runware',
+            },
+            {
+              id: 'flux-2-max',
+              label: 'FLUX.2 Max',
+              description: 'Strongest FLUX lane',
+              min_plan: 'pro',
+              credit_cost: 240,
               estimated_cost: 0.07,
               max_width: 2048,
               max_height: 2048,
@@ -117,73 +168,73 @@ describe('CreatePage model picker', () => {
           },
           credits: {
             ...sampleBillingSummary.credits,
-            remaining: 24,
-            gross_remaining: 24,
+            remaining: 240,
+            gross_remaining: 240,
             monthly_remaining: 0,
             monthly_allowance: 0,
-            extra_credits: 24,
-            available_to_spend: 24,
+            extra_credits: 240,
+            available_to_spend: 240,
           },
           wallet: {
             ...sampleBillingSummary.wallet,
-            balance: 24,
-            wallet_balance: 24,
+            balance: 240,
+            wallet_balance: 240,
             included_monthly_allowance: 0,
             included_monthly_remaining: 0,
-            available_to_spend: 24,
+            available_to_spend: 240,
           },
-          wallet_balance: 24,
+          wallet_balance: 240,
           account_tier: 'free',
           subscription_tier: null,
           generation_credit_guide: {
-            available_to_spend: 24,
+            available_to_spend: 240,
             reserved_total: 0,
             unlimited: false,
             lane_highlights: [],
             models: [
               {
-                model_id: 'flux-2-klein',
-                label: 'Fast',
+                model_id: 'gpt-image-2',
+                label: 'GPT Image 2',
                 pricing_lane: 'draft',
                 planned_provider: 'runware',
-                estimated_cost: 0.001,
+                estimated_cost: 0.006,
                 estimated_cost_source: 'provider_quote',
-                quoted_credit_cost: 6,
-                reserved_credit_cost: 6,
-                settlement_credit_cost: 6,
-                settlement_policy: 'reserve_then_settle',
-                affordable_now: true,
-                max_startable_jobs_now: 4,
-                start_status: 'available',
-              },
-              {
-                model_id: 'qwen-image-2512',
-                label: 'Standard',
-                pricing_lane: 'standard',
-                planned_provider: 'runware',
-                estimated_cost: 0.0051,
-                estimated_cost_source: 'provider_quote',
-                quoted_credit_cost: 8,
-                reserved_credit_cost: 8,
-                settlement_credit_cost: 8,
+                quoted_credit_cost: 80,
+                reserved_credit_cost: 80,
+                settlement_credit_cost: 80,
                 settlement_policy: 'reserve_then_settle',
                 affordable_now: true,
                 max_startable_jobs_now: 3,
                 start_status: 'available',
               },
               {
-                model_id: 'flux-2-max',
-                label: 'Premium',
-                pricing_lane: 'final',
+                model_id: 'nano-banana',
+                label: 'Nano Banana',
+                pricing_lane: 'standard',
                 planned_provider: 'runware',
-                estimated_cost: 0.07,
+                estimated_cost: 0.039,
                 estimated_cost_source: 'provider_quote',
-                quoted_credit_cost: 12,
-                reserved_credit_cost: 12,
-                settlement_credit_cost: 12,
+                quoted_credit_cost: 140,
+                reserved_credit_cost: 140,
+                settlement_credit_cost: 140,
                 settlement_policy: 'reserve_then_settle',
                 affordable_now: true,
-                max_startable_jobs_now: 2,
+                max_startable_jobs_now: 1,
+                start_status: 'available',
+              },
+              {
+                model_id: 'nano-banana-2',
+                label: 'Nano Banana 2',
+                pricing_lane: 'final',
+                planned_provider: 'runware',
+                estimated_cost: 0.069,
+                estimated_cost_source: 'provider_quote',
+                quoted_credit_cost: 220,
+                reserved_credit_cost: 220,
+                settlement_credit_cost: 220,
+                settlement_policy: 'reserve_then_settle',
+                affordable_now: true,
+                max_startable_jobs_now: 1,
                 start_status: 'available',
               },
             ],
@@ -197,28 +248,33 @@ describe('CreatePage model picker', () => {
     renderWithProviders(<CreatePage />, { route: '/create' })
 
     await waitFor(() => {
-      expect(screen.getByText('FLUX.2')).toBeInTheDocument()
+      expect(screen.getByText('GPT Image 2')).toBeInTheDocument()
     })
-    expect(screen.getByText(/pick the model, then run it/i)).toBeInTheDocument()
     expect(screen.queryByText(/^finish$/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Live result set/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Recent Create sessions/i)).not.toBeInTheDocument()
-    expect(screen.queryByTestId('create-preview-surface')).not.toBeInTheDocument()
+    expect(screen.getByTestId('create-preview-surface')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /model/i }))
+    const modelPickerButton = screen.getByText(/^Model$/i).closest('button')
+    expect(modelPickerButton).toBeTruthy()
+    await userEvent.click(modelPickerButton!)
 
-    expect(screen.getByText('Qwen Image')).toBeInTheDocument()
+    expect(screen.getByText('Nano Banana')).toBeInTheDocument()
+    expect(screen.getByText('Nano Banana 2')).toBeInTheDocument()
+    expect(screen.getByText('Grok Imagine Image Pro')).toBeInTheDocument()
+    expect(screen.getByText('Wan 2.7 Image Pro')).toBeInTheDocument()
     expect(screen.getByText('FLUX.2 Max')).toBeInTheDocument()
-    expect(screen.getByText(/8 credits/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/80 Credits/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/140 credits/i)).toBeInTheDocument()
     expect(screen.queryByText(/qwen-image-2512/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/\[klein\]|\[max\]/i)).not.toBeInTheDocument()
 
-    const premiumModelButton = screen.getByText(/^creator$/i).closest('button')
+    const premiumModelButton = screen.getAllByText(/^essential$/i)[0].closest('button')
     expect(premiumModelButton).toBeDisabled()
-    expect(screen.getByText(/^locked$/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/^locked$/i).length).toBeGreaterThan(0)
   })
 
-  it('restores session settings from history and hides stale preview tiles when variation count changes', async () => {
+  it('restores session settings from history and keeps preview state stable when variation count changes', async () => {
     const historySession = {
       job_id: 'gen-history-4',
       title: 'Atmospheric alley',
@@ -249,8 +305,8 @@ describe('CreatePage model picker', () => {
       estimated_cost: 0.001,
       estimated_cost_source: 'provider_quote',
       actual_cost_usd: null,
-      credit_cost: 24,
-      reserved_credit_cost: 24,
+      credit_cost: 240,
+      reserved_credit_cost: 240,
       final_credit_cost: null,
       credit_charge_policy: 'reserve_then_settle',
       credit_status: 'released',
@@ -306,7 +362,8 @@ describe('CreatePage model picker', () => {
     fireEvent.change(variationSlider, { target: { value: '2' } })
 
     await waitFor(() => {
-      expect(screen.queryByTestId('create-preview-surface')).not.toBeInTheDocument()
+      expect(variationSlider).toHaveValue('2')
     })
+    expect(screen.getByTestId('create-preview-surface')).toBeInTheDocument()
   })
 })

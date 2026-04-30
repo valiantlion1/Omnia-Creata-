@@ -562,170 +562,80 @@ function GalleryGrid({
   )
 }
 
-function PublicProfilePreview({
-  payload,
-  featuredPreview,
-  featuredAsset,
-  galleryAssets,
-  onOpenArtwork,
-}: {
-  payload: ProfilePayload
-  featuredPreview: string | null
-  featuredAsset: MediaAsset | null
-  galleryAssets: MediaAsset[]
-  onOpenArtwork: () => void
-}) {
-  const displayInitial = (payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()
-
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-[rgb(var(--primary-light))]/[0.12] bg-[#0c0d10]/88 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-      <div className="flex items-center justify-between gap-3 px-4 py-4">
-        <h2 className="text-[14px] font-semibold text-white">Public profile preview</h2>
-        <Link
-          to={`/u/${payload.profile.username}`}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-zinc-400 transition hover:bg-white/[0.07] hover:text-white"
-          title="Open public profile"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      <button
-        type="button"
-        onClick={onOpenArtwork}
-        disabled={!featuredPreview}
-        className="relative mx-4 block aspect-[2.1] w-[calc(100%-2rem)] overflow-visible rounded-[18px] bg-white/[0.035] ring-1 ring-white/[0.08] disabled:cursor-default"
-      >
-        {featuredPreview ? (
-          <img
-            src={featuredPreview}
-            alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name}
-            className="h-full w-full rounded-[18px] object-cover"
-            style={{ objectPosition: artworkObjectPosition(payload.profile.featured_asset_position) }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center rounded-[18px] text-zinc-600">
-            <ImagePlus className="h-7 w-7" />
-          </div>
-        )}
-        <div className="absolute inset-0 rounded-[18px] bg-gradient-to-t from-black/78 via-black/18 to-transparent" />
-        <div className="absolute -bottom-7 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border border-[rgb(var(--primary-light))]/60 bg-[#141006] text-2xl font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
-          {payload.profile.avatar_url ? <img src={payload.profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayInitial}
-        </div>
-      </button>
-
-      <div className="px-5 pb-5 pt-10 text-center">
-        <div className="text-lg font-semibold tracking-[-0.03em] text-white">
-          {payload.profile.display_name}
-        </div>
-        <div className="mt-1 text-[13px] text-zinc-400">@{payload.profile.username}</div>
-        {payload.profile.bio ? (
-          <p className="mx-auto mt-3 max-w-[18rem] text-[13px] leading-6 text-zinc-400">
-            {payload.profile.bio}
-          </p>
-        ) : (
-          <p className="mx-auto mt-3 max-w-[18rem] text-[13px] leading-6 text-zinc-500">
-            Public profile copy appears here after you add a bio.
-          </p>
-        )}
-
-        {galleryAssets.length ? (
-          <div className="mt-4 grid grid-cols-4 gap-2">
-            {galleryAssets.slice(0, 4).map((asset) => {
-              const preview = assetPreviewSource(asset)
-              return (
-                <div key={asset.id} className="overflow-hidden rounded-[12px] bg-white/[0.04] ring-1 ring-white/[0.08]">
-                  {preview ? <img src={preview} alt={asset.display_title ?? asset.title} className="aspect-square w-full object-cover" /> : <div className="aspect-square" />}
-                </div>
-              )
-            })}
-          </div>
-        ) : null}
-      </div>
-    </section>
-  )
-}
-
 function AccountSideRail({
   payload,
   usage,
   usageLabel,
-  featuredPreview,
-  featuredAsset,
-  galleryAssets,
   visibilityBusy,
   exportBusy,
   exportState,
-  onOpenArtwork,
   onVisibilityChange,
   onExportProfile,
 }: {
   payload: ProfilePayload
   usage: ProfilePayload['profile']['usage_summary']
   usageLabel: string | null
-  featuredPreview: string | null
-  featuredAsset: MediaAsset | null
-  galleryAssets: MediaAsset[]
   visibilityBusy: boolean
   exportBusy: boolean
   exportState: string | null
-  onOpenArtwork: () => void
   onVisibilityChange: (visibility: 'public' | 'private') => void
   onExportProfile: () => void
 }) {
   const activeDefaultVisibility = payload.profile.default_visibility ?? 'private'
   const planLabel = usage?.plan_label ?? payload.profile.plan.toUpperCase()
+  const publicProfilePath = `/u/${payload.profile.username}`
 
   return (
     <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-      <PublicProfilePreview
-        payload={payload}
-        featuredPreview={featuredPreview}
-        featuredAsset={featuredAsset}
-        galleryAssets={galleryAssets}
-        onOpenArtwork={onOpenArtwork}
-      />
-
-      {payload.own_profile ? (
-        <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-[14px] font-semibold text-white">Profile visibility</h2>
-              <p className="mt-1 text-[12px] leading-5 text-zinc-500">
-                New published work follows this default.
-              </p>
-            </div>
-            <div className="flex rounded-full border border-white/[0.08] bg-black/35 p-1">
-              <button
-                type="button"
-                disabled={visibilityBusy}
-                onClick={() => onVisibilityChange('public')}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  activeDefaultVisibility === 'public'
-                    ? 'bg-[rgb(var(--primary-light))] text-black'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Globe2 className="h-3 w-3" />
-                Public
-              </button>
-              <button
-                type="button"
-                disabled={visibilityBusy}
-                onClick={() => onVisibilityChange('private')}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  activeDefaultVisibility === 'private'
-                    ? 'bg-white text-black'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Lock className="h-3 w-3" />
-                Private
-              </button>
-            </div>
+      <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[14px] font-semibold text-white">Profile visibility</h2>
+            <p className="mt-1 text-[12px] leading-5 text-zinc-500">
+              New published work follows this default.
+            </p>
           </div>
-        </section>
-      ) : null}
+          <div className="flex rounded-full border border-white/[0.08] bg-black/35 p-1">
+            <button
+              type="button"
+              disabled={visibilityBusy}
+              onClick={() => onVisibilityChange('public')}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                activeDefaultVisibility === 'public'
+                  ? 'bg-[rgb(var(--primary-light))] text-black'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Globe2 className="h-3 w-3" />
+              Public
+            </button>
+            <button
+              type="button"
+              disabled={visibilityBusy}
+              onClick={() => onVisibilityChange('private')}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                activeDefaultVisibility === 'private'
+                  ? 'bg-white text-black'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Lock className="h-3 w-3" />
+              Private
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+        <h2 className="text-[14px] font-semibold text-white">Public page</h2>
+        <Link
+          to={publicProfilePath}
+          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:bg-white/[0.08] hover:text-white"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open public profile
+        </Link>
+      </section>
 
       <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
         <div className="flex items-center justify-between gap-3">
@@ -762,58 +672,51 @@ function AccountSideRail({
               {usageLabel ? <span>Resets {usageLabel}</span> : null}
             </div>
           </div>
-        ) : (
-          <p className="mt-3 text-[13px] leading-6 text-zinc-500">
-            Billing details are private to this account.
-          </p>
-        )}
+        ) : null}
       </section>
 
-      {payload.own_profile ? (
-        <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
-          <h2 className="text-[14px] font-semibold text-white">Account</h2>
-          <div className="mt-3 divide-y divide-white/[0.06]">
-            <button
-              type="button"
-              onClick={onExportProfile}
-              disabled={exportBusy}
-              className="flex w-full items-center justify-between gap-3 py-3 text-left transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="flex min-w-0 items-start gap-3">
-                <Download className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
-                <span>
-                  <span className="block text-[13px] font-semibold text-zinc-100">Export my data</span>
-                  <span className="mt-1 block text-[12px] text-zinc-500">
-                    {exportState ?? 'Download your profile archive.'}
-                  </span>
+      <section className="rounded-[24px] border border-white/[0.07] bg-[#0c0d10]/86 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+        <h2 className="text-[14px] font-semibold text-white">Account</h2>
+        <div className="mt-3 divide-y divide-white/[0.06]">
+          <button
+            type="button"
+            onClick={onExportProfile}
+            disabled={exportBusy}
+            className="flex w-full items-center justify-between gap-3 py-3 text-left transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="flex min-w-0 items-start gap-3">
+              <Download className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+              <span>
+                <span className="block text-[13px] font-semibold text-zinc-100">Export my data</span>
+                <span className="mt-1 block text-[12px] text-zinc-500">
+                  {exportState ?? 'Download your profile archive.'}
                 </span>
               </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
-            </button>
-            <a
-              href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
-              className="flex items-center justify-between gap-3 py-3 text-left transition hover:text-white"
-            >
-              <span className="flex min-w-0 items-start gap-3">
-                <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
-                <span>
-                  <span className="block text-[13px] font-semibold text-red-200">Delete account</span>
-                  <span className="mt-1 block text-[12px] text-zinc-500">
-                    Request deletion with billing and exports handled cleanly.
-                  </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
+          </button>
+          <a
+            href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
+            className="flex items-center justify-between gap-3 py-3 text-left transition hover:text-white"
+          >
+            <span className="flex min-w-0 items-start gap-3">
+              <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
+              <span>
+                <span className="block text-[13px] font-semibold text-red-200">Delete account</span>
+                <span className="mt-1 block text-[12px] text-zinc-500">
+                  Request deletion with billing and exports handled cleanly.
                 </span>
               </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
-            </a>
-          </div>
-        </section>
-      ) : null}
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
+          </a>
+        </div>
+      </section>
     </aside>
   )
 }
 
 export default function AccountPage() {
-  usePageMeta('Account', 'Your Omnia Creata Studio profile, plan, and public creations.')
   const { username } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const { openLightbox } = useLightbox()
@@ -824,6 +727,7 @@ export default function AccountPage() {
   const queryClient = useQueryClient()
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const ownAccount = !username
+  const isPublicProfileRoute = Boolean(username)
 
   const optimisticPayload = useMemo<ProfilePayload | undefined>(() => {
     if (!ownAccount || !auth || !auth.identity) return undefined
@@ -881,7 +785,38 @@ export default function AccountPage() {
     placeholderData: optimisticPayload,
   })
 
-  const payload = (profileQuery.data as ProfilePayload | undefined) ?? optimisticPayload
+  const rawPayload = (profileQuery.data as ProfilePayload | undefined) ?? optimisticPayload
+  const payload = useMemo<ProfilePayload | undefined>(() => {
+    if (!rawPayload || !isPublicProfileRoute) return rawPayload
+
+    const publicPosts = rawPayload.posts.filter((post) => post.visibility === 'public')
+    const publicAssetIds = new Set<string>()
+    for (const post of publicPosts) {
+      if (post.cover_asset?.id) publicAssetIds.add(post.cover_asset.id)
+      for (const asset of post.preview_assets) {
+        publicAssetIds.add(asset.id)
+      }
+    }
+    const featured_asset =
+      rawPayload.featured_asset && publicAssetIds.has(rawPayload.featured_asset.id)
+        ? rawPayload.featured_asset
+        : null
+
+    return {
+      ...rawPayload,
+      featured_asset,
+      posts: publicPosts,
+      own_profile: false,
+      can_edit: false,
+      profile: {
+        ...rawPayload.profile,
+        default_visibility: null,
+        featured_asset_id: null,
+        usage_summary: null,
+        public_post_count: rawPayload.profile.public_post_count,
+      },
+    }
+  }, [isPublicProfileRoute, rawPayload])
   const usage = payload?.profile.usage_summary
   const usageLabel = useMemo(() => {
     if (!usage?.reset_at) return null
@@ -889,9 +824,24 @@ export default function AccountPage() {
   }, [usage?.reset_at])
 
   const galleryAssets = useMemo(() => collectProfileAssets(payload?.posts ?? []), [payload?.posts])
-  const featuredAsset = payload?.featured_asset ?? galleryAssets[0] ?? null
+  const featuredAsset = useMemo(() => {
+    if (!payload) return null
+    if (payload.own_profile) return payload.featured_asset ?? galleryAssets[0] ?? null
+    const safeFeaturedAsset = payload.featured_asset && galleryAssets.some((asset) => asset.id === payload.featured_asset?.id)
+    return safeFeaturedAsset ? payload.featured_asset : galleryAssets[0] ?? null
+  }, [galleryAssets, payload])
   const featuredPreview = assetPreviewSource(featuredAsset)
   const activeDefaultVisibility = payload?.profile.default_visibility ?? null
+  const pageTitle = payload?.own_profile
+    ? 'Account'
+    : payload?.profile.display_name
+      ? `${payload.profile.display_name} - Creator profile`
+      : 'Creator profile'
+  const pageDescription = payload?.own_profile
+    ? 'Your Omnia Creata Studio profile, plan, and public creations.'
+    : `Public Omnia Creata Studio profile for @${payload?.profile.username ?? username ?? 'creator'}.`
+
+  usePageMeta(pageTitle, pageDescription)
 
   const openFeaturedArtwork = () => {
     if (!featuredPreview || !featuredAsset || !payload) return
@@ -956,83 +906,34 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col pb-28 md:pb-8">
-      <div className="relative isolate min-h-[300px] overflow-hidden border-b border-[rgb(var(--primary-light))]/[0.08]">
-        {featuredPreview ? (
-          <>
-            <img
-              src={featuredPreview}
-              alt={featuredAsset?.display_title ?? featuredAsset?.title ?? payload.profile.display_name}
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ objectPosition: artworkObjectPosition(payload.profile.featured_asset_position) }}
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,8,12,0.18),rgba(6,8,12,0.48)_28%,rgba(6,8,12,0.88)_78%,#090a0d)]" />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(241,191,103,0.18),transparent_42%),linear-gradient(135deg,#171109,#090806_72%)]" />
-        )}
-        <div className="absolute inset-0 opacity-[0.14] mix-blend-screen [background-image:radial-gradient(circle_at_top,rgba(241,191,103,0.22)_0,transparent_55%)]" />
-
-        <div className="relative mx-auto flex h-full min-h-[300px] w-full max-w-[1480px] flex-col px-4 pb-6 pt-5 md:px-5 xl:px-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
-              Account
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
-              Your creative home for profile, plan, and public presence.
-            </p>
+    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 pb-28 pt-5 md:px-5 md:pb-8 xl:px-6">
+      <header className="flex flex-col gap-4 border-b border-white/[0.08] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[rgb(var(--primary-light))]/70">
+            {payload.own_profile ? 'Account home' : 'Creator profile'}
           </div>
-          <div className="mt-auto flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-3xl">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-400">
-                {payload.own_profile ? 'Your profile' : 'Public profile'}
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.12] bg-black/35 text-xl font-bold text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-md">
-                  {payload.profile.avatar_url ? (
-                    <img src={payload.profile.avatar_url} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    (payload.profile.display_name || payload.profile.username).slice(0, 1).toUpperCase()
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">{payload.profile.display_name}</h1>
-                    <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{payload.profile.plan.toUpperCase()}</StatusPill>
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-zinc-300">@{payload.profile.username}</div>
-                </div>
-              </div>
-              {payload.profile.bio ? <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300">{payload.profile.bio}</p> : null}
-            </div>
-
-            {payload.own_profile ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProfileEditorOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/[0.22] bg-black/35 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-[rgb(var(--primary-light))]/[0.1]"
-                >
-                  <PenSquare className="h-4 w-4" />
-                  Edit profile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setArtworkPickerOpen(true)}
-                  disabled={!galleryAssets.length}
-                  className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/[0.22] bg-black/35 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition hover:bg-[rgb(var(--primary-light))]/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                  {featuredPreview ? 'Change artwork' : 'Choose artwork'}
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <h1 className="mt-2 text-[2rem] font-bold tracking-tight text-white">
+            {payload.own_profile ? 'Account' : payload.profile.display_name}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            {payload.own_profile
+              ? 'Manage your profile, public gallery, credits, exports, and account actions.'
+              : payload.profile.bio || `@${payload.profile.username} public gallery.`}
+          </p>
         </div>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {payload.own_profile ? (
+            <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{payload.profile.plan.toUpperCase()}</StatusPill>
+          ) : null}
+          {payload.own_profile ? (
+            <StatusPill tone={activeDefaultVisibility === 'public' ? 'brand' : 'neutral'}>
+              {activeDefaultVisibility === 'public' ? 'Public default' : 'Private default'}
+            </StatusPill>
+          ) : null}
+        </div>
+      </header>
 
-      <div className="mx-auto w-full max-w-[1480px] px-4 pt-5 md:px-5 xl:px-6">
-        <section className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_370px]">
+      <section className={`grid gap-5 ${payload.own_profile ? 'xl:grid-cols-[280px_minmax(0,1fr)_370px]' : 'xl:grid-cols-[280px_minmax(0,1fr)]'}`}>
           <aside className="xl:sticky xl:top-5 xl:self-start">
             <Surface tone="raised" className="space-y-5">
               <div className="flex items-start justify-between gap-4">
@@ -1042,7 +943,9 @@ export default function AccountPage() {
                   <div className="mt-1 text-sm text-zinc-400">@{payload.profile.username}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{payload.profile.plan.toUpperCase()}</StatusPill>
+                  {payload.own_profile ? (
+                    <StatusPill tone={payload.profile.plan === 'pro' ? 'brand' : 'neutral'}>{payload.profile.plan.toUpperCase()}</StatusPill>
+                  ) : null}
                   {featuredPreview ? (
                     <button
                       type="button"
@@ -1063,6 +966,28 @@ export default function AccountPage() {
 
               {payload.profile.bio ? <p className="text-sm leading-6 text-zinc-400">{payload.profile.bio}</p> : null}
 
+              {payload.own_profile ? (
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProfileEditorOpen(true)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                  >
+                    <PenSquare className="h-4 w-4" />
+                    Edit profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArtworkPickerOpen(true)}
+                    disabled={!galleryAssets.length}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    Choose artwork
+                  </button>
+                </div>
+              ) : null}
+
               <div className="overflow-hidden rounded-[20px] border border-white/[0.06] bg-white/[0.02]">
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Featured artwork</div>
@@ -1075,7 +1000,9 @@ export default function AccountPage() {
                 </div>
                 <div className="h-px bg-white/[0.06]" />
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Default visibility</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    {payload.own_profile ? 'Default visibility' : 'Profile'}
+                  </div>
                   {payload.own_profile ? (
                     <StatusPill tone={activeDefaultVisibility === 'public' ? 'brand' : 'neutral'}>
                       {activeDefaultVisibility === 'public' ? 'Public' : 'Private'}
@@ -1084,30 +1011,6 @@ export default function AccountPage() {
                     <StatusPill tone="neutral">Public profile</StatusPill>
                   )}
                 </div>
-                {payload.own_profile && usage ? (
-                  <>
-                    <div className="h-px bg-white/[0.06]" />
-                    <div className="space-y-3 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Credits</div>
-                        <div className="text-sm font-medium text-white">{usage.credits_remaining}</div>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${Math.max(4, 100 - usage.progress_percent)}%`,
-                            background: 'linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)))',
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-zinc-500">
-                        <span>{usage.allowance} included</span>
-                        {usageLabel ? <span>{usageLabel}</span> : null}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
               </div>
             </Surface>
           </aside>
@@ -1155,26 +1058,23 @@ export default function AccountPage() {
             ) : null}
           </Surface>
 
-          <AccountSideRail
-            payload={payload}
-            usage={usage ?? null}
-            usageLabel={usageLabel}
-            featuredPreview={featuredPreview}
-            featuredAsset={featuredAsset}
-            galleryAssets={galleryAssets}
-            visibilityBusy={updateProfileMutation.isPending}
-            exportBusy={exportProfileMutation.isPending}
-            exportState={exportState}
-            onOpenArtwork={openFeaturedArtwork}
-            onVisibilityChange={(visibility) => {
-              void handleVisibilityChange(visibility)
-            }}
-            onExportProfile={() => {
-              void handleExportProfile()
-            }}
-          />
-        </section>
-      </div>
+          {payload.own_profile ? (
+            <AccountSideRail
+              payload={payload}
+              usage={usage ?? null}
+              usageLabel={usageLabel}
+              visibilityBusy={updateProfileMutation.isPending}
+              exportBusy={exportProfileMutation.isPending}
+              exportState={exportState}
+              onVisibilityChange={(visibility) => {
+                void handleVisibilityChange(visibility)
+              }}
+              onExportProfile={() => {
+                void handleExportProfile()
+              }}
+            />
+          ) : null}
+      </section>
 
       <ProfileEditorDialog
         open={profileEditorOpen}
