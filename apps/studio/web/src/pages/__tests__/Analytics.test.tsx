@@ -23,7 +23,7 @@ const mockState = vi.hoisted(() => ({
       },
       plan: {
         id: 'pro',
-        label: 'Pro',
+        label: 'Premium',
         monthly_credits: 1000,
         queue_priority: 'priority',
         share_links: true,
@@ -79,8 +79,8 @@ describe('AnalyticsPage', () => {
     renderWithProviders(<AnalyticsPage />, { route: '/dashboard' })
 
     expect(await screen.findByText('Not tracked')).toBeInTheDocument()
-    expect(screen.getByText('No fake data')).toBeInTheDocument()
-    expect(screen.getByText(/Injection-specific blocking telemetry is not persisted yet/i)).toBeInTheDocument()
+    expect(screen.getByText('Unavailable')).toBeInTheDocument()
+    expect(screen.getByText(/Some safety signals are not available yet/i)).toBeInTheDocument()
     expect(mockState.getAdminTelemetry).toHaveBeenCalledTimes(1)
   })
 

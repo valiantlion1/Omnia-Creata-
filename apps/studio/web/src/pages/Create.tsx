@@ -33,6 +33,15 @@ import heroRiviera from '@/assets/landing/studio/hero-riviera.png'
 const LEGACY_PROMPT_HISTORY_KEY = 'omnia-prompt-history'
 const PROMPT_HISTORY_KEY_PREFIX = 'omnia-prompt-history:'
 const ACTIVE_CREATE_SESSION_KEY_PREFIX = 'omnia-create-active-session:'
+const DEFAULT_LAUNCH_MODEL_ID = 'gpt-image-2'
+const LAUNCH_MODEL_ORDER = [
+  'gpt-image-2',
+  'nano-banana',
+  'nano-banana-2',
+  'grok-imagine-image-pro',
+  'wan-2-7-image-pro',
+  'flux-2-max',
+]
 
 function buildPromptHistoryStorageKey(scope: string) {
   return `${PROMPT_HISTORY_KEY_PREFIX}${scope}`
@@ -305,7 +314,7 @@ function humanizeGenerationError(error: string | null, errorCode?: string | null
     return 'This render failed too many times to finish safely.'
   }
   if (normalizedError.includes('pollinations')) {
-    return 'The fallback image lane is unavailable right now.'
+    return 'Image generation is unavailable right now.'
   }
 
   if (!error) return 'This image could not be created.'
@@ -333,10 +342,15 @@ function mapGenerationToToast(generation: Generation, projectId: string): Genera
   }
 }
 
-function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean) {
+function sortModels(models: ModelCatalogEntry[], canUseLocal: boolean, launchModelIds: string[] = LAUNCH_MODEL_ORDER) {
+  const launchOrder = new Map(launchModelIds.map((modelId, index) => [modelId, index]))
   return [...models]
     .filter((entry) => !entry.owner_only || canUseLocal)
-    .sort((a, b) => Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost)
+    .sort((a, b) => {
+      const aOrder = launchOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER
+      const bOrder = launchOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER
+      return aOrder - bOrder || Number(b.featured) - Number(a.featured) || a.credit_cost - b.credit_cost
+    })
 }
 
 function getPlanRank(plan: IdentityPlan | null | undefined) {
@@ -356,9 +370,9 @@ function getPlanRank(plan: IdentityPlan | null | undefined) {
 function formatPlanLabel(plan: IdentityPlan | null | undefined) {
   switch (plan) {
     case 'creator':
-      return 'Creator'
+      return 'Essential'
     case 'pro':
-      return 'Pro'
+      return 'Premium'
     case 'guest':
       return 'Guest'
     case 'free':
@@ -372,8 +386,8 @@ function resolveDisplayedCreditCost(
   guide?: Pick<GenerationCreditGuideEntry, 'reserved_credit_cost' | 'quoted_credit_cost' | 'settlement_credit_cost'>,
 ) {
   const candidates = [
-    guide?.reserved_credit_cost,
     guide?.quoted_credit_cost,
+    guide?.reserved_credit_cost,
     guide?.settlement_credit_cost,
     model.credit_cost,
   ]
@@ -420,7 +434,7 @@ export default function CreatePage() {
 
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [selectedModelId, setSelectedModelId] = useState('flux-2-klein')
+  const [selectedModelId, setSelectedModelId] = useState(DEFAULT_LAUNCH_MODEL_ID)
   const [aspectRatio, setAspectRatio] = useState<keyof typeof aspectPresets>('1:1')
   const [steps, setSteps] = useState(DEFAULT_CREATE_STEPS)
   const [cfgScale, setCfgScale] = useState(DEFAULT_CFG_SCALE)
@@ -496,7 +510,7 @@ export default function CreatePage() {
   })
 
   const models = useMemo(
-    () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels),
+    () => sortModels(modelsQuery.data?.models ?? [], canUseLocalModels, modelsQuery.data?.launch_model_ids ?? LAUNCH_MODEL_ORDER),
     [canUseLocalModels, modelsQuery.data],
   )
   const visibleModels = useMemo(
@@ -669,9 +683,10 @@ export default function CreatePage() {
   useEffect(() => {
     if (!accessibleModels.length) return
     if (!accessibleModels.some((entry) => entry.id === selectedModelId)) {
-      setSelectedModelId(accessibleModels[0].id)
+      const defaultModelId = modelsQuery.data?.default_model_id ?? DEFAULT_LAUNCH_MODEL_ID
+      setSelectedModelId(accessibleModels.find((entry) => entry.id === defaultModelId)?.id ?? accessibleModels[0].id)
     }
-  }, [accessibleModels, selectedModelId])
+  }, [accessibleModels, modelsQuery.data?.default_model_id, selectedModelId])
 
   useEffect(() => {
     if (!requestedProjectId) return
@@ -1039,7 +1054,7 @@ export default function CreatePage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Create</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Create is Studio&apos;s direct image workspace. Start here when you know what you want to make.
+            Start here when you know what you want to make.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
@@ -1070,7 +1085,7 @@ export default function CreatePage() {
               <span className="text-white/82">New image</span>
             </div>
             <p className="mt-1 text-[12px] text-zinc-500">
-              {isOutOfCredits ? 'Shape the image now; run it after credits are ready.' : 'Prompt, preview, and generate from one focused workspace.'}
+              {isOutOfCredits ? 'Shape the image now; run it after credits are ready.' : 'Write the prompt, choose the look, and generate.'}
             </p>
             {missingRequiredReference ? (
               <p className="mt-2 text-[12px] text-amber-300">Upload a reference image to continue</p>
@@ -1437,7 +1452,7 @@ export default function CreatePage() {
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Model</div>
                     <div className="truncate text-[13px] font-semibold text-white">
-                      {selectedModel ? getStudioModelDisplayName(selectedModel.id, selectedModel.label) : 'FLUX.2'}
+                      {selectedModel ? getStudioModelDisplayName(selectedModel.id, selectedModel.label) : 'GPT Image 2'}
                     </div>
                   </div>
                   <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-zinc-500 transition-transform ${modelPickerOpen ? 'rotate-180 text-white' : ''}`} />
@@ -1654,7 +1669,7 @@ export default function CreatePage() {
                     }}
                     className="rounded-full border border-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-white/[0.06] hover:text-white"
                   >
-                    View session
+                    View run
                   </button>
                   {normalizeJobStatus(job.status) === 'succeeded' && job.projectId && auth?.plan.share_links ? (
                     <button

@@ -22,7 +22,7 @@ export type Messages = {
     supportCenter: string;
   };
   common: {
-    exploreEcosystem: string;
+    viewDetails: string;
     openStudio: string;
     viewPricing: string;
     contactTeam: string;
@@ -56,9 +56,9 @@ export type Messages = {
     platformBandEyebrow: string;
     platformBandTitle: string;
     platformBandDescription: string;
-    ecosystemEyebrow: string;
-    ecosystemTitle: string;
-    ecosystemDescription: string;
+    focusEyebrow: string;
+    focusTitle: string;
+    focusDescription: string;
     accessRailEyebrow: string;
     accessRailTitle: string;
     accessRailDescription: string;
@@ -70,7 +70,7 @@ export type Messages = {
     overview: string;
     access: string;
     capabilities: string;
-    ecosystemRole: string;
+    role: string;
     relatedProducts: string;
   };
   accessPanel: {
@@ -122,8 +122,8 @@ const english: Messages = {
     supportCenter: "Support",
   },
   common: {
-    exploreEcosystem: "View product map",
-    openStudio: "Open Studio",
+    viewDetails: "View details",
+    openStudio: "Contact",
     viewPricing: "View pricing",
     contactTeam: "Contact",
     openProductHub: "View product",
@@ -132,7 +132,7 @@ const english: Messages = {
     availableOn: "Available on",
     productPlatforms: "Platforms",
     live: "Live",
-    preview: "Managed access",
+    preview: "In preparation",
     planned: "Contact us",
     openWeb: "Open web app",
     openDesktop: "Open desktop app",
@@ -142,8 +142,8 @@ const english: Messages = {
     accessHub: "Access hub",
     viewProduct: "View product",
     learnMore: "Learn more",
-    globalRollout: "Global ready",
-    flagshipStudio: "Studio first",
+    globalRollout: "Public site",
+    flagshipStudio: "Studio in preparation",
     support: "Support",
     company: "Company",
     legal: "Legal",
@@ -158,11 +158,11 @@ const english: Messages = {
     platformBandEyebrow: "Access",
     platformBandTitle: "Studio opens from the web.",
     platformBandDescription:
-      "The main product path stays clear before the ecosystem expands.",
-    ecosystemEyebrow: "Product line",
-    ecosystemTitle: "Studio leads the ecosystem.",
-    ecosystemDescription:
-      "Start with Studio, then move into the product built for the next specific job.",
+      "Studio access details will be published when ready.",
+    focusEyebrow: "Focus",
+    focusTitle: "Studio is being prepared.",
+    focusDescription:
+      "The main site stays focused on company, contact, and legal information until then.",
     accessRailEyebrow: "Access",
     accessRailTitle: "Move from discovery to Studio quickly.",
     accessRailDescription:
@@ -176,14 +176,14 @@ const english: Messages = {
     overview: "Overview",
     access: "Access",
     capabilities: "Capabilities",
-    ecosystemRole: "Ecosystem role",
+    role: "Role",
     relatedProducts: "Related products",
   },
   accessPanel: {
     eyebrow: "Access update",
-    title: "Access is managed right now.",
+    title: "Access is not public yet.",
     description:
-      "Continue with the available path or contact us for access details.",
+      "Contact OmniaCreata for access details.",
     availableNow: "Available now",
     openAlternative: "Open alternative",
     backToHub: "Back to product hub",
@@ -203,7 +203,7 @@ const english: Messages = {
     placeholderMessage: "Tell us what you want to build with OmniaCreata.",
     submit: "Send inquiry",
     sending: "Sending...",
-    helper: "Share a short note and we will send it to the right inbox.",
+    helper: "Share a short note and we will reply from the right address.",
   },
 };
 
@@ -229,8 +229,8 @@ const turkish: Messages = {
     supportCenter: "Destek",
   },
   common: {
-    exploreEcosystem: "Ekosistemi kesfet",
-    openStudio: "Studio'yu ac",
+    viewDetails: "Detaylari gor",
+    openStudio: "Iletisim",
     viewPricing: "Fiyatlandirmayi gor",
     contactTeam: "Ekiple iletisime gec",
     openProductHub: "Urun merkezini ac",
@@ -238,8 +238,8 @@ const turkish: Messages = {
     productStatus: "Urun durumu",
     availableOn: "Kullanilabilir yuzeyler",
     productPlatforms: "Platformlar",
-    live: "Canli",
-    preview: "Yonetilen erisim",
+    live: "Acik",
+    preview: "Hazirlaniyor",
     planned: "Iletisime gec",
     openWeb: "Web uygulamasini ac",
     openDesktop: "Masaustu uygulamasini ac",
@@ -249,8 +249,8 @@ const turkish: Messages = {
     accessHub: "Erisim merkezi",
     viewProduct: "Urunu gor",
     learnMore: "Daha fazla bilgi",
-    globalRollout: "Global hazir",
-    flagshipStudio: "Amiral Studio",
+    globalRollout: "Public site",
+    flagshipStudio: "Studio hazirlaniyor",
     support: "Destek",
     company: "Sirket",
     legal: "Yasal",
@@ -258,40 +258,40 @@ const turkish: Messages = {
   home: {
     heroEyebrow: "OmniaCreata",
     heroTitle:
-      "Studio ile basla. Omnia'yi baglam icinde gor.",
+      "OmniaCreata image work icin yazilim uretir.",
     heroDescription:
       "Studio; promptlari, referanslari, denemeleri ve secimleri tek gorsel calisma alaninda toplar.",
     utilityDescription:
       "omniacreata.com",
-    platformBandEyebrow: "Platform gorunurlugu",
-    platformBandTitle: "Erisim durumu karar vermeden once gorunmeli.",
+    platformBandEyebrow: "Erisim",
+    platformBandTitle: "Studio web uzerinden acilir.",
     platformBandDescription:
-      "Web, iOS, Android, PWA ve desktop erisimi urun acilmadan once okunabilir kalir.",
-    ecosystemEyebrow: "Urun dizini",
-    ecosystemTitle: "Ekosistem gercek, ama agirlik merkezi Studio.",
-    ecosystemDescription:
-      "Amiral urunu giris noktasi yap, daha spesifik yuzey gerektiginde disari dogru ilerle.",
-    accessRailEyebrow: "Urun erisim hatti",
+      "Studio buyurken net ve kolay ulasilabilir kalir.",
+    focusEyebrow: "Odak",
+    focusTitle: "Studio hazirlaniyor.",
+    focusDescription:
+      "O zamana kadar ana site sirket, iletisim ve yasal bilgileri temiz tutar.",
+    accessRailEyebrow: "Erisim",
     accessRailTitle: "Her sey tek tik uzakta.",
     accessRailDescription:
       "Her tik anlamli bir sonraki adima gider.",
     trustEyebrow: "Sirket",
     trustTitle: "Buyuyen bir urun sistemi icin daha sakin bir on kapi.",
     trustDescription:
-      "Dogrudan rotalar, durust urun anlatimi ve kontrollu yapi ekosistem olgunlasirken siteyi faydali tutar.",
+      "Net urun anlatimi ve sade yapi siteyi faydali tutar.",
   },
   sections: {
     overview: "Genel bakis",
     access: "Erisim",
     capabilities: "Yetenekler",
-    ecosystemRole: "Ekosistem rolu",
+    role: "Rol",
     relatedProducts: "Ilgili urunler",
   },
   accessPanel: {
     eyebrow: "Erisim guncellemesi",
-    title: "Erisim su an yonetimli.",
+    title: "Erisim henuz public degil.",
     description:
-      "Mevcut yoldan devam edebilir veya erisim detayi icin bizimle iletisime gecebilirsin.",
+      "Erisim detayi icin OmniaCreata'ya yazabilirsin.",
     availableNow: "Simdi kullanilabilir",
     openAlternative: "Alternatifi ac",
     backToHub: "Urun merkezine don",

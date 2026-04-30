@@ -16,6 +16,7 @@ def test_chat_model_cost_rates_cover_current_selected_models() -> None:
     assert chat_model_cost_rates(settings.openai_model) == (0.15, 0.60)
     assert chat_model_cost_rates(settings.openai_premium_model) == (2.50, 15.00)
     assert chat_model_cost_rates("google/gemini-2.5-pro") == (1.25, 10.00)
+    assert chat_model_cost_rates(settings.runware_chat_model) == (None, None)
 
 
 def test_lookup_openai_image_output_price_is_model_aware() -> None:
@@ -38,40 +39,56 @@ def test_lookup_openai_image_output_price_is_model_aware() -> None:
 
 def test_build_ai_control_plane_summary_surfaces_provider_roles() -> None:
     settings = get_settings()
+    original = {
+        "chat_primary_provider": settings.chat_primary_provider,
+        "chat_fallback_provider": settings.chat_fallback_provider,
+        "protected_beta_chat_provider": settings.protected_beta_chat_provider,
+    }
 
-    summary = build_ai_control_plane_summary(
-        settings=settings,
-        chat_routing={
-            "primary_provider": settings.chat_primary_provider,
-            "fallback_provider": settings.chat_fallback_provider,
-            "multimodal_policy": "configured_provider_order",
-            "providers": {
-                "openrouter": {"status": "healthy"},
-                "openai": {"status": "healthy"},
-                "gemini": {"status": "healthy"},
+    try:
+        settings.chat_primary_provider = "runware"
+        settings.chat_fallback_provider = "heuristic"
+        settings.protected_beta_chat_provider = "runware"
+        summary = build_ai_control_plane_summary(
+            settings=settings,
+            chat_routing={
+                "primary_provider": settings.chat_primary_provider,
+                "fallback_provider": settings.chat_fallback_provider,
+                "multimodal_policy": "configured_provider_order",
+                "providers": {
+                    "runware": {"status": "healthy"},
+                    "openrouter": {"status": "healthy"},
+                    "openai": {"status": "healthy"},
+                    "gemini": {"status": "healthy"},
+                },
             },
-        },
-        generation_routing={"default_strategy": "free-first"},
-        studio_models=[
-            {
-                "id": "flux-schnell",
-                "label": "Fast",
-                "default_openai_request_model": settings.openai_image_draft_model,
-            }
-        ],
-        surface_matrix=[
-            {
-                "id": "chat:standard-assist",
-                "surface": "chat",
-            }
-        ],
-    )
+            generation_routing={"default_strategy": "free-first"},
+            studio_models=[
+                {
+                    "id": "flux-schnell",
+                    "label": "Fast",
+                    "default_openai_request_model": settings.openai_image_draft_model,
+                }
+            ],
+            surface_matrix=[
+                {
+                    "id": "chat:standard-assist",
+                    "surface": "chat",
+                }
+            ],
+        )
+    finally:
+        settings.chat_primary_provider = original["chat_primary_provider"]
+        settings.chat_fallback_provider = original["chat_fallback_provider"]
+        settings.protected_beta_chat_provider = original["protected_beta_chat_provider"]
 
-    openrouter = next(item for item in summary["chat"]["providers"] if item["provider"] == "openrouter")
+    runware = next(item for item in summary["chat"]["providers"] if item["provider"] == "runware")
     openai = next(item for item in summary["chat"]["providers"] if item["provider"] == "openai")
 
-    assert openrouter["roles"]["primary"] is True
-    assert openai["roles"]["fallback"] is True
+    assert runware["roles"]["primary"] is True
+    assert runware["roles"]["protected_beta_selected"] is True
+    assert openai["roles"]["fallback"] is False
+    assert summary["chat"]["free_account_provider"] == "runware"
     assert summary["protected_beta_policy"]["chat_provider"] == settings.protected_beta_chat_provider
     assert summary["image"]["openai"]["draft_model"]["name"] == settings.openai_image_draft_model
     assert summary["operator_policy"]["protected_beta_lock_is_temporary"] is True

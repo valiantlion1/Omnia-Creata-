@@ -52,7 +52,7 @@ function formatSurface(surface: "web" | "ios" | "android" | "pwa" | "desktop") {
 
 function formatStatus(status: "live" | "preview" | "planned") {
   if (status === "live") return "Available";
-  if (status === "preview") return "Access managed";
+  if (status === "preview") return "In preparation";
   return "Contact us";
 }
 
@@ -108,22 +108,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
               {product.name.replace(" Studio", "")} <strong>Studio</strong>
             </h1>
             <p className="site-page-lede">
-              Generate, edit, review, and save image work without scattering the process.
+              A focused workspace for image work, currently being prepared for public access.
             </p>
             <div className="site-page-actions">
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
                 {studioPrimaryLabel()}
               </ButtonLink>
-              <ButtonLink href={withLocalePrefix(locale, "/pricing")} size="lg" variant="secondary">
-                View pricing
+              <ButtonLink href={withLocalePrefix(locale, "/contact")} size="lg" variant="secondary">
+                Contact
               </ButtonLink>
             </div>
           </div>
 
           <div className="site-page-visual">
             <div className="site-page-visual__caption">
-              <span>First product</span>
-              <strong>Direction, generation, review, and selects in one workspace.</strong>
+              <span>In preparation</span>
+              <strong>Direction, generation, review, and saved selects in one workspace.</strong>
             </div>
           </div>
         </div>
@@ -166,10 +166,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Model families</p>
-            <h2 className="site-title max-w-[10ch]">Modern models, chosen per job.</h2>
+            <h2 className="site-title max-w-[10ch]">Model details will stay current.</h2>
             <p className="site-copy">
-              Studio can surface different model families as the catalog changes. Exact variants
-              and credit costs stay adjustable inside the product.
+              Exact model variants and credit costs will be published with the product surface.
             </p>
           </div>
 
@@ -200,7 +199,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Access</p>
-            <h2 className="site-title max-w-[9ch]">Studio opens from the web.</h2>
+            <h2 className="site-title max-w-[9ch]">Access will be published when ready.</h2>
             <p className="site-copy">{product.roleDescription}</p>
           </div>
 

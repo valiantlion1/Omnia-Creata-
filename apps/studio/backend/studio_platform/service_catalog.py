@@ -29,7 +29,7 @@ def build_plan_catalog(settings=None) -> dict[IdentityPlan, PlanCatalogEntry]:
         ),
         IdentityPlan.FREE: PlanCatalogEntry(
             id=IdentityPlan.FREE,
-            label="Free Account",
+            label="Free",
             monthly_credits=0,
             queue_priority="standard",
             max_incomplete_generations=1,
@@ -46,7 +46,7 @@ def build_plan_catalog(settings=None) -> dict[IdentityPlan, PlanCatalogEntry]:
         ),
         IdentityPlan.CREATOR: PlanCatalogEntry(
             id=IdentityPlan.CREATOR,
-            label="Creator",
+            label="Essential",
             monthly_credits=settings.creator_monthly_credits,
             queue_priority="standard",
             max_incomplete_generations=4,
@@ -63,7 +63,7 @@ def build_plan_catalog(settings=None) -> dict[IdentityPlan, PlanCatalogEntry]:
         ),
         IdentityPlan.PRO: PlanCatalogEntry(
             id=IdentityPlan.PRO,
-            label="Pro",
+            label="Premium",
             monthly_credits=settings.pro_monthly_credits,
             queue_priority="priority",
             max_incomplete_generations=6,
@@ -107,7 +107,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
     settings = settings or get_settings()
     return {
         CheckoutKind.CREATOR_MONTHLY: {
-            "label": "Creator monthly",
+            "label": "Essential monthly",
             "credits": settings.creator_monthly_credits,
             "price_usd": settings.creator_monthly_price_usd,
             "plan": IdentityPlan.CREATOR,
@@ -115,7 +115,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "kind_group": "subscription",
         },
         CheckoutKind.PRO_MONTHLY: {
-            "label": "Pro monthly",
+            "label": "Premium monthly",
             "credits": settings.pro_monthly_credits,
             "price_usd": settings.pro_monthly_price_usd,
             "plan": IdentityPlan.PRO,
@@ -123,7 +123,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "kind_group": "subscription",
         },
         CheckoutKind.CREDIT_PACK_SMALL: {
-            "label": f"Credit pack {settings.credit_pack_small_credits}",
+            "label": f"Credit pack {settings.credit_pack_small_credits:,}",
             "credits": settings.credit_pack_small_credits,
             "price_usd": settings.credit_pack_small_price_usd,
             "plan": None,
@@ -131,7 +131,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "kind_group": "credit_pack",
         },
         CheckoutKind.CREDIT_PACK_LARGE: {
-            "label": f"Credit pack {settings.credit_pack_large_credits}",
+            "label": f"Credit pack {settings.credit_pack_large_credits:,}",
             "credits": settings.credit_pack_large_credits,
             "price_usd": settings.credit_pack_large_price_usd,
             "plan": None,
@@ -151,12 +151,11 @@ def build_public_plan_catalog(
     return {
         IdentityPlan.FREE: {
             "public_id": "free_account",
-            "summary": "Use Create with wallet credits on the free account. Studio chat unlocks on paid plans.",
+            "summary": "Use Create with wallet credits on the free account. Studio runs image-only on the Runware launch catalog for v1.",
             "feature_summary": [
-                "Core image models with wallet credits",
+                "Runware image generation with wallet credits",
                 "No bundled image generation credits",
                 "Can buy wallet credit packs without a subscription",
-                "Studio chat stays locked on the free account",
                 "Projects, library, and saved styles stay on the same account",
             ],
             "price_usd": 0,
@@ -167,11 +166,10 @@ def build_public_plan_catalog(
         },
         IdentityPlan.CREATOR: {
             "public_id": "creator",
-            "summary": "Paid everyday plan for Create, Chat, and recurring monthly credits.",
+            "summary": "Paid everyday plan for Studio image work with recurring monthly credits.",
             "feature_summary": [
-                "Recurring monthly credits",
-                "Standard Studio chat",
-                "Newer image models",
+                "Recurring monthly credits for Runware image generation",
+                "Access to GPT Image 2, Nano Banana, Nano Banana 2, and Grok Imagine Image Pro",
                 "Add wallet credit packs for heavier bursts",
                 "Core Create, Library, Project, and share workflow",
             ],
@@ -183,11 +181,10 @@ def build_public_plan_catalog(
         },
         IdentityPlan.PRO: {
             "public_id": "pro",
-            "summary": "Higher limits, premium chat lanes, and access to Studio's newest image models.",
+            "summary": "Higher limits and access to Studio's premium Runware launch image models.",
             "feature_summary": [
                 "Larger recurring monthly credits",
-                "Advanced and newest image models",
-                "Premium chat lanes",
+                "Access to Wan 2.7 Image Pro and FLUX.2 Max plus every Essential image model",
                 "Higher generation and queue limits",
                 "Clean exports and fuller sharing access",
             ],
@@ -205,7 +202,7 @@ def build_public_credit_pack_group(settings=None) -> dict[str, Any]:
     return {
         "id": "credit_packs",
         "label": "Credit Packs",
-        "summary": "One-off wallet credits for free, Creator, or Pro accounts whenever usage spikes past the included allowance.",
+        "summary": "One-off wallet credits for Free, Essential, or Premium accounts whenever usage spikes past the included allowance.",
         "feature_summary": [
             "Wallet balance is separate from subscription tier",
             "Free accounts may buy packs without subscribing",

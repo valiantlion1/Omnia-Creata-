@@ -306,10 +306,12 @@ Studio no longer treats local ComfyUI as an active runtime lane.
 Current provider/runtime truth is controlled by environment variables such as:
 
 ```env
-CHAT_PRIMARY_PROVIDER=openrouter
-CHAT_FALLBACK_PROVIDER=openai
-PROTECTED_BETA_CHAT_PROVIDER=openrouter
+CHAT_PRIMARY_PROVIDER=runware
+CHAT_FALLBACK_PROVIDER=heuristic
+PROTECTED_BETA_CHAT_PROVIDER=runware
 PROTECTED_BETA_IMAGE_PROVIDER=runware
+RUNWARE_CHAT_MODEL=zai:glm@5.1
+RUNWARE_CHAT_PREMIUM_MODEL=zai:glm@5.1
 # Optional targeted QA only; OpenAI image is not in the normal public routing path.
 OPENAI_IMAGE_DRAFT_MODEL=gpt-image-1-mini
 OPENAI_IMAGE_MODEL=gpt-image-1.5

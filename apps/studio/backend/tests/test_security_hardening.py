@@ -228,7 +228,7 @@ async def test_create_generation_uses_server_authoritative_dimensions(tmp_path: 
         subscription_status=SubscriptionStatus.NONE,
         monthly_credits_remaining=0,
         monthly_credit_allowance=0,
-        extra_credits=12,
+        extra_credits=600,
     )
 
     try:
@@ -249,8 +249,8 @@ async def test_create_generation_uses_server_authoritative_dimensions(tmp_path: 
         )
 
         assert job.prompt_snapshot.aspect_ratio == "9:16"
-        assert job.prompt_snapshot.width == 576
-        assert job.prompt_snapshot.height == 1024
+        assert job.prompt_snapshot.width == 896
+        assert job.prompt_snapshot.height == 1536
     finally:
         await service.shutdown()
 

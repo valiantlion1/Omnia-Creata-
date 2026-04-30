@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, Minus, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { Check, CheckCircle2, ExternalLink, Loader2, Minus, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 
 import {
   studioApi,
+  type AuthMeResponse,
   type BillingSummary,
   type CheckoutKind,
   type PublicPlansPayload,
 } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { IS_CHAT_ENABLED } from '@/lib/featureFlags'
 import { toUserFacingErrorMessage } from '@/lib/uiError'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { InlineError } from '@/components/InlineError'
@@ -19,19 +21,19 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 function formatBillingStatusLabel(summary: BillingSummary) {
-  if (summary.account_tier === 'free') return 'Free account'
+  if (summary.account_tier === 'free') return 'Free'
   if (!summary.subscription_status || summary.subscription_status === 'none') return 'No active subscription'
   return summary.subscription_status.replace(/_/g, ' ')
 }
 
 function formatBillingActivityDescription(description: string) {
   const trimmed = description.trim()
-  if (/^free account welcome credits$/i.test(trimmed)) return 'Free account welcome credits'
-  if (/^free account monthly refresh$/i.test(trimmed)) return 'Free account monthly refresh'
-  if (/^creator activation$/i.test(trimmed)) return 'Creator activation'
-  if (/^creator renewal$/i.test(trimmed)) return 'Creator renewal'
-  if (/^pro activation$/i.test(trimmed)) return 'Pro activation'
-  if (/^pro renewal$/i.test(trimmed)) return 'Pro renewal'
+  if (/^free account welcome credits$/i.test(trimmed)) return 'Free welcome credits'
+  if (/^free account monthly refresh$/i.test(trimmed)) return 'Free monthly refresh'
+  if (/^creator activation$/i.test(trimmed)) return 'Essential activation'
+  if (/^creator renewal$/i.test(trimmed)) return 'Essential renewal'
+  if (/^pro activation$/i.test(trimmed)) return 'Premium activation'
+  if (/^pro renewal$/i.test(trimmed)) return 'Premium renewal'
   return trimmed
 }
 
@@ -46,10 +48,92 @@ function formatCreditPackLeadPrice(options: PublicPlansPayload['credit_packs']) 
   return `$${Math.min(...options.map((entry) => entry.price_usd))}`
 }
 
+function BillingPill({ children, tone = 'neutral' }: { children: string; tone?: 'neutral' | 'brand' | 'success' | 'warning' }) {
+  const className =
+    tone === 'brand'
+      ? 'border-[rgb(var(--primary-light))]/25 bg-[rgb(var(--primary-light))]/10 text-[rgb(var(--primary-light))]'
+      : tone === 'success'
+        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+        : tone === 'warning'
+          ? 'border-amber-300/20 bg-amber-300/10 text-amber-100'
+          : 'border-white/[0.08] bg-white/[0.04] text-zinc-300'
+  return <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${className}`}>{children}</span>
+}
+
+function billingSummaryFromAuth(auth?: Partial<AuthMeResponse>): BillingSummary | null {
+  if (!auth || auth.guest) return null
+  const plan = auth.plan ?? {
+    id: auth.identity?.plan ?? 'free',
+    label: auth.identity?.plan === 'pro' ? 'Premium' : auth.identity?.plan === 'creator' ? 'Essential' : 'Free',
+    monthly_credits: 0,
+    queue_priority: 'standard',
+    share_links: false,
+    can_generate: true,
+    can_access_chat: false,
+  }
+  const monthlyAllowance = Math.max(plan.monthly_credits ?? auth.credits?.monthly_remaining ?? 0, 0)
+  const monthlyRemaining = Math.max(auth.credits?.monthly_remaining ?? monthlyAllowance, 0)
+  const extraCredits = Math.max(auth.credits?.extra_credits ?? auth.wallet_balance ?? 0, 0)
+  const remaining = Math.max(auth.credits?.remaining ?? monthlyRemaining + extraCredits, 0)
+  const accountTier = auth.account_tier ?? (auth.identity?.plan && auth.identity.plan !== 'guest' ? auth.identity.plan : 'free')
+  const entitlements = auth.entitlements ?? auth.feature_entitlements ?? {
+    can_access_chat: Boolean(plan.can_access_chat),
+    premium_chat: accountTier === 'pro',
+    allowed_chat_modes: accountTier === 'pro' ? ['standard', 'premium'] : ['standard'],
+    chat_message_limit: accountTier === 'free' ? 0 : 100,
+    max_chat_attachments: accountTier === 'free' ? 0 : 4,
+    can_clean_export: accountTier !== 'free',
+    can_share_links: Boolean(plan.share_links),
+    can_generate: Boolean(plan.can_generate),
+  }
+  const credits = {
+    remaining,
+    gross_remaining: remaining,
+    monthly_remaining: monthlyRemaining,
+    monthly_allowance: monthlyAllowance,
+    extra_credits: extraCredits,
+    reserved_total: 0,
+    available_to_spend: remaining,
+    spend_order: 'monthly_then_extra',
+    unlimited: Boolean(auth.identity?.root_admin || auth.identity?.owner_mode),
+  }
+
+  return {
+    plan,
+    subscription_status: accountTier === 'free' ? 'none' : 'active',
+    entitlements,
+    feature_entitlements: entitlements,
+    credits,
+    wallet: {
+      balance: extraCredits,
+      wallet_balance: extraCredits,
+      included_monthly_allowance: monthlyAllowance,
+      included_monthly_remaining: monthlyRemaining,
+      reserved_total: 0,
+      available_to_spend: remaining,
+      spend_order: 'monthly_then_extra',
+      unlimited: credits.unlimited,
+    },
+    wallet_balance: extraCredits,
+    account_tier: accountTier,
+    subscription_tier: accountTier === 'creator' || accountTier === 'pro' ? accountTier : null,
+    generation_credit_guide: {
+      available_to_spend: remaining,
+      reserved_total: 0,
+      unlimited: credits.unlimited,
+      lane_highlights: [],
+      models: [],
+    },
+    checkout_options: [],
+    recent_activity: [],
+  }
+}
+
 export default function BillingPage() {
   const { auth, isAuthenticated } = useStudioAuth()
   const { addToast } = useToast()
   const isRoot = auth?.identity?.root_admin || auth?.identity?.owner_mode
+  const authBillingSnapshot = useMemo(() => billingSummaryFromAuth(auth), [auth])
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [publicPlans, setPublicPlans] = useState<PublicPlansPayload | null>(null)
   const [loading, setLoading] = useState(false)
@@ -61,7 +145,7 @@ export default function BillingPage() {
 
   usePageMeta(
     'Subscription',
-    'Review your Studio subscription, credits, and checkout availability.',
+    'Review your Studio subscription, credits, and purchases.',
   )
 
   const loadPublicPlans = useCallback(async () => {
@@ -99,6 +183,11 @@ export default function BillingPage() {
     void loadBillingSummary()
   }, [loadBillingSummary])
 
+  useEffect(() => {
+    if (!isAuthenticated || billing || !authBillingSnapshot) return
+    setBilling(authBillingSnapshot)
+  }, [authBillingSnapshot, billing, isAuthenticated])
+
   const isUnlimitedAccess = Boolean(billing?.credits.unlimited || isRoot)
   const availableCheckoutKinds = new Set<CheckoutKind>((billing?.checkout_options ?? []).map((option) => option.kind))
   const hasAnyCheckoutEnabled = availableCheckoutKinds.size > 0
@@ -113,13 +202,20 @@ export default function BillingPage() {
   )
   const entitlementFacts = useMemo(() => {
     if (!billing) return []
-    return [
-      billing.entitlements.can_access_chat ? 'Create + Chat unlocked' : 'Chat locked',
-      billing.entitlements.premium_chat ? 'Premium chat active' : 'Standard chat lane',
-      billing.entitlements.can_share_links ? 'Share links enabled' : 'Share links locked',
-      billing.entitlements.can_clean_export ? 'Clean exports enabled' : 'Clean export locked',
-    ]
+    const facts: string[] = []
+    if (IS_CHAT_ENABLED) {
+      facts.push(billing.entitlements.can_access_chat ? 'Create + Chat unlocked' : 'Chat locked')
+      facts.push(billing.entitlements.premium_chat ? 'Premium chat active' : 'Standard chat lane')
+    } else {
+      facts.push(billing.entitlements.can_generate ? 'Create unlocked' : 'Create locked')
+    }
+    facts.push(billing.entitlements.can_share_links ? 'Share links enabled' : 'Share links locked')
+    facts.push(billing.entitlements.can_clean_export ? 'Clean exports enabled' : 'Clean export locked')
+    return facts
   }, [billing])
+  const creditUsePercent = billing && !isUnlimitedAccess && billing.credits.monthly_allowance > 0
+    ? Math.min(100, Math.max(0, Math.round(((billing.credits.monthly_allowance - billing.credits.monthly_remaining) / billing.credits.monthly_allowance) * 100)))
+    : 0
   const comparisonRows = useMemo(() => {
     if (!publicPlans || publicPlans.subscriptions.length < 2) return []
     const creator = publicPlans.subscriptions.find((plan) => plan.id === 'creator') ?? publicPlans.subscriptions[0]
@@ -129,26 +225,30 @@ export default function BillingPage() {
     const creatorEntitlements = publicPlans.entitlements.creator
     const proEntitlements = publicPlans.entitlements.pro
 
-    return [
-      { feature: 'Studio chat', free: free.can_access_chat, creator: creator.can_access_chat, pro: pro.can_access_chat },
-      { feature: 'Image model access', free: 'Core', creator: 'Newer', pro: 'Newest + advanced' },
-      {
-        feature: 'Bundled monthly image credits',
-        free: false,
-        creator: `${creator.monthly_credits.toLocaleString()} / mo`,
-        pro: `${pro.monthly_credits.toLocaleString()} / mo`,
-      },
-      { feature: 'Wallet credit packs', free: true, creator: true, pro: true },
-      {
-        feature: 'Concurrent generations',
-        free: `${freeEntitlements.max_incomplete_generations} job`,
-        creator: `${creatorEntitlements.max_incomplete_generations} jobs`,
-        pro: `${proEntitlements.max_incomplete_generations} jobs`,
-      },
-      { feature: 'Share links', free: free.share_links, creator: creator.share_links, pro: pro.share_links },
-      { feature: 'Clean exports', free: freeEntitlements.can_clean_export, creator: creatorEntitlements.can_clean_export, pro: proEntitlements.can_clean_export },
-      { feature: 'Premium chat lanes', free: false, creator: false, pro: true },
-    ]
+    const rows: Array<{ feature: string; free: string | boolean; creator: string | boolean; pro: string | boolean }> = []
+    if (IS_CHAT_ENABLED) {
+      rows.push({ feature: 'Studio chat', free: free.can_access_chat, creator: creator.can_access_chat, pro: pro.can_access_chat })
+    }
+    rows.push({ feature: 'Image model access', free: 'Core', creator: 'Newer', pro: 'Newest + advanced' })
+    rows.push({
+      feature: 'Bundled monthly image credits',
+      free: false,
+      creator: `${creator.monthly_credits.toLocaleString()} / mo`,
+      pro: `${pro.monthly_credits.toLocaleString()} / mo`,
+    })
+    rows.push({ feature: 'Wallet credit packs', free: true, creator: true, pro: true })
+    rows.push({
+      feature: 'Concurrent generations',
+      free: `${freeEntitlements.max_incomplete_generations} job`,
+      creator: `${creatorEntitlements.max_incomplete_generations} jobs`,
+      pro: `${proEntitlements.max_incomplete_generations} jobs`,
+    })
+    rows.push({ feature: 'Share links', free: free.share_links, creator: creator.share_links, pro: pro.share_links })
+    rows.push({ feature: 'Clean exports', free: freeEntitlements.can_clean_export, creator: creatorEntitlements.can_clean_export, pro: proEntitlements.can_clean_export })
+    if (IS_CHAT_ENABLED) {
+      rows.push({ feature: 'Premium chat lanes', free: false, creator: false, pro: true })
+    }
+    return rows
   }, [publicPlans])
 
   const handleCheckout = async (kind: CheckoutKind) => {
@@ -173,35 +273,30 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 md:px-5 xl:px-6">
+    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 pb-28 pt-5 md:px-5 md:pb-8 xl:px-6">
       {/* ─── Hero ─── */}
-      <section className="grid gap-4 rounded-[28px] border border-[rgb(var(--primary-light))]/[0.08] bg-[linear-gradient(135deg,rgba(22,17,10,0.84),rgba(9,8,7,0.96))] p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)] md:p-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-end">
+      <header className="flex flex-col gap-4 border-b border-white/[0.08] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-        <div className="flex w-fit items-center gap-2 rounded-full border border-[rgb(var(--primary-light))]/25 bg-[rgb(var(--primary-light))]/[0.08] px-3.5 py-1 text-xs font-semibold text-[rgb(var(--primary-light))] uppercase tracking-wider">
-          <CreditCard className="h-3.5 w-3.5" />
-          <span>Subscription</span>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[rgb(var(--primary-light))]/70">
+            Billing
+          </div>
+          <h1 className="mt-2 text-[2rem] font-bold tracking-tight text-white">Your subscription</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+            Manage your plan, credits, and purchases.
+          </p>
         </div>
-        <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-white md:text-4xl">
-          Your subscription
-        </h1>
-        <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-zinc-400">
-          Manage your plan, track credits, and unlock more from Studio.
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {billing ? <BillingPill tone={billing.account_tier === 'pro' ? 'brand' : 'neutral'}>{billing.plan.label}</BillingPill> : null}
+          {billing && !isUnlimitedAccess ? <BillingPill tone={hasAnyCheckoutEnabled ? 'success' : 'warning'}>{hasAnyCheckoutEnabled ? 'Checkout ready' : 'Checkout paused'}</BillingPill> : null}
+          {isRoot ? <BillingPill tone="brand">Owner mirror</BillingPill> : null}
         </div>
-        <p className="rounded-[20px] border border-white/[0.06] bg-black/25 p-4 text-sm leading-relaxed text-zinc-400">
-          Billing questions, cancellations, and refund expectations are documented in the{' '}
-          <Link to="/legal/refunds" className="text-[rgb(var(--primary-light))] underline decoration-[rgb(var(--primary-light))]/30 underline-offset-4 transition hover:decoration-[rgb(var(--primary-light))]">
-            Refund Policy
-          </Link>
-          .
-        </p>
-      </section>
+      </header>
 
       {isRoot && (
         <div className="flex items-center justify-center gap-3 rounded-2xl border border-[rgb(var(--primary-light))]/[0.1] bg-[rgb(var(--primary-light))]/[0.05] p-4 text-zinc-300">
           <ShieldCheck className="h-5 w-5 text-zinc-200" />
           <p className="font-semibold text-sm">
-            Owner access mirrors the public subscription surface without charging this account like a customer account.
+            Owner access shows the public subscription experience without charging this account.
           </p>
         </div>
       )}
@@ -253,20 +348,22 @@ export default function BillingPage() {
         <div className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/[0.08] p-4 text-amber-100">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
           <div>
-            <div className="text-sm font-semibold">Secure checkout is not open for this account yet.</div>
+            <div className="text-sm font-semibold">Checkout is not open for this account yet.</div>
             <p className="mt-1 text-sm text-amber-100/80">
-              You can review the Studio catalog now. Upgrades and credit top-ups will appear here once billing is available for this account environment.
+              You can review plans now. Upgrades and credit packs will appear here when billing opens for your account.
             </p>
           </div>
         </div>
       ) : null}
 
       {/* ─── Stats row ─── */}
-      {billing && !loading ? (
-        <section className="grid gap-4 md:grid-cols-3">
+      {billing ? (
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,0.85fr)] lg:gap-4">
           {/* Credits */}
-          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative col-span-2 overflow-hidden rounded-[24px] border border-[rgb(var(--primary-light))]/[0.14] bg-[linear-gradient(135deg,rgba(22,17,10,0.72),rgba(7,7,6,0.92))] p-4 shadow-[0_20px_64px_rgba(0,0,0,0.28)] transition hover:border-[rgb(var(--primary-light))]/[0.2] md:p-6 lg:col-span-1">
+            <div className="absolute inset-x-4 bottom-4 h-2 overflow-hidden rounded-full bg-white/[0.08] md:inset-x-6 md:bottom-5">
+              <div className="h-full rounded-full bg-[rgb(var(--primary-light))]" style={{ width: `${isUnlimitedAccess ? 100 : creditUsePercent}%` }} />
+            </div>
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Access state' : 'Credits available'}
@@ -274,7 +371,7 @@ export default function BillingPage() {
               <div className="mt-3 text-4xl font-bold text-white tabular-nums">
                 {isUnlimitedAccess ? 'Unlimited' : billing.credits.available_to_spend.toLocaleString()}
               </div>
-              <div className="mt-2 text-[13px] text-zinc-500">
+              <div className="mb-6 mt-2 text-[13px] text-zinc-500 md:mb-7">
                 {isUnlimitedAccess
                   ? 'Unlimited owner access'
                   : billing.credits.reserved_total > 0
@@ -285,18 +382,17 @@ export default function BillingPage() {
           </div>
 
           {/* Plan */}
-          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--accent))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0a0907]/70 p-4 transition hover:border-[rgb(var(--primary-light))]/[0.16] md:p-6">
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Shell plan mirror' : 'Current plan'}
               </div>
-              <div className="mt-3 text-2xl font-bold text-white">{currentCommercialPlan?.label ?? billing.plan.label}</div>
+              <div className="mt-2 text-xl font-bold text-white md:mt-3 md:text-2xl">{currentCommercialPlan?.label ?? billing.plan.label}</div>
               <div className="mt-1 text-[13px] text-zinc-500 capitalize">
                 {isUnlimitedAccess ? 'Owner account' : formatBillingStatusLabel(billing)}
               </div>
               {!isUnlimitedAccess ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-3 hidden flex-wrap gap-1.5 sm:flex">
                   {entitlementFacts.slice(0, 2).map((fact) => (
                     <span key={fact} className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-400">
                       {fact}
@@ -308,13 +404,12 @@ export default function BillingPage() {
           </div>
 
           {/* Allowance */}
-          <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--primary-light))]/[0.08] bg-black/[0.18] p-6 transition hover:border-[rgb(var(--primary-light))]/[0.16]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[rgb(var(--primary-light))]/[0.07] to-transparent opacity-0 transition group-hover:opacity-100" />
+          <div className="group relative overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0a0907]/70 p-4 transition hover:border-[rgb(var(--primary-light))]/[0.16] md:p-6">
             <div className="relative">
               <div className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 {isUnlimitedAccess ? 'Metering mode' : 'Monthly allowance'}
               </div>
-              <div className="mt-3 text-4xl font-bold text-white tabular-nums">
+              <div className="mt-2 text-2xl font-bold text-white tabular-nums md:mt-3 md:text-4xl">
                 {isUnlimitedAccess ? 'Unlimited' : billing.credits.monthly_allowance.toLocaleString()}
               </div>
               <div className="mt-2 text-[13px] text-zinc-500">
@@ -331,7 +426,17 @@ export default function BillingPage() {
 
       {/* ─── Plan comparison ─── */}
       {publicPlans ? (
-        <section className="grid gap-4 lg:grid-cols-3">
+        <section className="space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgb(var(--primary-light))]/65">Plans</div>
+              <h2 className="mt-2 text-xl font-bold tracking-tight text-white">Choose access</h2>
+            </div>
+            <Link to="/legal/refunds" className="text-sm font-medium text-zinc-500 transition hover:text-white">
+              Refund Policy
+            </Link>
+          </div>
+          <div className="grid gap-4 pt-16 md:pt-0 lg:grid-cols-3">
           {[publicPlans.free_account, ...publicPlans.subscriptions].map((plan) => {
             const isCurrentPlan = Boolean(
               billing && (billing.plan.id === plan.entitlement_plan || billing.account_tier === plan.entitlement_plan),
@@ -453,6 +558,7 @@ export default function BillingPage() {
               </div>
             )
           })}
+          </div>
         </section>
       ) : null}
 
@@ -465,8 +571,8 @@ export default function BillingPage() {
                 <tr>
                   <th className="p-6 font-semibold text-white">Compare features</th>
                   <th className="p-6 text-center font-semibold text-white min-w-[120px]">Free</th>
-                  <th className="p-6 text-center font-semibold text-white min-w-[120px]">Creator</th>
-                  <th className="p-6 text-center font-semibold text-[rgb(var(--primary-light))] min-w-[120px]">Pro</th>
+                  <th className="p-6 text-center font-semibold text-white min-w-[120px]">Essential</th>
+                  <th className="p-6 text-center font-semibold text-[rgb(var(--primary-light))] min-w-[120px]">Premium</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">

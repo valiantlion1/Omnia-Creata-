@@ -8,9 +8,6 @@ import { defaultLocale, type LocaleCode } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import {
   cn,
-  studioAccessHref,
-  studioAccessLabel,
-  studioPageHref,
   withLocalePrefix,
 } from "@/lib/utils";
 import { ButtonLink } from "@/components/ui/button";
@@ -28,20 +25,13 @@ export function Navbar({ locale, messages }: NavbarProps) {
 
   const navigation = useMemo(
     () => [
-      { id: "studio", label: "Studio", href: studioPageHref(locale) },
-      { id: "products", label: copy.nav.products, href: withLocalePrefix(locale, "/products") },
-      { id: "pricing", label: copy.nav.pricing, href: withLocalePrefix(locale, "/pricing") },
       { id: "about", label: copy.nav.about, href: withLocalePrefix(locale, "/about") },
       { id: "contact", label: copy.nav.contact, href: withLocalePrefix(locale, "/contact") },
     ],
-    [copy.nav.about, copy.nav.contact, copy.nav.pricing, copy.nav.products, locale],
+    [copy.nav.about, copy.nav.contact, locale],
   );
 
   function isActive(item: { id: string; href: string }) {
-    if (item.id === "products") {
-      return pathname === item.href;
-    }
-
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
   }
 
@@ -74,8 +64,8 @@ export function Navbar({ locale, messages }: NavbarProps) {
             </nav>
 
             <div className="hidden items-center gap-3 lg:flex">
-              <ButtonLink href={studioAccessHref(locale)} size="md" variant="primary">
-                {studioAccessLabel()}
+              <ButtonLink href={withLocalePrefix(locale, "/contact")} size="md" variant="primary">
+                {copy.nav.contact}
               </ButtonLink>
             </div>
 
@@ -121,11 +111,11 @@ export function Navbar({ locale, messages }: NavbarProps) {
 
               <ButtonLink
                 className="mb-1 w-full"
-                href={studioAccessHref(locale)}
+                href={withLocalePrefix(locale, "/contact")}
                 size="lg"
                 variant="primary"
               >
-                {studioAccessLabel()}
+                {copy.nav.contact}
               </ButtonLink>
             </div>
           </div>

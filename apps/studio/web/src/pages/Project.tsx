@@ -151,7 +151,7 @@ function ProjectRecoveryState({
 }
 
 export default function ProjectPage() {
-  usePageMeta('Project', 'Project workspace in Omnia Creata Studio.')
+  usePageMeta('Project', 'Project in Omnia Creata Studio.')
   const { projectId = '' } = useParams()
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const { openLightbox } = useLightbox()

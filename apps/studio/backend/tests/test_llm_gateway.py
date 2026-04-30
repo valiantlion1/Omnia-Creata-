@@ -322,6 +322,106 @@ def test_explicit_openai_model_request_routes_to_openai_provider():
     assert plan.provider_plan[0].quality_tier == "premium"
 
 
+def test_runware_primary_plan_uses_runware_chat_model():
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original = {
+        "runware_api_key": settings.runware_api_key,
+        "chat_primary_provider": settings.chat_primary_provider,
+        "chat_fallback_provider": settings.chat_fallback_provider,
+        "runware_chat_model": settings.runware_chat_model,
+        "runware_chat_premium_model": settings.runware_chat_premium_model,
+    }
+
+    try:
+        settings.runware_api_key = "runware-key"
+        settings.chat_primary_provider = "runware"
+        settings.chat_fallback_provider = "heuristic"
+        settings.runware_chat_model = "zai:glm@5.1"
+        settings.runware_chat_premium_model = "zai:glm@5.1"
+
+        plan = gateway.resolve_chat_execution_plan(
+            requested_model=None,
+            mode="think",
+            attachments=(),
+            premium_chat=True,
+            prompt_profile="generic",
+            detail_score=1,
+            premium_intent=True,
+            recommended_workflow="text_to_image",
+        )
+
+        assert plan.provider_plan[0].provider == "runware"
+        assert plan.provider_plan[0].model == "zai:glm@5.1"
+        assert plan.provider_plan[-1].provider == "heuristic"
+    finally:
+        settings.runware_api_key = original["runware_api_key"]
+        settings.chat_primary_provider = original["chat_primary_provider"]
+        settings.chat_fallback_provider = original["chat_fallback_provider"]
+        settings.runware_chat_model = original["runware_chat_model"]
+        settings.runware_chat_premium_model = original["runware_chat_premium_model"]
+
+
+@pytest.mark.asyncio
+async def test_runware_chat_uses_openai_compatible_endpoint(monkeypatch):
+    gateway = StudioLLMGateway()
+    settings = get_settings()
+    original_runware_api_key = settings.runware_api_key
+    settings.runware_api_key = "runware-key"
+
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [{"message": {"content": "STUDIO_SMOKE_OK runware chat ready"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+            }
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = headers
+            return _FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
+
+    try:
+        result = await gateway._chat_with_runware(
+            model="zai:glm@5.1",
+            system_prompt="You are helpful.",
+            history=(),
+            current_message="Hello",
+            attachments=(),
+            temperature=0.3,
+            max_output_tokens=64,
+        )
+    finally:
+        settings.runware_api_key = original_runware_api_key
+
+    assert result is not None
+    assert result.provider == "runware"
+    assert result.estimated_cost_usd is None
+    assert captured["url"] == "https://api.runware.ai/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer runware-key"
+    assert captured["json"]["model"] == "zai:glm@5.1"
+    assert captured["json"]["max_completion_tokens"] == 64
+    assert "max_tokens" not in captured["json"]
+
+
 def test_chat_system_prompt_includes_continuity_summary_when_present():
     gateway = StudioLLMGateway()
 

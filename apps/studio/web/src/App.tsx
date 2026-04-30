@@ -14,6 +14,7 @@ import {
 import { useStudioAuth } from '@/lib/studioAuth'
 import { lazyWithChunkRecovery } from '@/lib/chunkRecovery'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
+import { IS_CHAT_ENABLED } from '@/lib/featureFlags'
 
 const posthogKey = (import.meta.env.VITE_POSTHOG_KEY || '').trim()
 const isPostHogConfigured = typeof window !== 'undefined' && Boolean(posthogKey) && posthogKey !== 'phc_placeholder'
@@ -53,7 +54,7 @@ const ShortcutModal = lazyWithChunkRecovery(
 )
 
 function ShellFriendlyPageChrome({ children }: { children: ReactNode }) {
-  return <div className="[&>header]:hidden [&>div>footer]:hidden">{children}</div>
+  return <div className="[&>header]:hidden [&>div>header]:hidden [&>div>div>footer]:hidden [&>div>footer]:hidden">{children}</div>
 }
 
 function ShellFriendlyDocumentationPage() {
@@ -215,7 +216,10 @@ function ProtectedRoutes() {
       <Route path="/dashboard" element={<AnalyticsPage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/compose" element={<Navigate to="/create" replace />} />
-      <Route path="/chat" element={<ChatPage />} />
+      <Route
+        path="/chat"
+        element={IS_CHAT_ENABLED ? <ChatPage /> : <Navigate to="/create" replace />}
+      />
       <Route path="/projects/:projectId" element={<ProjectPage />} />
       <Route path="/projects/:projectId/create" element={<CreatePage />} />
       <Route path="/history" element={<Navigate to="/library/images" replace />} />

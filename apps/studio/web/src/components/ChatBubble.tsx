@@ -11,10 +11,9 @@ type AssistantPlanChip = {
   tone: AssistantPlanChipTone
 }
 
-/* Plan chips completely removed — these were exposing backend metadata to end users.
-   No user should ever see "Premium lane unavailable", "Fallback reply", or model IDs. */
+/* Assistant status chips are intentionally hidden from the public chat view. */
 function resolveAssistantPlanChips(_message: ChatMessage): AssistantPlanChip[] {
-  return [] // intentionally empty — no developer metadata shown
+  return []
 }
 
 function resolveChipClassName(tone: AssistantPlanChipTone) {

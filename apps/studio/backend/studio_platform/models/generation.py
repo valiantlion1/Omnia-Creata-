@@ -125,6 +125,14 @@ class GenerationJob(BaseModel):
     provider_candidates: List[str] = Field(default_factory=list)
     output_count: int = 1
     outputs: List[GenerationOutput] = Field(default_factory=list)
+    # Origin chat context — set when this generation was kicked off from a
+    # chat assistant message (the user said "create me X" inside a chat
+    # thread). After the job completes, the chat message's attachments are
+    # updated in place so the conversation shows the rendered image inline.
+    # When the generation comes from the standalone Create surface, both
+    # fields stay None.
+    origin_chat_message_id: Optional[str] = None
+    origin_conversation_id: Optional[str] = None
     error: Optional[str] = None
     error_code: Optional[str] = None
     attempt_count: int = 0

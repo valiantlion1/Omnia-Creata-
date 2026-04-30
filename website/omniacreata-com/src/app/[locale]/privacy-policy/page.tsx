@@ -50,7 +50,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "2. Bilgilerin kullanim amaci",
           content:
-            "Toplanan bilgiler talepleri yanitlamak, urun uygunlugunu degerlendirmek, destek surecini yonetmek ve ekosistem guvenligini korumak icin kullanilir.",
+            "Toplanan bilgiler talepleri yanitlamak, urun uygunlugunu degerlendirmek, destek surecini yonetmek ve hizmet guvenligini korumak icin kullanilir.",
         },
         {
           title: "3. Iletisim formu islemleri",

@@ -18,16 +18,16 @@ type AboutPageProps = {
 
 const principles = [
   {
-    title: "Studio first",
-    description: "The company launches around one product path before expanding the ecosystem.",
+    title: "Focused first",
+    description: "The company is preparing one useful product before adding more surfaces.",
   },
   {
     title: "Useful before loud",
     description: "The product should help creative work move forward, not hide weak workflow behind style.",
   },
   {
-    title: "Current models, honest pricing",
-    description: "Model access and credit examples stay adjustable as catalogs change.",
+    title: "Honest public details",
+    description: "Access, pricing, and model details are published only when they are ready.",
   },
 ];
 
@@ -63,11 +63,11 @@ export default async function AboutPage({ params }: AboutPageProps) {
           <div className="site-page-copy">
             <p className="site-kicker">About</p>
             <h1 className="site-page-title">
-              A software company, <strong>starting with Studio.</strong>
+              A software company for <strong>image work.</strong>
             </h1>
             <p className="site-page-lede">
-              OmniaCreata builds creative software for image work. Studio is the first product and
-              the main path into the ecosystem.
+              OmniaCreata builds creative software for image work. Studio is being prepared, and
+              product access will be published when it is ready.
             </p>
             <div className="site-page-actions">
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
@@ -90,7 +90,7 @@ export default async function AboutPage({ params }: AboutPageProps) {
         <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">What matters</p>
-            <h2 className="site-title max-w-[11ch]">A clear product path.</h2>
+            <h2 className="site-title max-w-[11ch]">A focused product.</h2>
           </div>
 
           <div className="site-line-list">
@@ -106,13 +106,13 @@ export default async function AboutPage({ params }: AboutPageProps) {
         <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Company contact</p>
-            <h2 className="site-title max-w-[10ch]">Reach the official inbox.</h2>
+            <h2 className="site-title max-w-[10ch]">Reach OmniaCreata.</h2>
           </div>
 
           <div className="site-line-item">
             <strong>{contactChannels.general}</strong>
             <span>
-              Use the official inbox for Studio access, pricing, billing, privacy, legal, product,
+              Use this address for Studio access, pricing, billing, privacy, legal, product,
               and partnership questions.
             </span>
             <div className="pt-2">

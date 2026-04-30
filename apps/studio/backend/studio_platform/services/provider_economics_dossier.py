@@ -13,12 +13,6 @@ from ..generation_credit_forecast_ops import build_generation_credit_forecasts
 from ..model_catalog_ops import list_model_catalog_entries
 from ..models import IdentityPlan
 from ..providers import ProviderRegistry
-from ..studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
-    STUDIO_PREMIUM_MODEL_ID,
-    STUDIO_SIGNATURE_MODEL_ID,
-    STUDIO_STANDARD_MODEL_ID,
-)
 from ..versioning import load_version_info
 
 _OPENAI_PRICING_URL = "https://openai.com/api/pricing/"
@@ -105,25 +99,35 @@ def build_provider_economics_dossier(
         "premium": _sanitize_chat_pricing(lookup_chat_model_pricing(settings.gemini_premium_model)),
     }
     image_lane_cost_basis = {
-        "fast": {
+        "gpt_image_2": {
             "provider": "runware",
-            "reference_model": "runware:400@2",
+            "reference_model": "openai:gpt-image@2",
             "pricing_source": "runware_public_model_page",
         },
-        "standard": {
+        "nano_banana": {
             "provider": "runware",
-            "reference_model": "alibaba:qwen-image@2512",
+            "reference_model": "google:4@1",
             "pricing_source": "runware_public_model_page",
         },
-        "premium": {
+        "nano_banana_2": {
+            "provider": "runware",
+            "reference_model": "google:4@3",
+            "pricing_source": "runware_public_model_page",
+        },
+        "grok_imagine_image_pro": {
+            "provider": "runware",
+            "reference_model": "xai:grok-imagine@image-pro",
+            "pricing_source": "runware_public_model_page",
+        },
+        "wan_2_7_image_pro": {
+            "provider": "runware",
+            "reference_model": "alibaba:wan@2.7-image-pro",
+            "pricing_source": "runware_public_model_page",
+        },
+        "flux_2_max": {
             "provider": "runware",
             "reference_model": "bfl:7@1",
-            "pricing_source": "runware_bfl_official",
-        },
-        "signature_internal": {
-            "provider": "runware",
-            "reference_model": "bfl:6@1",
-            "pricing_source": "runware_bfl_official",
+            "pricing_source": "runware_public_model_page",
         },
     }
 
@@ -138,9 +142,12 @@ def build_provider_economics_dossier(
         and chat_lane_cost_basis["free_limited"] is not None
         and chat_lane_cost_basis["standard"] is not None
         and chat_lane_cost_basis["premium"] is not None
-        and image_lane_cost_basis["fast"]["reference_model"]
-        and image_lane_cost_basis["standard"]["reference_model"]
-        and image_lane_cost_basis["premium"]["reference_model"]
+        and image_lane_cost_basis["gpt_image_2"]["reference_model"]
+        and image_lane_cost_basis["nano_banana"]["reference_model"]
+        and image_lane_cost_basis["nano_banana_2"]["reference_model"]
+        and image_lane_cost_basis["grok_imagine_image_pro"]["reference_model"]
+        and image_lane_cost_basis["wan_2_7_image_pro"]["reference_model"]
+        and image_lane_cost_basis["flux_2_max"]["reference_model"]
         and lane_credit_impact["free_account"]["models"]
         and lane_credit_impact["creator"]["models"]
         and lane_credit_impact["pro"]["models"]

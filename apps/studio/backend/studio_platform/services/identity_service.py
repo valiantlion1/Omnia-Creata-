@@ -910,6 +910,7 @@ class IdentityService:
         identity_id: Optional[str] = None,
         viewer_identity_id: Optional[str] = None,
         limit: Optional[int] = None,
+        force_public: bool = False,
     ) -> Dict[str, Any]:
         if username:
             identity = await self.get_identity_by_username(username)
@@ -925,7 +926,7 @@ class IdentityService:
         )
         assets_by_id = {asset.id: asset for asset in assets}
         generations_by_id = {generation.id: generation for generation in generations}
-        own_profile = bool(viewer_identity_id and viewer_identity_id == identity.id)
+        own_profile = bool(not force_public and viewer_identity_id and viewer_identity_id == identity.id)
 
         visible_posts = []
         public_post_count = 0

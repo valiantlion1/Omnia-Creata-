@@ -34,6 +34,7 @@ describe('Cookie preferences', () => {
 
   beforeEach(async () => {
     vi.resetModules()
+    window.localStorage.clear()
     vi.stubEnv('VITE_POSTHOG_KEY', 'phc_test_cookie_controls')
     vi.stubEnv('VITE_POSTHOG_HOST', 'https://telemetry.example.test')
 
@@ -70,10 +71,55 @@ describe('Cookie preferences', () => {
 
     expect(screen.getByRole('dialog', { name: /cookie preferences/i })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /allow analytics/i }))
+    await user.click(screen.getByRole('button', { name: /accept optional/i }))
 
     expect(JSON.parse(window.localStorage.getItem(COOKIE_PREFERENCES_KEY) ?? '{}')).toMatchObject({
       analytics: true,
+      version: 1,
+    })
+    expect(screen.queryByRole('dialog', { name: /cookie preferences/i })).not.toBeInTheDocument()
+  })
+
+  it('saves draft choices from the preferences switch', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <>
+        <CookiePreferencesDialog analyticsAvailable />
+        <LegalFooter />
+      </>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /cookie preferences/i }))
+    await user.click(screen.getByRole('switch', { name: /optional analytics/i }))
+    await user.click(screen.getByRole('button', { name: /save choices/i }))
+
+    expect(JSON.parse(window.localStorage.getItem(COOKIE_PREFERENCES_KEY) ?? '{}')).toMatchObject({
+      analytics: true,
+      version: 1,
+    })
+    expect(screen.queryByRole('dialog', { name: /cookie preferences/i })).not.toBeInTheDocument()
+  })
+
+  it('does not show a dead accept control when analytics are unavailable', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <>
+        <CookiePreferencesDialog analyticsAvailable={false} />
+        <LegalFooter />
+      </>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /cookie preferences/i }))
+
+    expect(screen.queryByRole('switch', { name: /optional analytics/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /accept optional/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /save choices/i }))
+
+    expect(JSON.parse(window.localStorage.getItem(COOKIE_PREFERENCES_KEY) ?? '{}')).toMatchObject({
+      analytics: false,
       version: 1,
     })
     expect(screen.queryByRole('dialog', { name: /cookie preferences/i })).not.toBeInTheDocument()

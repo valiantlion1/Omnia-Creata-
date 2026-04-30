@@ -25,6 +25,14 @@ Future<Uint8List> renderEditedImage({
     'vignette': edit.vignette,
     'rotationTurns': edit.rotationTurns,
     'cropMode': edit.cropMode.name,
+    'cropX': edit.cropX,
+    'cropY': edit.cropY,
+    'cropLeft': edit.cropLeft,
+    'cropTop': edit.cropTop,
+    'cropWidth': edit.cropWidth,
+    'cropHeight': edit.cropHeight,
+    'straighten': edit.straighten,
+    'flipHorizontal': edit.flipHorizontal,
     'markups': markups.map((markup) => markup.toRequestMap()).toList(),
     'upscale': upscale,
     'maxLongEdge': maxLongEdge,
@@ -39,26 +47,57 @@ Uint8List _renderImageBytes(Map<String, Object?> request) {
   }
 
   decoded = img.bakeOrientation(decoded);
+  if (request['flipHorizontal']! as bool) {
+    decoded = img.copyFlip(decoded, direction: img.FlipDirection.horizontal);
+  }
+
+  final rotationTurns = request['rotationTurns']! as int;
+  final straighten = request['straighten']! as double;
+  final totalAngle = rotationTurns * 90 + straighten;
+  if (totalAngle != 0) {
+    decoded = img.copyRotate(
+      decoded,
+      angle: totalAngle,
+      interpolation: img.Interpolation.cubic,
+    );
+  }
+
   final cropMode = request['cropMode']! as String;
-  if (cropMode != CropMode.original.name) {
+  final cropLeft = request['cropLeft']! as double;
+  final cropTop = request['cropTop']! as double;
+  final cropWidth = request['cropWidth']! as double;
+  final cropHeight = request['cropHeight']! as double;
+  final hasCropRect =
+      cropLeft.abs() > 0.001 ||
+      cropTop.abs() > 0.001 ||
+      (1 - cropWidth).abs() > 0.001 ||
+      (1 - cropHeight).abs() > 0.001;
+  if (hasCropRect) {
+    decoded = _cropNormalisedRect(
+      decoded,
+      cropLeft,
+      cropTop,
+      cropWidth,
+      cropHeight,
+    );
+  } else if (cropMode != CropMode.original.name) {
     final ratio = switch (cropMode) {
+      'free' => null,
       'square' => 1.0,
       'portrait45' => 4 / 5,
+      'portrait916' => 9 / 16,
+      'classic43' => 4 / 3,
       'landscape169' => 16 / 9,
       _ => null,
     };
     if (ratio != null) {
-      decoded = _cropCenterRatio(decoded, ratio);
+      decoded = _cropRatio(
+        decoded,
+        ratio,
+        request['cropX']! as double,
+        request['cropY']! as double,
+      );
     }
-  }
-
-  final rotationTurns = request['rotationTurns']! as int;
-  if (rotationTurns != 0) {
-    decoded = img.copyRotate(
-      decoded,
-      angle: rotationTurns * 90,
-      interpolation: img.Interpolation.cubic,
-    );
   }
 
   final maxLongEdge = request['maxLongEdge'] as int?;
@@ -259,26 +298,58 @@ img.Image _resizeLongEdge(img.Image src, int maxLongEdge) {
   );
 }
 
-img.Image _cropCenterRatio(img.Image src, double ratio) {
+img.Image _cropRatio(img.Image src, double ratio, double cropX, double cropY) {
   final currentRatio = src.width / src.height;
   var cropWidth = src.width;
   var cropHeight = src.height;
-  var cropX = 0;
-  var cropY = 0;
+  var sourceX = 0;
+  var sourceY = 0;
 
   if (currentRatio > ratio) {
     cropWidth = (src.height * ratio).round().clamp(1, src.width);
-    cropX = ((src.width - cropWidth) / 2).round();
   } else {
     cropHeight = (src.width / ratio).round().clamp(1, src.height);
-    cropY = ((src.height - cropHeight) / 2).round();
+  }
+
+  final maxX = src.width - cropWidth;
+  final maxY = src.height - cropHeight;
+  if (maxX > 0) {
+    sourceX = (maxX * cropX.clamp(0.0, 1.0)).round().clamp(0, maxX);
+  }
+  if (maxY > 0) {
+    sourceY = (maxY * cropY.clamp(0.0, 1.0)).round().clamp(0, maxY);
   }
 
   return img.copyCrop(
     src,
-    x: cropX,
-    y: cropY,
+    x: sourceX,
+    y: sourceY,
     width: cropWidth,
     height: cropHeight,
+  );
+}
+
+img.Image _cropNormalisedRect(
+  img.Image src,
+  double left,
+  double top,
+  double width,
+  double height,
+) {
+  final sourceX = (src.width * left.clamp(0.0, 1.0)).round();
+  final sourceY = (src.height * top.clamp(0.0, 1.0)).round();
+  final cropWidth = (src.width * width.clamp(0.02, 1.0)).round();
+  final cropHeight = (src.height * height.clamp(0.02, 1.0)).round();
+  final safeX = sourceX.clamp(0, src.width - 1).toInt();
+  final safeY = sourceY.clamp(0, src.height - 1).toInt();
+  final safeWidth = cropWidth.clamp(1, src.width - safeX).toInt();
+  final safeHeight = cropHeight.clamp(1, src.height - safeY).toInt();
+
+  return img.copyCrop(
+    src,
+    x: safeX,
+    y: safeY,
+    width: safeWidth,
+    height: safeHeight,
   );
 }

@@ -36,7 +36,7 @@ describe('Legal pages', () => {
     expect(await screen.findByRole('heading', { name: /terms of service/i })).toBeInTheDocument()
     expect(screen.getAllByText(/omnia creata, a founder-operated service/i).length).toBeGreaterThan(0)
     expect(screen.queryByText(/Omnia Creata Legal Entity Name/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/business status/i)).toBeInTheDocument()
+    expect(screen.queryByText(/business status/i)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /refund policy/i })).toHaveAttribute('href', '/legal/refunds')
   })
 
@@ -49,10 +49,24 @@ describe('Legal pages', () => {
     expect(text).not.toContain('&ldquo;')
     expect(text).not.toContain('&rdquo;')
     expect(text).not.toContain('&rsquo;')
-    expect(text).not.toContain('Ã¢â‚¬')
-    expect(text).not.toContain('Ãƒ')
-    expect(text).not.toContain('Ã‚')
+    expect(text).not.toMatch(/\u00c3\u00a2\u00e2\u201a\u00ac/)
+    expect(text).not.toMatch(/\u00c3\u0192/)
+    expect(text).not.toMatch(/\u00c3\u201a/)
+
+    expect(text).not.toMatch(/[\u00c2\u00e2\u00c3\ufffd]/)
 
     unmount()
+  })
+
+  it('keeps the cookie policy at category level instead of exposing internal storage names', async () => {
+    const { container } = renderWithProviders(<CookiesPage />, { route: '/legal/cookies' })
+
+    expect(await screen.findByRole('heading', { name: /cookie policy/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /browser storage overview/i })).toBeInTheDocument()
+
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/oc_session|oc_csrf|oc_consent|oc_theme|oc_locale|oc_analytics_id/i)
+    expect(text).not.toMatch(/analytics_provider_\*|paddle_\*/i)
+    expect(text).not.toMatch(/cross-site request forgery|DDoS protection|Cookie inventory/i)
   })
 })

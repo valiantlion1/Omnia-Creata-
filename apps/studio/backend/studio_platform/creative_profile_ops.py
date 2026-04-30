@@ -2,40 +2,56 @@ from __future__ import annotations
 
 from .models import CreativeProfileEntry, ModelCatalogEntry
 from .studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
-    STUDIO_PREMIUM_MODEL_ID,
-    STUDIO_SIGNATURE_MODEL_ID,
-    STUDIO_STANDARD_MODEL_ID,
+    STUDIO_FLUX_STRONG_MODEL_ID,
+    STUDIO_GPT_IMAGE_2_MODEL_ID,
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID,
+    STUDIO_NANO_BANANA_2_MODEL_ID,
+    STUDIO_NANO_BANANA_MODEL_ID,
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID,
     normalize_studio_model_id,
 )
 
 _MODEL_PROFILE_OVERRIDES: dict[str, dict[str, str]] = {
-    STUDIO_FAST_MODEL_ID: {
-        "id": "fast",
-        "label": "Fast",
-        "badge": "Quick starts",
-        "description": "Quick starts for ideas, composition checks, and modern low-latency variations without making the result feel throwaway.",
+    STUDIO_GPT_IMAGE_2_MODEL_ID: {
+        "id": "gpt-image-2",
+        "label": "GPT Image 2",
+        "badge": "Modern base",
+        "description": "Modern OpenAI image generation through Runware for fast starts, edits, and everyday Studio work.",
         "default_lane": "draft",
     },
-    STUDIO_STANDARD_MODEL_ID: {
-        "id": "standard",
-        "label": "Standard",
-        "badge": "Everyday detail",
-        "description": "A balanced quality lane for everyday work when you want cleaner detail and dependable modern final picks.",
+    STUDIO_NANO_BANANA_MODEL_ID: {
+        "id": "nano-banana",
+        "label": "Nano Banana",
+        "badge": "Everyday polish",
+        "description": "A polished everyday model for chat-led creation, variations, and clean social or product visuals.",
         "default_lane": "standard",
     },
-    STUDIO_PREMIUM_MODEL_ID: {
-        "id": "premium",
-        "label": "Premium",
-        "badge": "Presentation ready",
-        "description": "A richer production lane with cleaner lighting, stronger materials, and presentation-ready polish.",
+    STUDIO_NANO_BANANA_2_MODEL_ID: {
+        "id": "nano-banana-2",
+        "label": "Nano Banana 2",
+        "badge": "Premium polish",
+        "description": "A higher-quality Nano Banana lane for final picks and premium creative output.",
         "default_lane": "final",
     },
-    STUDIO_SIGNATURE_MODEL_ID: {
-        "id": "signature",
-        "label": "Signature",
-        "badge": "Internal advanced",
-        "description": "An internal advanced lane for layout-critical, typography-heavy, and brand-system visuals.",
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID: {
+        "id": "grok-imagine-image-pro",
+        "label": "Grok Imagine Image Pro",
+        "badge": "Image Pro",
+        "description": "A premium model for cinematic, social, and campaign-style outputs where the user wants a named pro lane.",
+        "default_lane": "final",
+    },
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID: {
+        "id": "wan-2-7-image-pro",
+        "label": "Wan 2.7 Image Pro",
+        "badge": "Image Pro",
+        "description": "A high-end Wan image lane for explicit premium selections and stronger final-generation workflows.",
+        "default_lane": "final",
+    },
+    STUDIO_FLUX_STRONG_MODEL_ID: {
+        "id": "flux-2-max",
+        "label": "FLUX.2 Max",
+        "badge": "Strongest FLUX",
+        "description": "The strongest FLUX lane in the launch catalog for premium campaign visuals and reference-heavy final picks.",
         "default_lane": "final",
     },
 }

@@ -906,18 +906,18 @@ li {
   color: var(--foreground-soft);
 }
 
-.home-ecosystem {
+.home-focus {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent),
     rgba(0, 0, 0, 0.02);
 }
 
-.home-ecosystem-grid {
+.home-focus-grid {
   display: grid;
   gap: 2.25rem;
 }
 
-.home-ecosystem-card {
+.home-focus-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 1.2rem 1.5rem;
@@ -926,7 +926,7 @@ li {
   padding-left: 2rem;
 }
 
-.home-ecosystem-card__icon {
+.home-focus-card__icon {
   width: 3rem;
   height: 3rem;
   border: 1px solid rgba(216, 181, 109, 0.36);
@@ -937,26 +937,26 @@ li {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-.home-ecosystem-card p {
+.home-focus-card p {
   color: var(--foreground);
   font-size: 1.25rem;
   font-weight: 600;
 }
 
-.home-ecosystem-card span {
+.home-focus-card span {
   display: block;
   margin-top: 0.35rem;
   color: var(--foreground-soft);
 }
 
-.home-ecosystem-card__rule {
+.home-focus-card__rule {
   grid-column: 1 / -1;
   width: min(8rem, 70%);
   height: 1px;
   background: linear-gradient(90deg, var(--accent), transparent);
 }
 
-.home-ecosystem-card__copy {
+.home-focus-card__copy {
   grid-column: 1 / -1;
   max-width: 20rem;
   color: var(--foreground-soft) !important;
@@ -966,7 +966,7 @@ li {
 }
 
 @media (min-width: 900px) {
-  .home-ecosystem-grid {
+  .home-focus-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1767,7 +1767,7 @@ li {
     max-width: 100%;
   }
 
-  .home-ecosystem-card {
+  .home-focus-card {
     border-left: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     padding-left: 0;

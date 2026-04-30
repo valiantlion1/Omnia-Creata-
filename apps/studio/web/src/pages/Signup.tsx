@@ -1,8 +1,8 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, AtSign, Eye, EyeOff, Lock, Mail, UserRound } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { LegalFooter } from '@/components/StudioPrimitives'
+import { AuthExperience } from '@/components/AuthExperience'
 import { TurnstileWidget } from '@/components/TurnstileWidget'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -17,24 +17,9 @@ const LEGAL_DOCUMENTS: Array<{
   title: string
   to: string
 }> = [
-  {
-    id: 'terms',
-    label: 'Terms',
-    title: 'Terms of Service',
-    to: '/legal/terms',
-  },
-  {
-    id: 'privacy',
-    label: 'Privacy Policy',
-    title: 'Privacy Policy',
-    to: '/legal/privacy',
-  },
-  {
-    id: 'acceptable-use',
-    label: 'Acceptable Use',
-    title: 'Acceptable Use Policy',
-    to: '/legal/acceptable-use',
-  },
+  { id: 'terms', label: 'Terms', title: 'Terms of Service', to: '/legal/terms' },
+  { id: 'privacy', label: 'Privacy Policy', title: 'Privacy Policy', to: '/legal/privacy' },
+  { id: 'acceptable-use', label: 'Acceptable Use', title: 'Acceptable Use Policy', to: '/legal/acceptable-use' },
 ]
 
 function LegalDocumentDialog({
@@ -48,37 +33,32 @@ function LegalDocumentDialog({
 }) {
   if (!selected) return null
 
-  const activeDocument =
-    LEGAL_DOCUMENTS.find((document) => document.id === selected) ??
-    LEGAL_DOCUMENTS[0]
+  const activeDocument = LEGAL_DOCUMENTS.find((document) => document.id === selected) ?? LEGAL_DOCUMENTS[0]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
       <button
         type="button"
-        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+        className="absolute inset-0 bg-black/78 backdrop-blur-md"
         onClick={onClose}
         aria-label="Close legal document"
       />
-      <div className="relative z-10 flex h-[min(88vh,960px)] w-full max-w-6xl flex-col overflow-hidden rounded-[30px] border border-black/[0.08] bg-[#f2ede4] shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
-        <div className="border-b border-black/[0.08] bg-white/70 px-5 py-4 backdrop-blur-md md:px-6">
+      <div className="relative z-10 flex h-[min(88vh,960px)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--primary-light))]/15 bg-[#0b0907] shadow-[0_30px_120px_rgba(0,0,0,0.55)]">
+        <div className="border-b border-white/[0.08] bg-white/[0.035] px-5 py-4 backdrop-blur-md md:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--primary-light))]/70">
                 Legal documents
               </div>
-              <div className="mt-1 text-xl font-semibold tracking-tight text-zinc-950">
-                {activeDocument.title}
-              </div>
-              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-zinc-600">
-                The agreement stays readable in one centered document surface.
-                You can switch between policies without leaving sign-up.
+              <div className="mt-1 text-xl font-semibold tracking-tight text-white">{activeDocument.title}</div>
+              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-zinc-400">
+                Review the policy here, or open the full page.
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-black/[0.08] bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
+              className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
             >
               Close
             </button>
@@ -91,8 +71,8 @@ function LegalDocumentDialog({
                 onClick={() => onSelect(document.id)}
                 className={`rounded-full px-3.5 py-2 text-[12px] font-medium transition ${
                   document.id === activeDocument.id
-                    ? 'bg-zinc-950 text-white'
-                    : 'border border-black/[0.08] bg-white text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
+                    ? 'bg-[rgb(var(--primary-light))] text-[#120d06]'
+                    : 'border border-white/[0.08] bg-white/[0.035] text-zinc-400 hover:bg-white/[0.07] hover:text-white'
                 }`}
               >
                 {document.label}
@@ -102,7 +82,7 @@ function LegalDocumentDialog({
               to={activeDocument.to}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-black/[0.08] bg-transparent px-3.5 py-2 text-[12px] font-medium text-zinc-600 transition hover:bg-black/[0.04] hover:text-zinc-950"
+              className="rounded-full border border-white/[0.08] bg-transparent px-3.5 py-2 text-[12px] font-medium text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
             >
               Open full page
             </Link>
@@ -112,7 +92,7 @@ function LegalDocumentDialog({
           <iframe
             title={activeDocument.title}
             src={`${activeDocument.to}?embed=1`}
-            className="h-full w-full rounded-[24px] border border-black/[0.08] bg-white"
+            className="h-full w-full rounded-[22px] border border-white/[0.08] bg-white"
           />
         </div>
       </div>
@@ -129,6 +109,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false)
   const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -136,8 +118,7 @@ export default function SignupPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [selectedLegalDocument, setSelectedLegalDocument] =
-    useState<LegalDocumentId | null>(null)
+  const [selectedLegalDocument, setSelectedLegalDocument] = useState<LegalDocumentId | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -201,74 +182,37 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#091018_0%,#0c1622_56%,#0a111a_100%)] text-white">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-[8%] top-[6%] h-[22rem] w-[22rem] rounded-full blur-[120px] animate-[oc-gradientShift_20s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
-        <div className="absolute bottom-[10%] right-[10%] h-[20rem] w-[20rem] rounded-full blur-[130px] animate-[oc-gradientShiftB_24s_ease-in-out_infinite]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
-        <div className="absolute top-[50%] left-[50%] h-[16rem] w-[16rem] rounded-full blur-[100px]" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18), transparent 70%)' }} />
-      </div>
+    <div className="bg-[#060504] text-white">
+      <AuthExperience
+        title="Create account"
+        subtitle="Start in Studio with email or Google."
+        visualTitle="Begin with a blank frame."
+        visualSubtitle="Your account opens Create first, then keeps plans, credits, and saved work together."
+        switchTo="/login"
+        switchLabel="Sign in"
+      >
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <button
+            type="button"
+            onClick={() => handleProvider('google')}
+            disabled={googleBusy || submitting}
+            className="flex w-full items-center justify-center gap-3 rounded-[16px] border border-white/[0.1] bg-white/[0.045] px-4 py-3.5 text-sm font-semibold text-white transition hover:border-white/[0.18] hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--primary-light))]/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Continue with Google
+          </button>
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-8 md:px-8">
-        <div className="flex items-center justify-between">
-          <Link to="/landing" className="flex items-center gap-3">
-            <img src="/omnia-crest.png" alt="Omnia Creata" className="h-9 w-9 object-contain" />
-            <div>
-              <div className="text-sm font-semibold tracking-[0.22em] text-zinc-100">OMNIACREATA</div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.24em]" style={{ background: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Studio</div>
-            </div>
-          </Link>
-          <Link to="/login" className="text-sm text-zinc-300 transition hover:text-white">
-            Log in
-          </Link>
-        </div>
-
-        <div className="grid flex-1 gap-12 py-12 lg:grid-cols-[0.92fr_1.08fr]">
-          <div className="max-w-2xl">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Create account</div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl md:leading-[1.02]">
-              Create your account. Start in Create.
-            </h1>
-            <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
-              Create the account first. Once you&apos;re in, Create is the direct starting point and plans stay available inside Studio whenever you need more capacity.
-            </p>
-            <div className="mt-8 max-w-xl space-y-3 text-sm text-zinc-400">
-              {[
-                ['1', 'Create the account'],
-                ['2', 'Open Create and run your first image'],
-                ['3', 'Add credits or move up when you want Chat'],
-              ].map(([step, label]) => (
-                <div key={step} className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-zinc-200">
-                    {step}
-                  </div>
-                  <div className="pt-0.5 leading-6">{label}</div>
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center gap-3 text-xs text-zinc-600">
+            <span className="h-px flex-1 bg-white/[0.06]" />
+            <span>or create with email</span>
+            <span className="h-px flex-1 bg-white/[0.06]" />
           </div>
 
-          <form className="space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
-            <div className="max-w-sm">
-              <button
-                type="button"
-                onClick={() => handleProvider('google')}
-                disabled={googleBusy || submitting}
-                className="flex w-full items-center justify-center gap-3 rounded-[14px] border border-white/[0.12] bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-white/[0.08] hover:border-white/[0.18] hover:shadow-[0_0_16px_rgba(124,58,237,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-                Google
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-zinc-600">
-              <span className="h-px flex-1 bg-white/[0.06]" />
-              <span>Email</span>
-              <span className="h-px flex-1 bg-white/[0.06]" />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <label className="block">
-                <div className="mb-2 text-sm font-medium text-zinc-200">Name</div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <div className="mb-2 text-sm font-medium text-zinc-200">Name</div>
+              <div className="relative">
+                <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <input
                   id="studio-signup-display-name"
                   name="displayName"
@@ -277,12 +221,15 @@ export default function SignupPage() {
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder="Your name"
                   autoComplete="name"
-                  className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
+                  className="w-full rounded-[14px] border border-white/[0.08] bg-black/20 px-11 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--primary-light))]/45 focus:ring-2 focus:ring-[rgb(var(--primary-light))]/15"
                 />
-              </label>
+              </div>
+            </label>
 
-              <label className="block">
-                <div className="mb-2 text-sm font-medium text-zinc-200">Username</div>
+            <label className="block">
+              <div className="mb-2 text-sm font-medium text-zinc-200">Username</div>
+              <div className="relative">
+                <AtSign className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <input
                   id="studio-signup-username"
                   name="username"
@@ -292,148 +239,160 @@ export default function SignupPage() {
                   placeholder="username"
                   autoComplete="username"
                   spellCheck={false}
-                  className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
+                  className="w-full rounded-[14px] border border-white/[0.08] bg-black/20 px-11 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--primary-light))]/45 focus:ring-2 focus:ring-[rgb(var(--primary-light))]/15"
                 />
-              </label>
-            </div>
+              </div>
+            </label>
+          </div>
 
-            <label className="block">
-              <div className="mb-2 text-sm font-medium text-zinc-200">Email</div>
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-zinc-200">Email</div>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
                 id="studio-signup-email"
                 name="email"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@omniacreata.com"
+                placeholder="name@domain.com"
                 autoComplete="email"
                 spellCheck={false}
-                className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
+                className="w-full rounded-[14px] border border-white/[0.08] bg-black/20 px-11 py-3 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--primary-light))]/45 focus:ring-2 focus:ring-[rgb(var(--primary-light))]/15"
               />
-            </label>
+            </div>
+          </label>
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              <label className="block">
-                <div className="mb-2 text-sm font-medium text-zinc-200">Password</div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <div className="mb-2 text-sm font-medium text-zinc-200">Password</div>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <input
                   id="studio-signup-password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder="8+ chars"
                   autoComplete="new-password"
-                  className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
+                  className="w-full rounded-[14px] border border-white/[0.08] bg-black/20 px-11 py-3 pr-12 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--primary-light))]/45 focus:ring-2 focus:ring-[rgb(var(--primary-light))]/15"
                 />
-              </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--primary-light))]/40"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </label>
 
-              <label className="block">
-                <div className="mb-2 text-sm font-medium text-zinc-200">Confirm password</div>
+            <label className="block">
+              <div className="mb-2 text-sm font-medium text-zinc-200">Confirm password</div>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <input
                   id="studio-signup-password-confirmation"
                   name="passwordConfirmation"
-                  type="password"
+                  type={showPasswordConfirmation ? 'text' : 'password'}
                   value={passwordConfirmation}
                   onChange={(event) => setPasswordConfirmation(event.target.value)}
-                  placeholder="Repeat password"
+                  placeholder="Repeat"
                   autoComplete="new-password"
-                  className="w-full border-b border-white/[0.08] bg-transparent px-0 py-3 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20"
+                  className="w-full rounded-[14px] border border-white/[0.08] bg-black/20 px-11 py-3 pr-12 text-base text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--primary-light))]/45 focus:ring-2 focus:ring-[rgb(var(--primary-light))]/15"
                 />
-              </label>
-            </div>
-
-            <div className="space-y-3 pt-2 text-sm text-zinc-300">
-              <label className="flex items-start gap-3">
-                <input
-                  id="studio-signup-accepted-legal"
-                  name="acceptedLegal"
-                  type="checkbox"
-                  checked={acceptedLegal}
-                  onChange={(event) => setAcceptedLegal(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
-                />
-                <span>
-                  I agree to the{' '}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLegalDocument('terms')}
-                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
-                  >
-                    Terms
-                  </button>
-                  ,{' '}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLegalDocument('privacy')}
-                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
-                  >
-                    Privacy Policy
-                  </button>
-                  , and{' '}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLegalDocument('acceptable-use')}
-                    className="text-white underline decoration-white/25 underline-offset-4 transition hover:text-zinc-200 hover:decoration-white/60"
-                  >
-                    Acceptable Use
-                  </button>
-                  .
-                </span>
-              </label>
-              <label className="flex items-start gap-3 text-zinc-400">
-                <input
-                  id="studio-signup-marketing-opt-in"
-                  name="marketingOptIn"
-                  type="checkbox"
-                  checked={marketingOptIn}
-                  onChange={(event) => setMarketingOptIn(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
-                />
-                <span>Send me product updates, release notes, and occasional news.</span>
-              </label>
-            </div>
-
-            {error ? <div className="text-sm text-rose-200">{error}</div> : null}
-
-            {TURNSTILE_SITE_KEY ? (
-              <TurnstileWidget
-                siteKey={TURNSTILE_SITE_KEY}
-                action="signup"
-                resetKey={captchaResetKey}
-                onTokenChange={setCaptchaToken}
-              />
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <button
-                type="submit"
-                disabled={
-                  submitting ||
-                  !displayName.trim() ||
-                  !username.trim() ||
-                  !email.trim() ||
-                  password.length < 8 ||
-                  passwordConfirmation.length < 8 ||
-                  (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)
-                }
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
-              >
-                {submitting ? 'Creating account…' : 'Create account'}
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <div className="text-sm text-zinc-400">
-                Already have an account?{' '}
-                <Link to="/login" className="text-white transition hover:text-zinc-200">
-                  Log in
-                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordConfirmation((value) => !value)}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--primary-light))]/40"
+                  title={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'}
+                  aria-label={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'}
+                >
+                  {showPasswordConfirmation ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
-            </div>
-          </form>
-        </div>
+            </label>
+          </div>
 
-        <LegalFooter className="pb-6" showCookiePreferences={false} showBuildInfo />
-      </div>
+          <div className="space-y-3 pt-1 text-sm text-zinc-300">
+            <label className="flex items-start gap-3">
+              <input
+                id="studio-signup-accepted-legal"
+                name="acceptedLegal"
+                type="checkbox"
+                checked={acceptedLegal}
+                onChange={(event) => setAcceptedLegal(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+              />
+              <span>
+                I agree to the{' '}
+                <button type="button" onClick={() => setSelectedLegalDocument('terms')} className="text-[rgb(var(--primary-light))] transition hover:text-white">
+                  Terms
+                </button>
+                ,{' '}
+                <button type="button" onClick={() => setSelectedLegalDocument('privacy')} className="text-[rgb(var(--primary-light))] transition hover:text-white">
+                  Privacy Policy
+                </button>
+                , and{' '}
+                <button type="button" onClick={() => setSelectedLegalDocument('acceptable-use')} className="text-[rgb(var(--primary-light))] transition hover:text-white">
+                  Acceptable Use
+                </button>
+                .
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-zinc-500">
+              <input
+                id="studio-signup-marketing-opt-in"
+                name="marketingOptIn"
+                type="checkbox"
+                checked={marketingOptIn}
+                onChange={(event) => setMarketingOptIn(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+              />
+              <span>Send product updates.</span>
+            </label>
+          </div>
+
+          {error ? <div className="rounded-[14px] border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
+
+          {TURNSTILE_SITE_KEY ? (
+            <TurnstileWidget
+              siteKey={TURNSTILE_SITE_KEY}
+              action="signup"
+              resetKey={captchaResetKey}
+              onTokenChange={setCaptchaToken}
+            />
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={
+              submitting ||
+              !displayName.trim() ||
+              !username.trim() ||
+              !email.trim() ||
+              password.length < 8 ||
+              passwordConfirmation.length < 8 ||
+              (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)
+            }
+            className="inline-flex w-full items-center justify-center gap-2 rounded-[16px] bg-[rgb(var(--primary-light))] px-5 py-3.5 text-sm font-bold text-[#120d06] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--primary-light))]/50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? 'Creating account...' : 'Create account'}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+
+          <p className="text-center text-sm text-zinc-500">
+            Already have an account?{' '}
+            <Link to="/login" className="font-semibold text-[rgb(var(--primary-light))] transition hover:text-white">
+              Sign in
+            </Link>
+          </p>
+        </form>
+
+      </AuthExperience>
 
       <LegalDocumentDialog
         selected={selectedLegalDocument}

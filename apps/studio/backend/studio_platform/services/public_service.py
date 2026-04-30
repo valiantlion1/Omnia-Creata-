@@ -421,12 +421,14 @@ class PublicService:
         identity_id: str | None = None,
         viewer_identity_id: str | None = None,
         limit: int | None = None,
+        force_public: bool = False,
     ) -> Dict[str, Any]:
         return await self.service.identity.get_profile_payload(
             username=username,
             identity_id=identity_id,
             viewer_identity_id=viewer_identity_id,
             limit=limit,
+            force_public=force_public,
         )
 
     async def update_profile(
@@ -712,7 +714,7 @@ class PublicService:
             billing_state=billing_state,
         )
         if not entitlements.can_share_links:
-            raise PermissionError("Share links require Pro")
+            raise PermissionError("Share links require Premium")
         if bool(project_id) == bool(asset_id):
             raise ValueError("Provide exactly one of project_id or asset_id")
         if project_id:

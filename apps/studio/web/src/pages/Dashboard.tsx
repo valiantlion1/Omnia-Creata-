@@ -10,6 +10,7 @@ import { studioApi, type PublicPost } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { setStudioPostAuthRedirect } from '@/lib/studioSession'
 import { usePageMeta } from '@/lib/usePageMeta'
+import { IS_CHAT_ENABLED } from '@/lib/featureFlags'
 
 function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
@@ -35,7 +36,7 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
             Create an account to continue
           </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Sign up to save favorites, start in Create, and keep your work inside Studio. Creator and Pro add the chat surface when you want it.
+          Sign up to save favorites, start in Create, and keep your work inside Studio. Essential and Premium add more monthly credits and higher image models.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
@@ -105,8 +106,10 @@ function WelcomeOverlay({ open, onClose }: { open: boolean; onClose: () => void 
             Your account is ready. Start in Create when you want a direct image run, then come back to Explore and Library whenever you need direction or context.
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium text-zinc-400">
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-300">Free account: Create</span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-500">Creator / Pro: Chat</span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-300">Free: Create</span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-zinc-500">
+              {IS_CHAT_ENABLED ? 'Essential / Premium: Chat' : 'Essential / Premium: More image credits'}
+            </span>
           </div>
         </div>
 

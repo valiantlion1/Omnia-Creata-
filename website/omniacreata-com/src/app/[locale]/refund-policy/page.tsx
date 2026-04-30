@@ -26,7 +26,7 @@ export async function generateMetadata({
     path: "/refund-policy",
     title: "Refund Policy",
     description:
-      "Refund policy for OmniaCreata Studio subscriptions and credit purchases.",
+      "Refund policy for future OmniaCreata Studio subscriptions and credit purchases.",
   });
 }
 
@@ -43,12 +43,12 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "1. Kapsam",
           content:
-            "Bu politika OmniaCreata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
+            "Bu politika, sunulduklarinda OmniaCreata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
         },
         {
           title: "2. Abonelik iptalleri",
           content:
-            "Aylik aboneliginizi istediginiz zaman iptal edebilirsiniz. Iptal, mevcut donemin sonundaki yenilemeyi durdurur.",
+            "Aylik abonelik sunuldugunda, aboneliginizi istediginiz zaman iptal edebilirsiniz. Iptal, mevcut donemin sonundaki yenilemeyi durdurur.",
         },
         {
           title: "3. Iade talepleri",
@@ -75,12 +75,12 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "1. Scope",
           content:
-            "This policy explains how refund requests are handled for OmniaCreata Studio subscriptions and credit pack purchases.",
+            "This policy explains how refund requests will be handled when OmniaCreata Studio subscriptions and credit packs are available.",
         },
         {
           title: "2. Subscription cancellations",
           content:
-            "You may cancel a monthly subscription at any time. Cancellation stops the next renewal and does not remove access already provided for the active billing period.",
+            "When monthly subscriptions are available, you may cancel at any time. Cancellation stops the next renewal and does not remove access already provided for the active billing period.",
         },
         {
           title: "3. Refund requests",
@@ -111,16 +111,11 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
           href: withLocalePrefix(locale, "/contact"),
           label: isTurkish ? "Iletisim" : "Contact",
         },
-        {
-          href: withLocalePrefix(locale, "/pricing"),
-          label: isTurkish ? "Fiyatlari gor" : "View pricing",
-          variant: "secondary",
-        },
       ]}
       description={
         isTurkish
-          ? "Bu sayfa OmniaCreata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
-          : "This page explains the refund process for OmniaCreata Studio subscriptions and credit packs."
+          ? "Bu sayfa, sunulduklarinda OmniaCreata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
+          : "This page explains the refund process for future OmniaCreata Studio subscriptions and credit packs."
       }
       documentDescription={
         isTurkish
@@ -144,7 +139,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
       meta={[
         {
           label: isTurkish ? "Kapsam" : "Scope",
-          value: isTurkish ? "Studio odemeleri" : "Studio payments",
+          value: isTurkish ? "Gelecek Studio odemeleri" : "Future Studio payments",
         },
         { label: isTurkish ? "Alan adi" : "Domain", value: "omniacreata.com" },
         {

@@ -872,7 +872,7 @@ def _configured_chat_launch_grade_providers(*, settings: Settings, chat_routing:
     providers_payload = chat_routing.get("providers") if isinstance(chat_routing, dict) else None
     configured: list[str] = []
     if isinstance(providers_payload, dict):
-        for provider_name in ("gemini", "openrouter", "openai"):
+        for provider_name in ("gemini", "openrouter", "runware", "openai"):
             payload = providers_payload.get(provider_name)
             if _is_launch_grade_configured(provider_name, payload):
                 configured.append(provider_name)
@@ -880,7 +880,7 @@ def _configured_chat_launch_grade_providers(*, settings: Settings, chat_routing:
         return configured
 
     fallback_configured: list[str] = []
-    for provider_name in ("gemini", "openrouter", "openai"):
+    for provider_name in ("gemini", "openrouter", "runware", "openai"):
         if (
             _chat_provider_is_configured(settings=settings, provider=provider_name)
             and _chat_provider_counts_as_launch_grade(settings=settings, provider=provider_name)
@@ -1444,7 +1444,7 @@ def _build_chat_provider_check(*, settings: Settings, chat_routing: dict[str, An
     providers_payload = chat_routing.get("providers") if isinstance(chat_routing, dict) else None
     provider_states: list[tuple[str, dict[str, Any]]] = []
     if isinstance(providers_payload, dict):
-        for provider_name in ("gemini", "openrouter", "openai"):
+        for provider_name in ("gemini", "openrouter", "runware", "openai"):
             payload = providers_payload.get(provider_name)
             if isinstance(payload, dict):
                 provider_states.append((provider_name, payload))
@@ -1469,9 +1469,14 @@ def _build_chat_provider_check(*, settings: Settings, chat_routing: dict[str, An
                 provider == "openai"
                 and has_configured_secret(settings.openai_api_key)
             )
+            or (
+                provider == "runware"
+                and has_configured_secret(settings.runware_api_key)
+            )
             for provider in {
                 str(chat_routing.get("primary_provider") or "").strip().lower(),
                 str(chat_routing.get("fallback_provider") or "").strip().lower(),
+                "runware",
                 "gemini",
                 "openrouter",
                 "openai",

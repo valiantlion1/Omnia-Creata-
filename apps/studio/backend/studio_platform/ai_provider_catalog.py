@@ -10,10 +10,16 @@ from .contract_catalog import (
     build_contract_freeze_summary,
 )
 from .studio_model_contract import (
+    STUDIO_FLUX_STRONG_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
+    STUDIO_GPT_IMAGE_2_MODEL_ID,
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID,
+    STUDIO_NANO_BANANA_2_MODEL_ID,
+    STUDIO_NANO_BANANA_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID,
     resolve_studio_model_openai_quality,
 )
 
@@ -26,6 +32,12 @@ STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID: dict[str, str] = {
     STUDIO_STANDARD_MODEL_ID: "medium",
     STUDIO_PREMIUM_MODEL_ID: "high",
     STUDIO_SIGNATURE_MODEL_ID: "high",
+    STUDIO_GPT_IMAGE_2_MODEL_ID: "low",
+    STUDIO_NANO_BANANA_MODEL_ID: "medium",
+    STUDIO_NANO_BANANA_2_MODEL_ID: "high",
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID: "high",
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID: "high",
+    STUDIO_FLUX_STRONG_MODEL_ID: "high",
     "flux-schnell": "low",
     "sdxl-base": "medium",
     "realvis-xl": "high",
@@ -35,6 +47,7 @@ STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID: dict[str, str] = {
 _CHAT_PROVIDER_LABELS: dict[str, str] = {
     "openai": "OpenAI",
     "openrouter": "OpenRouter",
+    "runware": "Runware",
     "gemini": "Gemini",
     "heuristic": "Heuristic",
 }
@@ -259,6 +272,12 @@ def build_ai_control_plane_summary(
 
     for provider_name, standard_model, premium_model, service_tier in (
         (
+            "runware",
+            settings.runware_chat_model,
+            settings.runware_chat_premium_model,
+            settings.runware_service_tier,
+        ),
+        (
             "openrouter",
             settings.openrouter_model,
             settings.openrouter_premium_model,
@@ -323,8 +342,8 @@ def build_ai_control_plane_summary(
         "chat": {
             "primary_provider": settings.chat_primary_provider,
             "fallback_provider": settings.chat_fallback_provider,
-            "free_account_provider": "gemini",
-            "free_account_model": settings.gemini_free_model,
+            "free_account_provider": settings.chat_primary_provider,
+            "free_account_model": _default_chat_model_for_provider(settings, settings.chat_primary_provider),
             "providers": chat_providers,
             "multimodal_policy": chat_routing.get("multimodal_policy"),
         },
@@ -375,6 +394,17 @@ def _describe_chat_model(model: str) -> dict[str, Any]:
         "name": model,
         "pricing": pricing,
     }
+
+
+def _default_chat_model_for_provider(settings: Settings, provider: str) -> str:
+    normalized = str(provider or "").strip().lower()
+    if normalized == "runware":
+        return settings.runware_chat_model
+    if normalized == "openrouter":
+        return settings.openrouter_model
+    if normalized == "openai":
+        return settings.openai_model
+    return settings.gemini_free_model
 
 
 def _describe_image_model(model: str) -> dict[str, Any]:

@@ -4,11 +4,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { getProducts } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
-import {
-  studioPrimaryHref,
-  studioPrimaryLabel,
-  withLocalePrefix,
-} from "@/lib/utils";
+import { withLocalePrefix } from "@/lib/utils";
 
 type ProductsPageProps = {
   params: Promise<{
@@ -18,16 +14,16 @@ type ProductsPageProps = {
 
 const productProof = [
   {
-    title: "One live path",
-    description: "The public site points people into Studio without scattering attention across unfinished tools.",
+    title: "In preparation",
+    description: "Studio will be published when public access is ready.",
   },
   {
-    title: "One workflow",
-    description: "Brief, generate, edit, review, and save the work you want to keep.",
+    title: "Narrow focus",
+    description: "The product work is focused on image generation, editing, and review.",
   },
   {
-    title: "Current model families",
-    description: "The FLUX.2 family on Runware drives the catalog across Fast, Standard, and Premium lanes.",
+    title: "No public pricing yet",
+    description: "Pricing and access details will be shown when Studio is ready.",
   },
 ];
 
@@ -44,7 +40,7 @@ export async function generateMetadata({
     locale,
     path: "/products",
     title: "Products",
-    description: "Studio leads the OmniaCreata product line.",
+    description: "Product information for OmniaCreata Studio.",
   });
 }
 
@@ -64,30 +60,30 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
           <div className="site-page-copy">
             <p className="site-kicker">Products</p>
             <h1 className="site-page-title">
-              Studio is the <strong>current product.</strong>
+              Studio is <strong>in preparation.</strong>
             </h1>
             <p className="site-page-lede">
-              OmniaCreata launches around one useful workspace first. The ecosystem expands only
-              when another tool has a clear job.
+              OmniaCreata is preparing a focused workspace for image work. Public access details
+              will be shown when the product is ready.
             </p>
             <div className="site-page-actions">
-              <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
-                {studioPrimaryLabel()}
+              <ButtonLink href={withLocalePrefix(locale, "/contact")} size="lg" variant="primary">
+                Contact
               </ButtonLink>
               <ButtonLink
-                href={withLocalePrefix(locale, "/pricing")}
+                href={withLocalePrefix(locale, "/about")}
                 size="lg"
                 variant="secondary"
               >
-                View pricing
+                About
               </ButtonLink>
             </div>
           </div>
 
           <div className="site-page-visual">
             <div className="site-page-visual__caption">
-              <span>Product line</span>
-              <strong>Studio sets the standard before the ecosystem expands.</strong>
+              <span>Product</span>
+              <strong>Studio will be introduced when public access is ready.</strong>
             </div>
           </div>
         </div>
@@ -95,7 +91,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
         <div className="site-band lg:grid-cols-[0.72fr_1fr_auto] lg:items-start">
           <article className="contents">
             <div>
-              <p className="site-kicker">Current product</p>
+              <p className="site-kicker">Product in preparation</p>
               <h2 className="site-title mt-3 max-w-[11ch]">{studio.name}</h2>
             </div>
 
@@ -110,7 +106,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
                 size="lg"
                 variant="secondary"
               >
-                Product page
+                Studio details
               </ButtonLink>
             </div>
           </article>
@@ -119,7 +115,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
         <div className="site-band lg:grid-cols-[0.72fr_1.28fr]">
           <div className="space-y-4">
             <p className="site-kicker">Product truth</p>
-            <h2 className="site-title max-w-[10ch]">What is real now.</h2>
+            <h2 className="site-title max-w-[10ch]">What is public now.</h2>
           </div>
 
           <div className="site-line-list">

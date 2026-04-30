@@ -78,13 +78,12 @@ export default async function ContactPage({
     {
       title: "General",
       address: contactChannels.general,
-      description:
-        "The main public inbox for OmniaCreata.",
+      description: "The main contact address for OmniaCreata.",
     },
     {
       title: "Studio",
       address: contactChannels.studio,
-      description: "Studio access and product conversations.",
+      description: "Studio access and product questions.",
     },
     {
       title: "Support",
@@ -118,7 +117,7 @@ export default async function ContactPage({
               Talk to <strong>OmniaCreata.</strong>
             </h1>
             <p className="site-page-lede">
-              One direct path for Studio access, pricing, billing, partnerships, privacy, and legal
+              One direct address for Studio access, pricing, billing, partnerships, privacy, and legal
               questions.
             </p>
 
@@ -138,14 +137,14 @@ export default async function ContactPage({
               {contactChannels.general}
             </p>
             <p className="mt-5 text-sm leading-7 text-foreground-soft">
-              Email is always available. The form appears when delivery is connected.
+              For the fastest response, email us directly.
             </p>
           </div>
         </div>
 
         <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Best path</p>
+            <p className="site-kicker">Best way</p>
             <h2 className="site-title max-w-[10ch]">Send one clear note.</h2>
             <p className="site-copy">
               Mention Studio access, billing, partnership, privacy, legal, or product support.
@@ -182,10 +181,10 @@ export default async function ContactPage({
         ) : (
           <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
             <div className="space-y-4">
-              <p className="site-kicker">Email path</p>
-              <h2 className="site-title max-w-[9ch]">Email is the direct path.</h2>
+              <p className="site-kicker">Email</p>
+              <h2 className="site-title max-w-[9ch]">Email us directly.</h2>
               <p className="site-copy">
-                Use the inbox for Studio, billing, privacy, legal, partnerships, and product
+                Use this address for Studio, billing, privacy, legal, partnerships, and product
                 questions.
               </p>
             </div>
@@ -210,8 +209,8 @@ export default async function ContactPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href={withLocalePrefix(locale, "/products/omnia-creata-studio")} size="lg" variant="secondary">
-              See Studio
+            <ButtonLink href={withLocalePrefix(locale, "/about")} size="lg" variant="secondary">
+              About
             </ButtonLink>
             <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
               Email us

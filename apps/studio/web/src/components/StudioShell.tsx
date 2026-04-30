@@ -29,6 +29,7 @@ import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
+import { IS_CHAT_ENABLED } from '@/lib/featureFlags'
 
 type NavItem = {
   to: string
@@ -51,7 +52,7 @@ type NavChild = {
 const primaryNav: NavItem[] = [
   { to: '/explore', label: 'Explore', icon: Compass, aliases: ['/community'] },
   { to: '/create', label: 'Create', icon: Sparkles },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
+  ...(IS_CHAT_ENABLED ? [{ to: '/chat', label: 'Chat', icon: MessageSquare }] : []),
 ]
 
 const libraryNav: NavItem[] = [
@@ -266,7 +267,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
   const canLoadPrivate = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isGuestShell = !canLoadPrivate
-  const hideLegalFooter = location.pathname.startsWith('/create')
+  const hideLegalFooter = location.pathname.startsWith('/create') || location.pathname.startsWith('/chat')
 
   useEffect(() => {
     const saved = window.localStorage.getItem('oc-studio-rail-collapsed')
@@ -362,7 +363,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const mobileBottomNav: NavItem[] = [
     primaryNav[0],
     primaryNav[1],
-    primaryNav[2],
+    ...(IS_CHAT_ENABLED && primaryNav[2] ? [primaryNav[2]] : []),
     libraryNav[0],
     isGuestShell
       ? { to: '/signup', label: 'Join', icon: UserCircle2 }
@@ -579,7 +580,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </main>
         </div>
 
-        <nav className="sticky bottom-0 z-20 grid h-16 grid-cols-5 border-t border-[#d7ae68]/12 bg-[#0d0b08]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 24px rgba(0,0,0,0.32)' }}>
+        <nav className="sticky bottom-0 z-20 grid h-16 border-t border-[#d7ae68]/12 bg-[#0d0b08]/96 backdrop-blur-2xl lg:hidden" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 -4px 24px rgba(0,0,0,0.32)', gridTemplateColumns: `repeat(${mobileBottomNav.length}, minmax(0, 1fr))` }}>
           {mobileBottomNav.map((item) => {
             const Icon = item.icon
             const active = isActive(location.pathname, item)

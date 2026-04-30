@@ -1400,8 +1400,8 @@ class StudioService(StudioServiceDelegatesMixin):
     async def list_liked_posts(self, identity_id: str, *, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         return await self.public.list_liked_posts(identity_id, limit=limit)
 
-    async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, Any]:
-        return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id, limit=limit)
+    async def get_profile_payload(self, *, username: Optional[str] = None, identity_id: Optional[str] = None, viewer_identity_id: Optional[str] = None, limit: Optional[int] = None, force_public: bool = False) -> Dict[str, Any]:
+        return await self.public.get_profile_payload(username=username, identity_id=identity_id, viewer_identity_id=viewer_identity_id, limit=limit, force_public=force_public)
 
     async def update_profile(self, identity_id: str, *, display_name: Optional[str] = None, bio: Optional[str] = None, default_visibility: Optional[Visibility] = None, featured_asset_id: Optional[str] = None, featured_asset_id_provided: bool = False, featured_asset_position: Optional[str] = None) -> OmniaIdentity:
         return await self.public.update_profile(identity_id, display_name=display_name, bio=bio, default_visibility=default_visibility, featured_asset_id=featured_asset_id, featured_asset_id_provided=featured_asset_id_provided, featured_asset_position=featured_asset_position)
@@ -1482,6 +1482,8 @@ class StudioService(StudioServiceDelegatesMixin):
         moderation_rewrite_applied: bool = False,
         moderation_rewritten_prompt: str | None = None,
         moderation_llm_used: bool = False,
+        origin_chat_message_id: str | None = None,
+        origin_conversation_id: str | None = None,
     ) -> GenerationJob:
         return await self.generation.create_generation(
             identity_id=identity_id,
@@ -1510,6 +1512,8 @@ class StudioService(StudioServiceDelegatesMixin):
             moderation_rewrite_applied=moderation_rewrite_applied,
             moderation_rewritten_prompt=moderation_rewritten_prompt,
             moderation_llm_used=moderation_llm_used,
+            origin_chat_message_id=origin_chat_message_id,
+            origin_conversation_id=origin_conversation_id,
         )
 
     async def _persist_generation_job_with_reservation(

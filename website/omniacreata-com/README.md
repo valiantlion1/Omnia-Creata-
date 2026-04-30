@@ -1,6 +1,6 @@
 # OmniaCreata Public Website
 
-Official public headquarters for [omniacreata.com](https://omniacreata.com), built as the flagship marketing and discovery site for the OmniaCreata ecosystem.
+Official public headquarters for [omniacreata.com](https://omniacreata.com), built as the company site for OmniaCreata.
 
 ## Stack
 

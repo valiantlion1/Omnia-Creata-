@@ -339,7 +339,12 @@ class LibraryService:
 
     def asset_library_state(self, asset: MediaAsset) -> str:
         raw = str(asset.metadata.get("library_state") or "").strip().lower()
-        if raw in {"ready", "blocked", "failed", "generating"}:
+        # "needs_review" — set by the post-generation image moderation analyzer
+        # when the vision model wants a human/operator look but the asset is
+        # not unsafe enough to hard-block. Keeps the asset visible to its
+        # owner (can_open True) while excluding it from public sharing
+        # (is_public_share_eligible_asset requires "ready").
+        if raw in {"ready", "blocked", "needs_review", "failed", "generating"}:
             return raw
         if self.asset_protection_state(asset) == "blocked":
             return "blocked"

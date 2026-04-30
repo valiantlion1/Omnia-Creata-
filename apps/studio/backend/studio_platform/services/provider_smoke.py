@@ -260,6 +260,23 @@ def build_default_smoke_cases(
             )
         )
 
+    if normalized_surface in {"all", "chat"} and normalized_provider in {"all", "runware"}:
+        cases.append(
+            ProviderSmokeCase(
+                label="runware-chat-premium-smoke",
+                provider_name="runware",
+                workflow="chat",
+                surface="chat",
+                lane=(
+                    "primary"
+                    if settings.chat_primary_provider == "runware"
+                    else "secondary" if settings.chat_fallback_provider == "runware" else "backup"
+                ),
+                model=settings.runware_chat_model,
+                prompt="Return the token STUDIO_SMOKE_OK and one short sentence about premium creative direction.",
+            )
+        )
+
     if normalized_surface in {"all", "chat"} and normalized_provider in {"all", "openai"}:
         cases.append(
             ProviderSmokeCase(
@@ -525,6 +542,8 @@ def _chat_provider_is_configured(settings: Settings, provider_name: str) -> bool
         return has_configured_secret(settings.gemini_api_key)
     if normalized == "openrouter":
         return has_configured_secret(settings.openrouter_api_key)
+    if normalized == "runware":
+        return has_configured_secret(settings.runware_api_key)
     if normalized == "openai":
         return has_configured_secret(settings.openai_api_key)
     return False
@@ -536,6 +555,8 @@ def _default_chat_smoke_model(settings: Settings, provider_name: str) -> str | N
         return settings.gemini_model
     if normalized == "openrouter":
         return settings.openrouter_model
+    if normalized == "runware":
+        return settings.runware_chat_model
     if normalized == "openai":
         return settings.openai_model
     return None
@@ -547,6 +568,8 @@ def _chat_smoke_runner_name(provider_name: str) -> str:
         return "_chat_with_gemini"
     if normalized == "openrouter":
         return "_chat_with_openrouter"
+    if normalized == "runware":
+        return "_chat_with_runware"
     if normalized == "openai":
         return "_chat_with_openai"
     return ""

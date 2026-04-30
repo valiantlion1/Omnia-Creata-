@@ -198,6 +198,8 @@ def test_validate_production_requirements_requires_launch_shaped_runtime_values(
         asset_storage_backend="supabase",
         public_web_base_url="https://studio.example.com",
         public_api_base_url="https://api.example.com",
+        cors_origins="https://studio.example.com,https://app.example.com",
+        allowed_hosts="studio.example.com,api.example.com",
     )
 
     staging.validate_production_requirements()
@@ -212,10 +214,48 @@ def test_validate_production_requirements_requires_launch_shaped_runtime_values(
         ({"generation_runtime_mode": "all"}, "GENERATION_RUNTIME_MODE"),
         ({"public_web_base_url": "http://localhost:5173"}, "PUBLIC_WEB_BASE_URL"),
         ({"public_api_base_url": "http://127.0.0.1:8000"}, "PUBLIC_API_BASE_URL"),
+        ({"public_web_base_url": "https://10.0.0.5"}, "PUBLIC_WEB_BASE_URL"),
+        ({"public_api_base_url": "https://[::1]"}, "PUBLIC_API_BASE_URL"),
         ({"enable_demo_auth": True}, "ENABLE_DEMO_AUTH"),
         ({"enable_demo_generation_fallback": True}, "ENABLE_DEMO_GENERATION_FALLBACK"),
         ({"enable_api_docs": True}, "ENABLE_API_DOCS"),
         ({"jwt_secret": "dev-jwt-secret-0123456789abcdef0123456789abcdef"}, "JWT_SECRET"),
+        (
+            {"jwt_secret": "your-secret-here-padding-padding-padding"},
+            "JWT_SECRET",
+        ),
+        (
+            {"cors_origins": "http://localhost:5173,https://studio.example.com"},
+            "CORS_ORIGINS",
+        ),
+        (
+            {"cors_origins": "*"},
+            "CORS_ORIGINS",
+        ),
+        (
+            {"cors_origins": "http://studio.example.com"},
+            "CORS_ORIGINS",
+        ),
+        (
+            {"cors_origins": "https://192.168.1.10,https://studio.example.com"},
+            "CORS_ORIGINS",
+        ),
+        (
+            {"allowed_hosts": ""},
+            "ALLOWED_HOSTS",
+        ),
+        (
+            {"allowed_hosts": "localhost,studio.example.com"},
+            "ALLOWED_HOSTS",
+        ),
+        (
+            {"allowed_hosts": "127.0.0.1,studio.example.com"},
+            "ALLOWED_HOSTS",
+        ),
+        (
+            {"allowed_hosts": "*.example.com,*"},
+            "ALLOWED_HOSTS",
+        ),
     ],
 )
 def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides, expected_message):
@@ -233,6 +273,8 @@ def test_validate_production_requirements_rejects_unsafe_launch_drift(overrides,
         "asset_storage_backend": "supabase",
         "public_web_base_url": "https://studio.example.com",
         "public_api_base_url": "https://api.example.com",
+        "cors_origins": "https://studio.example.com,https://app.example.com",
+        "allowed_hosts": "studio.example.com,api.example.com",
     }
     base_kwargs.update(overrides)
 
@@ -257,6 +299,7 @@ def test_validate_runtime_accepts_launch_shaped_runtime_values():
         asset_storage_backend="supabase",
         public_web_base_url="https://studio.example.com",
         public_api_base_url="https://api.example.com",
+        cors_origins="https://studio.example.com,https://app.example.com",
     )
 
     warnings = staging.validate_runtime()

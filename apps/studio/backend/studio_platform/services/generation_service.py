@@ -51,6 +51,10 @@ from ..providers import (
     ProviderTemporaryError,
     is_provider_auth_failure,
 )
+from security.moderation_engine import (
+    analyze_generated_image,
+    decide_image_action,
+)
 from ..asset_import_ops import parse_data_url_image
 from ..prompt_engineering import CompiledPrompt, compile_generation_request, improve_prompt_candidate
 from ..prompt_memory_ops import build_prompt_memory_context, derive_display_title, derive_prompt_tags
@@ -776,6 +780,8 @@ class GenerationService:
         moderation_rewrite_applied: bool = False,
         moderation_rewritten_prompt: str | None = None,
         moderation_llm_used: bool = False,
+        origin_chat_message_id: str | None = None,
+        origin_conversation_id: str | None = None,
     ) -> GenerationJob:
         identity = await self.service.get_identity(identity_id)
         self.service._assert_identity_action_allowed(
@@ -959,6 +965,8 @@ class GenerationService:
             provider_candidates=list(filtered_provider_candidates),
             reserved_credit_cost=pricing_quote.reserved_credit_cost,
             credit_status="reserved" if pricing_quote.reserved_credit_cost > 0 else "none",
+            origin_chat_message_id=origin_chat_message_id,
+            origin_conversation_id=origin_conversation_id,
         )
         job = await self._persist_generation_job_with_reservation(
             identity=identity,
@@ -1261,6 +1269,14 @@ class GenerationService:
                     update={"provider_candidates": list(execution_provider_candidates), "provider": provider_label}
                 )
             execution = await self.service.generation_runtime.execute_job(execution_job)
+            # Post-generation vision-based moderation: looks at each rendered
+            # image and may flip library_state to "needs_review" or "blocked"
+            # before state is persisted. Fails open — never raises out of this
+            # helper — so an analyzer outage doesn't break image delivery.
+            await self._apply_image_moderation_post_check(
+                job=job,
+                created_assets=execution.created_assets,
+            )
             finished_at = utc_now()
             identity = await self.service.store.get_identity(job.identity_id)
             unlimited_access = bool(identity and self.service._has_unlimited_generation_access(identity))
@@ -1306,6 +1322,17 @@ class GenerationService:
                     created_assets=execution.created_assets,
                     style_tags=infer_style_tags(job),
                     now=utc_now(),
+                )
+                # Chat<>generation linkage: when a chat assistant message
+                # kicked off this generation, append the rendered assets to
+                # that message's attachments so the conversation surfaces
+                # the result inline (the "ChatGPT-style" UX the user asked
+                # for: chat tells the AI what to make, the AI makes it, and
+                # the result previews in the same conversation).
+                self._attach_completed_generation_to_origin_chat_message(
+                    state=state,
+                    job=job,
+                    created_assets=execution.created_assets,
                 )
 
             await self.service.store.mutate(mutation)
@@ -1797,6 +1824,190 @@ class GenerationService:
 
         asset.url = "stored"
         asset.thumbnail_url = thumbnail_url
+
+
+    def _attach_completed_generation_to_origin_chat_message(
+        self,
+        *,
+        state: StudioState,
+        job: GenerationJob,
+        created_assets: list[MediaAsset],
+    ) -> None:
+        """Append generated assets to the chat message that triggered them.
+
+        When a chat assistant message kicks off a generation, the GenerationJob
+        carries `origin_chat_message_id` and `origin_conversation_id`. After
+        the generation succeeds, we mutate the chat message in place to add
+        a `ChatAttachment` for each rendered asset (so the chat UI shows the
+        image inline) and stamp `generation_id` / `generation_status` /
+        `generation_assets` into `metadata` so the frontend can render a
+        proper preview block (with retry, regenerate, "open in Create"...).
+
+        Fails open: if the message has been deleted, or the conversation
+        rolled, or the assets list is empty, this is a no-op. The
+        generation completion still succeeds — chat preview is a UX bonus,
+        not a required side effect.
+        """
+        message_id = job.origin_chat_message_id
+        if not message_id:
+            return
+        if not created_assets:
+            return
+
+        # Avoid attaching anything that the moderation analyzer just
+        # blocked — the inline preview should never display CSAM/NCII/etc.
+        # The asset is still in state.assets, but we don't want it shown.
+        previewable_assets = [
+            asset
+            for asset in created_assets
+            if str(asset.metadata.get("library_state") or "ready").lower() != "blocked"
+        ]
+        if not previewable_assets:
+            return
+
+        message = state.chat_messages.get(message_id)
+        if message is None:
+            return
+
+        from ..models import ChatAttachment  # local import keeps top-of-file clean
+
+        new_attachments = list(message.attachments)
+        existing_asset_ids = {att.asset_id for att in new_attachments if att.asset_id}
+        attached_asset_ids: list[str] = []
+        for asset in previewable_assets:
+            if asset.id in existing_asset_ids:
+                continue
+            preview_url = self.service.build_asset_delivery_url(
+                asset.id,
+                variant="preview",
+                identity_id=job.identity_id,
+            )
+            new_attachments.append(
+                ChatAttachment(
+                    kind="image",
+                    url=preview_url,
+                    asset_id=asset.id,
+                    label=asset.title or "Generated image",
+                )
+            )
+            attached_asset_ids.append(asset.id)
+            existing_asset_ids.add(asset.id)
+
+        if not attached_asset_ids:
+            return
+
+        message.attachments = new_attachments
+        # Frontend renders a preview block off `metadata.generation_status`
+        # — "running" while in flight, "succeeded" when done, "blocked" when
+        # the analyzer hard-blocked, "needs_review" when pending review.
+        first_asset = previewable_assets[0]
+        first_state = str(first_asset.metadata.get("library_state") or "ready").lower()
+        message.metadata["generation_id"] = job.id
+        message.metadata["generation_status"] = "succeeded"
+        message.metadata["generation_assets"] = attached_asset_ids
+        message.metadata["generation_library_state"] = first_state
+        message.edited_at = utc_now()
+        state.chat_messages[message.id] = message
+
+
+    async def _apply_image_moderation_post_check(
+        self,
+        *,
+        job: GenerationJob,
+        created_assets: list[MediaAsset],
+    ) -> None:
+        """Run the vision-based moderation analyzer on each generated asset.
+
+        This is the AI-assisted (4th) tier of the moderation pipeline:
+        prompt-side fast filter, prompt-side LLM analyzer, prompt-side
+        decision engine — and then this post-generation vision check that
+        looks at the actual rendered image. The analyzer reasons about the
+        same vocabulary the prompt path uses (AgeAmbiguity / SexualIntent /
+        ContextType) so the decision composes cleanly.
+
+        Each asset is mutated in place: the function writes audit metadata
+        keys (`moderation_analyzer_used`, `moderation_analyzer_action`,
+        `moderation_analyzer_risk_score`, `moderation_analyzer_reason`,
+        `moderation_analyzer_model`) so the asset trail records the check,
+        and applies `library_state` / `protection_state` overrides when the
+        analyzer recommends them.
+
+        Fails open by design — if `_read_asset_bytes` raises, or the vision
+        provider is unavailable, or the analyzer itself errors, the asset
+        keeps its default state and the generation completes normally. The
+        analyzer also short-circuits inside pytest (`PYTEST_CURRENT_TEST`
+        env var) and when no vision keys are configured, so this is a
+        no-op in the test runner and unconfigured environments.
+        """
+        if not created_assets:
+            return
+
+        prompt_text = job.prompt_snapshot.prompt or ""
+
+        for asset in created_assets:
+            try:
+                image_bytes, mime_type = await self._read_asset_bytes(
+                    asset, variant="content"
+                )
+            except Exception as exc:
+                logger.debug(
+                    "image_moderation_post_check_no_bytes asset_id=%s reason=%s",
+                    asset.id,
+                    exc,
+                )
+                continue
+
+            try:
+                analysis = await analyze_generated_image(
+                    image_bytes=image_bytes,
+                    image_mime_type=mime_type,
+                    prompt=prompt_text,
+                )
+                decision = decide_image_action(analysis)
+            except Exception as exc:
+                logger.warning(
+                    "image_moderation_post_check_failed asset_id=%s error=%s",
+                    asset.id,
+                    exc,
+                )
+                continue
+
+            # Always record analyzer status so we can audit which assets
+            # were checked vs skipped, even when no override is applied.
+            if decision.analyzer_used:
+                asset.metadata["moderation_analyzer_used"] = True
+                if decision.analyzer_model:
+                    asset.metadata["moderation_analyzer_model"] = decision.analyzer_model
+                asset.metadata["moderation_analyzer_action"] = decision.action.value
+                asset.metadata["moderation_analyzer_risk_score"] = decision.risk_score
+                if decision.reason:
+                    asset.metadata["moderation_analyzer_reason"] = decision.reason
+                if decision.signals:
+                    asset.metadata["moderation_analyzer_signals"] = list(decision.signals)
+            elif decision.analyzer_skipped and decision.analyzer_skipped_reason:
+                asset.metadata["moderation_analyzer_skipped_reason"] = (
+                    decision.analyzer_skipped_reason
+                )
+
+            override = decision.library_state_override
+            if override:
+                asset.metadata["library_state"] = override
+                # Hard-block also flips protection_state so the blocked
+                # preview placeholder is served instead of the raw image.
+                if override == "blocked":
+                    asset.metadata["protection_state"] = "blocked"
+
+            if decision.analyzer_used and (override or decision.risk_score >= 30):
+                logger.info(
+                    "generation_image_moderation generation_id=%s asset_id=%s "
+                    "action=%s risk_score=%s override=%s reason=%s",
+                    job.id,
+                    asset.id,
+                    decision.action.value,
+                    decision.risk_score,
+                    override,
+                    decision.reason,
+                )
 
 
     def _extension_for_mime_type(self, mime_type: str) -> str:

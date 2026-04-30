@@ -173,7 +173,7 @@ export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) {
     return NextResponse.json(
-      { message: "Please submit the contact form as JSON." },
+      { message: "Please refresh the page and try again." },
       { status: 415 },
     );
   }

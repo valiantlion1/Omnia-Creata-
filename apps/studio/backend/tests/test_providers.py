@@ -1096,6 +1096,28 @@ async def test_fal_provider_generates_via_queue_and_downloads_output() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fal_provider_rejects_unsafe_result_download_url() -> None:
+    provider = FalProvider("test-key", transport=httpx.MockTransport(lambda request: httpx.Response(200)))
+
+    with pytest.raises(ProviderFatalError, match="unsafe image download URL"):
+        await provider._download_result_image(
+            image_url="http://169.254.169.254/latest/meta-data",
+            fallback_mime_type="image/png",
+        )
+
+
+@pytest.mark.asyncio
+async def test_openai_image_provider_rejects_private_result_download_url() -> None:
+    provider = OpenAIImageProvider(
+        "test-key",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200)),
+    )
+
+    with pytest.raises(ProviderFatalError, match="private image download URL"):
+        await provider._download_image("https://127.0.0.1/generated.png")
+
+
+@pytest.mark.asyncio
 async def test_fal_provider_uses_reference_image_for_edit_workflow() -> None:
     submitted_payload: dict[str, object] = {}
     submitted_url = ""

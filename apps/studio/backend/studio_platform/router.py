@@ -57,7 +57,7 @@ from .models import (
 )
 from .models.identity import MARKETING_CONSENT_VERSION, PRIVACY_VERSION, TERMS_VERSION, USAGE_POLICY_VERSION
 from .service import DeletedIdentityError, GenerationCapacityError, PRESET_CATALOG, PLAN_CATALOG, StudioService
-from .studio_model_contract import STUDIO_FAST_MODEL_ID
+from .studio_model_contract import STUDIO_FAST_MODEL_ID, STUDIO_LAUNCH_MODEL_IDS
 
 
 ValidatedEmail = Annotated[EmailStr, Field(max_length=320)]
@@ -224,6 +224,31 @@ class ChatMessageEditRequest(BaseModel):
 class ChatFeedbackRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     feedback: Optional[Literal["like", "dislike"]] = None
+
+
+class ChatGenerationCreateRequest(BaseModel):
+    """Kick off a generation from a chat assistant message.
+
+    The assistant message has a `metadata.generation_bridge` block (set
+    by the chat reply pipeline) that captures the prompt + blueprint the
+    AI proposed. This request carries only the user-facing overrides:
+    the project to bill against and (optionally) how many variations to
+    produce.
+
+    `project_id` is required so the generation lands in a scoped library
+    section. The frontend supplies the user's currently active project
+    or, if the chat thread is anchored to a project, that project's id.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    project_id: str = Field(min_length=1, max_length=128)
+    output_count: int = Field(default=1, ge=1, le=4)
+    # Optional override: if the user wants a different prompt than what
+    # the assistant proposed (e.g., they edited it inline). Falls back to
+    # the bridge prompt when omitted.
+    prompt_override: Optional[str] = Field(default=None, max_length=2000)
+    negative_prompt_override: Optional[str] = Field(default=None, max_length=500)
+    _sanitize_overrides = field_validator("prompt_override", "negative_prompt_override")(_sanitize_prompt_field)
 
 
 class AssetRenameRequest(BaseModel):
@@ -855,10 +880,17 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 identity = await service.get_identity(current_user.id)
             except KeyError:
                 identity = None
+        models = await service.list_models_for_identity(identity)
         return {
+            "default_model_id": STUDIO_FAST_MODEL_ID,
+            "launch_model_ids": list(STUDIO_LAUNCH_MODEL_IDS),
             "models": [
-                model.model_dump(mode="json")
-                for model in await service.list_models_for_identity(identity)
+                (
+                    service._serialize_model_catalog_for_identity(identity=identity, model=model)
+                    if identity is not None
+                    else model.model_dump(mode="json")
+                )
+                for model in models
             ]
         }
 
@@ -1179,6 +1211,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 username=username,
                 viewer_identity_id=viewer_identity_id,
                 limit=limit,
+                force_public=True,
             )
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
@@ -1359,6 +1392,178 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
         return _serialize_chat_message(message)
+
+    @router.post(
+        "/conversations/{conversation_id}/messages/{message_id}/generate",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def post_chat_message_generation(
+        conversation_id: str,
+        message_id: str,
+        payload: ChatGenerationCreateRequest,
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        """Kick off a generation from a chat assistant message.
+
+        The chat reply pipeline already attached a `generation_bridge`
+        block to the assistant message metadata (prompt + blueprint
+        the AI proposed). When the user clicks "Generate this" or the
+        chat UI auto-runs the bridge, the frontend hits this endpoint.
+
+        We:
+          - Verify the user owns the conversation + message.
+          - Read `metadata.generation_bridge` to recover the prompt and
+            blueprint (model, dimensions, steps, etc.).
+          - Run the standard prompt-side moderation pipeline so the chat
+            kickoff has the same gate as the standalone Create page.
+          - Stamp `origin_chat_message_id` and `origin_conversation_id`
+            on the GenerationJob so completion writes back into chat.
+
+        Returns the generation job exactly like POST /generations, so
+        the frontend can poll status via GET /generations/{id}.
+        """
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_generation_rate_limits(request, auth_user)
+        _require_verified_generation_account(auth_user)
+
+        # Verify ownership of the conversation and load the message.
+        await service.require_owned_model("conversations", conversation_id, ChatConversation, auth_user.id)
+        message = await service.store.get_chat_message(message_id)
+        if message is None or message.identity_id != auth_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        if message.conversation_id != conversation_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+        bridge = message.metadata.get("generation_bridge") if isinstance(message.metadata, dict) else None
+        if not isinstance(bridge, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This message does not have a generation plan attached.",
+            )
+        blueprint = bridge.get("blueprint") if isinstance(bridge.get("blueprint"), dict) else {}
+
+        # Pull prompt fields from the bridge, with optional user overrides.
+        bridge_prompt = str(bridge.get("prompt") or blueprint.get("prompt") or "").strip()
+        prompt = (payload.prompt_override or bridge_prompt).strip()
+        if not prompt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The chat plan is missing a prompt — re-ask the assistant.",
+            )
+        negative_prompt = (
+            payload.negative_prompt_override
+            if payload.negative_prompt_override is not None
+            else str(bridge.get("negative_prompt") or blueprint.get("negative_prompt") or "")
+        ).strip()
+        reference_asset_id = blueprint.get("reference_asset_id") or bridge.get("reference_asset_id")
+        model_id = str(blueprint.get("model") or STUDIO_FAST_MODEL_ID).strip() or STUDIO_FAST_MODEL_ID
+        width = blueprint.get("width") if isinstance(blueprint.get("width"), int) else None
+        height = blueprint.get("height") if isinstance(blueprint.get("height"), int) else None
+        steps = int(blueprint.get("steps") or 28)
+        cfg_scale = float(blueprint.get("cfg_scale") or 6.5)
+        aspect_ratio = str(blueprint.get("aspect_ratio") or "1:1") or "1:1"
+
+        # Same moderation gate as POST /generations — never skip this on
+        # the chat surface. A prompt that's blocked from the Create page
+        # must also be blocked from chat-driven kickoff.
+        raw_moderation_decision = await check_prompt_safety(prompt)
+        if isinstance(raw_moderation_decision, PromptModerationDecision):
+            moderation_decision = raw_moderation_decision
+        else:
+            mod_result, flagged_term = raw_moderation_decision
+            moderation_decision = PromptModerationDecision(
+                result=mod_result,
+                action=ModerationAction.HARD_BLOCK if mod_result in {
+                    ModerationResult.SOFT_BLOCK,
+                    ModerationResult.HARD_BLOCK,
+                } else ModerationAction.ALLOW,
+                reason=flagged_term,
+            )
+        if (
+            moderation_decision.result == ModerationResult.REVIEW
+            and moderation_decision.action == ModerationAction.ALLOW
+        ):
+            moderation_decision = replace(moderation_decision, action=ModerationAction.REVIEW)
+        mod_result = moderation_decision.result
+        flagged_term = moderation_decision.reason
+        rewritten_prompt = moderation_decision.rewritten_prompt or prompt
+        moderation_tier = moderation_decision.provider_moderation
+        audit = await service.record_prompt_moderation_audit(
+            surface="chat_generation_prompt",
+            identity_id=auth_user.id,
+            original_text=prompt,
+            final_text=rewritten_prompt,
+            decision=moderation_decision,
+        )
+
+        if moderation_decision.action == ModerationAction.HARD_BLOCK or mod_result in {
+            ModerationResult.SOFT_BLOCK,
+            ModerationResult.HARD_BLOCK,
+        }:
+            await service.record_generation_moderation_block(
+                auth_user.id,
+                mod_result,
+                flagged_term or mod_result.value,
+                prompt=prompt,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Safety violation: This chat plan contains blocked content and cannot be generated.",
+            )
+
+        try:
+            job = await service.create_generation(
+                identity_id=auth_user.id,
+                project_id=payload.project_id,
+                prompt=rewritten_prompt,
+                source_prompt=prompt,
+                negative_prompt=negative_prompt,
+                reference_asset_id=reference_asset_id,
+                model_id=model_id,
+                width=width,
+                height=height,
+                steps=steps,
+                cfg_scale=cfg_scale,
+                seed=int(blueprint.get("seed") or 20260316),
+                aspect_ratio=aspect_ratio,
+                output_count=payload.output_count,
+                moderation_tier=moderation_tier,
+                moderation_reason=flagged_term,
+                moderation_action=moderation_decision.action.value,
+                moderation_risk_level=moderation_decision.risk_level.value,
+                moderation_risk_score=moderation_decision.risk_score,
+                moderation_age_ambiguity=moderation_decision.age_ambiguity.value,
+                moderation_sexual_intent=moderation_decision.sexual_intent.value,
+                moderation_context_type=moderation_decision.context_type.value,
+                moderation_audit_id=audit.id,
+                moderation_rewrite_applied=moderation_decision.rewrite_applied,
+                moderation_rewritten_prompt=moderation_decision.rewritten_prompt,
+                moderation_llm_used=moderation_decision.llm_used,
+                origin_chat_message_id=message_id,
+                origin_conversation_id=conversation_id,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        except GenerationCapacityError as exc:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={
+                    "error": str(exc),
+                    "queue_full": exc.queue_full,
+                    "estimated_wait_seconds": exc.estimated_wait_seconds,
+                },
+                headers={
+                    "Retry-After": str(exc.estimated_wait_seconds or 30),
+                    "X-Queue-Full": "true" if exc.queue_full else "false",
+                },
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requested resource not found")
+
+        return _serialize_generation(job, auth_user.id)
 
     @router.get("/generations")
     async def get_generations(

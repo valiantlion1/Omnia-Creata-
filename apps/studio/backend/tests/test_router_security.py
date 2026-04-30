@@ -1509,6 +1509,7 @@ async def test_public_profile_route_hides_private_usage_and_visibility_defaults(
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.get("/v1/profiles/userone", headers={"X-Test-Guest": "true"})
+        owner_response = await client.get("/v1/profiles/userone", headers={"X-Test-User": "user-1"})
 
     try:
         assert response.status_code == 200
@@ -1517,6 +1518,12 @@ async def test_public_profile_route_hides_private_usage_and_visibility_defaults(
         assert payload["can_edit"] is False
         assert payload["profile"]["usage_summary"] is None
         assert payload["profile"]["default_visibility"] is None
+        assert owner_response.status_code == 200
+        owner_payload = owner_response.json()
+        assert owner_payload["own_profile"] is False
+        assert owner_payload["can_edit"] is False
+        assert owner_payload["profile"]["usage_summary"] is None
+        assert owner_payload["profile"]["default_visibility"] is None
     finally:
         await service.shutdown()
 
@@ -1534,13 +1541,21 @@ async def test_public_profile_route_uses_explicit_rate_limits_and_limit_param(
         calls.append((key, limit, window_seconds))
         return RateLimitDecision(allowed=True, limit=limit, remaining=limit - 1, retry_after=0)
 
-    async def fake_get_profile_payload(*, identity_id=None, username=None, viewer_identity_id=None, limit=None) -> dict:
+    async def fake_get_profile_payload(
+        *,
+        identity_id=None,
+        username=None,
+        viewer_identity_id=None,
+        limit=None,
+        force_public=None,
+    ) -> dict:
         captured.update(
             {
                 "identity_id": identity_id,
                 "username": username,
                 "viewer_identity_id": viewer_identity_id,
                 "limit": limit,
+                "force_public": force_public,
             }
         )
         return {"profile": {"username": username}, "posts": [], "own_profile": False, "can_edit": False}
@@ -1562,6 +1577,7 @@ async def test_public_profile_route_uses_explicit_rate_limits_and_limit_param(
             "username": "userone",
             "viewer_identity_id": "user-1",
             "limit": 15,
+            "force_public": True,
         }
         assert any("profiles:public:ip" in key and limit == 90 and window == 60 for key, limit, window in calls)
         assert any("profiles:public:user" in key and limit == 240 and window == 3600 for key, limit, window in calls)

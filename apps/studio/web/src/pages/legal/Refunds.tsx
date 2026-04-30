@@ -49,8 +49,8 @@ export default function RefundPolicyPage() {
         </p>
         <LegalList
           items={[
-            'Examples include provider-side failures that leave the request incomplete, internal job crashes after credits were reserved, or billing mismatches caused by our infrastructure.',
-            'Reversals apply to wallet credits and included plan credits when the failure is attributable to the Studio platform or one of our upstream provider lanes.',
+            'Examples include failed generations, service outages, or billing mismatches caused by our systems.',
+            'Reversals apply to wallet credits and included plan credits when the failure is attributable to Studio.',
             'We may deny an automatic reversal if the generation actually completed, if the output was delivered, or if the request was blocked for abuse, policy, or entitlement reasons before completion.',
           ]}
         />
@@ -58,7 +58,7 @@ export default function RefundPolicyPage() {
 
       <LegalSection id="subscriptions" title="3. Subscription cancellations and refunds">
         <p>
-          You can cancel a Creator or Pro subscription from the Billing page at any time. Cancellation stops the next
+          You can cancel an Essential or Premium subscription from the Billing page at any time. Cancellation stops the next
           renewal and your paid access continues until the current billing period ends.
         </p>
         <LegalList

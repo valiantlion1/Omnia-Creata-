@@ -3,7 +3,7 @@ import Link from "next/link";
 import { defaultLocale, type LocaleCode } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { contactChannels, mailto } from "@/lib/contact-channels";
-import { studioPageHref, withLocalePrefix } from "@/lib/utils";
+import { withLocalePrefix } from "@/lib/utils";
 import { BrandMark } from "./brand-mark";
 
 type FooterProps = {
@@ -21,28 +21,16 @@ export function Footer({ locale, messages }: FooterProps) {
           <div className="space-y-5">
             <BrandMark locale={locale} />
             <p className="max-w-md text-sm leading-7 text-foreground-soft">
-              Creative software for image work. Studio is the first product path.
+              Creative software company for image work.
             </p>
           </div>
 
           <FooterColumn title="Navigate">
             <Link
               className="text-sm text-foreground-soft transition hover:text-foreground"
-              href={studioPageHref(locale) as Route}
-            >
-              Studio
-            </Link>
-            <Link
-              className="text-sm text-foreground-soft transition hover:text-foreground"
               href={withLocalePrefix(locale, "/about") as Route}
             >
               {copy.nav.about}
-            </Link>
-            <Link
-              className="text-sm text-foreground-soft transition hover:text-foreground"
-              href={withLocalePrefix(locale, "/pricing") as Route}
-            >
-              {copy.nav.pricing}
             </Link>
             <Link
               className="text-sm text-foreground-soft transition hover:text-foreground"

@@ -41,8 +41,8 @@ describe('BillingPage', () => {
 
     expect(await screen.findByRole('heading', { name: /your subscription/i })).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getAllByText('Creator').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('Pro').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Essential').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Premium').length).toBeGreaterThan(0)
     })
     expect(await screen.findByText(/420/)).toBeInTheDocument()
     expect(screen.getByText(/image model access/i)).toBeInTheDocument()

@@ -28,9 +28,9 @@ function getBlockedInjectionSignal(data: AdminTelemetryPayload | undefined) {
 
   return {
     value: 'Not tracked',
-    trend: 'No fake data',
+    trend: 'Unavailable',
     tone: 'text-amber-300',
-    detail: data?.blocked_injections_detail ?? 'Studio is not persisting injection-specific blocking telemetry on this build.',
+    detail: 'Some safety signals are not available yet.',
   }
 }
 
@@ -89,7 +89,7 @@ export default function AnalyticsPage() {
     {
       title: 'Model inferences',
       value: formatCount(telemetry?.grand_total_generations ?? telemetry?.event_count),
-      trend: 'Backend truth',
+      trend: 'Live data',
       trendClassName: 'text-emerald-300',
       icon: <Cpu className="h-5 w-5 text-cyan-300" />,
       detail: null,
@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
       detail: null,
     },
     {
-      title: 'Active workspaces',
+      title: 'Active accounts',
       value: formatCount(data?.total_identities),
       trend: 'Store count',
       trendClassName: 'text-zinc-300',
@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
           Admin Analytics
         </h1>
         <p className="max-w-2xl text-base leading-7 text-zinc-400">
-          Root-admin view of Studio usage, cost, and signal availability. Values here come from the backend telemetry contract.
+          Usage, cost, and safety signals for the owner account.
         </p>
       </section>
 
@@ -174,7 +174,7 @@ export default function AnalyticsPage() {
               <div className="mt-5 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.02] p-6 text-center">
                 <Zap className="h-8 w-8 text-emerald-300/80" />
                 <p className="mt-3 max-w-md text-sm leading-6 text-zinc-500">
-                  Cost and usage totals are connected. Provider-by-provider trend charts will stay quiet until the backend exposes persisted trend buckets.
+                  Cost and usage totals are connected. Detailed trend charts will appear when enough history is available.
                 </p>
               </div>
             </div>
@@ -186,14 +186,14 @@ export default function AnalyticsPage() {
                   <div className="mt-1.5 h-2 w-2 rounded-full bg-emerald-300" />
                   <div>
                     <p className="text-sm font-medium text-white">Admin route connected</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">This page now reads `/v1/admin/telemetry` through the shared Studio API client.</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">Owner analytics are connected.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4 border-b border-white/[0.06] pb-4">
                   <div className="mt-1.5 h-2 w-2 rounded-full bg-amber-300" />
                   <div>
                     <p className="text-sm font-medium text-white">Unavailable fields stay explicit</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">Null backend signals are shown as unavailable instead of converted into reassuring zeroes.</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">Missing signals are shown as unavailable.</p>
                   </div>
                 </div>
               </div>

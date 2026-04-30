@@ -1651,8 +1651,8 @@ async def test_paddle_subscription_webhook_activates_pro_plan(tmp_path: Path):
 
     assert updated.plan.value == "pro"
     assert updated.subscription_status == SubscriptionStatus.ACTIVE
-    assert updated.monthly_credit_allowance == 1200
-    assert updated.monthly_credits_remaining == 1200
+    assert updated.monthly_credit_allowance == 12000
+    assert updated.monthly_credits_remaining == 12000
 
 
 @pytest.mark.asyncio
@@ -1697,9 +1697,9 @@ async def test_paddle_credit_pack_webhook_uses_checkout_kind_credit_amount(tmp_p
     updated = snapshot.identities[identity.id]
 
     assert updated.plan == IdentityPlan.FREE
-    assert updated.extra_credits == 800
+    assert updated.extra_credits == 8000
     assert any(
-        entry.checkout_kind == CheckoutKind.CREDIT_PACK_LARGE and entry.amount == 800
+        entry.checkout_kind == CheckoutKind.CREDIT_PACK_LARGE and entry.amount == 8000
         for entry in snapshot.credit_ledger.values()
     )
 
@@ -1746,7 +1746,7 @@ async def test_paddle_duplicate_credit_pack_webhook_is_idempotent(tmp_path: Path
     snapshot = await store.snapshot()
     updated = snapshot.identities[identity.id]
 
-    assert updated.extra_credits == 200
+    assert updated.extra_credits == 2000
     assert len(snapshot.billing_webhook_receipts) == 1
     assert sum(1 for entry in snapshot.credit_ledger.values() if entry.checkout_kind == CheckoutKind.CREDIT_PACK_SMALL) == 1
 
@@ -1862,8 +1862,8 @@ async def test_paddle_pro_checkout_transaction_waits_for_subscription_event(tmp_
 
     assert updated.plan == IdentityPlan.PRO
     assert updated.subscription_status == SubscriptionStatus.ACTIVE
-    assert updated.monthly_credit_allowance == 1200
-    assert updated.monthly_credits_remaining == 1200
+    assert updated.monthly_credit_allowance == 12000
+    assert updated.monthly_credits_remaining == 12000
     assert len(snapshot.billing_webhook_receipts) == 2
     assert sum(1 for entry in snapshot.credit_ledger.values() if entry.entry_type == CreditEntryType.SUBSCRIPTION) == 1
 
@@ -2001,7 +2001,7 @@ async def test_create_generation_persists_reference_asset_in_prompt_snapshot(tmp
         plan=IdentityPlan.FREE,
         monthly_credits_remaining=0,
         monthly_credit_allowance=0,
-        extra_credits=60,
+        extra_credits=600,
     )
     workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
     project = Project(
@@ -2344,30 +2344,30 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
         "can_sign_out_others": False,
     }
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
-    flux_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_FAST_MODEL_ID)
-    assert flux_model["creative_profile"]["id"] == "fast"
-    assert flux_model["creative_profile"]["label"] == "Fast"
-    assert flux_model["label"] == "Fast"
-    assert flux_model["display_label"] == "Fast"
-    assert flux_model["render_experience"]["state"] in {"ready", "fallback"}
+    launch_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_FAST_MODEL_ID)
+    assert launch_model["creative_profile"]["id"] == "gpt-image-2"
+    assert launch_model["creative_profile"]["label"] == "GPT Image 2"
+    assert launch_model["label"] == "GPT Image 2"
+    assert launch_model["display_label"] == "GPT Image 2"
+    assert launch_model["render_experience"]["state"] in {"ready", "fallback"}
     assert (
-        flux_model["route_preview"]["render_experience"]["state"]
-        == flux_model["render_experience"]["state"]
+        launch_model["route_preview"]["render_experience"]["state"]
+        == launch_model["render_experience"]["state"]
     )
-    assert flux_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
+    assert launch_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
     assert billing_summary["entitlements"]["can_access_chat"] is False
     assert billing_summary["credits"]["credits_remaining"] == 60
     assert billing_summary["wallet_balance"] == 60
     assert "max_resolution" not in billing_summary["plan"]
-    flux_lane = next(
+    launch_lane = next(
         entry
         for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
         if entry["model_id"] == STUDIO_FAST_MODEL_ID
     )
-    assert flux_lane["label"] == "Fast"
-    assert flux_lane["creative_profile"]["id"] == "fast"
-    assert flux_lane["pricing_lane"] == flux_model["route_preview"]["pricing_lane"]
-    assert flux_lane["render_experience"]["state"] == flux_model["render_experience"]["state"]
+    assert launch_lane["label"] == "GPT Image 2"
+    assert launch_lane["creative_profile"]["id"] == "gpt-image-2"
+    assert launch_lane["pricing_lane"] == launch_model["route_preview"]["pricing_lane"]
+    assert launch_lane["render_experience"]["state"] == launch_model["render_experience"]["state"]
 
 
 @pytest.mark.asyncio
@@ -3144,14 +3144,14 @@ async def test_create_generation_rejects_duplicate_incomplete_request(tmp_path: 
         queue_priority="priority",
         status=JobStatus.QUEUED,
         estimated_cost=0.0,
-        credit_cost=6,
+        credit_cost=80,
         output_count=1,
         prompt_snapshot=PromptSnapshot(
             prompt="  Luxury campaign portrait  ",
             negative_prompt="low quality",
             model="flux-schnell",
-            width=1024,
-            height=1024,
+            width=1536,
+            height=1536,
             steps=24,
             cfg_scale=6.0,
             seed=42,
@@ -3518,7 +3518,7 @@ async def test_create_generation_prefers_zero_cost_fast_lane_in_development_even
         assert job.provider_candidates[:3] == ["pollinations", "huggingface", "demo"]
         assert "runware" not in job.provider_candidates
         assert job.pricing_lane == "fallback"
-        assert job.reserved_credit_cost == 3
+        assert job.reserved_credit_cost == 40
     finally:
         settings.environment = original_environment
         settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
@@ -3833,7 +3833,7 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
         )
         assert create_fast["request_model"] == get_settings().openai_image_draft_model
         chat_standard = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:standard-assist")
-        assert chat_standard["provider_chain"][0]["provider"] in {"gemini", "openrouter", "openai"}
+        assert chat_standard["provider_chain"][0]["provider"] in {"gemini", "openrouter", "runware", "openai"}
         prompt_improve = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:prompt-improve")
         assert prompt_improve["operator_role"] == "prompt_improve"
         provider_totals = {item["provider"]: item["total_spend_usd"] for item in telemetry["providers"]}

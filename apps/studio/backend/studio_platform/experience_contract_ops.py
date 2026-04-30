@@ -13,6 +13,7 @@ _DEGRADED_ONLY_PROVIDERS = frozenset({"demo"})
 _CHAT_PROVIDER_LABELS = {
     "openai": "OpenAI",
     "openrouter": "OpenRouter",
+    "runware": "Runware",
     "gemini": "Gemini",
     "anthropic": "Anthropic",
 }

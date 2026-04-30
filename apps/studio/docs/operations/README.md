@@ -25,6 +25,8 @@ Bu klasorun mantigi:
 
 - [Production Roadmap](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/STUDIO_PRODUCTION_ROADMAP.md)
   alpha-prelaunch stack'i public launch, growth ve hyperscale kapasite basamaklarina tasiyan kanonik hardening roadmap'i ve work package catalog'u
+- [Production Env Checklist](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/operations/PRODUCTION_ENV_CHECKLIST.md)
+  Runware-only image v1 icin backend, web ve marketing env contract'ini tek yerde tutar; Chat surface'in `VITE_STUDIO_CHAT_ENABLED` ile gizli kaldigini netlestirir
 
 Aktif urun frame'i `Controlled Public Paid Launch`tir.
 `Protected Beta Hardening` ise hala korunmasi gereken tarihsel/current-build baseline proof olarak okunur.

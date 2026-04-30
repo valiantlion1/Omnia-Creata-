@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crop_your_image/crop_your_image.dart' as cropper;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -22,10 +23,15 @@ void main() {
   runApp(const OmniaPixelsApp());
 }
 
-const _accent = Color(0xFF5EEAD4);
-const _bg = Color(0xFF090A0F);
-const _surface = Color(0xFF101116);
-const _versionLabel = '0.3.6+14';
+const _accent = Color(0xFFE7B85F);
+const _accentSoft = Color(0xFF382814);
+const _bg = Color(0xFF07090D);
+const _surface = Color(0xFF0D1015);
+const _surfaceHigh = Color(0xFF141820);
+const _line = Color(0x18FFFFFF);
+const _muted = Color(0xFFA0A7AE);
+const _versionLabel = '0.3.13+21';
+const _goldLogoAsset = 'assets/brand/omnia-creata-logo-gold-script.png';
 const _galleryPageSize = 60;
 const _galleryPrecacheCount = 90;
 const _maxThumbnailCacheEntries = 180;
@@ -33,6 +39,7 @@ const _maxDiagnosticsEntries = 24;
 const _maxFrameDiagnosticsSamples = 180;
 const _previewLongEdge = 1600;
 const _previewDecodeWidth = 1400;
+const _editorControlDockHeight = 182.0;
 const _galleryThumbnailOption = ThumbnailOption(
   size: ThumbnailSize.square(192),
   quality: 64,
@@ -62,6 +69,14 @@ class OmniaPixelsApp extends StatelessWidget {
         sliderTheme: const SliderThemeData(
           showValueIndicator: ShowValueIndicator.never,
         ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            foregroundColor: Colors.white.withValues(alpha: 0.86),
+            disabledForegroundColor: Colors.white.withValues(alpha: 0.26),
+          ),
+        ),
+        splashColor: _accent.withValues(alpha: 0.08),
+        highlightColor: Colors.white.withValues(alpha: 0.04),
       ),
       home: const OmniaPixelsShell(),
     );
@@ -94,6 +109,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   Uint8List? _pickedOriginalBytes;
   Uint8List? _sourceBytes;
   Uint8List? _previewBytes;
+  Uint8List? _cropBaseBytes;
   Uint8List? _upscaledBytes;
   int _galleryPage = 0;
   int _selectedAlbumTotal = 0;
@@ -102,6 +118,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   final LinkedHashMap<String, Future<Uint8List?>> _thumbnailFutures =
       LinkedHashMap();
   EditValues _edit = const EditValues();
+  EditValues? _cropBaseEdit;
   EditorTool _tool = EditorTool.light;
   UpscaleMode _upscaleMode = UpscaleMode.fastLocal;
   List<MarkupLayer> _markups = const [];
@@ -330,7 +347,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _clearThumbnailCaches();
         _albums = paths;
         _selectedAlbum = album;
-        _assets = assets;
+        _assets = List<AssetEntity>.of(assets, growable: true);
         _galleryPage = 0;
         _selectedAlbumTotal = total;
         _hasMoreAssets = assets.length < total;
@@ -354,7 +371,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _clearThumbnailCaches();
         _albums = albums ?? _albums;
         _selectedAlbum = album;
-        _assets = assets;
+        _assets = List<AssetEntity>.of(assets, growable: true);
         _galleryPage = 0;
         _selectedAlbumTotal = total;
         _hasMoreAssets = assets.length < total;
@@ -384,7 +401,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         setState(() {
           _galleryPage = nextPage;
           _selectedAlbumTotal = total;
-          _assets = [..._assets, ...nextAssets];
+          _assets.addAll(nextAssets);
           _hasMoreAssets = _assets.length < total;
           _status = '${album.name}: ${_assets.length} / $total';
         });
@@ -416,43 +433,67 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
   }
 
   Future<void> _pickSinglePhoto() async {
-    await _runBusy('Opening picker...', () async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _status = 'Opening Android picker...');
+    try {
       final picked = await picker.ImagePicker().pickImage(
         source: picker.ImageSource.gallery,
         requestFullMetadata: false,
       );
+      if (!mounted) {
+        return;
+      }
       if (picked == null) {
         setState(() => _status = 'Picker dismissed');
         return;
       }
-      final original = await picked.readAsBytes();
-      final preview = await _measure(
-        'Picker preview render',
-        () => _render(
-          bytes: original,
-          edit: const EditValues(),
-          maxLongEdge: _previewLongEdge,
-        ),
-      );
-      setState(() {
-        _selectedAsset = null;
-        _pickedOriginalBytes = original;
-        _sourceBytes = preview;
-        _previewBytes = preview;
-        _upscaledBytes = null;
-        _edit = const EditValues();
-        _markups = const [];
-        _draftMarkup = null;
-        _undoStack.clear();
-        _redoStack.clear();
-        _gestureStartEdit = null;
-        _showOriginal = false;
-        _tool = EditorTool.light;
-        _upscaleMode = UpscaleMode.fastLocal;
-        _tab = 1;
-        _status = 'Picked photo ready';
+
+      await _runBusy('Preparing photo...', () async {
+        final original = await _measure(
+          'Read picked photo',
+          picked.readAsBytes,
+        );
+        final preview = await _measure(
+          'Picker preview render',
+          () => _render(
+            bytes: original,
+            edit: const EditValues(),
+            maxLongEdge: _previewLongEdge,
+          ),
+        );
+        setState(() {
+          _selectedAsset = null;
+          _pickedOriginalBytes = original;
+          _sourceBytes = preview;
+          _previewBytes = preview;
+          _cropBaseBytes = null;
+          _cropBaseEdit = null;
+          _upscaledBytes = null;
+          _edit = const EditValues();
+          _markups = const [];
+          _draftMarkup = null;
+          _undoStack.clear();
+          _redoStack.clear();
+          _gestureStartEdit = null;
+          _showOriginal = false;
+          _tool = EditorTool.light;
+          _upscaleMode = UpscaleMode.fastLocal;
+          _tab = 1;
+          _status = 'Picked photo ready';
+        });
       });
-    });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _latestError = error.toString();
+        _status = 'Could not open selected photo';
+      });
+      _showSnack(error.toString());
+    }
   }
 
   Future<void> _selectAsset(AssetEntity asset) async {
@@ -475,6 +516,8 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         _pickedOriginalBytes = null;
         _sourceBytes = bytes;
         _previewBytes = preview;
+        _cropBaseBytes = null;
+        _cropBaseEdit = null;
         _upscaledBytes = null;
         _edit = const EditValues();
         _markups = const [];
@@ -493,7 +536,53 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
 
   void _changeTool(EditorTool tool) {
     unawaited(HapticFeedback.selectionClick());
+    if (_tool == EditorTool.crop && tool != EditorTool.crop) {
+      _endEditGesture();
+      unawaited(_refreshPreview());
+    }
     setState(() => _tool = tool);
+    if (tool == EditorTool.crop) {
+      unawaited(_prepareCropBase());
+    }
+  }
+
+  EditValues _cropBaseEditFor(EditValues edit) {
+    return edit.copyWith(
+      cropMode: CropMode.original,
+      cropX: 0.5,
+      cropY: 0.5,
+      cropLeft: 0,
+      cropTop: 0,
+      cropWidth: 1,
+      cropHeight: 1,
+    );
+  }
+
+  Future<void> _prepareCropBase() async {
+    final bytes = _sourceBytes;
+    if (bytes == null) {
+      return;
+    }
+    final baseEdit = _cropBaseEditFor(_edit);
+    if (_cropBaseBytes != null && _cropBaseEdit == baseEdit) {
+      return;
+    }
+
+    final rendered = await _measure(
+      'Crop base render',
+      () =>
+          _render(bytes: bytes, edit: baseEdit, maxLongEdge: _previewLongEdge),
+    );
+    if (!mounted ||
+        _tool != EditorTool.crop ||
+        _cropBaseEditFor(_edit) != baseEdit) {
+      return;
+    }
+    setState(() {
+      _cropBaseBytes = rendered;
+      _cropBaseEdit = baseEdit;
+      _status = 'Crop ready';
+    });
   }
 
   void _beginEditGesture() {
@@ -526,6 +615,14 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     final next = preset.values.copyWith(
       rotationTurns: _edit.rotationTurns,
       cropMode: _edit.cropMode,
+      cropX: _edit.cropX,
+      cropY: _edit.cropY,
+      cropLeft: _edit.cropLeft,
+      cropTop: _edit.cropTop,
+      cropWidth: _edit.cropWidth,
+      cropHeight: _edit.cropHeight,
+      straighten: _edit.straighten,
+      flipHorizontal: _edit.flipHorizontal,
     );
     _commitEdit(next, status: '${preset.label} preset');
   }
@@ -545,8 +642,19 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     }
 
     final next = switch (tool) {
-      EditorTool.crop => _edit.copyWith(cropMode: CropMode.original),
-      EditorTool.rotate => _edit.copyWith(rotationTurns: 0),
+      EditorTool.crop => _edit.copyWith(
+        rotationTurns: 0,
+        cropMode: CropMode.original,
+        cropX: 0.5,
+        cropY: 0.5,
+        cropLeft: 0,
+        cropTop: 0,
+        cropWidth: 1,
+        cropHeight: 1,
+        straighten: 0,
+        flipHorizontal: false,
+      ),
+      EditorTool.rotate => _edit.copyWith(rotationTurns: 0, straighten: 0),
       EditorTool.light => _edit.copyWith(
         exposure: 0,
         brightness: 1,
@@ -574,6 +682,8 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       _edit = const EditValues();
       _markups = const [];
       _draftMarkup = null;
+      _cropBaseBytes = null;
+      _cropBaseEdit = null;
       _upscaledBytes = null;
       _status = 'All edits reset';
     });
@@ -644,10 +754,33 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
     unawaited(_refreshPreview());
   }
 
+  void _updateCropFrame(EditValues edit) {
+    if (edit == _edit) {
+      return;
+    }
+    _gestureStartEdit ??= _edit;
+    setState(() {
+      _edit = edit;
+      _draftMarkup = null;
+      _upscaledBytes = null;
+      _status = 'Crop frame';
+    });
+  }
+
   void _updateEdit(EditValues edit, {bool immediate = false, String? status}) {
-    final geometryChanged =
+    final structuralGeometryChanged =
         edit.rotationTurns != _edit.rotationTurns ||
-        edit.cropMode != _edit.cropMode;
+        edit.cropMode != _edit.cropMode ||
+        edit.straighten != _edit.straighten ||
+        edit.flipHorizontal != _edit.flipHorizontal;
+    final cropPositionChanged =
+        edit.cropX != _edit.cropX ||
+        edit.cropY != _edit.cropY ||
+        edit.cropLeft != _edit.cropLeft ||
+        edit.cropTop != _edit.cropTop ||
+        edit.cropWidth != _edit.cropWidth ||
+        edit.cropHeight != _edit.cropHeight;
+    final geometryChanged = structuralGeometryChanged || cropPositionChanged;
     setState(() {
       _edit = edit;
       _draftMarkup = null;
@@ -656,8 +789,15 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
           status ?? (geometryChanged ? 'Preview updating...' : 'Live preview');
     });
     _previewDebounce?.cancel();
-    if (immediate || geometryChanged) {
+    if (immediate || structuralGeometryChanged) {
       unawaited(_refreshPreview());
+      if (_tool == EditorTool.crop) {
+        unawaited(_prepareCropBase());
+      }
+    } else if (cropPositionChanged) {
+      _previewDebounce = Timer(const Duration(milliseconds: 120), () {
+        unawaited(_refreshPreview());
+      });
     }
   }
 
@@ -993,6 +1133,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       GalleryScreen(
         albums: _albums,
         assets: _assets,
+        selectedAlbumTotal: _selectedAlbumTotal,
         selectedAlbum: _selectedAlbum,
         selectedAsset: _selectedAsset,
         hasMoreAssets: _hasMoreAssets,
@@ -1008,6 +1149,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
       ),
       EditorScreen(
         bytes: _previewBytes ?? _sourceBytes,
+        cropBaseBytes: _cropBaseBytes,
         originalBytes: _sourceBytes,
         edit: _edit,
         markups: _markups,
@@ -1025,6 +1167,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         stickerTemplate: _stickerTemplate,
         onLiveEditChanged: _updateEdit,
         onCommittedEditChanged: _commitEdit,
+        onCropFrameChanged: _updateCropFrame,
         onEditGestureStart: _beginEditGesture,
         onEditGestureEnd: _endEditGesture,
         onUndo: _undoEdit,
@@ -1046,6 +1189,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         onCompareChanged: (value) => setState(() => _showOriginal = value),
         onToolSelected: _changeTool,
         onOpenGallery: () => setState(() => _tab = 0),
+        onPickSingle: _pickSinglePhoto,
         onSave: _saveToGallery,
       ),
       UpscaleScreen(
@@ -1063,6 +1207,8 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
         }),
         onRunUpscale: _runUpscale,
         onApply: () => setState(() => _tab = 3),
+        onSave: _saveToGallery,
+        onShare: _shareImage,
       ),
       ExportScreen(
         bytes: _currentBytes,
@@ -1099,7 +1245,7 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
           ),
           if (_busy)
             Positioned.fill(
-              child: IgnorePointer(
+              child: AbsorbPointer(
                 child: _ProcessingOverlay(
                   status: _status,
                   startedAt: _busyStartedAt,
@@ -1108,38 +1254,10 @@ class _OmniaPixelsShellState extends State<OmniaPixelsShell> {
             ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _OmniaBottomNav(
         selectedIndex: _tab,
-        onDestinationSelected: (index) => setState(() => _tab = index),
-        backgroundColor: const Color(0xF20F1016),
-        indicatorColor: _accent.withValues(alpha: 0.18),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.photo_library_outlined),
-            selectedIcon: Icon(Icons.photo_library),
-            label: 'Gallery',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: 'Edit',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'Upscale',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.ios_share_outlined),
-            selectedIcon: Icon(Icons.ios_share),
-            label: 'Export',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
+        enabled: !_busy,
+        onSelect: (index) => setState(() => _tab = index),
       ),
     );
   }
@@ -1158,54 +1276,270 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topCenter,
-            radius: 1.25,
-            colors: [Color(0xFF1B2230), _bg],
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 720;
+              final logoWidth = compact ? 164.0 : 224.0;
+              final logoHeight = compact ? 102.0 : 142.0;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Center(
+                    child: SizedBox(
+                      width: logoWidth,
+                      height: logoHeight,
+                      child: Image.asset(_goldLogoAsset, fit: BoxFit.contain),
+                    ),
+                  ),
+                  SizedBox(height: compact ? 4 : 10),
+                  Text(
+                    'OmniaPixels',
+                    style: TextStyle(
+                      fontSize: compact ? 34 : 42,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                      color: const Color(0xFFF5EFE3),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Premium photo editor & upscaler.\n100% local. No cloud.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.64),
+                      fontSize: compact ? 12.5 : 14,
+                      height: 1.28,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 14 : 22),
+                  Expanded(
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1.55,
+                        child: _OnboardingPhotoFrame(alpha: 0.42),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: compact ? 14 : 22),
+                  _PrimaryButton(
+                    label: 'Choose Photos',
+                    icon: Icons.add_photo_alternate_outlined,
+                    onPressed: onChoosePhotos,
+                  ),
+                  const SizedBox(height: 10),
+                  _SecondaryButton(
+                    label: 'Open Gallery',
+                    onPressed: onContinue,
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'By Omnia Creata',
+                        style: TextStyle(
+                          color: _accent.withValues(alpha: 0.86),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.favorite_border,
+                        size: 17,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const Spacer(),
-                Image.asset(
-                  'assets/brand/omnia-creata-logo-transparent.png',
-                  width: 230,
-                ),
-                const SizedBox(height: 28),
-                const Text(
-                  'OmniaPixels',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Photo editor & upscaler',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.68),
-                    fontSize: 16,
-                  ),
-                ),
-                const Spacer(),
-                _PrimaryButton(
-                  label: 'Choose Photos',
-                  icon: Icons.add_photo_alternate_outlined,
-                  onPressed: onChoosePhotos,
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: onContinue,
-                  child: const Text('Continue without access'),
-                ),
-              ],
+      ),
+    );
+  }
+}
+
+class _OnboardingPhotoFrame extends StatelessWidget {
+  const _OnboardingPhotoFrame({required this.alpha});
+
+  final double alpha;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF111318),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _accent.withValues(alpha: alpha)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.32),
+            blurRadius: 28,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(painter: _PhotoTexturePainter()),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.32),
+                ],
+              ),
             ),
+          ),
+          Positioned(
+            left: 14,
+            bottom: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.36),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              ),
+              child: const Text(
+                'Edit locally',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OmniaBottomNav extends StatelessWidget {
+  const _OmniaBottomNav({
+    required this.selectedIndex,
+    required this.enabled,
+    required this.onSelect,
+  });
+
+  final int selectedIndex;
+  final bool enabled;
+  final ValueChanged<int> onSelect;
+
+  static const _items = [
+    _NavItem('Gallery', Icons.photo_library_outlined, Icons.photo_library),
+    _NavItem('Edit', Icons.tune_outlined, Icons.tune),
+    _NavItem('Upscale', Icons.auto_awesome_outlined, Icons.auto_awesome),
+    _NavItem('Export', Icons.ios_share_outlined, Icons.ios_share),
+    _NavItem('Settings', Icons.settings_outlined, Icons.settings),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _surface.withValues(alpha: 0.98),
+        border: const Border(top: BorderSide(color: _line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          child: Row(
+            children: [
+              for (var i = 0; i < _items.length; i++)
+                Expanded(
+                  child: _BottomNavButton(
+                    item: _items[i],
+                    selected: i == selectedIndex,
+                    enabled: enabled,
+                    onTap: () => onSelect(i),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem {
+  const _NavItem(this.label, this.icon, this.selectedIcon);
+
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+}
+
+class _BottomNavButton extends StatelessWidget {
+  const _BottomNavButton({
+    required this.item,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? _accent : Colors.white.withValues(alpha: 0.66);
+    return Tooltip(
+      message: item.label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          height: 52,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: const BoxDecoration(color: Colors.transparent),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                selected ? item.selectedIcon : item.icon,
+                color: enabled ? color : Colors.white.withValues(alpha: 0.24),
+                size: 21,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: enabled ? color : Colors.white.withValues(alpha: 0.24),
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 5),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: selected ? 22 : 0,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: _accent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1218,6 +1552,7 @@ class GalleryScreen extends StatelessWidget {
     super.key,
     required this.albums,
     required this.assets,
+    required this.selectedAlbumTotal,
     required this.selectedAlbum,
     required this.selectedAsset,
     required this.hasMoreAssets,
@@ -1234,6 +1569,7 @@ class GalleryScreen extends StatelessWidget {
 
   final List<AssetPathEntity> albums;
   final List<AssetEntity> assets;
+  final int selectedAlbumTotal;
   final AssetPathEntity? selectedAlbum;
   final AssetEntity? selectedAsset;
   final bool hasMoreAssets;
@@ -1250,46 +1586,42 @@ class GalleryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppSurface(
-      title: 'OmniaPixels',
-      trailing: IconButton(
-        onPressed: onLoadGallery,
-        icon: const Icon(Icons.refresh),
+      title: selectedAlbum?.name ?? 'All Photos',
+      leading: IconButton(
+        tooltip: 'Menu',
+        onPressed: () {},
+        icon: const Icon(Icons.menu),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Search',
+            onPressed: () {},
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: isBusy ? null : onLoadGallery,
+            icon: const Icon(Icons.more_vert),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(title: 'Recent', action: '${assets.length} photos'),
-          const SizedBox(height: 8),
-          _StatusLine(status: status),
-          if (albums.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 42,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: albums.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final album = albums[index];
-                  final selected = album.id == selectedAlbum?.id;
-                  return ChoiceChip(
-                    selected: selected,
-                    label: Text(album.name, overflow: TextOverflow.ellipsis),
-                    onSelected: (_) => onSelectAlbum(album),
-                    selectedColor: _accent.withValues(alpha: 0.24),
-                    labelStyle: TextStyle(
-                      color: selected ? _accent : Colors.white70,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
+          _GalleryFilterStrip(
+            total: totalCountLabel,
+            recent: assets.length,
+            albumName: selectedAlbum?.name,
+          ),
+          const SizedBox(height: 14),
+          _SectionHeader(title: 'Today', action: '${assets.length} selected'),
+          const SizedBox(height: 10),
           Expanded(
             child: assets.isEmpty
                 ? EmptyGallery(
+                    isBusy: isBusy,
                     onLoadGallery: onLoadGallery,
                     onPickSingle: onPickSingle,
                   )
@@ -1311,8 +1643,8 @@ class GalleryScreen extends StatelessWidget {
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 3,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 5,
+                            crossAxisSpacing: 5,
                           ),
                       itemBuilder: (context, index) {
                         if (index >= assets.length) {
@@ -1333,24 +1665,69 @@ class GalleryScreen extends StatelessWidget {
                     ),
                   ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _PrimaryButton(
-                  label: 'Pick One',
-                  icon: Icons.add_photo_alternate_outlined,
-                  onPressed: onPickSingle,
+          const SizedBox(height: 10),
+          if (selectedAsset != null)
+            _GallerySelectionBar(
+              onOpenEditor: () => onSelectAsset(selectedAsset!),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _PrimaryButton(
+                    label: 'Pick One',
+                    icon: Icons.add_photo_alternate_outlined,
+                    onPressed: isBusy ? null : onPickSingle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _SecondaryButton(
-                  label: assets.isEmpty ? 'Load Gallery' : 'Refresh',
-                  onPressed: onLoadGallery,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _SecondaryButton(
+                    label: assets.isEmpty ? 'Load Gallery' : 'Refresh',
+                    onPressed: isBusy ? null : onLoadGallery,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  String get totalCountLabel {
+    final total = selectedAlbumTotal > 0 ? selectedAlbumTotal : assets.length;
+    if (total >= 1000) {
+      return '${(total / 1000).toStringAsFixed(total >= 10000 ? 0 : 1)}k';
+    }
+    return '$total';
+  }
+}
+
+class _GalleryFilterStrip extends StatelessWidget {
+  const _GalleryFilterStrip({
+    required this.total,
+    required this.recent,
+    required this.albumName,
+  });
+
+  final String total;
+  final int recent;
+  final String? albumName;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _GalleryChip(label: 'All', value: total, selected: true),
+          _GalleryChip(label: 'Recent', value: '$recent', selected: false),
+          const _GalleryChip(label: 'Favorites', value: '0', selected: false),
+          _GalleryChip(
+            label: albumName == null ? 'Videos' : 'Album',
+            value: albumName == null ? '0' : albumName!,
+            selected: false,
           ),
         ],
       ),
@@ -1358,52 +1735,156 @@ class GalleryScreen extends StatelessWidget {
   }
 }
 
+class _GalleryChip extends StatelessWidget {
+  const _GalleryChip({
+    required this.label,
+    required this.value,
+    required this.selected,
+  });
+
+  final String label;
+  final String value;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 78,
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? _accent : Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: selected ? _accent : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? const Color(0xFF140F08) : Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected
+                  ? const Color(0xFF140F08).withValues(alpha: 0.72)
+                  : Colors.white.withValues(alpha: 0.52),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GallerySelectionBar extends StatelessWidget {
+  const _GallerySelectionBar({required this.onOpenEditor});
+
+  final VoidCallback onOpenEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const _MiniPill(label: '1 selected'),
+        const Spacer(),
+        SizedBox(
+          width: 150,
+          child: _PrimaryButton(
+            label: 'Edit Photo',
+            icon: Icons.arrow_forward,
+            onPressed: onOpenEditor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class EmptyGallery extends StatelessWidget {
   const EmptyGallery({
     super.key,
+    required this.isBusy,
     required this.onLoadGallery,
     required this.onPickSingle,
   });
 
+  final bool isBusy;
   final VoidCallback onLoadGallery;
   final VoidCallback onPickSingle;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _surfaceHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
         children: [
-          Icon(
-            Icons.photo_library_outlined,
-            size: 54,
-            color: Colors.white.withValues(alpha: 0.42),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'No photos loaded',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Use Android picker for fastest access.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 230,
-            child: _PrimaryButton(
-              label: 'Pick One Photo',
-              icon: Icons.add_photo_alternate_outlined,
-              onPressed: onPickSingle,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: 230,
-            child: _SecondaryButton(
-              label: 'Load Albums',
-              onPressed: onLoadGallery,
+          Positioned.fill(child: CustomPaint(painter: _PhotoTexturePainter())),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    size: 46,
+                    color: Colors.white.withValues(alpha: 0.44),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'No photos loaded',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Use Android picker for fastest access.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.58),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: 250,
+                    child: _PrimaryButton(
+                      label: 'Pick One Photo',
+                      icon: Icons.add_photo_alternate_outlined,
+                      onPressed: isBusy ? null : onPickSingle,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: 250,
+                    child: _SecondaryButton(
+                      label: 'Load Albums',
+                      onPressed: isBusy ? null : onLoadGallery,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -1429,9 +1910,9 @@ class LoadMoreTile extends StatelessWidget {
       onTap: isLoading ? null : onLoadMore,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          color: Colors.white.withValues(alpha: 0.06),
+          color: _surfaceHigh,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1475,28 +1956,32 @@ class AssetThumbnail extends StatelessWidget {
       future: thumbnail,
       builder: (context, snapshot) {
         final bytes = snapshot.data;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? _accent : Colors.white.withValues(alpha: 0.08),
-              width: selected ? 2 : 1,
+        return RepaintBoundary(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? _accent
+                    : Colors.white.withValues(alpha: 0.04),
+                width: selected ? 2 : 0.5,
+              ),
+              color: _surfaceHigh,
             ),
-            color: Colors.white.withValues(alpha: 0.06),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(selected ? 14 : 15),
-            child: bytes == null
-                ? const Center(child: Icon(Icons.image_outlined))
-                : Image.memory(
-                    bytes,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    cacheWidth: 192,
-                    cacheHeight: 192,
-                    filterQuality: FilterQuality.low,
-                  ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(selected ? 6 : 7),
+              child: bytes == null
+                  ? const Center(child: Icon(Icons.image_outlined))
+                  : Image.memory(
+                      bytes,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      cacheWidth: 192,
+                      cacheHeight: 192,
+                      filterQuality: FilterQuality.low,
+                    ),
+            ),
           ),
         );
       },
@@ -1508,6 +1993,7 @@ class EditorScreen extends StatelessWidget {
   const EditorScreen({
     super.key,
     required this.bytes,
+    required this.cropBaseBytes,
     required this.originalBytes,
     required this.edit,
     required this.markups,
@@ -1525,6 +2011,7 @@ class EditorScreen extends StatelessWidget {
     required this.stickerTemplate,
     required this.onLiveEditChanged,
     required this.onCommittedEditChanged,
+    required this.onCropFrameChanged,
     required this.onEditGestureStart,
     required this.onEditGestureEnd,
     required this.onUndo,
@@ -1546,10 +2033,12 @@ class EditorScreen extends StatelessWidget {
     required this.onCompareChanged,
     required this.onToolSelected,
     required this.onOpenGallery,
+    required this.onPickSingle,
     required this.onSave,
   });
 
   final Uint8List? bytes;
+  final Uint8List? cropBaseBytes;
   final Uint8List? originalBytes;
   final EditValues edit;
   final List<MarkupLayer> markups;
@@ -1567,6 +2056,7 @@ class EditorScreen extends StatelessWidget {
   final String stickerTemplate;
   final ValueChanged<EditValues> onLiveEditChanged;
   final ValueChanged<EditValues> onCommittedEditChanged;
+  final ValueChanged<EditValues> onCropFrameChanged;
   final VoidCallback onEditGestureStart;
   final VoidCallback onEditGestureEnd;
   final VoidCallback onUndo;
@@ -1588,132 +2078,205 @@ class EditorScreen extends StatelessWidget {
   final ValueChanged<bool> onCompareChanged;
   final ValueChanged<EditorTool> onToolSelected;
   final VoidCallback onOpenGallery;
+  final VoidCallback onPickSingle;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
     final displayBytes = showOriginal ? originalBytes ?? bytes : bytes;
     return AppSurface(
-      title: 'Edit',
+      title: 'Editor',
       leading: IconButton(
+        tooltip: 'Open gallery',
         onPressed: onOpenGallery,
-        icon: const Icon(Icons.photo_library_outlined),
+        icon: const Icon(Icons.arrow_back),
       ),
-      trailing: IconButton(onPressed: onSave, icon: const Icon(Icons.save_alt)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _TinyIconButton(
+            icon: Icons.undo,
+            tooltip: 'Undo',
+            enabled: canUndo,
+            onTap: onUndo,
+          ),
+          const SizedBox(width: 6),
+          _TinyIconButton(
+            icon: Icons.redo,
+            tooltip: 'Redo',
+            enabled: canRedo,
+            onTap: onRedo,
+          ),
+          const SizedBox(width: 6),
+          _TinyIconButton(
+            icon: Icons.layers_outlined,
+            tooltip: 'Reset all',
+            enabled: canResetAll,
+            onTap: onResetAll,
+          ),
+          const SizedBox(width: 2),
+          IconButton(
+            tooltip: 'Save',
+            onPressed: bytes == null || isBusy ? null : onSave,
+            icon: const Icon(Icons.ios_share_outlined),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Expanded(
-            child: PhotoPreview(
-              bytes: displayBytes,
-              edit: showOriginal ? const EditValues() : edit,
-              markups: showOriginal ? const [] : markups,
-              draftMarkup: showOriginal ? null : draftMarkup,
-              activeTool: showOriginal ? null : tool,
-              label: displayBytes == null
-                  ? 'Choose a photo'
-                  : showOriginal
-                  ? 'Original'
-                  : 'Edited preview',
-              compareEnabled: bytes != null,
-              showOriginal: showOriginal,
-              onBrushStart: onBrushStart,
-              onBrushUpdate: onBrushUpdate,
-              onBrushEnd: onBrushEnd,
-              onTextTap: onTextTap,
-              onStickerTap: onStickerTap,
-              onCompareChanged: onCompareChanged,
+            child: displayBytes == null
+                ? EditorEmptyState(
+                    onPickSingle: isBusy ? null : onPickSingle,
+                    onOpenGallery: isBusy ? null : onOpenGallery,
+                  )
+                : PhotoPreview(
+                    bytes: displayBytes,
+                    cropBytes: cropBaseBytes ?? originalBytes ?? bytes,
+                    edit: showOriginal ? const EditValues() : edit,
+                    markups: showOriginal ? const [] : markups,
+                    draftMarkup: showOriginal ? null : draftMarkup,
+                    activeTool: showOriginal ? null : tool,
+                    label: showOriginal ? 'Original' : 'Edited preview',
+                    compareEnabled: bytes != null,
+                    showOriginal: showOriginal,
+                    onBrushStart: onBrushStart,
+                    onBrushUpdate: onBrushUpdate,
+                    onBrushEnd: onBrushEnd,
+                    onTextTap: onTextTap,
+                    onStickerTap: onStickerTap,
+                    onCropFrameChanged: onCropFrameChanged,
+                    onCompareChanged: onCompareChanged,
+                  ),
+          ),
+          if (displayBytes != null) ...[
+            const SizedBox(height: 10),
+            ToolRail(
+              active: tool,
+              edit: edit,
+              markups: markups,
+              onSelect: onToolSelected,
             ),
-          ),
-          const SizedBox(height: 12),
-          _EditorQuickActions(
-            status: status,
-            canUndo: canUndo,
-            canRedo: canRedo,
-            canResetAll: canResetAll,
-            onUndo: onUndo,
-            onRedo: onRedo,
-            onResetAll: onResetAll,
-          ),
-          const SizedBox(height: 12),
-          PresetStrip(edit: edit, onPresetSelected: onPresetSelected),
-          const SizedBox(height: 10),
-          ToolRail(
-            active: tool,
-            edit: edit,
-            markups: markups,
-            onSelect: onToolSelected,
-          ),
-          const SizedBox(height: 8),
-          EditorControlDock(
-            tool: tool,
-            edit: edit,
-            markups: markups,
-            markupColorValue: markupColorValue,
-            brushSize: brushSize,
-            textTemplate: textTemplate,
-            stickerTemplate: stickerTemplate,
-            onLiveChanged: onLiveEditChanged,
-            onCommittedChanged: onCommittedEditChanged,
-            onGestureStart: onEditGestureStart,
-            onGestureEnd: onEditGestureEnd,
-            onResetTool: () => onResetTool(tool),
-            onMarkupColorChanged: onMarkupColorChanged,
-            onBrushSizeChanged: onBrushSizeChanged,
-            onTextTemplateChanged: onTextTemplateChanged,
-            onStickerTemplateChanged: onStickerTemplateChanged,
-            onAddCenteredText: onAddCenteredText,
-            onAddCenteredSticker: onAddCenteredSticker,
-          ),
+            const SizedBox(height: 8),
+            EditorControlDock(
+              tool: tool,
+              edit: edit,
+              markups: markups,
+              markupColorValue: markupColorValue,
+              brushSize: brushSize,
+              textTemplate: textTemplate,
+              stickerTemplate: stickerTemplate,
+              onLiveChanged: onLiveEditChanged,
+              onCommittedChanged: onCommittedEditChanged,
+              onGestureStart: onEditGestureStart,
+              onGestureEnd: onEditGestureEnd,
+              onResetTool: () => onResetTool(tool),
+              onMarkupColorChanged: onMarkupColorChanged,
+              onBrushSizeChanged: onBrushSizeChanged,
+              onTextTemplateChanged: onTextTemplateChanged,
+              onStickerTemplateChanged: onStickerTemplateChanged,
+              onAddCenteredText: onAddCenteredText,
+              onAddCenteredSticker: onAddCenteredSticker,
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _EditorQuickActions extends StatelessWidget {
-  const _EditorQuickActions({
-    required this.status,
-    required this.canUndo,
-    required this.canRedo,
-    required this.canResetAll,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onResetAll,
+class EditorEmptyState extends StatelessWidget {
+  const EditorEmptyState({
+    super.key,
+    required this.onPickSingle,
+    required this.onOpenGallery,
   });
 
-  final String status;
-  final bool canUndo;
-  final bool canRedo;
-  final bool canResetAll;
-  final VoidCallback onUndo;
-  final VoidCallback onRedo;
-  final VoidCallback onResetAll;
+  final VoidCallback? onPickSingle;
+  final VoidCallback? onOpenGallery;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(child: _StatusLine(status: status)),
-        const SizedBox(width: 8),
-        _TinyIconButton(
-          icon: Icons.undo,
-          tooltip: 'Undo',
-          enabled: canUndo,
-          onTap: onUndo,
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _surfaceHigh,
+              borderRadius: BorderRadius.circular(16),
+              border: const Border.fromBorderSide(BorderSide(color: _line)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(painter: _PhotoTexturePainter()),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          _bg.withValues(alpha: 0.82),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 46,
+                        color: Colors.white.withValues(alpha: 0.48),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Pick a photo first',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No photo is loaded.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.56),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(width: 8),
-        _TinyIconButton(
-          icon: Icons.redo,
-          tooltip: 'Redo',
-          enabled: canRedo,
-          onTap: onRedo,
-        ),
-        const SizedBox(width: 8),
-        _TinyIconButton(
-          icon: Icons.restart_alt,
-          tooltip: 'Reset all',
-          enabled: canResetAll,
-          onTap: onResetAll,
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _PrimaryButton(
+                label: 'Pick Photo',
+                icon: Icons.add_photo_alternate_outlined,
+                onPressed: onPickSingle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SecondaryButton(
+                label: 'Open Gallery',
+                onPressed: onOpenGallery,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1737,7 +2300,7 @@ class PresetStrip extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: editPresets.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final preset = editPresets[index];
           return _ModeChip(
@@ -1796,7 +2359,7 @@ class EditorControlDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 178,
+      height: _editorControlDockHeight,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 160),
         switchInCurve: Curves.easeOutCubic,
@@ -1809,8 +2372,46 @@ class EditorControlDock extends StatelessWidget {
               children: [
                 _CropModePicker(
                   value: edit.cropMode,
-                  onChanged: (mode) =>
-                      onCommittedChanged(edit.copyWith(cropMode: mode)),
+                  onChanged: (mode) => onCommittedChanged(
+                    edit.copyWith(
+                      cropMode: mode,
+                      cropX: 0.5,
+                      cropY: 0.5,
+                      cropLeft: 0,
+                      cropTop: 0,
+                      cropWidth: 1,
+                      cropHeight: 1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.fit_screen,
+                        label: edit.hasCropRect ? 'Framed' : 'Full',
+                        onTap: () => onCommittedChanged(
+                          edit.copyWith(
+                            cropLeft: 0,
+                            cropTop: 0,
+                            cropWidth: 1,
+                            cropHeight: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CompactActionButton(
+                        icon: Icons.flip,
+                        label: 'Flip',
+                        onTap: () => onCommittedChanged(
+                          edit.copyWith(flipHorizontal: !edit.flipHorizontal),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -1822,6 +2423,10 @@ class EditorControlDock extends StatelessWidget {
                         onTap: () => onCommittedChanged(
                           edit.copyWith(
                             rotationTurns: (edit.rotationTurns + 3) % 4,
+                            cropLeft: 0,
+                            cropTop: 0,
+                            cropWidth: 1,
+                            cropHeight: 1,
                           ),
                         ),
                       ),
@@ -1834,6 +2439,10 @@ class EditorControlDock extends StatelessWidget {
                         onTap: () => onCommittedChanged(
                           edit.copyWith(
                             rotationTurns: (edit.rotationTurns + 1) % 4,
+                            cropLeft: 0,
+                            cropTop: 0,
+                            cropWidth: 1,
+                            cropHeight: 1,
                           ),
                         ),
                       ),
@@ -2137,12 +2746,12 @@ class _ControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        color: _surfaceHigh.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
         child: Column(mainAxisSize: MainAxisSize.min, children: children),
       ),
     );
@@ -2194,7 +2803,7 @@ class _MarkupColorSwatches extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _colors.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 9),
+        separatorBuilder: (_, _) => const SizedBox(width: 9),
         itemBuilder: (context, index) {
           final colorValue = _colors[index];
           final isSelected = colorValue == selected;
@@ -2247,7 +2856,7 @@ class _TemplatePicker extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: values.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final value = values[index];
           return _ModeChip(
@@ -2285,10 +2894,8 @@ class _ModeChip extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
         decoration: BoxDecoration(
-          color: selected
-              ? _accent.withValues(alpha: 0.18)
-              : Colors.white.withValues(alpha: 0.055),
-          borderRadius: BorderRadius.circular(999),
+          color: selected ? _accentSoft : Colors.white.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? _accent : Colors.white.withValues(alpha: 0.08),
           ),
@@ -2329,13 +2936,13 @@ class _TinyIconButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
-          width: 40,
+          width: 38,
           height: 36,
           decoration: BoxDecoration(
             color: enabled
-                ? Colors.white.withValues(alpha: 0.08)
+                ? Colors.white.withValues(alpha: 0.055)
                 : Colors.white.withValues(alpha: 0.035),
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
           ),
           child: Icon(
@@ -2392,8 +2999,8 @@ class _CompactActionButton extends StatelessWidget {
       child: Ink(
         height: 44,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
@@ -2526,6 +3133,8 @@ class UpscaleScreen extends StatelessWidget {
     required this.onModeChanged,
     required this.onRunUpscale,
     required this.onApply,
+    required this.onSave,
+    required this.onShare,
   });
 
   final Uint8List? beforeBytes;
@@ -2538,16 +3147,22 @@ class UpscaleScreen extends StatelessWidget {
   final ValueChanged<UpscaleMode> onModeChanged;
   final VoidCallback onRunUpscale;
   final VoidCallback onApply;
+  final VoidCallback onSave;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
     return AppSurface(
       title: 'Upscale 2x',
+      leading: IconButton(
+        tooltip: 'Close',
+        onPressed: () {},
+        icon: const Icon(Icons.close),
+      ),
       trailing: IconButton(
+        tooltip: afterBytes == null ? 'Run upscale' : 'Use result',
         onPressed: afterBytes == null ? onRunUpscale : onApply,
-        icon: Icon(
-          afterBytes == null ? Icons.auto_awesome : Icons.check_circle_outline,
-        ),
+        icon: Icon(afterBytes == null ? Icons.settings : Icons.home_outlined),
       ),
       child: Column(
         children: [
@@ -2558,58 +3173,45 @@ class UpscaleScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _StatusLine(status: status),
-          const SizedBox(height: 12),
-          _UpscaleModeSwitch(value: mode, onChanged: onModeChanged),
-          const SizedBox(height: 12),
-          const Row(
-            children: [
-              Expanded(
-                child: _StatusPill(
-                  icon: Icons.phone_iphone,
-                  label: 'On-device',
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _StatusPill(
-                  icon: Icons.high_quality_outlined,
-                  label: '2x output',
-                ),
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: _StatusPill(icon: Icons.memory, label: 'Safe memory'),
-              ),
-            ],
+          _UpscaleProcessingCard(
+            status: status,
+            mode: mode,
+            hasResult: afterBytes != null,
+            isBusy: isBusy,
           ),
           const SizedBox(height: 12),
-          _SliderRow(
-            label: 'Detail',
-            value: detail,
-            min: 0,
-            max: 1,
-            neutral: 0.35,
-            onChanged: onDetailChanged,
-          ),
-          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: _SecondaryButton(
-                  label: 'Run 2x',
-                  onPressed: isBusy ? null : onRunUpscale,
+                child: _PrimaryButton(
+                  label: afterBytes == null ? 'Run Upscale' : 'Save Copy',
+                  icon: afterBytes == null
+                      ? Icons.auto_awesome
+                      : Icons.file_download_outlined,
+                  onPressed: isBusy
+                      ? null
+                      : afterBytes == null
+                      ? onRunUpscale
+                      : onSave,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _PrimaryButton(
-                  label: 'Use Result',
-                  icon: Icons.check,
-                  onPressed: afterBytes == null ? null : onApply,
+                child: _SecondaryButton(
+                  label: 'Share',
+                  onPressed: afterBytes == null || isBusy ? null : onShare,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Original is never overwritten.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.56),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -2617,27 +3219,84 @@ class UpscaleScreen extends StatelessWidget {
   }
 }
 
-class _UpscaleModeSwitch extends StatelessWidget {
-  const _UpscaleModeSwitch({required this.value, required this.onChanged});
+class _UpscaleProcessingCard extends StatelessWidget {
+  const _UpscaleProcessingCard({
+    required this.status,
+    required this.mode,
+    required this.hasResult,
+    required this.isBusy,
+  });
 
-  final UpscaleMode value;
-  final ValueChanged<UpscaleMode> onChanged;
+  final String status;
+  final UpscaleMode mode;
+  final bool hasResult;
+  final bool isBusy;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final mode in UpscaleMode.values) ...[
-          Expanded(
-            child: _ModeChip(
-              label: mode.label,
-              selected: mode == value,
-              onTap: () => onChanged(mode),
+    final progress = isBusy
+        ? 0.58
+        : hasResult
+        ? 1.0
+        : 0.0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surfaceHigh.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  hasResult
+                      ? 'Upscale ready'
+                      : isBusy
+                      ? 'Enhancing details...'
+                      : 'Ready to enhance',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                hasResult
+                    ? '100%'
+                    : isBusy
+                    ? '58%'
+                    : '0%',
+                style: const TextStyle(
+                  color: _accent,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${mode.label} - Local processing. $status',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.58),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          if (mode != UpscaleMode.values.last) const SizedBox(width: 8),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              color: _accent,
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
         ],
-      ],
+      ),
     );
   }
 }
@@ -2667,6 +3326,7 @@ class ExportScreen extends StatelessWidget {
     return AppSurface(
       title: 'Export',
       trailing: IconButton(
+        tooltip: 'Share',
         onPressed: bytes == null ? null : onShare,
         icon: const Icon(Icons.ios_share),
       ),
@@ -2857,34 +3517,55 @@ class AppSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                leading ??
-                    Image.asset(
-                      'assets/brand/omnia-creata-logo-transparent.png',
-                      width: 46,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF080A0E), _bg],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+          child: Column(
+            children: [
+              SizedBox(
+                height: 46,
+                child: Row(
+                  children: [
+                    leading ??
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: Image.asset(
+                            _goldLogoAsset,
+                            width: 44,
+                            height: 34,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
                     ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                    trailing ?? const SizedBox(width: 44),
+                  ],
                 ),
-                trailing ?? const SizedBox(width: 48),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Expanded(child: child),
-          ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(child: child),
+            ],
+          ),
         ),
       ),
     );
@@ -2965,6 +3646,7 @@ class PhotoPreview extends StatelessWidget {
     super.key,
     required this.bytes,
     required this.label,
+    this.cropBytes,
     this.edit = const EditValues(),
     this.markups = const [],
     this.draftMarkup,
@@ -2976,10 +3658,12 @@ class PhotoPreview extends StatelessWidget {
     this.onBrushEnd,
     this.onTextTap,
     this.onStickerTap,
+    this.onCropFrameChanged,
     this.onCompareChanged,
   });
 
   final Uint8List? bytes;
+  final Uint8List? cropBytes;
   final String label;
   final EditValues edit;
   final List<MarkupLayer> markups;
@@ -2992,33 +3676,36 @@ class PhotoPreview extends StatelessWidget {
   final VoidCallback? onBrushEnd;
   final ValueChanged<MarkupPoint>? onTextTap;
   final ValueChanged<MarkupPoint>? onStickerTap;
+  final ValueChanged<EditValues>? onCropFrameChanged;
   final ValueChanged<bool>? onCompareChanged;
 
   @override
   Widget build(BuildContext context) {
+    final cropActive =
+        activeTool == EditorTool.crop &&
+        !showOriginal &&
+        cropBytes != null &&
+        onCropFrameChanged != null;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFCBD5E1), Color(0xFF334155), Color(0xFF111827)],
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 28,
-            offset: Offset(0, 20),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        color: _surfaceHigh,
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: bytes == null
+            borderRadius: BorderRadius.circular(16),
+            child: cropActive
+                ? _CropEditorStage(
+                    bytes: cropBytes!,
+                    edit: edit,
+                    onFrameChanged: onCropFrameChanged!,
+                  )
+                : bytes == null
                 ? CustomPaint(painter: _PhotoTexturePainter())
                 : RepaintBoundary(
                     child: ColorFiltered(
@@ -3033,12 +3720,12 @@ class PhotoPreview extends StatelessWidget {
                     ),
                   ),
           ),
-          if (edit.vignette > 0)
+          if (!cropActive && edit.vignette > 0)
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(16),
                     gradient: RadialGradient(
                       center: Alignment.center,
                       radius: 0.92,
@@ -3054,7 +3741,7 @@ class PhotoPreview extends StatelessWidget {
                 ),
               ),
             ),
-          if (bytes != null && !showOriginal)
+          if (!cropActive && bytes != null && !showOriginal)
             Positioned.fill(
               child: _MarkupOverlayStage(
                 bytes: bytes!,
@@ -3068,19 +3755,20 @@ class PhotoPreview extends StatelessWidget {
                 onStickerTap: onStickerTap,
               ),
             ),
-          if (bytes != null &&
+          if (!cropActive &&
+              bytes != null &&
               !showOriginal &&
-              edit.cropMode != CropMode.original)
+              edit.hasGeometryEdits)
             Positioned.fill(
               child: IgnorePointer(
                 child: _CropGuideOverlay(mode: edit.cropMode),
               ),
             ),
-          Positioned(left: 18, bottom: 18, child: _MiniPill(label: label)),
+          Positioned(left: 12, top: 12, child: _MiniPill(label: label)),
           if (compareEnabled && onCompareChanged != null)
             Positioned(
-              right: 16,
-              bottom: 16,
+              right: 12,
+              top: 12,
               child: GestureDetector(
                 onTapDown: (_) => onCompareChanged!(true),
                 onTapUp: (_) => onCompareChanged!(false),
@@ -3128,6 +3816,308 @@ class PhotoPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CropEditorStage extends StatefulWidget {
+  const _CropEditorStage({
+    required this.bytes,
+    required this.edit,
+    required this.onFrameChanged,
+  });
+
+  final Uint8List bytes;
+  final EditValues edit;
+  final ValueChanged<EditValues> onFrameChanged;
+
+  @override
+  State<_CropEditorStage> createState() => _CropEditorStageState();
+}
+
+class _CropEditorStageState extends State<_CropEditorStage> {
+  final cropper.CropController _controller = cropper.CropController();
+  ImageStream? _imageStream;
+  ImageStreamListener? _imageListener;
+  Size? _imageSize;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveImage();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CropEditorStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bytes != widget.bytes) {
+      _resolveImage();
+    }
+    if (oldWidget.edit.cropMode != widget.edit.cropMode) {
+      _syncAspectRatio();
+    }
+  }
+
+  @override
+  void dispose() {
+    final listener = _imageListener;
+    if (listener != null) {
+      _imageStream?.removeListener(listener);
+    }
+    super.dispose();
+  }
+
+  void _resolveImage() {
+    final listener = _imageListener;
+    if (listener != null) {
+      _imageStream?.removeListener(listener);
+    }
+
+    final provider = MemoryImage(widget.bytes);
+    final stream = provider.resolve(createLocalImageConfiguration(context));
+    _imageListener = ImageStreamListener((info, _) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _imageSize = Size(
+          info.image.width.toDouble(),
+          info.image.height.toDouble(),
+        );
+      });
+      _syncAspectRatio();
+    });
+    _imageStream = stream;
+    stream.addListener(_imageListener!);
+  }
+
+  void _syncAspectRatio() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final imageSize = _imageSize;
+      if (imageSize == null) {
+        return;
+      }
+      _controller.aspectRatio = _aspectRatioFor(imageSize);
+    });
+  }
+
+  double? _aspectRatioFor(Size imageSize) {
+    return switch (widget.edit.cropMode) {
+      CropMode.original => imageSize.width / imageSize.height,
+      CropMode.free => null,
+      CropMode.square => 1.0,
+      CropMode.portrait45 => 4 / 5,
+      CropMode.portrait916 => 9 / 16,
+      CropMode.classic43 => 4 / 3,
+      CropMode.landscape169 => 16 / 9,
+    };
+  }
+
+  cropper.InitialRectBuilder _initialRectBuilder(Size imageSize) {
+    final aspectRatio = _aspectRatioFor(imageSize);
+    if (widget.edit.hasCropRect) {
+      return cropper.InitialRectBuilder.withArea(
+        Rect.fromLTWH(
+          widget.edit.cropLeft.clamp(0.0, 1.0).toDouble() * imageSize.width,
+          widget.edit.cropTop.clamp(0.0, 1.0).toDouble() * imageSize.height,
+          widget.edit.cropWidth.clamp(0.02, 1.0).toDouble() * imageSize.width,
+          widget.edit.cropHeight.clamp(0.02, 1.0).toDouble() * imageSize.height,
+        ),
+      );
+    }
+    return cropper.InitialRectBuilder.withSizeAndRatio(
+      size: widget.edit.cropMode == CropMode.original ? 1 : 0.92,
+      aspectRatio: aspectRatio,
+    );
+  }
+
+  void _handleMoved(Rect imageRect) {
+    final imageSize = _imageSize;
+    if (imageSize == null || imageSize.width <= 0 || imageSize.height <= 0) {
+      return;
+    }
+
+    widget.onFrameChanged(
+      widget.edit.copyWith(
+        cropLeft: (imageRect.left / imageSize.width).clamp(0.0, 1.0).toDouble(),
+        cropTop: (imageRect.top / imageSize.height).clamp(0.0, 1.0).toDouble(),
+        cropWidth: (imageRect.width / imageSize.width)
+            .clamp(0.02, 1.0)
+            .toDouble(),
+        cropHeight: (imageRect.height / imageSize.height)
+            .clamp(0.02, 1.0)
+            .toDouble(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageSize = _imageSize;
+    if (imageSize == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: _accent, strokeWidth: 2.5),
+      );
+    }
+
+    return cropper.Crop(
+      key: ValueKey(Object.hash(widget.bytes, imageSize, widget.edit.cropMode)),
+      image: widget.bytes,
+      controller: _controller,
+      aspectRatio: _aspectRatioFor(imageSize),
+      initialRectBuilder: _initialRectBuilder(imageSize),
+      baseColor: _bg,
+      maskColor: Colors.black.withValues(alpha: 0.56),
+      radius: 8,
+      clipBehavior: Clip.none,
+      interactive: false,
+      filterQuality: FilterQuality.medium,
+      progressIndicator: const CircularProgressIndicator(
+        color: _accent,
+        strokeWidth: 2.5,
+      ),
+      cornerDotBuilder: (size, alignment) =>
+          _CropCornerHandle(size: size, alignment: alignment),
+      overlayBuilder: (context, rect) => const _CropGridOverlay(),
+      onMoved: (_, imageRect) => _handleMoved(imageRect),
+      onCropped: (_) {},
+    );
+  }
+}
+
+class _CropCornerHandle extends StatelessWidget {
+  const _CropCornerHandle({required this.size, required this.alignment});
+
+  final double size;
+  final cropper.EdgeAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Center(
+        child: CustomPaint(
+          size: const Size.square(22),
+          painter: _CropCornerHandlePainter(alignment),
+        ),
+      ),
+    );
+  }
+}
+
+class _CropCornerHandlePainter extends CustomPainter {
+  const _CropCornerHandlePainter(this.alignment);
+
+  final cropper.EdgeAlignment alignment;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = _accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.round;
+    final path = Path();
+    const inset = 3.0;
+    final length = size.shortestSide * 0.56;
+
+    switch (alignment) {
+      case cropper.EdgeAlignment.topLeft:
+        path
+          ..moveTo(size.width - inset, inset)
+          ..lineTo(inset, inset)
+          ..lineTo(inset, size.height - inset)
+          ..moveTo(inset, inset + length)
+          ..lineTo(inset, inset)
+          ..lineTo(inset + length, inset);
+      case cropper.EdgeAlignment.topRight:
+        path
+          ..moveTo(inset, inset)
+          ..lineTo(size.width - inset, inset)
+          ..lineTo(size.width - inset, size.height - inset)
+          ..moveTo(size.width - inset - length, inset)
+          ..lineTo(size.width - inset, inset)
+          ..lineTo(size.width - inset, inset + length);
+      case cropper.EdgeAlignment.bottomLeft:
+        path
+          ..moveTo(inset, inset)
+          ..lineTo(inset, size.height - inset)
+          ..lineTo(size.width - inset, size.height - inset)
+          ..moveTo(inset, size.height - inset - length)
+          ..lineTo(inset, size.height - inset)
+          ..lineTo(inset + length, size.height - inset);
+      case cropper.EdgeAlignment.bottomRight:
+        path
+          ..moveTo(size.width - inset, inset)
+          ..lineTo(size.width - inset, size.height - inset)
+          ..lineTo(inset, size.height - inset)
+          ..moveTo(size.width - inset, size.height - inset - length)
+          ..lineTo(size.width - inset, size.height - inset)
+          ..lineTo(size.width - inset - length, size.height - inset);
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CropCornerHandlePainter oldDelegate) =>
+      oldDelegate.alignment != alignment;
+}
+
+class _CropGridOverlay extends StatelessWidget {
+  const _CropGridOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _CropGridPainter());
+  }
+}
+
+class _CropGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final border = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..color = _accent.withValues(alpha: 0.92);
+    canvas.drawRect(Offset.zero & size, border);
+
+    final grid = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.85
+      ..color = Colors.white.withValues(alpha: 0.38);
+    for (var i = 1; i < 3; i++) {
+      final dx = size.width * i / 3;
+      final dy = size.height * i / 3;
+      canvas.drawLine(Offset(dx, 0), Offset(dx, size.height), grid);
+      canvas.drawLine(Offset(0, dy), Offset(size.width, dy), grid);
+    }
+
+    final center = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.65
+      ..color = _accent.withValues(alpha: 0.28);
+    canvas.drawLine(
+      Offset(size.width / 2, 0),
+      Offset(size.width / 2, size.height),
+      center,
+    );
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      center,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CropGridPainter oldDelegate) => false;
 }
 
 class _MarkupOverlayStage extends StatefulWidget {
@@ -3328,7 +4318,7 @@ class _MarkupPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(imageRect);
-    final layers = [...markups, if (draftMarkup != null) draftMarkup!];
+    final layers = [...markups, ?draftMarkup];
     for (final markup in layers) {
       switch (markup.type) {
         case MarkupLayerType.brush:
@@ -3438,8 +4428,10 @@ class _CropGuidePainter extends CustomPainter {
     final ratio = switch (mode) {
       CropMode.square => 1.0,
       CropMode.portrait45 => 4 / 5,
+      CropMode.portrait916 => 9 / 16,
+      CropMode.classic43 => 4 / 3,
       CropMode.landscape169 => 16 / 9,
-      CropMode.original => null,
+      CropMode.original || CropMode.free => null,
     };
     if (ratio == null) {
       return;
@@ -3466,7 +4458,7 @@ class _CropGuidePainter extends CustomPainter {
     final shade = Paint()..color = Colors.black.withValues(alpha: 0.22);
     final framePath = Path()
       ..addRect(Offset.zero & size)
-      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(18)))
+      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(10)))
       ..fillType = PathFillType.evenOdd;
     canvas.drawPath(framePath, shade);
 
@@ -3475,7 +4467,7 @@ class _CropGuidePainter extends CustomPainter {
       ..strokeWidth = 1.4
       ..color = _accent.withValues(alpha: 0.85);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(18)),
+      RRect.fromRectAndRadius(rect, const Radius.circular(10)),
       border,
     );
 
@@ -3510,8 +4502,9 @@ class ComparePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        color: _surfaceHigh,
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Row(
@@ -3519,7 +4512,7 @@ class ComparePreview extends StatelessWidget {
           Expanded(
             child: _CompareSide(bytes: beforeBytes, label: 'Before'),
           ),
-          Container(width: 3, color: _accent),
+          Container(width: 2, color: _accent),
           Expanded(
             child: _CompareSide(
               bytes: afterBytes ?? beforeBytes,
@@ -3576,11 +4569,11 @@ class ToolRail extends StatelessWidget {
   Widget build(BuildContext context) {
     const tools = EditorTool.values;
     return SizedBox(
-      height: 58,
+      height: 50,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: tools.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final tool = tools[index];
           final isActive = tool == active;
@@ -3592,19 +4585,17 @@ class ToolRail extends StatelessWidget {
             builder: (context, scale, child) =>
                 Transform.scale(scale: scale, child: child),
             child: InkWell(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(12),
               onTap: () => onSelect(tool),
               child: Stack(
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 140),
                     curve: Curves.easeOutCubic,
-                    width: 58,
+                    width: 54,
                     decoration: BoxDecoration(
-                      color: isActive
-                          ? _accent.withValues(alpha: 0.17)
-                          : Colors.white.withValues(alpha: 0.055),
-                      borderRadius: BorderRadius.circular(15),
+                      color: isActive ? _accentSoft : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isActive
                             ? _accent
@@ -3616,16 +4607,17 @@ class ToolRail extends StatelessWidget {
                       children: [
                         Icon(
                           _toolIcon(tool),
-                          size: 18,
+                          size: 17,
                           color: isActive ? _accent : Colors.white70,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           _toolLabel(tool),
                           maxLines: 1,
                           overflow: TextOverflow.fade,
-                          style: const TextStyle(
-                            fontSize: 10,
+                          style: TextStyle(
+                            color: isActive ? _accent : Colors.white60,
+                            fontSize: 9.5,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -3634,8 +4626,8 @@ class ToolRail extends StatelessWidget {
                   ),
                   if (hasEdits)
                     Positioned(
-                      right: 8,
-                      top: 8,
+                      right: 7,
+                      top: 7,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: _accent,
@@ -3674,7 +4666,7 @@ class ToolRail extends StatelessWidget {
       EditorTool.light => 'Light',
       EditorTool.color => 'Color',
       EditorTool.detail => 'Detail',
-      EditorTool.fx => 'FX',
+      EditorTool.fx => 'Effects',
       EditorTool.brush => 'Brush',
       EditorTool.text => 'Text',
       EditorTool.sticker => 'Sticker',
@@ -3687,8 +4679,9 @@ class ToolRail extends StatelessWidget {
     List<MarkupLayer> markups,
   ) {
     return switch (tool) {
-      EditorTool.crop => edit.cropMode != CropMode.original,
-      EditorTool.rotate => edit.rotationTurns != 0,
+      EditorTool.crop => edit.hasCropRect || edit.cropMode != CropMode.original,
+      EditorTool.rotate =>
+        edit.rotationTurns != 0 || edit.straighten != 0 || edit.flipHorizontal,
       EditorTool.light =>
         edit.exposure != 0 || edit.brightness != 1 || edit.contrast != 1,
       EditorTool.color =>
@@ -3843,12 +4836,12 @@ class _SectionHeader extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
         ),
         Text(
           action,
-          style: const TextStyle(color: _accent, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: _accent, fontWeight: FontWeight.w900),
         ),
       ],
     );
@@ -3871,9 +4864,9 @@ class _StatusLine extends StatelessWidget {
             status,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.62),
+              color: _muted,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -3900,12 +4893,13 @@ class _PrimaryButton extends StatelessWidget {
       icon: Icon(icon),
       label: Text(label),
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(54),
+        minimumSize: const Size.fromHeight(48),
         backgroundColor: _accent,
-        foregroundColor: const Color(0xFF071013),
+        foregroundColor: const Color(0xFF120D06),
         disabledBackgroundColor: Colors.white.withValues(alpha: 0.12),
         disabledForegroundColor: Colors.white.withValues(alpha: 0.36),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
       ),
     );
   }
@@ -3921,7 +4915,13 @@ class _SecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton(
       onPressed: onPressed,
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        foregroundColor: Colors.white.withValues(alpha: 0.82),
+        side: BorderSide(color: _accent.withValues(alpha: 0.38)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+      ),
       child: Text(label),
     );
   }
@@ -3936,49 +4936,16 @@ class _MiniPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xCC0D1017),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        color: _surface.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(10),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900),
         ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 18, color: _accent),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -3995,8 +4962,9 @@ class _Segmented extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(18),
+        color: _surfaceHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       child: Row(
         children: [
@@ -4006,7 +4974,7 @@ class _Segmented extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: i == selected ? _accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   labels[i],
@@ -4045,11 +5013,11 @@ class DiagnosticsPanel extends StatelessWidget {
     final visibleEntries = entries.take(8).toList(growable: false);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: _surfaceHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4129,9 +5097,9 @@ class _MetricPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C0F14),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -4238,20 +5206,40 @@ class _SettingsLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Image.asset(
-          'assets/brand/omnia-creata-logo-transparent.png',
-          width: 138,
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'OmniaPixels',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 6),
-        const _MiniPill(label: _versionLabel),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surfaceHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          Image.asset(_goldLogoAsset, width: 74),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'OmniaPixels',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Local photo editor',
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const _MiniPill(label: _versionLabel),
+        ],
+      ),
     );
   }
 }
@@ -4291,19 +5279,22 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: _accent),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right),
-        ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(12),
+        border: const Border.fromBorderSide(BorderSide(color: _line)),
+      ),
+      child: ListTile(
+        dense: true,
+        minLeadingWidth: 26,
+        leading: Icon(icon, color: _accent, size: 21),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+        trailing: Text(
+          value,
+          style: const TextStyle(color: _muted, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -4312,19 +5303,73 @@ class _SettingsRow extends StatelessWidget {
 class _PhotoTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withValues(alpha: 0.1);
-    for (var i = 0; i < 12; i++) {
-      final dx = size.width * ((i * 37) % 100) / 100;
-      final dy = size.height * ((i * 23) % 100) / 100;
-      canvas.drawCircle(Offset(dx, dy), 18 + (i % 4) * 10, paint);
-    }
-    final linePaint = Paint()
-      ..color = _accent.withValues(alpha: 0.14)
-      ..strokeWidth = 2;
-    for (var i = 0; i < 6; i++) {
-      final y = size.height * (0.18 + i * 0.12);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 38), linePaint);
-    }
+    final sky = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF2A211A), Color(0xFF0B0D12)],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, sky);
+
+    final sunPaint = Paint()
+      ..color = _accent.withValues(alpha: 0.34)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 32);
+    canvas.drawCircle(
+      Offset(size.width * 0.68, size.height * 0.34),
+      size.shortestSide * 0.18,
+      sunPaint,
+    );
+
+    final mountainBack = Path()
+      ..moveTo(0, size.height * 0.62)
+      ..lineTo(size.width * 0.18, size.height * 0.42)
+      ..lineTo(size.width * 0.34, size.height * 0.56)
+      ..lineTo(size.width * 0.52, size.height * 0.34)
+      ..lineTo(size.width * 0.76, size.height * 0.6)
+      ..lineTo(size.width, size.height * 0.45)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      mountainBack,
+      Paint()..color = const Color(0xFF2A2C2F).withValues(alpha: 0.72),
+    );
+
+    final mountainFront = Path()
+      ..moveTo(0, size.height * 0.76)
+      ..lineTo(size.width * 0.2, size.height * 0.58)
+      ..lineTo(size.width * 0.44, size.height * 0.72)
+      ..lineTo(size.width * 0.68, size.height * 0.5)
+      ..lineTo(size.width, size.height * 0.7)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      mountainFront,
+      Paint()..color = const Color(0xFF111417).withValues(alpha: 0.92),
+    );
+
+    final water = Paint()
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              _accent.withValues(alpha: 0.22),
+              const Color(0xFF07090D).withValues(alpha: 0.88),
+            ],
+          ).createShader(
+            Rect.fromLTWH(
+              0,
+              size.height * 0.74,
+              size.width,
+              size.height * 0.26,
+            ),
+          );
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height * 0.74, size.width, size.height * 0.26),
+      water,
+    );
   }
 
   @override

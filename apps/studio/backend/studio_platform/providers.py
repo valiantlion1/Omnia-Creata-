@@ -41,8 +41,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import io
 import json
+import socket
 import textwrap
 import time
 from abc import ABC, abstractmethod
@@ -50,7 +52,7 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Optional, Sequence, TypeVar
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 from PIL import Image, ImageDraw, ImageFont
@@ -66,12 +68,14 @@ from .ai_provider_catalog import (
 from .models import IdentityPlan
 from .prompt_engineering import PromptProfileAnalysis, analyze_generation_prompt_profile
 from .studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
-    STUDIO_PREMIUM_MODEL_ID,
-    STUDIO_STANDARD_MODEL_ID,
+    STUDIO_FLUX_STRONG_MODEL_ID,
+    STUDIO_GPT_IMAGE_2_MODEL_ID,
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID,
+    STUDIO_NANO_BANANA_2_MODEL_ID,
+    STUDIO_NANO_BANANA_MODEL_ID,
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID,
     is_fast_model_id,
     is_high_fidelity_model_id,
-    is_signature_model_id,
     is_standard_model_id,
     normalize_studio_model_id,
     resolve_runware_model_air_id,
@@ -188,6 +192,45 @@ _AUTH_FAILURE_MARKERS = (
     "authentication required",
     "permission denied",
 )
+
+
+def _assert_safe_provider_download_url(
+    image_url: str,
+    *,
+    provider_name: str,
+    skip_dns_validation: bool = False,
+) -> None:
+    parsed = urlparse(str(image_url or "").strip())
+    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
+    if parsed.scheme != "https" or not hostname:
+        raise ProviderFatalError(f"{provider_name} returned an unsafe image download URL")
+
+    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
+        raise ProviderFatalError(f"{provider_name} returned a local image download URL")
+
+    try:
+        literal_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        literal_ip = None
+    if literal_ip is not None and not literal_ip.is_global:
+        raise ProviderFatalError(f"{provider_name} returned a private image download URL")
+
+    if skip_dns_validation:
+        return
+
+    try:
+        resolved = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ProviderTemporaryError(f"{provider_name} image download host could not be resolved") from exc
+
+    for entry in resolved:
+        address = entry[4][0]
+        try:
+            resolved_ip = ipaddress.ip_address(address)
+        except ValueError:
+            raise ProviderFatalError(f"{provider_name} returned an unsafe image download host")
+        if not resolved_ip.is_global:
+            raise ProviderFatalError(f"{provider_name} image download resolved to a private address")
 
 
 @dataclass(frozen=True, slots=True)
@@ -611,6 +654,11 @@ class FalProvider(StudioImageProvider):
         raise ProviderTemporaryError("fal.ai queue request timed out before completion")
 
     async def _download_result_image(self, *, image_url: str, fallback_mime_type: str) -> tuple[bytes, str]:
+        _assert_safe_provider_download_url(
+            image_url,
+            provider_name="fal.ai",
+            skip_dns_validation=self._transport is not None,
+        )
         async with self._build_client() as client:
             async def download() -> httpx.Response:
                 try:
@@ -802,17 +850,19 @@ class RunwareProvider(StudioImageProvider):
         megapixels = max(1, int(((width * height) + (1024 * 1024) - 1) / (1024 * 1024)))
         reference_megapixels = 1 if has_reference_image or workflow in {"image_to_image", "edit"} else 0
 
-        if normalized_model == STUDIO_FAST_MODEL_ID:
-            return round(0.00078 * megapixels + (0.00078 * reference_megapixels), 6)
-        if normalized_model == STUDIO_STANDARD_MODEL_ID:
-            return round(0.0051 * megapixels + (0.0051 * reference_megapixels), 6)
-        if normalized_model == STUDIO_PREMIUM_MODEL_ID:
+        if normalized_model == STUDIO_GPT_IMAGE_2_MODEL_ID:
+            return round(0.006 * megapixels + (0.006 * reference_megapixels), 6)
+        if normalized_model == STUDIO_NANO_BANANA_MODEL_ID:
+            return round(0.039 * megapixels + (0.039 * reference_megapixels), 6)
+        if normalized_model == STUDIO_NANO_BANANA_2_MODEL_ID:
+            return round(0.069 * megapixels + (0.069 * reference_megapixels), 6)
+        if normalized_model == STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID:
+            return round(0.07 * megapixels + (0.07 * reference_megapixels), 6)
+        if normalized_model == STUDIO_WAN_27_IMAGE_PRO_MODEL_ID:
+            return round(0.075 * megapixels + (0.075 * reference_megapixels), 6)
+        if normalized_model == STUDIO_FLUX_STRONG_MODEL_ID:
             output_cost = 0.07 + max(0, megapixels - 1) * 0.03
             input_cost = 0.03 * reference_megapixels
-            return round(output_cost + input_cost, 6)
-        if is_signature_model_id(normalized_model):
-            output_cost = 0.06 * megapixels
-            input_cost = 0.06 * reference_megapixels
             return round(output_cost + input_cost, 6)
         return None
 
@@ -838,6 +888,7 @@ class RunwareProvider(StudioImageProvider):
         resolved_cfg_scale = model_defaults.get("cfg_scale")
         resolved_acceleration = model_defaults.get("acceleration")
         resolved_true_cfg_scale = model_defaults.get("true_cfg_scale")
+        provider_managed_settings = bool(model_defaults.get("provider_managed_settings"))
         prompt_upsampling = bool(model_defaults.get("prompt_upsampling"))
         normalized_workflow = normalize_generation_workflow(
             workflow,
@@ -863,12 +914,16 @@ class RunwareProvider(StudioImageProvider):
         # Runware rejects empty or too-short negative prompts; omit them unless they are valid.
         if len(cleaned_negative_prompt) >= 2:
             payload["negativePrompt"] = cleaned_negative_prompt
-        if resolved_steps is not None:
+        if provider_managed_settings:
+            pass
+        elif resolved_steps is not None:
             payload["steps"] = min(max(int(resolved_steps), 1), 50)
         elif normalized_workflow not in {"image_to_image", "edit"}:
             payload["steps"] = min(max(steps, 1), 50)
 
-        if resolved_cfg_scale is not None:
+        if provider_managed_settings:
+            pass
+        elif resolved_cfg_scale is not None:
             payload["CFGScale"] = float(resolved_cfg_scale)
         elif normalized_workflow not in {"image_to_image", "edit"}:
             payload["CFGScale"] = cfg_scale
@@ -1177,6 +1232,11 @@ class OpenAIImageProvider(StudioImageProvider):
         raise ProviderTemporaryError("OpenAI image response did not include image bytes")
 
     async def _download_image(self, image_url: str) -> tuple[bytes, str]:
+        _assert_safe_provider_download_url(
+            image_url,
+            provider_name="OpenAI",
+            skip_dns_validation=self._transport is not None,
+        )
         async with self._build_client() as client:
             async def download() -> httpx.Response:
                 try:

@@ -55,6 +55,7 @@ ROUTE_POLICY: dict[RoutePolicyKey, Policy] = {
     ("POST", "/v1/conversations/{conversation_id}/messages"): "authenticated",
     ("PATCH", "/v1/conversations/{conversation_id}/messages/{message_id}"): "authenticated",
     ("POST", "/v1/conversations/{conversation_id}/messages/{message_id}/regenerate"): "authenticated",
+    ("POST", "/v1/conversations/{conversation_id}/messages/{message_id}/generate"): "authenticated",
     ("POST", "/v1/conversations/{conversation_id}/messages/{message_id}/revert"): "authenticated",
     ("PATCH", "/v1/conversations/{conversation_id}/messages/{message_id}/feedback"): "authenticated",
     ("GET", "/v1/generations"): "authenticated",

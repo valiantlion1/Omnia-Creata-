@@ -23,7 +23,7 @@ Keep the product feeling:
 1. `Create` and `Chat` remain distinct surfaces unless explicitly redirected by the user.
 2. Backend stability beats feature sprawl.
 3. Security, ownership, billing, and runtime behavior are server-authoritative.
-4. Free Account or lower-tier users may be constrained, but must not receive humiliatingly bad product quality.
+4. Free or lower-tier users may be constrained, but must not receive humiliatingly bad product quality.
 5. Degraded/fallback behavior must be explicit in backend metadata, never silent magic.
 6. Do not redesign the UI unless the user explicitly asks for UI work.
 
@@ -43,9 +43,9 @@ Current active frame:
 - `Protected Beta Hardening` is now the closed baseline, not the active planning target.
 - `Controlled Public Paid Launch` is the active working frame.
 - Do not drift into random feature work; the main path is catalog truth, launch-critical surface completion, provider honesty, and current-build proof sync.
-- `Free Account`, `Creator`, `Pro`, and `Credit Packs` are the launch catalog shapes; exact numbers belong to the server-authoritative catalog, not hardcoded shell copy.
+- `Free`, `Essential`, `Premium`, and `Credit Packs` are the public launch labels; exact numbers belong to the server-authoritative catalog, not hardcoded shell copy. Keep internal entitlement ids stable unless a migration is explicitly planned.
 - Free accounts may buy wallet credits, but free image generation is not included at launch.
-- The broader provider bench still includes `Gemini`, `OpenRouter`, `Runware`, and selective `OpenAI`, but the active launch doctrine is `OpenRouter primary + OpenAI fallback` for chat and `Runware FLUX.2` for public image generation. If a proof artefact still reflects an older env selection, name that artefact explicitly instead of narrating it as current doctrine.
+- The broader provider bench still includes `Gemini`, `OpenRouter`, `fal`, and selective `OpenAI` paths as historical or backup surfaces, but the active launch doctrine is `Runware` primary for chat and public image generation. If a proof artefact still reflects an older env selection, name that artefact explicitly instead of narrating it as current doctrine.
 - `OCOS` is future internal operating-system work and should not silently enter Studio scope during this frame.
 - `main` is the only official Studio continuation branch. If Studio work appears on OOFM/Organizer branches again, recover `apps/studio/**` path-by-path instead of merging those branches wholesale.
 - Sprint 6 is complete, but its chat-quality guardrails remain active and should not be eroded by later changes.
@@ -111,7 +111,7 @@ Current active frame:
 - For Sprint 9 provider economics, do not let a single healthy managed image lane read as `public_paid_usage_safe`; broader paid safety should stay false until the launch-grade mix is also redundancy-safe.
 - For Sprint 9 chat honesty, do not let static quick starts or degraded heuristic replies look like live premium model output. Empty-state starters should be visibly static, and fallback chat replies should advertise that the premium lane was unavailable.
 - For Sprint 9 chat honesty, prefer an explicit response-mode contract in assistant metadata (`live_provider_reply`, `premium_lane_unavailable`, `degraded_fallback_reply`) over UI-side guessing from prose or partial flags.
-- For Sprint 9 Pro image routing, prefer `fal` and `Runware` before fallback-only lanes even on balanced non-premium prompts; fallback-only providers should not jump ahead of managed lanes just because the request is not premium-intent.
+- For Sprint 9 premium image routing, prefer `fal` and `Runware` before fallback-only lanes even on balanced non-premium prompts; fallback-only providers should not jump ahead of managed lanes just because the request is not premium-intent.
 - For Sprint 9 provider truth, expose per-provider diagnostics directly in owner health detail. Operators should be able to see credential presence, runtime availability, cooldown/circuit state, recent failure state, and current-build smoke result without opening raw logs first.
 - Silent fake image success is not acceptable in Studio. Demo image fallback must stay explicit opt-in only; if real providers are unavailable, fail honestly instead of returning the colorful demo mock as if it were a real generation.
 - Legacy demo placeholder outputs must not survive as normal library/share/post assets on truthful surfaces. If a stored asset is marked `provider=demo`, hide it from user-facing galleries and shares instead of presenting it like a real completed render.

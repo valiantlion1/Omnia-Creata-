@@ -116,6 +116,8 @@ def create_generation_job_record(
     final_credit_cost: Optional[int] = None,
     credit_charge_policy: str = "none",
     credit_status: str = "none",
+    origin_chat_message_id: Optional[str] = None,
+    origin_conversation_id: Optional[str] = None,
 ) -> GenerationJob:
     return GenerationJob(
         workspace_id=workspace_id,
@@ -156,6 +158,8 @@ def create_generation_job_record(
         credit_charge_policy=credit_charge_policy,
         credit_status=credit_status,
         output_count=output_count,
+        origin_chat_message_id=origin_chat_message_id,
+        origin_conversation_id=origin_conversation_id,
     )
 
 

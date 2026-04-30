@@ -49,7 +49,7 @@ export default async function TermsOfServicePage({
         {
           title: "2. Public bilgi kapsami",
           content:
-            "Bu site; OmniaCreata urunlerini, fiyatlandirma bilgisini, yasal metinleri ve resmi iletisim yollarini sunar. Ozellikler zamanla degisebilir.",
+            "Bu site; OmniaCreata hakkinda genel bilgi, yasal metinler ve resmi iletisim yollarini sunar. Urun bilgileri hazir oldukca guncellenebilir.",
         },
         {
           title: "3. Kabul edilebilir kullanim",
@@ -91,7 +91,7 @@ export default async function TermsOfServicePage({
         {
           title: "2. Website information",
           content:
-            "This website is intended to present OmniaCreata, its products, pricing information, legal terms, and official contact channels. Availability, features, and access conditions may change over time.",
+            "This website presents OmniaCreata, legal terms, and official contact channels. Product information may be updated when public access is ready.",
         },
         {
           title: "3. Acceptable use",

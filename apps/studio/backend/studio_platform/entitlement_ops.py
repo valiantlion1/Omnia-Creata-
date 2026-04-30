@@ -130,10 +130,10 @@ def ensure_chat_request_allowed(
         raise PermissionError("Studio chat is not available on this plan")
     if mode not in entitlements.allowed_chat_modes:
         if mode in {"vision", "edit"}:
-            raise PermissionError("Vision and Edit chat require Pro")
+            raise PermissionError("Vision and Edit chat require Premium")
         raise PermissionError("This chat mode is not available on your plan")
     if attachments and entitlements.max_chat_attachments <= 0:
-        raise PermissionError("Image attachments in chat require Pro")
+        raise PermissionError("Image attachments in chat require Premium")
     if len(attachments) > entitlements.max_chat_attachments:
         raise ValueError(
             f"This plan supports up to {entitlements.max_chat_attachments} chat attachment(s) per turn"
@@ -149,5 +149,5 @@ def ensure_clean_export_allowed(
 ) -> ResolvedEntitlements:
     entitlements = resolve_entitlements(identity=identity, plan_catalog=plan_catalog, billing_state=billing_state)
     if not entitlements.can_clean_export:
-        raise PermissionError("Clean export requires Pro")
+        raise PermissionError("Clean export requires Premium")
     return entitlements

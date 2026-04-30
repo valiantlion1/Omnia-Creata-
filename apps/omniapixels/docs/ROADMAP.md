@@ -1,6 +1,6 @@
 # OmniaPixels Roadmap
 
-Date: 2026-04-26
+Date: 2026-04-28
 
 ## Product target
 
@@ -53,4 +53,4 @@ Every release-test APK must follow the same loop:
 
 ## Current next priority
 
-After `0.3.6+14`, test the new Brush, Text, and Sticker editor tools on emulator and real Android devices. The next implementation wave should improve direct manipulation: drag/scale text, manual crop handles, brush opacity/eraser, and gallery/editor performance proof through Settings > Diagnostics.
+After `0.3.13+21`, run a real-device crop and gallery pass against large libraries, especially 10k and 25k+ photo collections. The next implementation wave should keep the reference-board gold Omnia Creata brand direction while fixing the remaining hard editor gaps: text drag/scale, brush opacity/eraser, clearer upscale completion states, and gallery frame-time proof through Settings > Diagnostics.

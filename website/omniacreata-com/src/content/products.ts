@@ -12,7 +12,7 @@ export type AccessLink = {
 };
 
 export type HubSection = {
-  id: "overview" | "access" | "capabilities" | "ecosystem-role";
+  id: "overview" | "access" | "capabilities" | "role";
   title: string;
   description: string;
 };
@@ -40,7 +40,7 @@ export type ProductRecord = {
     title: string;
     description: string;
   }>;
-  ecosystemPoints: Array<{
+  rolePoints: Array<{
     title: string;
     description: string;
   }>;
@@ -52,26 +52,26 @@ export const products: ProductRecord[] = [
     slug: "omnia-creata-studio",
     name: "OmniaCreata Studio",
     shortDescription:
-      "Image generation, editing, review, and saved selects in one visual workspace.",
+      "Image generation, editing, review, and saved selects in one workspace.",
     summary:
-      "Studio keeps briefs, prompts, references, generations, edits, and saved history in one place.",
-    status: "preview",
+      "Studio is being prepared as a focused workspace for image work.",
+    status: "planned",
     badge: "Studio",
     headline: "Image work that stays organized.",
     subheadline: "Built for people who need more than a lucky reroll.",
     roleTitle: "Studio comes first.",
     roleDescription:
-      "It is the first OmniaCreata product and the center of the image workflow.",
+      "Public access details will be published when Studio is ready.",
     platformMatrix: [
       {
         platform: "web",
-        status: "preview",
-        note: "Primary browser-based Studio access path.",
+        status: "planned",
+        note: "Web access will be published when Studio is ready.",
       },
     ],
     primaryCTA: {
-      href: "/products/omnia-creata-studio",
-      label: "See Studio",
+      href: "/contact",
+      label: "Contact",
     },
     accessLinks: [],
     hubNav: [
@@ -83,7 +83,7 @@ export const products: ProductRecord[] = [
       {
         id: "access",
         title: "Access",
-        description: "How Studio access is handled.",
+        description: "When Studio access will be available.",
       },
       {
         id: "capabilities",
@@ -91,9 +91,9 @@ export const products: ProductRecord[] = [
         description: "The core jobs Studio handles.",
       },
       {
-        id: "ecosystem-role",
+        id: "role",
         title: "Role",
-        description: "Why Studio leads the product line.",
+        description: "Why Studio stays focused.",
       },
     ],
     surfaceType: ["web", "pwa", "desktop"],
@@ -114,21 +114,21 @@ export const products: ProductRecord[] = [
           "Save the outputs and decisions worth returning to later.",
       },
     ],
-    ecosystemPoints: [
+    rolePoints: [
       {
-        title: "The product is the proof",
+        title: "The product stays focused",
         description:
-          "Studio is the clearest expression of what OmniaCreata is building.",
+          "Studio is being prepared around a clear image workflow.",
       },
       {
-        title: "The product line stays focused",
+        title: "The public site stays honest",
         description:
-          "New products are added only when they serve a clear creative job.",
+          "Access, pricing, and product details are published only when ready.",
       },
       {
-        title: "The ecosystem grows deliberately",
+        title: "New surfaces come later",
         description:
-          "The site points people into Studio first, then expands when the tools are ready.",
+          "Additional products are added only when they have a clear job.",
       },
     ],
     companionSlugs: [],

@@ -89,6 +89,8 @@ class StudioLLMGateway:
                 "gemini_premium": settings.gemini_premium_model,
                 "openrouter_standard": settings.openrouter_model,
                 "openrouter_premium": settings.openrouter_premium_model,
+                "runware_standard": settings.runware_chat_model,
+                "runware_premium": settings.runware_chat_premium_model,
                 "openai_standard": settings.openai_model,
                 "openai_premium": settings.openai_premium_model,
             },
@@ -101,6 +103,7 @@ class StudioLLMGateway:
             "providers": {
                 "gemini": self._provider_runtime_summary("gemini"),
                 "openrouter": self._provider_runtime_summary("openrouter"),
+                "runware": self._provider_runtime_summary("runware"),
                 "openai": self._provider_runtime_summary("openai"),
             },
             "heuristic_fallback": {
@@ -346,6 +349,16 @@ class StudioLLMGateway:
                         temperature=0.45,
                         max_output_tokens=700,
                     )
+                elif candidate.provider == "runware":
+                    result = await self._chat_with_runware(
+                        model=candidate_model,
+                        system_prompt=system_prompt,
+                        history=(),
+                        current_message=request_text,
+                        attachments=(),
+                        temperature=0.45,
+                        max_output_tokens=700,
+                    )
                 elif candidate.provider == "openai":
                     result = await self._chat_with_openai(
                         model=candidate_model,
@@ -465,6 +478,22 @@ class StudioLLMGateway:
                 provider_plan=[
                     ChatProviderCandidate(
                         provider="openrouter",
+                        model=model,
+                        quality_tier=quality_tier,
+                        used_fallback=False,
+                    )
+                ],
+            )
+        if normalized.startswith("runware:"):
+            model = (requested_model or "").split(":", 1)[1] or settings.runware_chat_model
+            quality_tier = self._infer_quality_tier_from_model(model)
+            return ChatExecutionPlan(
+                requested_quality_tier=quality_tier,
+                routing_strategy="explicit-model",
+                routing_reason="explicit_model_request",
+                provider_plan=[
+                    ChatProviderCandidate(
+                        provider="runware",
                         model=model,
                         quality_tier=quality_tier,
                         used_fallback=False,
@@ -598,6 +627,10 @@ class StudioLLMGateway:
             model = settings.openrouter_premium_model if quality_tier == "premium" else settings.openrouter_model
             effective_quality_tier = quality_tier if quality_tier != "limited" else self._infer_quality_tier_from_model(model)
             return model, effective_quality_tier
+        if provider == "runware":
+            model = settings.runware_chat_premium_model if quality_tier == "premium" else settings.runware_chat_model
+            effective_quality_tier = quality_tier if quality_tier != "limited" else self._infer_quality_tier_from_model(model)
+            return model, effective_quality_tier
         if provider == "openai":
             if quality_tier == "premium" and settings.environment == Environment.DEVELOPMENT:
                 # Keep local/dev fallback inexpensive unless premium is requested explicitly.
@@ -616,6 +649,7 @@ class StudioLLMGateway:
             [
                 settings.chat_primary_provider,
                 settings.chat_fallback_provider,
+                "runware",
                 "openrouter",
                 "openai",
                 "gemini",
@@ -624,7 +658,7 @@ class StudioLLMGateway:
         ordered: list[str] = []
         for provider in seed:
             normalized = provider.strip().lower()
-            if normalized in {"gemini", "openrouter", "openai"} and normalized not in ordered:
+            if normalized in {"gemini", "openrouter", "runware", "openai"} and normalized not in ordered:
                 ordered.append(normalized)
         return ordered
 
@@ -637,7 +671,7 @@ class StudioLLMGateway:
         quality_tier: str,
     ) -> None:
         normalized_provider = provider.strip().lower()
-        if normalized_provider not in {"gemini", "openrouter", "openai"}:
+        if normalized_provider not in {"gemini", "openrouter", "runware", "openai"}:
             return
         if not self._provider_is_configured(normalized_provider):
             return
@@ -657,6 +691,8 @@ class StudioLLMGateway:
             return has_configured_secret(settings.gemini_api_key)
         if provider == "openrouter":
             return has_configured_secret(settings.openrouter_api_key)
+        if provider == "runware":
+            return has_configured_secret(settings.runware_api_key)
         if provider == "openai":
             return has_configured_secret(settings.openai_api_key)
         return False
@@ -749,7 +785,7 @@ class StudioLLMGateway:
             if surface != "chat" and workflow != "chat":
                 continue
             provider = str(raw_result.get("provider_name") or "").strip().lower()
-            if provider not in {"gemini", "openrouter", "openai"}:
+            if provider not in {"gemini", "openrouter", "runware", "openai"}:
                 continue
             latest_chat_result_by_provider[provider] = dict(raw_result)
 
@@ -1042,6 +1078,16 @@ class StudioLLMGateway:
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
             )
+        if provider == "runware":
+            return await self._chat_with_runware(
+                model=model,
+                system_prompt=system_prompt,
+                history=history,
+                current_message=current_message,
+                attachments=attachments,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            )
         if provider == "openai":
             return await self._chat_with_openai(
                 model=model,
@@ -1221,6 +1267,86 @@ class StudioLLMGateway:
             completion_tokens=completion_tokens,
             estimated_cost_usd=self._estimate_cost_usd(model, prompt_tokens, completion_tokens),
         )
+
+    async def _chat_with_runware(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        history: Sequence[ChatMessage],
+        current_message: str,
+        attachments: Sequence[ChatAttachment],
+        temperature: float,
+        max_output_tokens: int,
+    ) -> LLMResult | None:
+        settings = get_settings()
+        runware_api_key = configured_secret_value(settings.runware_api_key)
+        if not runware_api_key:
+            return None
+
+        body = self._build_runware_request_body(
+            model=model,
+            system_prompt=system_prompt,
+            history=history,
+            current_message=current_message,
+            attachments=attachments,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        headers = {
+            "Authorization": f"Bearer {runware_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            response = await client.post("https://api.runware.ai/v1/chat/completions", json=body, headers=headers)
+            response.raise_for_status()
+
+        payload = response.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            return None
+
+        message = (choices[0] or {}).get("message") or {}
+        text = self._extract_openrouter_text(message.get("content"))
+        if not text:
+            return None
+
+        usage = payload.get("usage") or {}
+        prompt_tokens = self._as_int(usage.get("prompt_tokens"))
+        completion_tokens = self._as_int(usage.get("completion_tokens"))
+
+        return LLMResult(
+            text=text,
+            provider="runware",
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            estimated_cost_usd=self._estimate_cost_usd(model, prompt_tokens, completion_tokens),
+        )
+
+    def _build_runware_request_body(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        history: Sequence[ChatMessage],
+        current_message: str,
+        attachments: Sequence[ChatAttachment],
+        temperature: float,
+        max_output_tokens: int,
+    ) -> dict[str, Any]:
+        body = self._build_openrouter_request_body(
+            model=model,
+            system_prompt=system_prompt,
+            history=history,
+            current_message=current_message,
+            attachments=attachments,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        body["max_completion_tokens"] = body.pop("max_tokens")
+        return body
 
     async def _chat_with_openai(
         self,

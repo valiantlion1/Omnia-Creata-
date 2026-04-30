@@ -7,10 +7,12 @@ from .creative_profile_ops import attach_creative_profile, resolve_creative_prof
 from .experience_contract_ops import build_model_route_preview
 from .models import IdentityPlan, ModelCatalogEntry, OmniaIdentity
 from .studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
-    STUDIO_PREMIUM_MODEL_ID,
-    STUDIO_SIGNATURE_MODEL_ID,
-    STUDIO_STANDARD_MODEL_ID,
+    STUDIO_FLUX_STRONG_MODEL_ID,
+    STUDIO_GPT_IMAGE_2_MODEL_ID,
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID,
+    STUDIO_NANO_BANANA_2_MODEL_ID,
+    STUDIO_NANO_BANANA_MODEL_ID,
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID,
     normalize_studio_model_id,
 )
 
@@ -27,47 +29,62 @@ _DIMENSION_MULTIPLE = 64
 
 # Model catalog
 # estimated_cost is the conservative fallback when the provider does not return
-# a live cost quote for the exact request. The active doctrine is modern
-# Runware-first lanes rather than older SDXL/RealVis/Juggernaut era defaults.
+# a live cost quote for the exact request. The active launch set is Runware-only
+# and intentionally exposes current flagship names instead of old internal lanes.
 #
-# Official/public anchors checked on 2026-04-19:
-#   FLUX.2 [klein] 9B   1024x1024 ~ $0.00078 / image
-#   Qwen-Image-2512     1024x1024 ~ $0.0051 / image
-#   FLUX.2 [max]        first MP $0.07, then $0.03 per extra MP
-#   FLUX.2 [flex]       1024x1024 $0.06 / image
+# Official/public anchors checked on 2026-04-28 from Runware model pages:
+#   OpenAI GPT Image 2      openai:gpt-image@2            from $0.006
+#   Nano Banana             google:4@1                    from $0.039
+#   Nano Banana 2           google:4@3                    from $0.069
+#   Grok Imagine Image Pro  xai:grok-imagine@image-pro    from $0.070
+#   Wan 2.7 Image Pro       alibaba:wan@2.7-image-pro     from $0.075
+#   FLUX.2 [max]            bfl:7@1                       from $0.070
 
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
-    STUDIO_FAST_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_FAST_MODEL_ID,
-        label="Fast",
-        description="Fast interactive previews on FLUX.2 Klein for rapid ideation, composition checks, and low-latency variations.",
+    STUDIO_GPT_IMAGE_2_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_GPT_IMAGE_2_MODEL_ID,
+        label="GPT Image 2",
+        description="OpenAI GPT Image 2 through Runware for modern prompt-to-image and edit workflows with low launch cost.",
         min_plan=IdentityPlan.FREE,
-        credit_cost=6,
-        estimated_cost=0.001,
-        max_width=1024,
-        max_height=1024,
+        credit_cost=80,
+        estimated_cost=0.006,
+        max_width=1536,
+        max_height=1536,
         featured=True,
         runtime="cloud",
         provider_hint="runware",
     ),
-    STUDIO_STANDARD_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_STANDARD_MODEL_ID,
-        label="Standard",
-        description="Balanced Qwen image quality for dependable detail, stronger text and layout handling, and modern everyday output.",
+    STUDIO_NANO_BANANA_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_NANO_BANANA_MODEL_ID,
+        label="Nano Banana",
+        description="Google Nano Banana through Runware for polished everyday creative output and reliable chat-driven generation.",
         min_plan=IdentityPlan.FREE,
-        credit_cost=8,
-        estimated_cost=0.0051,
+        credit_cost=140,
+        estimated_cost=0.039,
         max_width=1536,
         max_height=1536,
         runtime="cloud",
         provider_hint="runware",
     ),
-    STUDIO_PREMIUM_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_PREMIUM_MODEL_ID,
-        label="Premium",
-        description="Flagship FLUX.2 Max output for premium campaign visuals, multi-reference hero shots, and highest-control final picks.",
+    STUDIO_NANO_BANANA_2_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_NANO_BANANA_2_MODEL_ID,
+        label="Nano Banana 2",
+        description="Google Nano Banana 2 through Runware for premium image generation and higher-quality final picks.",
         min_plan=IdentityPlan.CREATOR,
-        credit_cost=12,
+        credit_cost=220,
+        estimated_cost=0.069,
+        max_width=2048,
+        max_height=2048,
+        featured=True,
+        runtime="cloud",
+        provider_hint="runware",
+    ),
+    STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_GROK_IMAGINE_IMAGE_PRO_MODEL_ID,
+        label="Grok Imagine Image Pro",
+        description="Grok Imagine Image Pro through Runware for premium cinematic, social, and campaign-style outputs.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=220,
         estimated_cost=0.070,
         max_width=2048,
         max_height=2048,
@@ -75,15 +92,28 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         runtime="cloud",
         provider_hint="runware",
     ),
-    STUDIO_SIGNATURE_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_SIGNATURE_MODEL_ID,
-        label="Signature",
-        description="Internal FLUX.2 Flex lane for typography, layout-critical compositions, and advanced brand-system visuals.",
+    STUDIO_WAN_27_IMAGE_PRO_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_WAN_27_IMAGE_PRO_MODEL_ID,
+        label="Wan 2.7 Image Pro",
+        description="Wan 2.7 Image Pro through Runware for high-end image generation where the user chooses a premium model explicitly.",
         min_plan=IdentityPlan.PRO,
-        credit_cost=16,
-        estimated_cost=0.060,
+        credit_cost=240,
+        estimated_cost=0.075,
         max_width=2048,
         max_height=2048,
+        runtime="cloud",
+        provider_hint="runware",
+    ),
+    STUDIO_FLUX_STRONG_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_FLUX_STRONG_MODEL_ID,
+        label="FLUX.2 Max",
+        description="The strongest FLUX launch lane through Runware for premium campaign visuals, references, and final hero picks.",
+        min_plan=IdentityPlan.PRO,
+        credit_cost=240,
+        estimated_cost=0.070,
+        max_width=2048,
+        max_height=2048,
+        featured=True,
         runtime="cloud",
         provider_hint="runware",
     ),
@@ -147,10 +177,10 @@ def validate_model_for_identity(
 ) -> None:
     effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
     if effective_plan == IdentityPlan.FREE and model.min_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}:
-        required_label = "Creator" if model.min_plan == IdentityPlan.CREATOR else "Pro"
+        required_label = "Essential" if model.min_plan == IdentityPlan.CREATOR else "Premium"
         raise PermissionError(f"This model requires {required_label}")
     if effective_plan == IdentityPlan.CREATOR and model.min_plan == IdentityPlan.PRO:
-        raise PermissionError("This model requires Pro")
+        raise PermissionError("This model requires Premium")
     if effective_plan == IdentityPlan.GUEST:
         raise PermissionError("Guests cannot generate images")
 

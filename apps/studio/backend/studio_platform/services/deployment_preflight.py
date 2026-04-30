@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -47,28 +48,47 @@ def _has_real_value(env_values: dict[str, str], key: str) -> bool:
     return bool(value) and not _looks_like_placeholder(value)
 
 
+def _is_public_hostname(value: str | None) -> bool:
+    hostname = str(value or "").strip().lower().rstrip(".")
+    if not hostname:
+        return False
+    if hostname in {"localhost", "localhost.localdomain"} or hostname.endswith(".localhost"):
+        return False
+    try:
+        parsed_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        parsed_ip = None
+    if parsed_ip is not None:
+        return parsed_ip.is_global
+    blocked_markers = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+    if any(marker in hostname for marker in blocked_markers):
+        return False
+    return "." in hostname
+
+
 def _is_https_public_url(value: str) -> bool:
     parsed = urlparse(value) if value else None
-    if not parsed:
+    return bool(parsed and parsed.scheme == "https" and _is_public_hostname(parsed.hostname))
+
+
+def _is_public_allowed_host(value: str) -> bool:
+    normalized = str(value or "").strip().lower().rstrip(".")
+    if not normalized or normalized == "*" or "/" in normalized or ":" in normalized:
         return False
-    return (
-        parsed.scheme == "https"
-        and bool(parsed.netloc)
-        and "localhost" not in parsed.netloc
-        and "127.0.0.1" not in parsed.netloc
-    )
+    hostname = normalized[2:] if normalized.startswith("*.") else normalized
+    return _is_public_hostname(hostname)
 
 
 def _protected_beta_chat_provider(env_values: dict[str, str]) -> str:
     value = (
         env_values.get("PROTECTED_BETA_CHAT_PROVIDER")
         or env_values.get("CHAT_PRIMARY_PROVIDER")
-        or "gemini"
+        or "runware"
     )
     normalized = value.strip().lower()
-    if normalized in {"gemini", "openrouter", "openai"}:
+    if normalized in {"gemini", "openrouter", "runware", "openai"}:
         return normalized
-    return "gemini"
+    return "runware"
 
 
 def _protected_beta_image_provider(env_values: dict[str, str]) -> str:
@@ -102,14 +122,7 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
         )
 
     public_web_base_url = env_values.get("PUBLIC_WEB_BASE_URL", "").strip()
-    parsed_public_url = urlparse(public_web_base_url) if public_web_base_url else None
-    if (
-        parsed_public_url
-        and parsed_public_url.scheme == "https"
-        and parsed_public_url.netloc
-        and "localhost" not in parsed_public_url.netloc
-        and "127.0.0.1" not in parsed_public_url.netloc
-    ):
+    if _is_https_public_url(public_web_base_url):
         add_check(
             "public_web_base_url",
             "pass",
@@ -122,6 +135,27 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
             "blocked",
             "PUBLIC_WEB_BASE_URL is missing, local, or not HTTPS.",
             public_web_base_url or "missing",
+        )
+
+    allowed_hosts = [
+        host.strip()
+        for host in str(env_values.get("ALLOWED_HOSTS", "") or "").split(",")
+        if host.strip()
+    ]
+    unsafe_allowed_hosts = [host for host in allowed_hosts if not _is_public_allowed_host(host)]
+    if allowed_hosts and not unsafe_allowed_hosts:
+        add_check(
+            "allowed_hosts",
+            "pass",
+            "Allowed hosts are pinned to public launch hostnames.",
+            ", ".join(allowed_hosts),
+        )
+    else:
+        add_check(
+            "allowed_hosts",
+            "blocked",
+            "ALLOWED_HOSTS must be configured without wildcard or local hostnames.",
+            ", ".join(unsafe_allowed_hosts or allowed_hosts) or "missing",
         )
 
     stack = build_deployment_stack_summary_from_env(env_values)
@@ -310,6 +344,7 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
     premium_chat_secret_key = {
         "gemini": "GEMINI_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "runware": "RUNWARE_API_KEY",
         "openai": "OPENAI_API_KEY",
     }[protected_beta_chat_provider]
     premium_chat_configured = _has_real_value(env_values, premium_chat_secret_key)

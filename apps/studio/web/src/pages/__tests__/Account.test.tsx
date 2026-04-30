@@ -47,7 +47,7 @@ const mockState = vi.hoisted(() => {
         featured_asset_id: null,
         featured_asset_position: 'center',
         usage_summary: {
-          plan_label: 'Pro',
+          plan_label: 'Premium',
           credits_remaining: 240,
           allowance: 1200,
           reset_at: null,
@@ -92,6 +92,8 @@ const mockState = vi.hoisted(() => {
       ],
     }),
     getProfile: vi.fn(),
+    assetOne,
+    assetTwo,
     exportProfile: vi.fn().mockResolvedValue({ profile: { username: 'ghostsofter12' }, posts: [] }),
     updateMyProfile: vi.fn().mockResolvedValue({
       profile: {
@@ -104,7 +106,7 @@ const mockState = vi.hoisted(() => {
         featured_asset_id: 'asset-1',
         featured_asset_position: 'bottom',
         usage_summary: {
-          plan_label: 'Pro',
+          plan_label: 'Premium',
           credits_remaining: 240,
           allowance: 1200,
           reset_at: null,
@@ -138,7 +140,7 @@ const mockState = vi.hoisted(() => {
       },
       plan: {
         id: 'pro',
-        label: 'Pro',
+        label: 'Premium',
         monthly_credits: 1200,
         queue_priority: 'premium',
         share_links: true,
@@ -173,11 +175,12 @@ vi.mock('@/lib/usePageMeta', () => ({
 
 import AccountPage from '@/pages/Account'
 import { renderWithProviders } from '@/test/renderWithProviders'
+import { Route, Routes } from 'react-router-dom'
 
 describe('AccountPage', () => {
   afterEach(() => {
     mockState.getMyProfile.mockClear()
-    mockState.getProfile.mockClear()
+    mockState.getProfile.mockReset()
     mockState.exportProfile.mockClear()
     mockState.updateMyProfile.mockClear()
   })
@@ -220,6 +223,9 @@ describe('AccountPage', () => {
 
     renderWithProviders(<AccountPage />, { route: '/account' })
 
+    expect(screen.queryByText('Public profile preview')).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /open public profile/i })).toHaveAttribute('href', '/u/ghostsofter12')
+
     await userEvent.click(await screen.findByRole('button', { name: /^private$/i }))
     await waitFor(() => {
       expect(mockState.updateMyProfile).toHaveBeenCalledWith({ default_visibility: 'private' })
@@ -230,5 +236,86 @@ describe('AccountPage', () => {
       expect(mockState.exportProfile).toHaveBeenCalled()
     })
     anchorClick.mockRestore()
+  })
+
+  it('renders username routes as public profiles even when the viewer owns the account', async () => {
+    mockState.getProfile.mockResolvedValue({
+      profile: {
+        display_name: 'valiantlion',
+        username: 'ghostsofter12',
+        avatar_url: null,
+        bio: '',
+        plan: 'pro',
+        default_visibility: 'private',
+        featured_asset_id: 'asset-2',
+        featured_asset_position: 'center',
+        usage_summary: {
+          plan_label: 'Premium',
+          credits_remaining: 240,
+          allowance: 1200,
+          reset_at: null,
+          progress_percent: 20,
+        },
+        public_post_count: 1,
+      },
+      featured_asset: mockState.assetTwo,
+      own_profile: true,
+      can_edit: true,
+      posts: [
+        {
+          id: 'post-1',
+          owner_username: 'ghostsofter12',
+          owner_display_name: 'valiantlion',
+          title: 'Anime tarzinda',
+          prompt: 'anime profile portrait',
+          cover_asset: mockState.assetOne,
+          preview_assets: [],
+          visibility: 'public',
+          like_count: 3,
+          viewer_has_liked: false,
+          created_at: '2026-04-19T00:00:00Z',
+          project_id: 'project-1',
+          style_tags: [],
+        },
+        {
+          id: 'post-2',
+          owner_username: 'ghostsofter12',
+          owner_display_name: 'valiantlion',
+          title: 'Golden portrait',
+          prompt: 'gold editorial portrait',
+          cover_asset: mockState.assetTwo,
+          preview_assets: [],
+          visibility: 'private',
+          like_count: 1,
+          viewer_has_liked: false,
+          created_at: '2026-04-19T00:01:00Z',
+          project_id: 'project-2',
+          style_tags: [],
+        },
+      ],
+    })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/u/:username" element={<AccountPage />} />
+      </Routes>,
+      { route: '/u/ghostsofter12' },
+    )
+
+    expect(await screen.findByRole('heading', { name: 'valiantlion', level: 1 })).toBeInTheDocument()
+    expect(mockState.getProfile).toHaveBeenCalledWith('ghostsofter12')
+    expect(mockState.getMyProfile).not.toHaveBeenCalled()
+    expect(screen.getByText('Creator profile')).toBeInTheDocument()
+    expect(screen.getAllByText('Anime tarzinda').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Golden portrait')).not.toBeInTheDocument()
+    expect(screen.queryByText('Profile details, public preview, credits, exports, and gallery actions live here.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Plan & billing')).not.toBeInTheDocument()
+    expect(screen.queryByText('Public page')).not.toBeInTheDocument()
+    expect(screen.queryByText('Billing details are private to this account')).not.toBeInTheDocument()
+    expect(screen.queryByText('Default visibility')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /edit profile/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /choose artwork/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /export my data/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('Delete account')).not.toBeInTheDocument()
   })
 })
