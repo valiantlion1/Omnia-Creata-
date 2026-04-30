@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Messages } from "@/i18n/messages";
 import { Button } from "@/components/ui/button";
+import { contactChannels } from "@/lib/contact-channels";
 
 type FormState = {
   status: "idle" | "success" | "error";
@@ -99,7 +100,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         setState({
           status: "error",
           message:
-            "We could not submit your request right now. Please email founder@omniacreata.com directly.",
+            `We could not submit your request right now. Please email ${contactChannels.general} directly.`,
         });
       }
     });

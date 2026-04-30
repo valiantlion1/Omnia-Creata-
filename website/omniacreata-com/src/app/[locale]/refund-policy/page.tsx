@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/i18n/config";
+import { contactChannels } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
 import { withLocalePrefix } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "3. Iade talepleri",
           content:
-            "Yanlis odeme, teknik erisim sorunu veya benzer bir durum varsa odemeden sonraki 14 gun icinde founder@omniacreata.com adresinden iade talebi gonderebilirsiniz.",
+            `Yanlis odeme, teknik erisim sorunu veya benzer bir durum varsa odemeden sonraki 14 gun icinde ${contactChannels.billing} adresinden iade talebi gonderebilirsiniz.`,
         },
         {
           title: "4. Kullanilmis krediler",
@@ -67,7 +68,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "6. Nasil basvurulur",
           content:
-            "Iade talebi icin hesap e-postanizi, odeme tarihini, islem bilgisini ve talep nedeninizi founder@omniacreata.com adresine iletin.",
+            `Iade talebi icin hesap e-postanizi, odeme tarihini, islem bilgisini ve talep nedeninizi ${contactChannels.billing} adresine iletin.`,
         },
       ]
     : [
@@ -84,7 +85,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "3. Refund requests",
           content:
-            "If you believe a payment was made in error, access failed, or a technical issue prevented use, contact founder@omniacreata.com within 14 days of purchase.",
+            `If you believe a payment was made in error, access failed, or a technical issue prevented use, contact ${contactChannels.billing} within 14 days of purchase.`,
         },
         {
           title: "4. Used credits",
@@ -99,7 +100,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "6. How to request support",
           content:
-            "Send the account email, payment date, transaction details, and reason for the request to founder@omniacreata.com.",
+            `Send the account email, payment date, transaction details, and reason for the request to ${contactChannels.billing}.`,
         },
       ];
 
@@ -131,8 +132,8 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
       eyebrow={isTurkish ? "Iade politikasi" : "Refund Policy"}
       footerDescription={
         isTurkish
-          ? "Hesap ve odeme bilgilerinizi ekleyerek founder@omniacreata.com adresinden bize ulasabilirsiniz."
-          : "Include your account and payment details when contacting founder@omniacreata.com."
+          ? `Hesap ve odeme bilgilerinizi ekleyerek ${contactChannels.billing} adresinden bize ulasabilirsiniz.`
+          : `Include your account and payment details when contacting ${contactChannels.billing}.`
       }
       footerEyebrow={isTurkish ? "Destek" : "Support"}
       footerTitle={

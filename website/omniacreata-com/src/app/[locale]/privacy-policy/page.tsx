@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LegalDocumentPage } from "@/components/legal/legal-document-page";
 import { isLocale } from "@/i18n/config";
+import { contactChannels } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
 import { withLocalePrefix } from "@/lib/utils";
 
@@ -74,7 +75,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "7. Kullanici talepleri",
           content:
-            "Erisim, duzeltme veya silme talepleri icin founder@omniacreata.com adresi uzerinden bize ulasabilirsiniz.",
+            `Erisim, duzeltme veya silme talepleri icin ${contactChannels.legal} adresi uzerinden bize ulasabilirsiniz.`,
         },
       ]
     : [
@@ -111,7 +112,7 @@ export default async function PrivacyPolicyPage({
         {
           title: "7. Your requests",
           content:
-            "If you have privacy questions or want to request access, correction, or deletion where applicable, contact founder@omniacreata.com.",
+            `If you have privacy questions or want to request access, correction, or deletion where applicable, contact ${contactChannels.legal}.`,
         },
       ];
 
@@ -135,7 +136,7 @@ export default async function PrivacyPolicyPage({
       }
       documentDescription={
         isTurkish
-          ? "Temel basliklari tarayip ilgili konuda bize dogrudan founder@omniacreata.com uzerinden ulasabilirsiniz."
+          ? `Temel basliklari tarayip ilgili konuda bize dogrudan ${contactChannels.legal} uzerinden ulasabilirsiniz.`
           : "Review the sections below for the main privacy commitments and contact us directly if you need a specific answer."
       }
       documentEyebrow={isTurkish ? "Belge" : "Document"}

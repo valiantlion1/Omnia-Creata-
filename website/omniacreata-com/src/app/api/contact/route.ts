@@ -3,6 +3,7 @@ import {
   deliverContactInquiry,
   type ContactDeliveryPayload,
 } from "@/lib/server/contact-delivery";
+import { contactChannels } from "@/lib/contact-channels";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ type ContactPayload = {
 const maxBodyBytes = 16 * 1024;
 const rateLimitWindowMs = 10 * 60 * 1000;
 const rateLimitMaxRequests = 5;
-const officialContactEmail = "founder@omniacreata.com";
+const officialContactEmail = contactChannels.general;
 const maxLengths = {
   name: 120,
   email: 254,

@@ -51,7 +51,7 @@ Add this only after Studio is live:
 NEXT_PUBLIC_STUDIO_URL=https://studio.omniacreata.com
 ```
 
-`NEXT_PUBLIC_STUDIO_URL` is public and only controls where Studio buttons go. If it is not set, Studio buttons stay on the public Studio product page instead of pointing to an unavailable subdomain. `CONTACT_WEBHOOK_URL` and `CONTACT_WEBHOOK_SECRET` are server-only and must stay private. Without contact delivery credentials, the public contact path falls back to `founder@omniacreata.com`.
+`NEXT_PUBLIC_STUDIO_URL` is public and only controls where Studio buttons go. If it is not set, Studio buttons stay on the public Studio product page instead of pointing to an unavailable subdomain. `CONTACT_WEBHOOK_URL` and `CONTACT_WEBHOOK_SECRET` are server-only and must stay private. Without contact delivery credentials, the public contact path falls back to `contact@omniacreata.com`.
 
 ## Vercel note
 

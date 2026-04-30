@@ -92,10 +92,12 @@ export function Navbar({ locale, messages }: NavbarProps) {
           </div>
 
           <div
+            aria-hidden={!mobileOpen}
             className={cn(
               "overflow-hidden transition-[max-height,opacity,margin] duration-300 lg:hidden",
               mobileOpen ? "mb-4 mt-1 max-h-[480px] opacity-100" : "max-h-0 opacity-0",
             )}
+            hidden={!mobileOpen}
             id="mobile-nav"
           >
             <div className="space-y-4 border-t border-white/8 pb-4 pt-4">

@@ -2,6 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { defaultLocale, type LocaleCode } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
+import { contactChannels, mailto } from "@/lib/contact-channels";
 import { studioPageHref, withLocalePrefix } from "@/lib/utils";
 import { BrandMark } from "./brand-mark";
 
@@ -72,9 +73,9 @@ export function Footer({ locale, messages }: FooterProps) {
             </Link>
             <a
               className="text-sm text-foreground-soft transition hover:text-foreground"
-              href="mailto:founder@omniacreata.com"
+              href={mailto(contactChannels.general)}
             >
-              founder@omniacreata.com
+              {contactChannels.general}
             </a>
           </FooterColumn>
         </div>

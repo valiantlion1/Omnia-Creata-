@@ -5,6 +5,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { getProducts } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { contactChannels, mailto } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
 import { isContactDeliveryConfigured } from "@/lib/server/contact-delivery";
 import { studioPrimaryHref, studioPrimaryLabel, withLocalePrefix } from "@/lib/utils";
@@ -75,10 +76,35 @@ export default async function ContactPage({
 
   const routes = [
     {
-      title: "Email",
-      address: "founder@omniacreata.com",
+      title: "General",
+      address: contactChannels.general,
       description:
-        "Studio access, pricing, billing, partnerships, privacy, and legal questions.",
+        "The main public inbox for OmniaCreata.",
+    },
+    {
+      title: "Studio",
+      address: contactChannels.studio,
+      description: "Studio access and product conversations.",
+    },
+    {
+      title: "Support",
+      address: contactChannels.support,
+      description: "Account, access, and product support.",
+    },
+    {
+      title: "Billing",
+      address: contactChannels.billing,
+      description: "Pricing, payments, credits, and refund questions.",
+    },
+    {
+      title: "Legal",
+      address: contactChannels.legal,
+      description: "Privacy, terms, and formal requests.",
+    },
+    {
+      title: "Partnerships",
+      address: contactChannels.partnerships,
+      description: "Partnership and business conversations.",
     },
   ];
 
@@ -97,7 +123,7 @@ export default async function ContactPage({
             </p>
 
             <div className="site-page-actions">
-              <ButtonLink href="mailto:founder@omniacreata.com" size="lg" variant="primary">
+              <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
                 Email us
               </ButtonLink>
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="secondary">
@@ -108,8 +134,8 @@ export default async function ContactPage({
 
           <div className="site-premium-card p-6 sm:p-8">
             <p className="site-kicker">Direct contact</p>
-            <p className="mt-5 break-all text-2xl font-semibold tracking-[-0.04em] text-foreground sm:text-3xl">
-              founder@omniacreata.com
+            <p className="mt-5 break-all text-xl font-semibold leading-tight text-foreground sm:text-3xl">
+              {contactChannels.general}
             </p>
             <p className="mt-5 text-sm leading-7 text-foreground-soft">
               Email is always available. The form appears when delivery is connected.
@@ -166,9 +192,9 @@ export default async function ContactPage({
 
             <article className="site-line-item">
               <strong>Email</strong>
-              <span className="break-all text-foreground">founder@omniacreata.com</span>
+              <span className="break-all text-foreground">{contactChannels.general}</span>
               <div className="pt-2">
-                <ButtonLink href="mailto:founder@omniacreata.com" size="lg" variant="primary">
+                <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
                   Email us
                 </ButtonLink>
               </div>
@@ -187,7 +213,7 @@ export default async function ContactPage({
             <ButtonLink href={withLocalePrefix(locale, "/products/omnia-creata-studio")} size="lg" variant="secondary">
               See Studio
             </ButtonLink>
-            <ButtonLink href="mailto:founder@omniacreata.com" size="lg" variant="primary">
+            <ButtonLink href={mailto(contactChannels.general)} size="lg" variant="primary">
               Email us
             </ButtonLink>
           </div>

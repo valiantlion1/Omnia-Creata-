@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button";
 import { isLocale } from "@/i18n/config";
+import { contactChannels } from "@/lib/contact-channels";
 import { createPageMetadata } from "@/lib/seo";
 import {
   studioPrimaryHref,
@@ -109,7 +110,7 @@ export default async function AboutPage({ params }: AboutPageProps) {
           </div>
 
           <div className="site-line-item">
-            <strong>founder@omniacreata.com</strong>
+            <strong>{contactChannels.general}</strong>
             <span>
               Use the official inbox for Studio access, pricing, billing, privacy, legal, product,
               and partnership questions.
