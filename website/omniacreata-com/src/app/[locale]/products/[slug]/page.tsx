@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { StudioMotionScene } from "@/components/site/studio-motion-scene";
 import { ButtonLink } from "@/components/ui/button";
 import { getProductBySlug, products } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
 import {
   STUDIO_PREVIEW_AVAILABLE,
-  studioAccessHref,
-  studioAccessLabel,
   studioPrimaryHref,
   studioPrimaryLabel,
+  withLocalePrefix,
 } from "@/lib/utils";
 
 type ProductPageProps = {
@@ -27,6 +25,23 @@ const useCases = [
   "Moodboards and visual exploration",
 ];
 
+const workflowSteps = [
+  {
+    title: "Brief",
+    description: "Start with the goal, references, and the first prompt.",
+  },
+  {
+    title: "Create",
+    description: "Generate and edit with the model family that fits the job.",
+  },
+  {
+    title: "Review",
+    description: "Compare variations, keep the strongest outputs, and return to them later.",
+  },
+];
+
+const modelFamilies = ["FLUX.2 Pro", "FLUX.2 Dev", "FLUX.2 Schnell", "Runware Fast", "Runware Standard", "Runware Premium"];
+
 function formatSurface(surface: "web" | "ios" | "android" | "pwa" | "desktop") {
   if (surface === "ios") return "iOS";
   if (surface === "android") return "Android";
@@ -36,9 +51,9 @@ function formatSurface(surface: "web" | "ios" | "android" | "pwa" | "desktop") {
 }
 
 function formatStatus(status: "live" | "preview" | "planned") {
-  if (status === "live") return "Live";
-  if (status === "preview") return "Preview";
-  return "Planned";
+  if (status === "live") return "Available";
+  if (status === "preview") return "Access managed";
+  return "Contact us";
 }
 
 export function generateStaticParams() {
@@ -84,31 +99,40 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   return (
-    <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1340px]">
-        <div className="grid gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
-          <div className="space-y-6">
+    <section className="site-page">
+      <div className="site-page-inner">
+        <div className="site-page-hero lg:grid-cols-[0.82fr_1.18fr]">
+          <div className="site-page-copy">
             <p className="site-kicker">Studio</p>
-            <h1 className="site-title max-w-[10ch]">{product.name}</h1>
-            <p className="site-copy">{product.shortDescription}</p>
-            <div className="flex flex-wrap gap-3">
+            <h1 className="site-page-title">
+              {product.name.replace(" Studio", "")} <strong>Studio</strong>
+            </h1>
+            <p className="site-page-lede">
+              Generate, edit, review, and save image work without scattering the process.
+            </p>
+            <div className="site-page-actions">
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
                 {studioPrimaryLabel()}
               </ButtonLink>
-              <ButtonLink href={studioAccessHref(locale)} size="lg" variant="secondary">
-                {studioAccessLabel()}
+              <ButtonLink href={withLocalePrefix(locale, "/pricing")} size="lg" variant="secondary">
+                View pricing
               </ButtonLink>
             </div>
           </div>
 
-          <StudioMotionScene variant="product" />
+          <div className="site-page-visual">
+            <div className="site-page-visual__caption">
+              <span>First product</span>
+              <strong>Direction, generation, review, and selects in one workspace.</strong>
+            </div>
+          </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Overview</p>
             <h2 className="site-title max-w-[11ch]">
-              Direction, generation, and review stay together.
+              The image workflow stays together.
             </h2>
             <p className="site-copy">{product.summary}</p>
           </div>
@@ -123,10 +147,45 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
+          <div className="space-y-4">
+            <p className="site-kicker">Workflow</p>
+            <h2 className="site-title max-w-[10ch]">From brief to saved select.</h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {workflowSteps.map((step) => (
+              <article className="site-premium-card p-5" key={step.title}>
+                <strong className="text-lg text-foreground">{step.title}</strong>
+                <p className="mt-4 text-sm leading-7 text-foreground-soft">{step.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
+          <div className="space-y-4">
+            <p className="site-kicker">Model families</p>
+            <h2 className="site-title max-w-[10ch]">Modern models, chosen per job.</h2>
+            <p className="site-copy">
+              Studio can surface different model families as the catalog changes. Exact variants
+              and credit costs stay adjustable inside the product.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap content-start gap-3">
+            {modelFamilies.map((family) => (
+              <span className="site-status-pill" data-status="preview" key={family}>
+                {family}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Use it for</p>
-            <h2 className="site-title max-w-[10ch]">The work you come back to again and again.</h2>
+            <h2 className="site-title max-w-[10ch]">Work worth coming back to.</h2>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -138,10 +197,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
 
-        <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="site-band lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
             <p className="site-kicker">Access</p>
-            <h2 className="site-title max-w-[9ch]">Web first. Everything else earns its turn.</h2>
+            <h2 className="site-title max-w-[9ch]">Studio opens from the web.</h2>
             <p className="site-copy">{product.roleDescription}</p>
           </div>
 

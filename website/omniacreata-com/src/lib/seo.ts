@@ -22,10 +22,16 @@ export function createPageMetadata({
 }: CreatePageMetadataOptions): Metadata {
   const localeDefinition = getLocaleDefinition(locale);
   const localizedPath = getLocalizedPath(locale, path);
-  const socialTitle = title === "Omnia Creata" ? title : `${title} | Omnia Creata`;
+  const socialTitle = title === "OmniaCreata" ? title : `${title} | OmniaCreata`;
+  const pageTitle =
+    title === "OmniaCreata"
+      ? {
+          absolute: "OmniaCreata | Creative software for image work",
+        }
+      : title;
 
   return {
-    title,
+    title: pageTitle,
     description,
     alternates: {
       canonical: localizedPath,
@@ -36,14 +42,14 @@ export function createPageMetadata({
       description,
       url: absoluteUrl(localizedPath),
       locale: localeDefinition.hreflang.replace("-", "_"),
-      siteName: "Omnia Creata",
+      siteName: "OmniaCreata",
       type: "website",
       images: [
         {
           url: absoluteUrl("/opengraph-image"),
           width: 1200,
           height: 630,
-          alt: "Omnia Creata",
+          alt: "OmniaCreata",
         },
       ],
     },

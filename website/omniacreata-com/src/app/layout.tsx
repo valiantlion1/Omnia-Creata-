@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     template: "%s | OmniaCreata",
   },
   description:
-    "OmniaCreata is the public home for creative software, starting with OmniaCreata Studio.",
+    "OmniaCreata builds creative software for image work, starting with OmniaCreata Studio.",
   applicationName: "OmniaCreata",
   alternates: {
     canonical: `/${defaultLocale}`,
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "OmniaCreata",
     description:
-      "Creative software ecosystem, starting with OmniaCreata Studio.",
+      "Creative software for image work, starting with OmniaCreata Studio.",
     url: absoluteUrl(`/${defaultLocale}`),
     siteName: "OmniaCreata",
     locale: "en_US",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "OmniaCreata",
     description:
-      "Creative software ecosystem, starting with OmniaCreata Studio.",
+      "Creative software for image work, starting with OmniaCreata Studio.",
     images: [absoluteUrl("/opengraph-image")],
   },
   icons: {

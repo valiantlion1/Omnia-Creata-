@@ -45,7 +45,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         copy?.placeholderInterest ?? "Studio, partnership, pricing...",
       message:
         copy?.placeholderMessage ??
-        "Tell us what you want to build with Omnia Creata.",
+        "Tell us what you want to build with OmniaCreata.",
     },
     submit: copy?.submit ?? "Send inquiry",
     sending: copy?.sending ?? "Sending...",
@@ -71,29 +71,37 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         website: String(formData.get("website") ?? ""),
       };
 
-      const response = await fetch("/api/contact", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      try {
+        const response = await fetch("/api/contact", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
 
-      const result = (await response.json()) as { message?: string };
+        const result = (await response.json()) as { message?: string };
 
-      if (!response.ok) {
+        if (!response.ok) {
+          setState({
+            status: "error",
+            message: result.message ?? "Something went wrong. Please try again.",
+          });
+          return;
+        }
+
+        setState({
+          status: "success",
+          message: result.message ?? "Thanks. We will get back to you soon.",
+        });
+        form.reset();
+      } catch {
         setState({
           status: "error",
-          message: result.message ?? "Something went wrong. Please try again.",
+          message:
+            "We could not submit your request right now. Please email founder@omniacreata.com directly.",
         });
-        return;
       }
-
-      setState({
-        status: "success",
-        message: result.message ?? "Thanks. We will get back to you soon.",
-      });
-      form.reset();
     });
   }
 
@@ -169,7 +177,13 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         >
           {state.message || resolvedCopy.helper}
         </p>
-        <Button className="min-w-40" size="lg" type="submit" variant="primary">
+        <Button
+          className="min-w-40"
+          disabled={isPending}
+          size="lg"
+          type="submit"
+          variant="primary"
+        >
           {isPending ? resolvedCopy.sending : resolvedCopy.submit}
         </Button>
       </div>

@@ -20,7 +20,7 @@ export function Footer({ locale, messages }: FooterProps) {
           <div className="space-y-5">
             <BrandMark locale={locale} />
             <p className="max-w-md text-sm leading-7 text-foreground-soft">
-              Creative software for image work with taste. Studio leads the ecosystem.
+              Creative software for image work. Studio is the first product path.
             </p>
           </div>
 
@@ -72,15 +72,15 @@ export function Footer({ locale, messages }: FooterProps) {
             </Link>
             <a
               className="text-sm text-foreground-soft transition hover:text-foreground"
-              href="mailto:hello@omniacreata.com"
+              href="mailto:founder@omniacreata.com"
             >
-              hello@omniacreata.com
+              founder@omniacreata.com
             </a>
           </FooterColumn>
         </div>
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/[0.06] pt-5 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>(c) 2026 OmniaCreata.</p>
+          <p>Copyright 2026 OmniaCreata.</p>
           <p>omniacreata.com</p>
         </div>
       </div>

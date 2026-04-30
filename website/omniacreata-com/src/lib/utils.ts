@@ -56,7 +56,7 @@ export function studioPrimaryLabel() {
 export function studioAccessHref(locale: string) {
   return STUDIO_PREVIEW_AVAILABLE
     ? studioUrl("/")
-    : `${withLocalePrefix(locale, "/contact")}?intent=studio_preview`;
+    : `${withLocalePrefix(locale, "/contact")}?intent=studio_access`;
 }
 
 export function studioAccessLabel() {

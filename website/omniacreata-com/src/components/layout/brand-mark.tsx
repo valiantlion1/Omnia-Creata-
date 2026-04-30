@@ -14,7 +14,7 @@ export function BrandMark({
   compact = false,
   className,
 }: BrandMarkProps) {
-  const topLabel = locale === "tr" ? "Public HQ" : "Public HQ";
+  const topLabel = locale === "tr" ? "Creative software" : "Creative software";
   const subLabel = locale === "tr" ? "omniacreata.com" : "omniacreata.com";
 
   return (
@@ -30,7 +30,7 @@ export function BrandMark({
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(188,209,229,0.2),transparent_58%)]" />
         <Image
-          alt="Omnia Creata"
+          alt="OmniaCreata"
           className="relative z-10 h-full w-full object-contain"
           height={compact ? 28 : 36}
           priority

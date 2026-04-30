@@ -25,7 +25,7 @@ export async function generateMetadata({
     path: "/refund-policy",
     title: "Refund Policy",
     description:
-      "Refund policy for Omnia Creata Studio subscriptions and credit purchases.",
+      "Refund policy for OmniaCreata Studio subscriptions and credit purchases.",
   });
 }
 
@@ -42,7 +42,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "1. Kapsam",
           content:
-            "Bu politika Omnia Creata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
+            "Bu politika OmniaCreata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
         },
         {
           title: "2. Abonelik iptalleri",
@@ -52,7 +52,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "3. Iade talepleri",
           content:
-            "Yanlis odeme, teknik erisim sorunu veya benzer bir durum varsa odemeden sonraki 14 gun icinde billing@omniacreata.com adresinden iade talebi gonderebilirsiniz.",
+            "Yanlis odeme, teknik erisim sorunu veya benzer bir durum varsa odemeden sonraki 14 gun icinde founder@omniacreata.com adresinden iade talebi gonderebilirsiniz.",
         },
         {
           title: "4. Kullanilmis krediler",
@@ -67,14 +67,14 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "6. Nasil basvurulur",
           content:
-            "Iade talebi icin hesap e-postanizi, odeme tarihini, islem bilgisini ve talep nedeninizi billing@omniacreata.com adresine iletin.",
+            "Iade talebi icin hesap e-postanizi, odeme tarihini, islem bilgisini ve talep nedeninizi founder@omniacreata.com adresine iletin.",
         },
       ]
     : [
         {
           title: "1. Scope",
           content:
-            "This policy explains how refund requests are handled for Omnia Creata Studio subscriptions and credit pack purchases.",
+            "This policy explains how refund requests are handled for OmniaCreata Studio subscriptions and credit pack purchases.",
         },
         {
           title: "2. Subscription cancellations",
@@ -84,7 +84,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "3. Refund requests",
           content:
-            "If you believe a payment was made in error, access failed, or a technical issue prevented use, contact billing@omniacreata.com within 14 days of purchase.",
+            "If you believe a payment was made in error, access failed, or a technical issue prevented use, contact founder@omniacreata.com within 14 days of purchase.",
         },
         {
           title: "4. Used credits",
@@ -94,12 +94,12 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "5. Credit packs",
           content:
-            "Credit packs are one-time digital top-ups. Eligible unused-purchase requests may be reviewed before credits are consumed.",
+            "Credit packs are one-time digital top-ups. Eligible unused credit-pack requests may be reviewed before credits are consumed.",
         },
         {
           title: "6. How to request support",
           content:
-            "Send the account email, payment date, transaction details, and reason for the request to billing@omniacreata.com.",
+            "Send the account email, payment date, transaction details, and reason for the request to founder@omniacreata.com.",
         },
       ];
 
@@ -118,8 +118,8 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
       ]}
       description={
         isTurkish
-          ? "Bu sayfa Omnia Creata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
-          : "This page explains the refund process for Omnia Creata Studio subscriptions and credit packs."
+          ? "Bu sayfa OmniaCreata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
+          : "This page explains the refund process for OmniaCreata Studio subscriptions and credit packs."
       }
       documentDescription={
         isTurkish
@@ -131,8 +131,8 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
       eyebrow={isTurkish ? "Iade politikasi" : "Refund Policy"}
       footerDescription={
         isTurkish
-          ? "Hesap ve odeme bilgilerinizi ekleyerek billing@omniacreata.com adresinden bize ulasabilirsiniz."
-          : "Include your account and payment details when contacting billing@omniacreata.com."
+          ? "Hesap ve odeme bilgilerinizi ekleyerek founder@omniacreata.com adresinden bize ulasabilirsiniz."
+          : "Include your account and payment details when contacting founder@omniacreata.com."
       }
       footerEyebrow={isTurkish ? "Destek" : "Support"}
       footerTitle={

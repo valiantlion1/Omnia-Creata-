@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { StudioMotionScene } from "@/components/site/studio-motion-scene";
 import { ButtonLink } from "@/components/ui/button";
 import { getProducts } from "@/content/products";
 import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
 import {
-  studioAccessHref,
-  studioAccessLabel,
+  studioPrimaryHref,
+  studioPrimaryLabel,
   withLocalePrefix,
 } from "@/lib/utils";
 
@@ -16,6 +15,21 @@ type ProductsPageProps = {
     locale: string;
   }>;
 };
+
+const productProof = [
+  {
+    title: "One live path",
+    description: "The public site points people into Studio without scattering attention across unfinished tools.",
+  },
+  {
+    title: "One workflow",
+    description: "Brief, generate, edit, review, and save the work you want to keep.",
+  },
+  {
+    title: "Current model families",
+    description: "The FLUX.2 family on Runware drives the catalog across Fast, Standard, and Premium lanes.",
+  },
+];
 
 export async function generateMetadata({
   params,
@@ -30,7 +44,7 @@ export async function generateMetadata({
     locale,
     path: "/products",
     title: "Products",
-    description: "Studio is the first Omnia Creata product.",
+    description: "Studio leads the OmniaCreata product line.",
   });
 }
 
@@ -44,38 +58,45 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
   const studio = getProducts(locale)[0];
 
   return (
-    <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-[1340px]">
-        <div className="grid gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
-          <div className="space-y-5">
+    <section className="site-page">
+      <div className="site-page-inner">
+        <div className="site-page-hero lg:grid-cols-[0.86fr_1.14fr]">
+          <div className="site-page-copy">
             <p className="site-kicker">Products</p>
-            <h1 className="site-title max-w-[10ch]">One product, on purpose.</h1>
-            <p className="site-copy">
-              Studio is the only public product here right now. One real thing is better than a
-              shelf of placeholders.
+            <h1 className="site-page-title">
+              Studio is the <strong>current product.</strong>
+            </h1>
+            <p className="site-page-lede">
+              OmniaCreata launches around one useful workspace first. The ecosystem expands only
+              when another tool has a clear job.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="site-page-actions">
+              <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
+                {studioPrimaryLabel()}
+              </ButtonLink>
               <ButtonLink
-                href={withLocalePrefix(locale, `/products/${studio.slug}`)}
+                href={withLocalePrefix(locale, "/pricing")}
                 size="lg"
                 variant="secondary"
               >
-                See Studio
-              </ButtonLink>
-              <ButtonLink href={studioAccessHref(locale)} size="lg" variant="primary">
-                {studioAccessLabel()}
+                View pricing
               </ButtonLink>
             </div>
           </div>
 
-          <StudioMotionScene variant="compact" />
+          <div className="site-page-visual">
+            <div className="site-page-visual__caption">
+              <span>Product line</span>
+              <strong>Studio sets the standard before the ecosystem expands.</strong>
+            </div>
+          </div>
         </div>
 
-        <div className="site-rule mt-12 pt-8">
-          <article className="grid gap-8 lg:grid-cols-[0.72fr_1fr_auto] lg:items-start">
+        <div className="site-band lg:grid-cols-[0.72fr_1fr_auto] lg:items-start">
+          <article className="contents">
             <div>
               <p className="site-kicker">Current product</p>
-              <h2 className="site-title mt-3 max-w-[9ch]">{studio.name}</h2>
+              <h2 className="site-title mt-3 max-w-[11ch]">{studio.name}</h2>
             </div>
 
             <div className="site-stack">
@@ -93,6 +114,22 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
               </ButtonLink>
             </div>
           </article>
+        </div>
+
+        <div className="site-band lg:grid-cols-[0.72fr_1.28fr]">
+          <div className="space-y-4">
+            <p className="site-kicker">Product truth</p>
+            <h2 className="site-title max-w-[10ch]">What is real now.</h2>
+          </div>
+
+          <div className="site-line-list">
+            {productProof.map((item) => (
+              <article className="site-line-item md:grid md:grid-cols-[0.38fr_1fr] md:gap-6" key={item.title}>
+                <strong>{item.title}</strong>
+                <span>{item.description}</span>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>

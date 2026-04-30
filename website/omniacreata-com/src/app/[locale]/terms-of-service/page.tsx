@@ -49,7 +49,7 @@ export default async function TermsOfServicePage({
         {
           title: "2. Public bilgi kapsami",
           content:
-            "Bu site; Omnia Creata urunlerini, fiyatlandirma bilgisini, yasal metinleri ve resmi iletisim yollarini sunar. Ozellikler zamanla degisebilir.",
+            "Bu site; OmniaCreata urunlerini, fiyatlandirma bilgisini, yasal metinleri ve resmi iletisim yollarini sunar. Ozellikler zamanla degisebilir.",
         },
         {
           title: "3. Kabul edilebilir kullanim",
@@ -59,12 +59,12 @@ export default async function TermsOfServicePage({
         {
           title: "4. Urun erisimi ve gelecekteki hizmetler",
           content:
-            "Urun veya platform referanslari her bolgede anlik erisim garantisi vermez. Omnia Creata erisim modelini guncelleyebilir.",
+            "Urun veya platform referanslari her bolgede anlik erisim garantisi vermez. OmniaCreata erisim modelini guncelleyebilir.",
         },
         {
           title: "5. Fikri mulkiyet",
           content:
-            "Omnia Creata markasi, logo, tasarim unsurlari ve yazi icerikleri fikri mulkiyet kapsamindadir.",
+            "OmniaCreata markasi, logo, tasarim unsurlari ve yazi icerikleri fikri mulkiyet kapsamindadir.",
         },
         {
           title: "6. Garanti yoktur",
@@ -74,7 +74,7 @@ export default async function TermsOfServicePage({
         {
           title: "7. Sorumlulugun sinirlandirilmasi",
           content:
-            "Yururlukteki hukukun izin verdigi olcude, website kullanimindan dogan zararlardan Omnia Creata sorumlu tutulamaz.",
+            "Yururlukteki hukukun izin verdigi olcude, website kullanimindan dogan zararlardan OmniaCreata sorumlu tutulamaz.",
         },
         {
           title: "8. Iletisim",
@@ -91,7 +91,7 @@ export default async function TermsOfServicePage({
         {
           title: "2. Website information",
           content:
-            "This website is intended to present Omnia Creata, its products, pricing information, legal terms, and official contact channels. Availability, features, and access conditions may change over time.",
+            "This website is intended to present OmniaCreata, its products, pricing information, legal terms, and official contact channels. Availability, features, and access conditions may change over time.",
         },
         {
           title: "3. Acceptable use",
@@ -101,22 +101,22 @@ export default async function TermsOfServicePage({
         {
           title: "4. Product access and future services",
           content:
-            "References to products, applications, or platform access points do not guarantee immediate availability in every region or on every surface. Omnia Creata may change, suspend, or limit public access paths at its discretion.",
+            "References to products, applications, or platform access points do not guarantee immediate availability in every region or on every surface. OmniaCreata may change, suspend, or limit public access paths at its discretion.",
         },
         {
           title: "5. Intellectual property",
           content:
-            "The Omnia Creata brand, logo, design elements, written materials, and public software presentation are protected intellectual property and may not be reused without permission.",
+            "The OmniaCreata brand, logo, design elements, written materials, and public software presentation are protected intellectual property and may not be reused without permission.",
         },
         {
           title: "6. No warranty",
           content:
-            "The website is provided on an as-is basis. While Omnia Creata aims for accuracy and quality, some details may change as the products and services evolve.",
+            "The website is provided on an as-is basis. While OmniaCreata aims for accuracy and quality, some details may change as the products and services evolve.",
         },
         {
           title: "7. Limitation of liability",
           content:
-            "To the maximum extent permitted by law, Omnia Creata will not be liable for damages arising from use of, or inability to use, the website or related information.",
+            "To the maximum extent permitted by law, OmniaCreata will not be liable for damages arising from use of, or inability to use, the website or related information.",
         },
         {
           title: "8. Contact",

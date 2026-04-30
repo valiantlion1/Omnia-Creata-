@@ -132,8 +132,8 @@ const english: Messages = {
     availableOn: "Available on",
     productPlatforms: "Platforms",
     live: "Live",
-    preview: "Preview",
-    planned: "Planned",
+    preview: "Managed access",
+    planned: "Contact us",
     openWeb: "Open web app",
     openDesktop: "Open desktop app",
     installPwa: "Install PWA",
@@ -149,28 +149,28 @@ const english: Messages = {
     legal: "Legal",
   },
   home: {
-    heroEyebrow: "Omnia Creata",
-    heroTitle: "Studio ships first.",
+    heroEyebrow: "OmniaCreata",
+    heroTitle: "Software for image work with taste.",
     heroDescription:
-      "The public site explains the company and routes people into the live product without duplicating the Studio landing.",
+      "Studio keeps prompts, references, runs, and selects in one visual workspace.",
     utilityDescription:
       "omniacreata.com",
-    platformBandEyebrow: "Platform visibility",
-    platformBandTitle: "Availability is visible before commitment.",
+    platformBandEyebrow: "Access",
+    platformBandTitle: "Studio opens from the web.",
     platformBandDescription:
-      "Web, iOS, Android, PWA, and desktop availability stay readable before someone opens a product.",
-    ecosystemEyebrow: "Product directory",
-    ecosystemTitle: "One live route, more direction around it.",
+      "The main product path stays clear before the ecosystem expands.",
+    ecosystemEyebrow: "Product line",
+    ecosystemTitle: "Studio leads the ecosystem.",
     ecosystemDescription:
-      "Start with the flagship, then move into the product built for the next specific job.",
-    accessRailEyebrow: "Product access rail",
-    accessRailTitle: "Move from discovery to the right product quickly.",
+      "Start with Studio, then move into the product built for the next specific job.",
+    accessRailEyebrow: "Access",
+    accessRailTitle: "Move from discovery to Studio quickly.",
     accessRailDescription:
-      "Every visible action should lead somewhere useful.",
-    trustEyebrow: "Public HQ",
-    trustTitle: "A public site built to feel active, clear, and honest.",
+      "Every visible action leads somewhere useful.",
+    trustEyebrow: "Company",
+    trustTitle: "A calm front door for a focused software company.",
     trustDescription:
-      "Direct routes, product-first copy, and restrained structure keep the site useful as the system grows.",
+      "Product-first copy and restrained structure keep the site useful as the system grows.",
   },
   sections: {
     overview: "Overview",
@@ -181,9 +181,9 @@ const english: Messages = {
   },
   accessPanel: {
     eyebrow: "Access update",
-    title: "This platform is not publicly open yet.",
+    title: "Access is managed right now.",
     description:
-      "You can continue with a live surface or contact the team for access details.",
+      "Continue with the available path or contact us for access details.",
     availableNow: "Available now",
     openAlternative: "Open alternative",
     backToHub: "Back to product hub",
@@ -200,7 +200,7 @@ const english: Messages = {
     placeholderEmail: "you@company.com",
     placeholderCompany: "Company or studio",
     placeholderInterest: "Studio, partnership, pricing...",
-    placeholderMessage: "Tell us what you want to build with Omnia Creata.",
+    placeholderMessage: "Tell us what you want to build with OmniaCreata.",
     submit: "Send inquiry",
     sending: "Sending...",
     helper: "Share a short note and we will send it to the right inbox.",
@@ -239,8 +239,8 @@ const turkish: Messages = {
     availableOn: "Kullanilabilir yuzeyler",
     productPlatforms: "Platformlar",
     live: "Canli",
-    preview: "Onizleme",
-    planned: "Planli",
+    preview: "Yonetilen erisim",
+    planned: "Iletisime gec",
     openWeb: "Web uygulamasini ac",
     openDesktop: "Masaustu uygulamasini ac",
     installPwa: "PWA yukle",
@@ -256,11 +256,11 @@ const turkish: Messages = {
     legal: "Yasal",
   },
   home: {
-    heroEyebrow: "Studio merkezli public HQ",
+    heroEyebrow: "OmniaCreata",
     heroTitle:
       "Studio ile basla. Omnia'yi baglam icinde gor.",
     heroDescription:
-      "Amiral urun, destek yuzeyleri ve her biri icin bir sonraki rota icin daha sakin bir public HQ.",
+      "Studio; promptlari, referanslari, denemeleri ve secimleri tek gorsel calisma alaninda toplar.",
     utilityDescription:
       "omniacreata.com",
     platformBandEyebrow: "Platform gorunurlugu",
@@ -275,7 +275,7 @@ const turkish: Messages = {
     accessRailTitle: "Her sey tek tik uzakta.",
     accessRailDescription:
       "Her tik anlamli bir sonraki adima gider.",
-    trustEyebrow: "Public HQ",
+    trustEyebrow: "Sirket",
     trustTitle: "Buyuyen bir urun sistemi icin daha sakin bir on kapi.",
     trustDescription:
       "Dogrudan rotalar, durust urun anlatimi ve kontrollu yapi ekosistem olgunlasirken siteyi faydali tutar.",
@@ -289,9 +289,9 @@ const turkish: Messages = {
   },
   accessPanel: {
     eyebrow: "Erisim guncellemesi",
-    title: "Bu platform girisi henuz canli degil.",
+    title: "Erisim su an yonetimli.",
     description:
-      "Su an canli olan yuzeylerden devam edebilir veya Omnia Creata ekibinden erisim detayi talep edebilirsin.",
+      "Mevcut yoldan devam edebilir veya erisim detayi icin bizimle iletisime gecebilirsin.",
     availableNow: "Simdi kullanilabilir",
     openAlternative: "Alternatifi ac",
     backToHub: "Urun merkezine don",
@@ -308,7 +308,7 @@ const turkish: Messages = {
     placeholderEmail: "eposta@sirket.com",
     placeholderCompany: "Sirket veya ekip",
     placeholderInterest: "Studio, ortaklik, fiyatlandirma...",
-    placeholderMessage: "Omnia Creata ile ne kurmak istediginizi yazin.",
+    placeholderMessage: "OmniaCreata ile ne kurmak istediginizi yazin.",
     submit: "Mesaj gonder",
     sending: "Gonderiliyor...",
     helper: "Kisa bir not birak, dogru ekibe iletelim.",
