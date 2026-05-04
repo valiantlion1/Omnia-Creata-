@@ -37,7 +37,7 @@ const mockState = vi.hoisted(() => ({
         category: 'illustration',
         preview_image_url: null,
         negative_prompt: 'blurry extra fingers',
-        preferred_model_id: 'flux-2-pro',
+        preferred_model_id: 'grok-imagine-pro',
         preferred_aspect_ratio: '4:5',
         preferred_steps: 32,
         preferred_cfg_scale: 7.5,
@@ -54,14 +54,14 @@ const mockState = vi.hoisted(() => ({
   listModels: vi.fn().mockResolvedValue({
     models: [
       {
-        id: 'flux-2-pro',
-        label: 'Pro',
-        description: 'Premium finish',
+        id: 'grok-imagine-pro',
+        label: 'Grok Imagine Pro',
+        description: 'Cinematic finish',
         min_plan: 'creator',
         credit_cost: 16,
-        estimated_cost: 0.08,
-        max_width: 1536,
-        max_height: 1536,
+        estimated_cost: 0.07,
+        max_width: 2816,
+        max_height: 2816,
         featured: true,
         runtime: 'cloud',
         owner_only: false,
@@ -70,14 +70,14 @@ const mockState = vi.hoisted(() => ({
         license_reference: null,
       },
       {
-        id: 'flux-2-klein',
-        label: 'Fast',
-        description: 'Quick finish',
+        id: 'nano-banana-2',
+        label: 'Nano Banana 2',
+        description: 'Default 2K finish',
         min_plan: 'free',
-        credit_cost: 4,
-        estimated_cost: 0.02,
-        max_width: 1024,
-        max_height: 1024,
+        credit_cost: 20,
+        estimated_cost: 0.10255,
+        max_width: 4096,
+        max_height: 4096,
         featured: false,
         runtime: 'cloud',
         owner_only: false,
@@ -130,7 +130,7 @@ describe('ElementsPage', () => {
 
     expect(await screen.findByText(/Night Portrait/i)).toBeInTheDocument()
     expect(screen.getByText(/Prompt starter/i)).toBeInTheDocument()
-    expect(screen.getByText(/^Pro$/i)).toBeInTheDocument()
+    expect(screen.getByText(/Grok Imagine Pro/i)).toBeInTheDocument()
     expect(screen.getByText(/4:5/i)).toBeInTheDocument()
     expect(screen.getByText(/Has exclusions/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /use full preset/i })).toBeInTheDocument()
@@ -147,7 +147,7 @@ describe('ElementsPage', () => {
     await userEvent.type(nameInput, 'Night Portrait Deluxe')
     await userEvent.clear(screen.getByLabelText(/negative prompt/i))
     await userEvent.type(screen.getByLabelText(/negative prompt/i), 'washed out, bad anatomy')
-    await userEvent.selectOptions(screen.getByLabelText(/preferred model/i), 'flux-2-klein')
+    await userEvent.selectOptions(screen.getByLabelText(/preferred model/i), 'nano-banana-2')
     await userEvent.click(screen.getByRole('button', { name: '16:9' }))
     await userEvent.clear(screen.getByLabelText(/preferred variations/i))
     await userEvent.type(screen.getByLabelText(/preferred variations/i), '3')
@@ -159,7 +159,7 @@ describe('ElementsPage', () => {
         expect.objectContaining({
           title: 'Night Portrait Deluxe',
           negative_prompt: 'washed out, bad anatomy',
-          preferred_model_id: 'flux-2-klein',
+          preferred_model_id: 'nano-banana-2',
           preferred_aspect_ratio: '16:9',
           preferred_output_count: 3,
         }),

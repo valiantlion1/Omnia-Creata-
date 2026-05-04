@@ -10,7 +10,7 @@ from .prompt_engineering import (
     compact_visual_prompt,
     compile_generation_request,
 )
-from .studio_model_contract import STUDIO_FAST_MODEL_ID, STUDIO_PREMIUM_MODEL_ID
+from .studio_model_contract import STUDIO_DEFAULT_IMAGE_MODEL_ID, STUDIO_QUICK_IMAGE_MODEL_ID
 
 
 @dataclass(slots=True)
@@ -843,8 +843,8 @@ def _resolve_blueprint_model(
     if context is not None and context.follow_up_refinement and isinstance(prior_blueprint.get("model"), str):
         return str(prior_blueprint["model"])
     if not premium_chat:
-        return STUDIO_FAST_MODEL_ID
-    return STUDIO_PREMIUM_MODEL_ID
+        return STUDIO_QUICK_IMAGE_MODEL_ID
+    return STUDIO_DEFAULT_IMAGE_MODEL_ID
 
 
 def _resolve_blueprint_aspect_ratio(
@@ -884,17 +884,17 @@ def _resolve_blueprint_dimensions(
 def _dimensions_for_aspect_ratio(aspect_ratio: str, *, premium_chat: bool) -> tuple[int, int]:
     if premium_chat:
         mapping = {
-            "1:1": (1536, 1536),
-            "4:5": (1280, 1600),
-            "3:4": (1344, 1792),
-            "16:9": (1600, 900),
+            "1:1": (2048, 2048),
+            "4:5": (1856, 2304),
+            "3:4": (1792, 2400),
+            "16:9": (2752, 1536),
         }
     else:
         mapping = {
             "1:1": (1024, 1024),
-            "4:5": (1024, 1280),
-            "3:4": (960, 1280),
-            "16:9": (1280, 720),
+            "4:5": (896, 1152),
+            "3:4": (864, 1184),
+            "16:9": (1344, 768),
         }
     return mapping.get(aspect_ratio, mapping["1:1"])
 

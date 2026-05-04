@@ -23,6 +23,7 @@ from studio_platform.owner_health_ops import build_runtime_topology_summary
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, StudioImageProvider
 from studio_platform.service import StudioService
 from studio_platform.studio_model_contract import (
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
@@ -149,7 +150,7 @@ def test_premium_model_contract_normalizes_legacy_aliases_to_flux_max() -> None:
     model = get_model_catalog_entry_or_raise("flux-2-pro")
 
     assert model.id != "flux-2-pro"
-    assert model.estimated_cost == pytest.approx(0.07)
+    assert model.estimated_cost == pytest.approx(0.16)
     assert normalize_studio_model_id("flux-2-pro") == model.id
     assert normalize_studio_model_id("bfl:5@1") == model.id
     assert resolve_runware_model_air_id("flux-2-pro") == "bfl:7@1"
@@ -390,7 +391,7 @@ def test_build_owner_ai_control_plane_keeps_surface_matrix_and_contract_freeze()
         "failed",
         "blocked",
     ]
-    assert any(item["id"] == f"create:{STUDIO_FAST_MODEL_ID}" for item in control_plane["surface_matrix"])
+    assert any(item["id"] == f"create:{STUDIO_DEFAULT_IMAGE_MODEL_ID}" for item in control_plane["surface_matrix"])
     assert any(item["id"] == "chat:standard-assist" for item in control_plane["surface_matrix"])
 
 

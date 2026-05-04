@@ -7,10 +7,9 @@ import { isLocale } from "@/i18n/config";
 import { createPageMetadata } from "@/lib/seo";
 import {
   STUDIO_PREVIEW_AVAILABLE,
-  studioAccessHref,
-  studioAccessLabel,
   studioPrimaryHref,
   studioPrimaryLabel,
+  withLocalePrefix,
 } from "@/lib/utils";
 
 type ProductPageProps = {
@@ -95,8 +94,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
                 {studioPrimaryLabel()}
               </ButtonLink>
-              <ButtonLink href={studioAccessHref(locale)} size="lg" variant="secondary">
-                {studioAccessLabel()}
+              <ButtonLink
+                href={`${withLocalePrefix(locale, "/contact")}?intent=studio_preview`}
+                size="lg"
+                variant="secondary"
+              >
+                Talk to us
               </ButtonLink>
             </div>
           </div>

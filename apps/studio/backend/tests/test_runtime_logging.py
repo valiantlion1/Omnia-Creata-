@@ -183,6 +183,14 @@ def test_settings_enable_api_docs_defaults_to_development_only():
     assert staging.enable_api_docs is False
 
 
+def test_settings_enable_metrics_endpoint_defaults_to_development_only():
+    development = Settings(_env_file=None, jwt_secret="x" * 32, environment=Environment.DEVELOPMENT)
+    staging = Settings(_env_file=None, jwt_secret="x" * 32, environment=Environment.STAGING)
+
+    assert development.enable_metrics_endpoint is True
+    assert staging.enable_metrics_endpoint is False
+
+
 def test_validate_production_requirements_requires_launch_shaped_runtime_values():
     staging = Settings(
         _env_file=None,

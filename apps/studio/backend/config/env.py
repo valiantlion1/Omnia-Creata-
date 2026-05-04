@@ -207,9 +207,9 @@ class Settings(BaseSettings):
     credit_pack_small_credits: int = 200
     credit_pack_large_credits: int = 800
     creator_monthly_price_usd: float = 12.0
-    pro_monthly_price_usd: float = 24.0
-    credit_pack_small_price_usd: float = 8.0
-    credit_pack_large_price_usd: float = 24.0
+    pro_monthly_price_usd: float = 29.0
+    credit_pack_small_price_usd: float = 10.0
+    credit_pack_large_price_usd: float = 29.0
     free_account_chat_message_limit: int = 0
     creator_chat_message_limit: int = 120
     pro_chat_message_limit: int = 200
@@ -280,7 +280,7 @@ class Settings(BaseSettings):
     turnstile_secret_key: Optional[SecretStr] = None
     supabase_auth_user_cache_ttl_seconds: float = 15.0
     enable_api_docs: Optional[bool] = None
-    enable_metrics_endpoint: bool = True
+    enable_metrics_endpoint: Optional[bool] = None
     enable_demo_auth: Optional[bool] = None
 
     # Rate Limiting
@@ -635,6 +635,8 @@ class Settings(BaseSettings):
             self.enable_api_docs = self.environment == Environment.DEVELOPMENT
         if self.enable_demo_auth is None:
             self.enable_demo_auth = self.environment == Environment.DEVELOPMENT
+        if self.enable_metrics_endpoint is None:
+            self.enable_metrics_endpoint = self.environment == Environment.DEVELOPMENT
         if not self.jwt_secret:
             # Provide a stable development fallback
             if self.environment == Environment.DEVELOPMENT:

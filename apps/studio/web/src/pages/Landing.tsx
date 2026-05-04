@@ -634,12 +634,12 @@ function ComposerPanel({ onCreate }: { onCreate: () => void }) {
 
         <div className="mt-3 rounded-[16px] border border-white/[0.08] bg-[#171711] px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a7b68]">Model</p>
-          <p className="mt-1 text-sm font-bold text-white">FLUX.2</p>
+          <p className="mt-1 text-sm font-bold text-white">Nano Banana 2</p>
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
           <div>
-            <p className="text-[12px] font-bold text-white">3 Credits</p>
+            <p className="text-[12px] font-bold text-white">20 Credits</p>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8a7b68]">1 variation reserve</p>
           </div>
           <button

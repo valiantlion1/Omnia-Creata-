@@ -66,9 +66,17 @@ from .ai_provider_catalog import (
 from .models import IdentityPlan
 from .prompt_engineering import PromptProfileAnalysis, analyze_generation_prompt_profile
 from .studio_model_contract import (
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
+    STUDIO_DESIGN_IMAGE_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
+    STUDIO_IDEOGRAM_MODEL_ID,
+    STUDIO_MULTI_REFERENCE_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_QUICK_IMAGE_MODEL_ID,
+    STUDIO_SEEDREAM_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
+    STUDIO_TEXT_IMAGE_MODEL_ID,
     is_fast_model_id,
     is_high_fidelity_model_id,
     is_signature_model_id,
@@ -802,6 +810,37 @@ class RunwareProvider(StudioImageProvider):
         megapixels = max(1, int(((width * height) + (1024 * 1024) - 1) / (1024 * 1024)))
         reference_megapixels = 1 if has_reference_image or workflow in {"image_to_image", "edit"} else 0
 
+        if normalized_model == STUDIO_QUICK_IMAGE_MODEL_ID:
+            return 0.039
+        if normalized_model == STUDIO_DEFAULT_IMAGE_MODEL_ID:
+            raw_megapixels = max((max(width, 0) * max(height, 0)) / float(1024 * 1024), 0.0)
+            longest_edge = max(width, height)
+            if longest_edge >= 3000 or raw_megapixels >= 6.0:
+                base_cost = 0.15295
+            elif raw_megapixels >= 3.5:
+                base_cost = 0.10255
+            else:
+                base_cost = 0.06895
+            return round(base_cost + (0.00028 * reference_megapixels), 6)
+        if normalized_model == STUDIO_CINEMATIC_IMAGE_MODEL_ID:
+            return 0.072 if reference_megapixels else 0.07
+        if normalized_model == STUDIO_MULTI_REFERENCE_MODEL_ID:
+            return 0.075
+        if normalized_model == STUDIO_TEXT_IMAGE_MODEL_ID:
+            raw_megapixels = max((max(width, 0) * max(height, 0)) / float(1024 * 1024), 0.0)
+            if raw_megapixels >= 6.0:
+                return 0.16359
+            if raw_megapixels >= 3.5:
+                return 0.12
+            if raw_megapixels >= 1.5:
+                return 0.08
+            return 0.006
+        if normalized_model == STUDIO_DESIGN_IMAGE_MODEL_ID:
+            return 0.04
+        if normalized_model == STUDIO_IDEOGRAM_MODEL_ID:
+            return 0.06
+        if normalized_model == STUDIO_SEEDREAM_MODEL_ID:
+            return 0.04
         if normalized_model == STUDIO_FAST_MODEL_ID:
             return round(0.00078 * megapixels + (0.00078 * reference_megapixels), 6)
         if normalized_model == STUDIO_STANDARD_MODEL_ID:
@@ -839,6 +878,7 @@ class RunwareProvider(StudioImageProvider):
         resolved_acceleration = model_defaults.get("acceleration")
         resolved_true_cfg_scale = model_defaults.get("true_cfg_scale")
         prompt_upsampling = bool(model_defaults.get("prompt_upsampling"))
+        omit_steps_cfg = bool(model_defaults.get("omit_steps_cfg"))
         normalized_workflow = normalize_generation_workflow(
             workflow,
             has_reference_image=reference_image is not None,
@@ -863,14 +903,14 @@ class RunwareProvider(StudioImageProvider):
         # Runware rejects empty or too-short negative prompts; omit them unless they are valid.
         if len(cleaned_negative_prompt) >= 2:
             payload["negativePrompt"] = cleaned_negative_prompt
-        if resolved_steps is not None:
+        if resolved_steps is not None and not omit_steps_cfg:
             payload["steps"] = min(max(int(resolved_steps), 1), 50)
-        elif normalized_workflow not in {"image_to_image", "edit"}:
+        elif normalized_workflow not in {"image_to_image", "edit"} and not omit_steps_cfg:
             payload["steps"] = min(max(steps, 1), 50)
 
-        if resolved_cfg_scale is not None:
+        if resolved_cfg_scale is not None and not omit_steps_cfg:
             payload["CFGScale"] = float(resolved_cfg_scale)
-        elif normalized_workflow not in {"image_to_image", "edit"}:
+        elif normalized_workflow not in {"image_to_image", "edit"} and not omit_steps_cfg:
             payload["CFGScale"] = cfg_scale
 
         if resolved_acceleration:
@@ -886,6 +926,19 @@ class RunwareProvider(StudioImageProvider):
                 "bfl": {
                     "promptUpsampling": True,
                 }
+            }
+        configured_settings = model_defaults.get("settings")
+        if isinstance(configured_settings, dict):
+            payload["settings"] = {
+                **dict(payload.get("settings") or {}),
+                **configured_settings,
+            }
+
+        configured_provider_settings = model_defaults.get("provider_settings")
+        if isinstance(configured_provider_settings, dict):
+            payload["providerSettings"] = {
+                **dict(payload.get("providerSettings") or {}),
+                **configured_provider_settings,
             }
 
         if normalized_workflow in {"image_to_image", "edit"}:

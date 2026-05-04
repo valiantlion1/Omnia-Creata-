@@ -18,6 +18,16 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.02.245`
+- Date: `2026-05-02`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The public paid launch economics needed to stop depending on the older four-lane `Fast / Standard / Premium / Signature` story. Studio now needs recognizable modern model names, 2K default paid output, quote-aware credit holds, and the same credit engine whether the user generates from `Create` or from `Chat`.
+- What:
+  `.245` implements the model-routing and credit-economics decision from `09_MODEL_ROUTING_AND_CREDIT_DECISION_2026_05_02.md`. The public catalog now centers `Nano Banana 2` as the default 2K route, keeps `Nano Banana` as quick chat/draft, adds `Grok Imagine Pro`, `Wan 2.7 Image Pro`, `GPT Image 2`, `Recraft V4`, `Ideogram 3.0`, `Seedream 4.5`, and preserves `FLUX.2 Max` as the premium final lane. `Qwen-Image-2512`, `FLUX.2 Klein`, and `FLUX.2 Flex / Signature` remain internal/compatibility lanes instead of public cards. Credit holds now account for model floor, output count, reference surcharge, high-resolution stress cases, and provider quote floors; `Nano Banana 2` defaults to 20 credits at 2K and 28 credits for 4K/high-MP stress. The billing credit guide uses default render dimensions rather than each model's maximum dimensions, so the default Create screen shows the 20-credit 2K hold instead of a 4K/stress hold. Launch package defaults move to Creator `$12 / 400`, Pro `$29 / 1200`, Small Pack `$10 / 200`, and Large Pack `$29 / 800`.
+  Verification on `.245` is focused contract proof, not live launch proof. From `apps/studio/backend`, model/pricing/profile/backend-spine tests pass with `32 passed`, Runware provider tests pass with `4 passed`, focused service-regression pricing/chat checks pass with `10 passed`, and `python -m compileall config studio_platform` passes. The local test environment required `PROTECTED_BETA_CHAT_PROVIDER=openrouter` because the machine `.env` still contains an invalid chat-provider value. From `apps/studio/web`, focused Create/Chat/Elements/Billing tests pass with `9 passed`, `npm run type-check` passes, and `npm run build` passes. Browser route proof against the existing `127.0.0.1:5173` host passes for `/create` desktop/mobile and `/chat` desktop/mobile with zero failed routes. After a local backend restart, live `/v1/version` reports `build=2026.05.02.245` and `bootBuild=2026.05.02.245`, `/v1/models` exposes the new public model catalog, and `/create` desktop proof shows `Nano Banana 2` at `20 Credits`. A wider backend grouped command timed out before completion and is not counted as green. Live Runware smoke, protected staging, Paddle live checkout, and Turnstile activation remain unrun.
+
 ### `0.6.0-alpha` / build `2026.04.27.232`
 - Date: `2026-04-27`
 - Codename: `Foundation`

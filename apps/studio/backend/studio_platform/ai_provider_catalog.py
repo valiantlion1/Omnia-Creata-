@@ -10,10 +10,18 @@ from .contract_catalog import (
     build_contract_freeze_summary,
 )
 from .studio_model_contract import (
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
+    STUDIO_DESIGN_IMAGE_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
+    STUDIO_IDEOGRAM_MODEL_ID,
+    STUDIO_MULTI_REFERENCE_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_QUICK_IMAGE_MODEL_ID,
+    STUDIO_SEEDREAM_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
+    STUDIO_TEXT_IMAGE_MODEL_ID,
     resolve_studio_model_openai_quality,
 )
 
@@ -26,6 +34,14 @@ STUDIO_OPENAI_IMAGE_QUALITY_BY_MODEL_ID: dict[str, str] = {
     STUDIO_STANDARD_MODEL_ID: "medium",
     STUDIO_PREMIUM_MODEL_ID: "high",
     STUDIO_SIGNATURE_MODEL_ID: "high",
+    STUDIO_QUICK_IMAGE_MODEL_ID: "low",
+    STUDIO_DEFAULT_IMAGE_MODEL_ID: "high",
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID: "high",
+    STUDIO_MULTI_REFERENCE_MODEL_ID: "high",
+    STUDIO_TEXT_IMAGE_MODEL_ID: "high",
+    STUDIO_DESIGN_IMAGE_MODEL_ID: "medium",
+    STUDIO_IDEOGRAM_MODEL_ID: "high",
+    STUDIO_SEEDREAM_MODEL_ID: "high",
     "flux-schnell": "low",
     "sdxl-base": "medium",
     "realvis-xl": "high",

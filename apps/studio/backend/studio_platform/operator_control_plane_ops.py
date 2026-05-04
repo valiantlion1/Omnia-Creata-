@@ -13,7 +13,7 @@ from .ai_provider_catalog import (
 from .experience_contract_ops import build_model_route_preview
 from .model_catalog_ops import list_model_catalog_entries
 from .models import IdentityPlan, ModelCatalogEntry
-from .studio_model_contract import STUDIO_FAST_MODEL_ID, resolve_studio_model_openai_quality
+from .studio_model_contract import STUDIO_DEFAULT_IMAGE_MODEL_ID, resolve_studio_model_openai_quality
 
 
 def build_operator_studio_model_catalog(
@@ -87,7 +87,7 @@ def build_operator_surface_matrix(
                 "user_label": model["label"],
                 "internal_tier": model["id"],
                 "selected_provider": pro_route["planned_provider"],
-                "protected_beta_default": model["id"] == STUDIO_FAST_MODEL_ID,
+                "protected_beta_default": model["id"] == STUDIO_DEFAULT_IMAGE_MODEL_ID,
                 "request_model": model["default_openai_request_model"],
                 "request_quality": model["default_openai_quality"],
                 "estimated_cost_usd": model["default_openai_estimated_cost_usd"],

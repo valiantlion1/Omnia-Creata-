@@ -420,7 +420,7 @@ export default function CreatePage() {
 
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [selectedModelId, setSelectedModelId] = useState('flux-2-klein')
+  const [selectedModelId, setSelectedModelId] = useState('nano-banana-2')
   const [aspectRatio, setAspectRatio] = useState<keyof typeof aspectPresets>('1:1')
   const [steps, setSteps] = useState(DEFAULT_CREATE_STEPS)
   const [cfgScale, setCfgScale] = useState(DEFAULT_CFG_SCALE)
@@ -500,7 +500,7 @@ export default function CreatePage() {
     [canUseLocalModels, modelsQuery.data],
   )
   const visibleModels = useMemo(
-    () => models.filter((entry) => getCreativeProfileKey(entry.id) !== 'signature'),
+    () => models.filter((entry) => !['signature', 'internal'].includes(getCreativeProfileKey(entry.id))),
     [models],
   )
   const recentSessions = recentSessionsQuery.data?.generations ?? []

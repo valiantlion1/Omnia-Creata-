@@ -8,6 +8,7 @@ from .creative_profile_ops import resolve_creative_profile
 from .experience_contract_ops import build_render_experience
 from .generation_pricing_ops import build_generation_pricing_quote
 from .models import IdentityPlan, ModelCatalogEntry
+from .model_catalog_ops import resolve_generation_dimensions_for_model
 from .providers import ProviderRegistry
 
 _LANE_ORDER = {"draft": 0, "standard": 1, "final": 2, "fallback": 3, "degraded": 4}
@@ -74,10 +75,14 @@ def build_generation_credit_forecasts(
             has_reference_image=False,
             wallet_backed=identity_plan == IdentityPlan.FREE and billing_state.extra_credits > 0,
         )
+        default_width, default_height = resolve_generation_dimensions_for_model(
+            model=model,
+            aspect_ratio="1:1",
+        )
         provider_estimated_cost = providers.estimate_generation_cost(
             provider_name=routing_decision.selected_provider,
-            width=model.max_width,
-            height=model.max_height,
+            width=default_width,
+            height=default_height,
             model_id=model.id,
             workflow=routing_decision.workflow,
             has_reference_image=False,
@@ -87,8 +92,8 @@ def build_generation_credit_forecasts(
             routing_decision=routing_decision,
             requested_model_id=model.id,
             workflow=routing_decision.workflow,
-            width=model.max_width,
-            height=model.max_height,
+            width=default_width,
+            height=default_height,
             output_count=1,
             provider_estimated_cost=provider_estimated_cost,
             legacy_model=model,

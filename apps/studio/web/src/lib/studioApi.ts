@@ -351,7 +351,19 @@ export function isTerminalJobStatus(status: JobStatus) {
   return normalized === 'succeeded' || normalized === 'failed' || normalized === 'retryable_failed' || normalized === 'cancelled' || normalized === 'timed_out'
 }
 
-type CreativeProfileKey = 'fast' | 'standard' | 'premium' | 'signature' | 'studio-default'
+type CreativeProfileKey =
+  | 'quick-image'
+  | 'default-image'
+  | 'cinematic'
+  | 'premium-final'
+  | 'multi-reference'
+  | 'text-layout'
+  | 'design'
+  | 'typography'
+  | 'precision-edit'
+  | 'internal'
+  | 'signature'
+  | 'studio-default'
 
 function cleanCreativeProfileLabel(value: string) {
   return value
@@ -368,6 +380,30 @@ function cleanCreativeProfileLabel(value: string) {
 
 export function getCreativeProfileKey(modelId: string | null | undefined): CreativeProfileKey {
   const normalized = modelId?.trim().toLowerCase() ?? ''
+  if (normalized.includes('nano-banana-2') || normalized.includes('nano banana 2') || normalized.includes('google:4@3')) {
+    return 'default-image'
+  }
+  if (normalized.includes('nano-banana') || normalized.includes('nano banana') || normalized.includes('google:4@1')) {
+    return 'quick-image'
+  }
+  if (normalized.includes('grok-imagine-pro') || normalized.includes('grok imagine pro') || normalized.includes('xai:grok-imagine@image-pro')) {
+    return 'cinematic'
+  }
+  if (normalized.includes('wan-2-7-image-pro') || normalized.includes('wan 2.7 image pro') || normalized.includes('alibaba:wan@2.7-image-pro')) {
+    return 'multi-reference'
+  }
+  if (normalized.includes('gpt-image-2') || normalized.includes('gpt image 2') || normalized.includes('openai:gpt-image@2')) {
+    return 'text-layout'
+  }
+  if (normalized.includes('recraft-v4') || normalized.includes('recraft v4') || normalized.includes('recraft:v4@0')) {
+    return 'design'
+  }
+  if (normalized.includes('ideogram-3') || normalized.includes('ideogram 3') || normalized.includes('ideogram:4@1')) {
+    return 'typography'
+  }
+  if (normalized.includes('seedream-4-5') || normalized.includes('seedream 4.5') || normalized.includes('bytedance:seedream@4.5')) {
+    return 'precision-edit'
+  }
   if (
     normalized.includes('flux-2-klein') ||
     normalized.includes('flux.2-klein') ||
@@ -375,7 +411,7 @@ export function getCreativeProfileKey(modelId: string | null | undefined): Creat
     normalized.includes('flux-schnell') ||
     normalized.includes('flux.1-schnell')
   ) {
-    return 'fast'
+    return 'internal'
   }
   if (
     normalized.includes('flux-2-dev') ||
@@ -384,15 +420,18 @@ export function getCreativeProfileKey(modelId: string | null | undefined): Creat
     normalized.includes('sdxl') ||
     normalized.includes('stable-diffusion-xl')
   ) {
-    return 'standard'
+    return 'internal'
   }
   if (
+    normalized.includes('flux-2-max') ||
+    normalized.includes('flux.2-max') ||
+    normalized.includes('flux2-max') ||
     normalized.includes('flux-2-pro') ||
     normalized.includes('flux.2-pro') ||
     normalized.includes('flux2-pro') ||
     normalized.includes('realvis')
   ) {
-    return 'premium'
+    return 'premium-final'
   }
   if (
     normalized.includes('flux-2-flex') ||
@@ -407,14 +446,28 @@ export function getCreativeProfileKey(modelId: string | null | undefined): Creat
 
 export function getCreativeProfileLabel(modelId: string | null | undefined, fallbackLabel?: string | null) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast':
-      return 'Fast'
-    case 'standard':
-      return 'Standard'
-    case 'premium':
-      return 'Premium'
+    case 'quick-image':
+      return 'Nano Banana'
+    case 'default-image':
+      return 'Nano Banana 2'
+    case 'cinematic':
+      return 'Grok Imagine Pro'
+    case 'premium-final':
+      return 'FLUX.2 Max'
+    case 'multi-reference':
+      return 'Wan 2.7 Image Pro'
+    case 'text-layout':
+      return 'GPT Image 2'
+    case 'design':
+      return 'Recraft V4'
+    case 'typography':
+      return 'Ideogram 3.0'
+    case 'precision-edit':
+      return 'Seedream 4.5'
+    case 'internal':
+      return 'Studio internal'
     case 'signature':
-      return 'Signature'
+      return 'Internal hold'
     default:
       if (fallbackLabel?.trim()) return cleanCreativeProfileLabel(fallbackLabel)
       if (modelId?.trim()) return cleanCreativeProfileLabel(modelId)
@@ -433,6 +486,24 @@ function getStudioModelFamilyName(value: string | null | undefined) {
   }
   if (normalized.includes('flux-2-klein') || normalized.includes('flux.2 klein') || normalized.includes('flux 2 klein')) {
     return 'FLUX.2'
+  }
+  if (normalized.includes('grok-imagine-pro') || normalized.includes('grok imagine pro') || normalized.includes('xai:grok-imagine@image-pro')) {
+    return 'Grok Imagine Pro'
+  }
+  if (normalized.includes('wan-2-7-image-pro') || normalized.includes('wan 2.7 image pro') || normalized.includes('alibaba:wan@2.7-image-pro')) {
+    return 'Wan 2.7 Image Pro'
+  }
+  if (normalized.includes('gpt-image-2') || normalized.includes('gpt image 2') || normalized.includes('openai:gpt-image@2')) {
+    return 'GPT Image 2'
+  }
+  if (normalized.includes('recraft-v4') || normalized.includes('recraft v4') || normalized.includes('recraft:v4@0')) {
+    return 'Recraft V4'
+  }
+  if (normalized.includes('ideogram-3') || normalized.includes('ideogram 3') || normalized.includes('ideogram:4@1')) {
+    return 'Ideogram 3.0'
+  }
+  if (normalized.includes('seedream-4-5') || normalized.includes('seedream 4.5') || normalized.includes('bytedance:seedream@4.5')) {
+    return 'Seedream 4.5'
   }
   if (normalized.includes('nano-banana-2') || normalized.includes('nano banana 2')) {
     return 'Nano Banana 2'
@@ -499,14 +570,28 @@ export function getCreativeProfileDescription(
   fallbackDescription?: string | null,
 ) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast':
-      return 'Quick starts for ideas, composition tests, and fast modern variations.'
-    case 'standard':
-      return 'Balanced FLUX.2 Dev quality for everyday work when you want clean, dependable detail.'
-    case 'premium':
-      return 'A richer production finish with stronger lighting, materials, and final-pick polish.'
+    case 'quick-image':
+      return 'Quick 1K visual drafting for chat-first ideas and lower-cost prompt exploration.'
+    case 'default-image':
+      return 'Modern 2K Studio output for prompt following, readable text, and everyday final picks.'
+    case 'cinematic':
+      return 'Photoreal and cinematic output for polished editorial scenes and hero images.'
+    case 'premium-final':
+      return 'A flagship final-pick lane for reference-guided production renders and highest-polish selections.'
+    case 'multi-reference':
+      return 'Multi-reference production output for preserving people, products, style cues, and composition.'
+    case 'text-layout':
+      return 'Instruction-heavy image output for text, logos, and layout-aware prompts.'
+    case 'design':
+      return 'Design and marketing visuals for brand assets, product compositions, and controlled style.'
+    case 'typography':
+      return 'Text-forward poster, logo, and graphic-layout output.'
+    case 'precision-edit':
+      return 'Precise multi-reference 2K to 4K composition, small text, and design-heavy edits.'
+    case 'internal':
+      return 'Internal compatibility lane.'
     case 'signature':
-      return 'An internal advanced lane for typography, layout-critical, and brand-system visuals.'
+      return 'Internal hold/manual lane.'
     default:
       return fallbackDescription?.trim() || 'A Studio image quality lane matched to your current plan.'
   }
@@ -514,14 +599,28 @@ export function getCreativeProfileDescription(
 
 export function getCreativeProfileBadge(modelId: string | null | undefined) {
   switch (getCreativeProfileKey(modelId)) {
-    case 'fast':
-      return 'Quick starts'
-    case 'standard':
-      return 'Everyday detail'
-    case 'premium':
-      return 'Presentation ready'
+    case 'quick-image':
+      return 'Quick 1K'
+    case 'default-image':
+      return 'Default 2K'
+    case 'cinematic':
+      return 'Cinematic'
+    case 'premium-final':
+      return 'Premium final'
+    case 'multi-reference':
+      return 'Multi-reference'
+    case 'text-layout':
+      return 'Text and layout'
+    case 'design':
+      return 'Design'
+    case 'typography':
+      return 'Typography'
+    case 'precision-edit':
+      return 'Precision edit'
+    case 'internal':
+      return 'Internal'
     case 'signature':
-      return 'Internal advanced'
+      return 'Internal hold'
     default:
       return 'Studio'
   }

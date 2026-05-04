@@ -14,6 +14,7 @@ archive/_cold-storage/
 .tmp.driveupload/
 archive/imports/
 audit/
+archive/docs/legacy/OmniSystemReport_*/
 
 # Local agent / editor workspace state
 .claude/

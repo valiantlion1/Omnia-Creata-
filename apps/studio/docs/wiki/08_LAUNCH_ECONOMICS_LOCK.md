@@ -5,6 +5,7 @@
 - Effective date: `2026-04-18`
 - Scope: `Controlled Public Paid Launch`
 - This is an internal operations lock, not public marketing copy.
+- Model routing, public image model names, and current credit holds are superseded by `09_MODEL_ROUTING_AND_CREDIT_DECISION_2026_05_02.md` as implemented in build `2026.05.02.245`.
 - This lock does not close `provider_economics` by itself. That blocker stays open until exact current-build Runware lane pricing is signed off together with founder/operator approval.
 
 ## Locked Commercial Shape

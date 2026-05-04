@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
   defaultLocale,
+  getPreferredLocale,
   isLocale,
   localeCookieName,
 } from "@/i18n/config";
@@ -23,15 +24,8 @@ export function middleware(request: NextRequest) {
   const candidate = segments[1];
 
   if (candidate && isLocale(candidate)) {
-    if (candidate !== defaultLocale) {
-      const url = request.nextUrl.clone();
-      const rest = segments.slice(2).join("/");
-      url.pathname = `/${defaultLocale}${rest ? `/${rest}` : ""}`;
-      return NextResponse.redirect(url);
-    }
-
     const response = NextResponse.next();
-    response.cookies.set(localeCookieName, defaultLocale, {
+    response.cookies.set(localeCookieName, candidate, {
       maxAge: 60 * 60 * 24 * 365,
       path: "/",
     });
@@ -39,8 +33,12 @@ export function middleware(request: NextRequest) {
   }
 
   const url = request.nextUrl.clone();
+  const preferredLocale = getPreferredLocale({
+    cookieLocale: request.cookies.get(localeCookieName)?.value,
+    acceptLanguage: request.headers.get("accept-language"),
+  });
   url.pathname =
-    pathname === "/" ? `/${defaultLocale}` : `/${defaultLocale}${pathname}`;
+    pathname === "/" ? `/${preferredLocale}` : `/${defaultLocale}${pathname}`;
 
   return NextResponse.redirect(url);
 }

@@ -50,8 +50,8 @@ def _build_generation_job(**overrides: object) -> GenerationJob:
         estimated_cost=0.0,
         estimated_cost_source="catalog_fallback",
         pricing_lane="fallback",
-        credit_cost=6,
-        reserved_credit_cost=3,
+        credit_cost=4,
+        reserved_credit_cost=2,
         credit_status="reserved",
         output_count=1,
         prompt_snapshot=PromptSnapshot(
@@ -228,14 +228,14 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
         assert payload["routing_strategy"] == "free-first"
         assert payload["routing_reason"] == "free_standard_default"
         assert payload["prompt_profile"] == "generic"
-        assert payload["reserved_credit_cost"] == 3
+        assert payload["reserved_credit_cost"] == 2
         assert payload["final_credit_cost"] is None
         assert payload["credit_charge_policy"] == "none"
         assert payload["credit_status"] == "reserved"
         assert payload["pricing_lane"] == "fallback"
         assert payload["estimated_cost_source"] == "catalog_fallback"
-        assert payload["creative_profile"]["id"] == "fast"
-        assert payload["creative_profile"]["label"] == "Fast"
+        assert payload["creative_profile"]["id"] == "internal-fast"
+        assert payload["creative_profile"]["label"] == "FLUX.2 Klein"
         assert payload["render_experience"]["state"] == "fallback"
     finally:
         await service.shutdown()

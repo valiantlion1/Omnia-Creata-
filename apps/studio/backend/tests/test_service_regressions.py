@@ -43,8 +43,7 @@ from studio_platform.models.identity import (
 )
 from studio_platform.service import DeletedIdentityError, GenerationCapacityError, StudioService
 from studio_platform.studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
-    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
 )
 from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
@@ -2344,28 +2343,28 @@ async def test_settings_and_billing_summary_include_resolved_entitlements(tmp_pa
         "can_sign_out_others": False,
     }
     assert settings_payload["identity"]["entitlements"]["max_chat_attachments"] == 0
-    flux_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_FAST_MODEL_ID)
-    assert flux_model["creative_profile"]["id"] == "fast"
-    assert flux_model["creative_profile"]["label"] == "Fast"
-    assert flux_model["label"] == "Fast"
-    assert flux_model["display_label"] == "Fast"
+    flux_model = next(model for model in settings_payload["models"] if model["id"] == STUDIO_DEFAULT_IMAGE_MODEL_ID)
+    assert flux_model["creative_profile"]["id"] == "default-image"
+    assert flux_model["creative_profile"]["label"] == "Nano Banana 2"
+    assert flux_model["label"] == "Nano Banana 2"
+    assert flux_model["display_label"] == "Nano Banana 2"
     assert flux_model["render_experience"]["state"] in {"ready", "fallback"}
     assert (
         flux_model["route_preview"]["render_experience"]["state"]
         == flux_model["render_experience"]["state"]
     )
-    assert flux_model["route_preview"]["pricing_lane"] in {"draft", "fallback"}
+    assert flux_model["route_preview"]["pricing_lane"] in {"standard", "fallback"}
     assert billing_summary["entitlements"]["can_access_chat"] is False
     assert billing_summary["credits"]["credits_remaining"] == 60
     assert billing_summary["wallet_balance"] == 60
     assert "max_resolution" not in billing_summary["plan"]
     flux_lane = next(
         entry
-        for entry in billing_summary["generation_credit_guide"]["lane_highlights"]
-        if entry["model_id"] == STUDIO_FAST_MODEL_ID
+        for entry in billing_summary["generation_credit_guide"]["models"]
+        if entry["model_id"] == STUDIO_DEFAULT_IMAGE_MODEL_ID
     )
-    assert flux_lane["label"] == "Fast"
-    assert flux_lane["creative_profile"]["id"] == "fast"
+    assert flux_lane["label"] == "Nano Banana 2"
+    assert flux_lane["creative_profile"]["id"] == "default-image"
     assert flux_lane["pricing_lane"] == flux_model["route_preview"]["pricing_lane"]
     assert flux_lane["render_experience"]["state"] == flux_model["render_experience"]["state"]
 
@@ -2599,11 +2598,11 @@ async def test_chat_message_feedback_edit_regenerate_and_revert_flow(tmp_path: P
     assert assistant_message.metadata["routing_strategy"] == "premium-studio"
     assert assistant_message.metadata["generation_bridge"]["workflow"] == "text_to_image"
     assert assistant_message.metadata["generation_bridge"]["prompt"]
-    assert assistant_message.metadata["generation_bridge"]["blueprint"]["model"] == STUDIO_PREMIUM_MODEL_ID
+    assert assistant_message.metadata["generation_bridge"]["blueprint"]["model"] == STUDIO_DEFAULT_IMAGE_MODEL_ID
     assert assistant_message.metadata["generation_bridge"]["blueprint"]["output_count"] == 1
     first_action = assistant_message.suggested_actions[0]
     assert first_action.payload["generation_bridge"]["workflow"] == "text_to_image"
-    assert first_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_PREMIUM_MODEL_ID
+    assert first_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_DEFAULT_IMAGE_MODEL_ID
 
     feedback_message = await service.set_chat_message_feedback(
         identity.id,
@@ -3518,7 +3517,7 @@ async def test_create_generation_prefers_zero_cost_fast_lane_in_development_even
         assert job.provider_candidates[:3] == ["pollinations", "huggingface", "demo"]
         assert "runware" not in job.provider_candidates
         assert job.pricing_lane == "fallback"
-        assert job.reserved_credit_cost == 3
+        assert job.reserved_credit_cost == 2
     finally:
         settings.environment = original_environment
         settings.development_fast_zero_cost_mode_enabled = original_zero_cost_fast_mode
@@ -3825,11 +3824,11 @@ async def test_health_detail_includes_cost_telemetry_summary(tmp_path: Path):
         assert openai_chat["premium_model"]["pricing"]["reference_model"] == "gpt-5.4"
         assert control_plane["image"]["openai"]["draft_model"]["per_image_usd"]["1024x1024"]["low"] == 0.005
         assert control_plane["operator_policy"]["current_operator_source"] == "ai_control_plane.surface_matrix"
-        fast_model = next(item for item in control_plane["studio_models"] if item["id"] == STUDIO_FAST_MODEL_ID)
+        fast_model = next(item for item in control_plane["studio_models"] if item["id"] == STUDIO_DEFAULT_IMAGE_MODEL_ID)
         assert fast_model["default_openai_request_model"] == get_settings().openai_image_draft_model
         assert fast_model["default_openai_estimated_cost_usd"] == 0.005
         create_fast = next(
-            item for item in control_plane["surface_matrix"] if item["id"] == f"create:{STUDIO_FAST_MODEL_ID}"
+            item for item in control_plane["surface_matrix"] if item["id"] == f"create:{STUDIO_DEFAULT_IMAGE_MODEL_ID}"
         )
         assert create_fast["request_model"] == get_settings().openai_image_draft_model
         chat_standard = next(item for item in control_plane["surface_matrix"] if item["id"] == "chat:standard-assist")

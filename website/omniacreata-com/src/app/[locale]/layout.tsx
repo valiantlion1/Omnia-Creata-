@@ -3,9 +3,9 @@ import { Footer } from "@/components/layout/footer";
 import { Navbar } from "@/components/layout/navbar";
 import { DepthBackdrop } from "@/components/experience/depth-backdrop";
 import {
-  defaultLocale,
   getLocaleDirection,
   isLocale,
+  localeCodes,
 } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 
@@ -17,7 +17,7 @@ type LocaleLayoutProps = {
 };
 
 export function generateStaticParams() {
-  return [{ locale: defaultLocale }];
+  return localeCodes.map((locale) => ({ locale }));
 }
 
 export default async function LocaleLayout({
@@ -26,7 +26,7 @@ export default async function LocaleLayout({
 }: LocaleLayoutProps) {
   const { locale } = await params;
 
-  if (!isLocale(locale) || locale !== defaultLocale) {
+  if (!isLocale(locale)) {
     notFound();
   }
 

@@ -17,8 +17,9 @@ from studio_platform.chat_ops import (
 )
 from studio_platform.models import ChatAttachment, ChatMessage, ChatRole
 from studio_platform.studio_model_contract import (
-    STUDIO_FAST_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_QUICK_IMAGE_MODEL_ID,
 )
 
 
@@ -347,7 +348,7 @@ def test_suggested_actions_use_compiled_prompt_candidate():
     assert draft_action.value == candidate.prompt
     assert draft_action.payload["target_surface"] == "chat_composer"
     assert draft_action.payload["generation_bridge"]["prompt"] == candidate.prompt
-    assert draft_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_FAST_MODEL_ID
+    assert draft_action.payload["generation_bridge"]["blueprint"]["model"] == STUDIO_QUICK_IMAGE_MODEL_ID
 
 
 def test_generation_blueprint_prefers_premium_model_for_product_chat():
@@ -366,11 +367,11 @@ def test_generation_blueprint_prefers_premium_model_for_product_chat():
     )
 
     assert blueprint.workflow == "text_to_image"
-    assert blueprint.model == STUDIO_PREMIUM_MODEL_ID
+    assert blueprint.model == STUDIO_DEFAULT_IMAGE_MODEL_ID
     assert blueprint.aspect_ratio == "4:5"
-    assert blueprint.width == 1280
-    assert blueprint.height == 1600
-    assert blueprint.steps >= 30
+    assert blueprint.width == 1856
+    assert blueprint.height == 2304
+    assert blueprint.steps >= 34
 
 
 def test_generation_blueprint_marks_reference_edit_flow():
@@ -398,7 +399,7 @@ def test_generation_blueprint_marks_reference_edit_flow():
     assert blueprint.workflow == "edit"
     assert blueprint.reference_mode == "required"
     assert blueprint.reference_asset_id == "asset-portrait"
-    assert blueprint.model == STUDIO_PREMIUM_MODEL_ID
+    assert blueprint.model == STUDIO_DEFAULT_IMAGE_MODEL_ID
 
 
 def test_follow_up_generation_blueprint_preserves_prior_edit_reference_settings():

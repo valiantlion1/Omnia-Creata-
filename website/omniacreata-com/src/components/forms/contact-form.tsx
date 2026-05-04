@@ -1,8 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { Messages } from "@/i18n/messages";
 import { Button } from "@/components/ui/button";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          callback?: (token: string) => void;
+          "expired-callback"?: () => void;
+          "error-callback"?: () => void;
+          action?: string;
+          theme?: "light" | "dark" | "auto";
+        },
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId?: string) => void;
+    };
+  }
+}
 
 type FormState = {
   status: "idle" | "success" | "error";
@@ -25,9 +45,51 @@ const initialState: FormState = {
   message: "",
 };
 
+const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+let turnstileScriptPromise: Promise<void> | null = null;
+
+function loadTurnstileScript() {
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+
+  if (window.turnstile) {
+    return Promise.resolve();
+  }
+
+  if (turnstileScriptPromise) {
+    return turnstileScriptPromise;
+  }
+
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src^="https://challenges.cloudflare.com/turnstile/v0/api.js"]',
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("turnstile_load_failed")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("turnstile_load_failed"));
+    document.head.appendChild(script);
+  });
+
+  return turnstileScriptPromise;
+}
+
 export function ContactForm({ copy, prefill }: ContactFormProps) {
   const [isPending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(initialState);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileReady, setTurnstileReady] = useState(!turnstileSiteKey);
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
 
   const resolvedCopy = {
     labels: {
@@ -54,6 +116,64 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
       "Share a short note and we will get back to you.",
   };
 
+  useEffect(() => {
+    if (!turnstileSiteKey || !turnstileContainerRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+
+    loadTurnstileScript()
+      .then(() => {
+        if (cancelled || !window.turnstile || !turnstileContainerRef.current) {
+          return;
+        }
+        if (turnstileWidgetIdRef.current) {
+          return;
+        }
+
+        turnstileWidgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
+          sitekey: turnstileSiteKey,
+          action: "contact",
+          theme: "dark",
+          callback: (token) => {
+            setTurnstileToken(token);
+            setTurnstileReady(true);
+          },
+          "expired-callback": () => {
+            setTurnstileToken("");
+            setTurnstileReady(false);
+          },
+          "error-callback": () => {
+            setTurnstileToken("");
+            setTurnstileReady(false);
+            setState({
+              status: "error",
+              message: "Verification could not load. Please refresh and try again.",
+            });
+          },
+        });
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setTurnstileReady(false);
+        setState({
+          status: "error",
+          message: "Verification could not load. Please refresh and try again.",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+      if (turnstileWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(turnstileWidgetIdRef.current);
+        turnstileWidgetIdRef.current = null;
+      }
+    };
+  }, []);
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -62,6 +182,15 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
     startTransition(async () => {
       setState(initialState);
 
+      if (turnstileSiteKey && !turnstileToken) {
+        setTurnstileReady(false);
+        setState({
+          status: "error",
+          message: "Please complete verification before sending.",
+        });
+        return;
+      }
+
       const payload = {
         name: String(formData.get("name") ?? ""),
         email: String(formData.get("email") ?? ""),
@@ -69,6 +198,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         interest: String(formData.get("interest") ?? ""),
         message: String(formData.get("message") ?? ""),
         website: String(formData.get("website") ?? ""),
+        turnstileToken,
       };
 
       const response = await fetch("/api/contact", {
@@ -82,6 +212,11 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
       const result = (await response.json()) as { message?: string };
 
       if (!response.ok) {
+        if (turnstileWidgetIdRef.current && window.turnstile) {
+          window.turnstile.reset(turnstileWidgetIdRef.current);
+          setTurnstileToken("");
+          setTurnstileReady(false);
+        }
         setState({
           status: "error",
           message: result.message ?? "Something went wrong. Please try again.",
@@ -94,6 +229,11 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         message: result.message ?? "Thanks. We will get back to you soon.",
       });
       form.reset();
+      if (turnstileWidgetIdRef.current && window.turnstile) {
+        window.turnstile.reset(turnstileWidgetIdRef.current);
+        setTurnstileToken("");
+        setTurnstileReady(false);
+      }
     });
   }
 
@@ -161,6 +301,12 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         />
       </label>
 
+      {turnstileSiteKey ? (
+        <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
+          <div ref={turnstileContainerRef} />
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p
           className={`text-sm ${
@@ -169,7 +315,13 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         >
           {state.message || resolvedCopy.helper}
         </p>
-        <Button className="min-w-40" size="lg" type="submit" variant="primary">
+        <Button
+          className="min-w-40"
+          disabled={isPending || !turnstileReady}
+          size="lg"
+          type="submit"
+          variant="primary"
+        >
           {isPending ? resolvedCopy.sending : resolvedCopy.submit}
         </Button>
       </div>

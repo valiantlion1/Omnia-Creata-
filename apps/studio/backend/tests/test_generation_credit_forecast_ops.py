@@ -5,6 +5,7 @@ from studio_platform.billing_ops import BillingStateSnapshot
 from studio_platform.generation_credit_forecast_ops import build_generation_credit_forecasts
 from studio_platform.models import IdentityPlan, ModelCatalogEntry
 from studio_platform.providers import ProviderCapabilities, ProviderRegistry, StudioImageProvider
+from studio_platform.studio_model_contract import STUDIO_DEFAULT_IMAGE_MODEL_ID
 
 
 class _FakeProvider(StudioImageProvider):
@@ -80,6 +81,34 @@ def _model(model_id: str, *, credit_cost: int, estimated_cost: float) -> ModelCa
     )
 
 
+def test_credit_forecasts_use_default_render_dimensions_not_model_maximum() -> None:
+    registry = _registry_with(
+        _FakeProvider(name="runware", rollout_tier="primary", billable=True),
+    )
+    summary = build_generation_credit_forecasts(
+        identity_plan=IdentityPlan.PRO,
+        billing_state=_billing_state(available_to_spend=1200),
+        models=[
+            ModelCatalogEntry(
+                id=STUDIO_DEFAULT_IMAGE_MODEL_ID,
+                label="Nano Banana 2",
+                description="Default 2K model with optional 4K maximum.",
+                min_plan=IdentityPlan.FREE,
+                credit_cost=20,
+                estimated_cost=0.10255,
+                max_width=4096,
+                max_height=4096,
+            )
+        ],
+        providers=registry,
+    )
+
+    model = summary["models"][0]
+    assert model["model_id"] == STUDIO_DEFAULT_IMAGE_MODEL_ID
+    assert model["reserved_credit_cost"] == 20
+    assert model["settlement_credit_cost"] == 20
+
+
 def test_credit_forecasts_follow_openai_managed_lane_truth() -> None:
     registry = _registry_with(
         provider_module.OpenAIImageProvider(
@@ -112,9 +141,9 @@ def test_credit_forecasts_follow_openai_managed_lane_truth() -> None:
     assert final["pricing_lane"] == "final"
     assert final["planned_provider"] == "openai"
     assert final["estimated_cost_source"] == "provider_quote"
-    assert final["reserved_credit_cost"] == 12
-    assert final["settlement_credit_cost"] == 12
-    assert final["max_startable_jobs_now"] == 5
+    assert final["reserved_credit_cost"] == 20
+    assert final["settlement_credit_cost"] == 20
+    assert final["max_startable_jobs_now"] == 3
 
 
 def test_credit_forecasts_show_discounted_fallback_hold() -> None:

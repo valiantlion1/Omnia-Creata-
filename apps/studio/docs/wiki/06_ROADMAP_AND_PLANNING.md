@@ -91,14 +91,14 @@ Implications for Studio:
 - do not compete on `cheapest prompt box`
 - compete on premium execution continuity and product trust
 - keep credit packs as the main shock absorber for spiky premium image usage
-- treat `Creator $12` and `Pro $24` as launch assumptions, not forever assumptions
+- treat `Creator $12` and `Pro $29` as launch assumptions, not forever assumptions
 
 Current economics reading:
 - current `Creator` and `Pro` positioning sits below much of the serious creator band in the market
 - current credit-pack pricing is materially stronger than the monthly plans on a per-credit basis
 - the free account only makes sense if image generation stays wallet-backed and tightly bounded
-- if selective OpenAI lanes become the default for broader traffic, package math should be re-signed before scale
-- the current internal stop-loss, burn caps, and lane revenue floor are now written down in [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
+- if high-cost specialist lanes become the default for broader traffic, package math should be re-signed before scale
+- the current model routing, credit floors, and package numbers are now written down in [Model Routing And Credit Decision](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/09_MODEL_ROUTING_AND_CREDIT_DECISION_2026_05_02.md)
 
 Recommended next commercial decisions:
 1. keep `Free Account` as a Create-first wallet entry point, not a free image or free chat sink

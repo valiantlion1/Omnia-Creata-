@@ -7,10 +7,19 @@ from .creative_profile_ops import attach_creative_profile, resolve_creative_prof
 from .experience_contract_ops import build_model_route_preview
 from .models import IdentityPlan, ModelCatalogEntry, OmniaIdentity
 from .studio_model_contract import (
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
+    STUDIO_DESIGN_IMAGE_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
+    STUDIO_IDEOGRAM_MODEL_ID,
+    STUDIO_MULTI_REFERENCE_MODEL_ID,
     STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_PUBLIC_MODEL_IDS,
+    STUDIO_QUICK_IMAGE_MODEL_ID,
+    STUDIO_SEEDREAM_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
+    STUDIO_TEXT_IMAGE_MODEL_ID,
     normalize_studio_model_id,
 )
 
@@ -24,36 +33,227 @@ SUPPORTED_ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "3:2": (3, 2),
 }
 _DIMENSION_MULTIPLE = 64
+_MODEL_ASPECT_DIMENSIONS: dict[str, dict[str, tuple[int, int]]] = {
+    STUDIO_QUICK_IMAGE_MODEL_ID: {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+        "4:5": (896, 1152),
+        "3:4": (864, 1184),
+        "2:3": (832, 1248),
+        "3:2": (1248, 832),
+    },
+    STUDIO_DEFAULT_IMAGE_MODEL_ID: {
+        "1:1": (2048, 2048),
+        "16:9": (2752, 1536),
+        "9:16": (1536, 2752),
+        "4:5": (1856, 2304),
+        "3:4": (1792, 2400),
+        "2:3": (1696, 2528),
+        "3:2": (2528, 1696),
+    },
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID: {
+        "1:1": (2048, 2048),
+        "16:9": (2816, 1536),
+        "9:16": (1536, 2816),
+        "4:5": (1792, 2304),
+        "3:4": (1792, 2560),
+        "2:3": (1728, 2592),
+        "3:2": (2592, 1728),
+    },
+    STUDIO_MULTI_REFERENCE_MODEL_ID: {
+        "1:1": (2048, 2048),
+        "16:9": (2560, 1440),
+        "9:16": (1440, 2560),
+        "4:5": (1728, 2160),
+        "3:4": (1728, 2304),
+        "2:3": (1664, 2496),
+        "3:2": (2496, 1664),
+    },
+    STUDIO_SEEDREAM_MODEL_ID: {
+        "1:1": (2048, 2048),
+        "16:9": (2560, 1440),
+        "9:16": (1440, 2560),
+        "4:5": (1728, 2160),
+        "3:4": (1728, 2304),
+        "2:3": (1664, 2496),
+        "3:2": (2496, 1664),
+    },
+    STUDIO_DESIGN_IMAGE_MODEL_ID: {
+        "1:1": (1024, 1024),
+        "16:9": (1344, 768),
+        "9:16": (768, 1344),
+        "4:5": (896, 1152),
+        "3:4": (896, 1216),
+        "2:3": (832, 1280),
+        "3:2": (1280, 832),
+    },
+}
 
 # Model catalog
 # estimated_cost is the conservative fallback when the provider does not return
-# a live cost quote for the exact request. The active doctrine is modern
-# Runware-first lanes rather than older SDXL/RealVis/Juggernaut era defaults.
+# a live cost quote for the exact request. Public Studio output now exposes
+# named modern models instead of hiding everything behind the older four-lane
+# Fast/Standard/Premium/Signature shell.
 #
-# Official/public anchors checked on 2026-04-19:
-#   FLUX.2 [klein] 9B   1024x1024 ~ $0.00078 / image
-#   Qwen-Image-2512     1024x1024 ~ $0.0051 / image
-#   FLUX.2 [max]        first MP $0.07, then $0.03 per extra MP
-#   FLUX.2 [flex]       1024x1024 $0.06 / image
+# Official/public anchors refreshed on 2026-05-02:
+#   Nano Banana          google:4@1                    $0.039 / 1K image
+#   Nano Banana 2        google:4@3                    $0.06895 1K, $0.10255 2K, $0.15295 4K
+#   Grok Imagine Pro     xai:grok-imagine@image-pro    $0.07 / text image, ~$0.072 edit
+#   FLUX.2 Max           bfl:7@1                       $0.07 first MP + $0.03 / extra or ref MP
+#   Wan 2.7 Image Pro    alibaba:wan@2.7-image-pro     $0.075 / image
+#   GPT Image 2          openai:gpt-image@2            live provider quote preferred
+#   Recraft V4           recraft:v4@0                  $0.04 / 1K image
+#   Ideogram 3.0         ideogram:4@1                  $0.06 / image
+#   Seedream 4.5         bytedance:seedream@4.5        $0.04 / 2K or 4K image
 
 MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
-    STUDIO_FAST_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_FAST_MODEL_ID,
-        label="Fast",
-        description="Fast interactive previews on FLUX.2 Klein for rapid ideation, composition checks, and low-latency variations.",
+    STUDIO_DEFAULT_IMAGE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_DEFAULT_IMAGE_MODEL_ID,
+        label="Nano Banana 2",
+        description="Default Studio final lane for modern 2K image generation, prompt following, readable text, and strong everyday creative output.",
         min_plan=IdentityPlan.FREE,
-        credit_cost=6,
-        estimated_cost=0.001,
-        max_width=1024,
-        max_height=1024,
+        credit_cost=20,
+        estimated_cost=0.10255,
+        max_width=4096,
+        max_height=4096,
         featured=True,
         runtime="cloud",
         provider_hint="runware",
+        source_id="google:4@3",
+        license_reference="Runware Google Nano Banana 2",
+    ),
+    STUDIO_QUICK_IMAGE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_QUICK_IMAGE_MODEL_ID,
+        label="Nano Banana",
+        description="Quick 1K visual drafting for chat-first ideas, lightweight references, and low-friction prompt exploration.",
+        min_plan=IdentityPlan.FREE,
+        credit_cost=10,
+        estimated_cost=0.039,
+        max_width=1536,
+        max_height=1536,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="google:4@1",
+        license_reference="Runware Google Nano Banana",
+    ),
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_CINEMATIC_IMAGE_MODEL_ID,
+        label="Grok Imagine Pro",
+        description="Photoreal and cinematic image lane for polished editorial scenes, atmospheric realism, and commercial-looking hero images.",
+        min_plan=IdentityPlan.FREE,
+        credit_cost=16,
+        estimated_cost=0.07,
+        max_width=2816,
+        max_height=2816,
+        featured=True,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="xai:grok-imagine@image-pro",
+        license_reference="Runware xAI Grok Imagine Image Pro",
+    ),
+    STUDIO_PREMIUM_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_PREMIUM_MODEL_ID,
+        label="FLUX.2 Max",
+        description="Premium final-pick lane for high-control hero shots, reference-guided production renders, and flagship visual polish.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=20,
+        estimated_cost=0.16,
+        max_width=2048,
+        max_height=2048,
+        featured=True,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="bfl:7@1",
+        license_reference="Runware Black Forest Labs FLUX.2 Max",
+    ),
+    STUDIO_MULTI_REFERENCE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_MULTI_REFERENCE_MODEL_ID,
+        label="Wan 2.7 Image Pro",
+        description="Multi-reference and edit-capable production lane for preserving people, objects, style cues, and composition across references.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=20,
+        estimated_cost=0.075,
+        max_width=4096,
+        max_height=4096,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="alibaba:wan@2.7-image-pro",
+        license_reference="Runware Alibaba Wan 2.7 Image Pro",
+    ),
+    STUDIO_TEXT_IMAGE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_TEXT_IMAGE_MODEL_ID,
+        label="GPT Image 2",
+        description="Instruction-heavy text, layout, and logo-aware image lane. Studio uses live provider cost quotes when this lane is selected.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=24,
+        estimated_cost=0.12,
+        max_width=2048,
+        max_height=2048,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="openai:gpt-image@2",
+        license_reference="Runware OpenAI GPT Image 2",
+    ),
+    STUDIO_DESIGN_IMAGE_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_DESIGN_IMAGE_MODEL_ID,
+        label="Recraft V4",
+        description="Design and marketing visual lane for tasteful 1K brand assets, product compositions, and controlled visual language.",
+        min_plan=IdentityPlan.FREE,
+        credit_cost=10,
+        estimated_cost=0.04,
+        max_width=1536,
+        max_height=1536,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="recraft:v4@0",
+        license_reference="Runware Recraft V4",
+    ),
+    STUDIO_IDEOGRAM_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_IDEOGRAM_MODEL_ID,
+        label="Ideogram 3.0",
+        description="Text-forward poster, logo, typography, and graphic-layout lane when readable words matter more than photoreal polish.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=14,
+        estimated_cost=0.06,
+        max_width=2048,
+        max_height=2048,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="ideogram:4@1",
+        license_reference="Runware Ideogram 3.0",
+    ),
+    STUDIO_SEEDREAM_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_SEEDREAM_MODEL_ID,
+        label="Seedream 4.5",
+        description="High-fidelity multi-reference lane for precise 2K to 4K composition, small text, and design-heavy image edits.",
+        min_plan=IdentityPlan.CREATOR,
+        credit_cost=18,
+        estimated_cost=0.04,
+        max_width=4096,
+        max_height=4096,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="bytedance:seedream@4.5",
+        license_reference="Runware ByteDance Seedream 4.5",
+    ),
+    STUDIO_FAST_MODEL_ID: ModelCatalogEntry(
+        id=STUDIO_FAST_MODEL_ID,
+        label="FLUX.2 Klein",
+        description="Internal compatibility lane for older fast-preview requests and development zero-cost routing checks.",
+        min_plan=IdentityPlan.FREE,
+        credit_cost=4,
+        estimated_cost=0.001,
+        max_width=1024,
+        max_height=1024,
+        runtime="cloud",
+        provider_hint="runware",
+        source_id="runware:400@2",
     ),
     STUDIO_STANDARD_MODEL_ID: ModelCatalogEntry(
         id=STUDIO_STANDARD_MODEL_ID,
-        label="Standard",
-        description="Balanced Qwen image quality for dependable detail, stronger text and layout handling, and modern everyday output.",
+        label="Qwen Image 2512",
+        description="Internal compatibility lane for older standard requests and Qwen-specific proof coverage.",
         min_plan=IdentityPlan.FREE,
         credit_cost=8,
         estimated_cost=0.0051,
@@ -61,37 +261,31 @@ MODEL_CATALOG: dict[str, ModelCatalogEntry] = {
         max_height=1536,
         runtime="cloud",
         provider_hint="runware",
-    ),
-    STUDIO_PREMIUM_MODEL_ID: ModelCatalogEntry(
-        id=STUDIO_PREMIUM_MODEL_ID,
-        label="Premium",
-        description="Flagship FLUX.2 Max output for premium campaign visuals, multi-reference hero shots, and highest-control final picks.",
-        min_plan=IdentityPlan.CREATOR,
-        credit_cost=12,
-        estimated_cost=0.070,
-        max_width=2048,
-        max_height=2048,
-        featured=True,
-        runtime="cloud",
-        provider_hint="runware",
+        source_id="alibaba:qwen-image@2512",
     ),
     STUDIO_SIGNATURE_MODEL_ID: ModelCatalogEntry(
         id=STUDIO_SIGNATURE_MODEL_ID,
-        label="Signature",
-        description="Internal FLUX.2 Flex lane for typography, layout-critical compositions, and advanced brand-system visuals.",
+        label="FLUX.2 Flex",
+        description="Internal hold/manual lane for advanced brand-system work. It is not part of the public self-serve catalog.",
         min_plan=IdentityPlan.PRO,
-        credit_cost=16,
+        credit_cost=40,
         estimated_cost=0.060,
         max_width=2048,
         max_height=2048,
         runtime="cloud",
+        owner_only=True,
         provider_hint="runware",
+        source_id="bfl:6@1",
     ),
 }
 
 
 def list_model_catalog_entries() -> list[ModelCatalogEntry]:
-    return [attach_creative_profile(model) for model in MODEL_CATALOG.values()]
+    return [
+        attach_creative_profile(MODEL_CATALOG[model_id])
+        for model_id in STUDIO_PUBLIC_MODEL_IDS
+        if model_id in MODEL_CATALOG
+    ]
 
 
 def get_model_catalog_entry(model_id: str) -> ModelCatalogEntry | None:
@@ -153,6 +347,8 @@ def validate_model_for_identity(
         raise PermissionError("This model requires Pro")
     if effective_plan == IdentityPlan.GUEST:
         raise PermissionError("Guests cannot generate images")
+    if model.owner_only and not (identity.owner_mode or identity.root_admin or identity.local_access):
+        raise PermissionError("This model is not available for self-serve generation")
 
 
 def validate_dimensions_for_model(
@@ -196,6 +392,12 @@ def resolve_generation_dimensions_for_model(
     aspect_ratio: str,
 ) -> tuple[int, int]:
     normalized_ratio = normalize_generation_aspect_ratio(aspect_ratio)
+    model_dimensions = _MODEL_ASPECT_DIMENSIONS.get(normalize_studio_model_id(model.id))
+    if model_dimensions is not None and normalized_ratio in model_dimensions:
+        width, height = model_dimensions[normalized_ratio]
+        validate_dimensions_for_model(width=width, height=height, model=model)
+        return width, height
+
     ratio_width, ratio_height = SUPPORTED_ASPECT_RATIOS[normalized_ratio]
     scale = min(model.max_width / ratio_width, model.max_height / ratio_height)
     if scale <= 0:

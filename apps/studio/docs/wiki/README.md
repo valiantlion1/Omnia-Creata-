@@ -26,7 +26,9 @@ Use it to answer five questions fast:
 - [Roadmap And Planning](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/06_ROADMAP_AND_PLANNING.md)
   What comes next and in what order
 - [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
-  Internal package, lane, stop-loss, and burn-cap truth
+  Historical package, lane, stop-loss, and burn-cap truth before the `.245` model/economics refresh
+- [Model Routing And Credit Decision](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/09_MODEL_ROUTING_AND_CREDIT_DECISION_2026_05_02.md)
+  Implemented modern model matrix, chat image credit rules, and quote-aware credit economics
 
 ## Canonical Use
 
@@ -52,7 +54,7 @@ Current build and operator truth still live in:
 - `Protected Beta Hardening` is closed as the baseline that got Studio here
 - The active frame is `Controlled Public Paid Launch`
 - Current launch packaging shape is `Free Account`, `Creator`, `Pro`, and `Credit Packs`
-- Current public image quality shape is `Fast`, `Standard`, and `Premium`
+- Current public image quality shape is named modern models, with `Nano Banana 2` as the default 2K image route and `FLUX.2 Max` kept as premium final
 - Exact package numbers belong to the backend catalog, not static docs copy
 - Current public-paid blockers remain:
   - `provider_mix`

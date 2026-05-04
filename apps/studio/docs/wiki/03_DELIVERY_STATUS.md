@@ -104,15 +104,15 @@ As of `2026-04-14`, official market pricing clusters roughly like this:
 Current Studio package assumptions in the economics dossier:
 - `Free Account`: `0` bundled image credits, chat locked, wallet credit packs allowed for Create
 - `Creator`: `400` monthly credits for `$12/month`
-- `Pro`: `1200` monthly credits for `$24/month`
-- `Credit Pack`: `200` credits for `$8`
-- `Credit Pack`: `800` credits for `$24`
+- `Pro`: `1200` monthly credits for `$29/month`
+- `Credit Pack`: `200` credits for `$10`
+- `Credit Pack`: `800` credits for `$29`
 
 Current internal economics lock:
-- [Launch Economics Lock](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/08_LAUNCH_ECONOMICS_LOCK.md)
-- conservative launch revenue floor is still the `Pro` plan at `$0.02 / credit`
-- public visible image lanes stay `Fast`, `Standard`, and `Premium`
-- `provider_economics` still stays open until exact current-build Runware normal-lane pricing and founder signoff are both current-build true
+- [Model Routing And Credit Decision](/C:/Users/valiantlion/Desktop/OMNIA%20CREATA/apps/studio/docs/wiki/09_MODEL_ROUTING_AND_CREDIT_DECISION_2026_05_02.md)
+- conservative launch floor is now the `Pro` plan at `$29 / 1200 credits`, with payment-fee reserve accounted for in the credit model
+- public visible image lanes now use named modern models, with `Nano Banana 2` as the default 2K route
+- `provider_economics` still stays open until live current-build provider smoke and founder/operator signoff are both true
 
 Interpretation:
 - `Creator` is the new paid entry point instead of a vague starter-to-pro jump

@@ -262,9 +262,9 @@ function resolveVisualExecutionPlan(
     negativePrompt: asString(blueprint?.negative_prompt) || asString(bridge.negative_prompt) || '',
     referenceAssetId: asString(blueprint?.reference_asset_id) || asString(bridge.reference_asset_id),
     referenceMode: asString(blueprint?.reference_mode) || 'none',
-    model: asString(blueprint?.model) || 'flux-2-klein',
-    width: asNumber(blueprint?.width) || 1024,
-    height: asNumber(blueprint?.height) || 1024,
+    model: asString(blueprint?.model) || 'nano-banana-2',
+    width: asNumber(blueprint?.width) || 2048,
+    height: asNumber(blueprint?.height) || 2048,
     steps: asNumber(blueprint?.steps) || 24,
     cfgScale: asNumber(blueprint?.cfg_scale) || 6,
     aspectRatio: asString(blueprint?.aspect_ratio) || '1:1',
@@ -285,7 +285,7 @@ function resolveLatestConversationVisualReferenceAssetId(
 }
 
 function formatChatVisualModelName(model: string | null, mode: ComposeMode) {
-  if (!model) return mode === 'Vision' ? 'Fast Render' : 'Omnia'
+  if (!model) return mode === 'Vision' ? 'Studio render' : 'Omnia'
   return model
     .split(/[-_]/g)
     .filter(Boolean)
@@ -1090,9 +1090,9 @@ export default function ChatPage() {
         negativePrompt: '',
         referenceAssetId: null,
         referenceMode: 'none',
-        model: 'flux-2-klein',
-        width: 1024,
-        height: 1024,
+        model: 'nano-banana-2',
+        width: 2048,
+        height: 2048,
         steps: 24,
         cfgScale: 6,
         aspectRatio: '1:1',

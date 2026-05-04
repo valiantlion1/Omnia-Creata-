@@ -3,6 +3,7 @@ from __future__ import annotations
 from studio_platform.generation_pricing_ops import build_generation_pricing_quote
 from studio_platform.models import IdentityPlan, ModelCatalogEntry
 from studio_platform.providers import GenerationRoutingDecision
+from studio_platform.studio_model_contract import STUDIO_DEFAULT_IMAGE_MODEL_ID, STUDIO_PREMIUM_MODEL_ID
 
 
 def _model(
@@ -146,3 +147,68 @@ def test_degraded_demo_route_stays_free_to_hold() -> None:
     assert quote.estimated_cost_source == "catalog_fallback"
     assert quote.credit_cost == 6
     assert quote.reserved_credit_cost == 0
+
+
+def test_nano_banana_2_keeps_default_2k_credit_floor() -> None:
+    quote = build_generation_pricing_quote(
+        selected_provider="runware",
+        routing_decision=_decision(
+            workflow="text_to_image",
+            selected_provider="runware",
+            provider_candidates=("runware",),
+        ),
+        requested_model_id=STUDIO_DEFAULT_IMAGE_MODEL_ID,
+        workflow="text_to_image",
+        width=2048,
+        height=2048,
+        output_count=1,
+        provider_estimated_cost=0.10255,
+        legacy_model=_model(STUDIO_DEFAULT_IMAGE_MODEL_ID, credit_cost=20, estimated_cost=0.10255),
+    )
+
+    assert quote.pricing_lane == "standard"
+    assert quote.credit_cost == 20
+    assert quote.reserved_credit_cost == 20
+
+
+def test_nano_banana_2_4k_uses_stress_credit_floor() -> None:
+    quote = build_generation_pricing_quote(
+        selected_provider="runware",
+        routing_decision=_decision(
+            workflow="text_to_image",
+            selected_provider="runware",
+            provider_candidates=("runware",),
+        ),
+        requested_model_id=STUDIO_DEFAULT_IMAGE_MODEL_ID,
+        workflow="text_to_image",
+        width=4096,
+        height=4096,
+        output_count=1,
+        provider_estimated_cost=0.15295,
+        legacy_model=_model(STUDIO_DEFAULT_IMAGE_MODEL_ID, credit_cost=20, estimated_cost=0.10255),
+    )
+
+    assert quote.credit_cost == 28
+    assert quote.reserved_credit_cost == 28
+
+
+def test_flux_max_reference_run_uses_reference_surcharge() -> None:
+    quote = build_generation_pricing_quote(
+        selected_provider="runware",
+        routing_decision=_decision(
+            workflow="image_to_image",
+            selected_provider="runware",
+            provider_candidates=("runware",),
+        ),
+        requested_model_id=STUDIO_PREMIUM_MODEL_ID,
+        workflow="image_to_image",
+        width=2048,
+        height=2048,
+        output_count=1,
+        provider_estimated_cost=0.19,
+        legacy_model=_model(STUDIO_PREMIUM_MODEL_ID, credit_cost=20, estimated_cost=0.16),
+    )
+
+    assert quote.pricing_lane == "final"
+    assert quote.credit_cost == 24
+    assert quote.reserved_credit_cost == 24
