@@ -1614,6 +1614,20 @@ async def test_generation_creation_records_reserve_audit_entry(
 
 
 @pytest.mark.asyncio
+async def test_retired_paddle_webhook_processing_is_disabled(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    service, _, _ = await _build_service(tmp_path, providers=_registry_with())
+    try:
+        with pytest.raises(RuntimeError, match="Paddle webhook processing is retired and disabled"):
+            await service.process_paddle_webhook({"event_type": "transaction.completed", "data": {}})
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
+@pytest.mark.asyncio
 async def test_subscription_cancelled_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1660,6 +1674,7 @@ async def test_subscription_cancelled_fails_closed_to_free_entitlements_but_pres
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_subscription_expired_clamps_to_free_without_granting_new_monthly_credits(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1703,6 +1718,7 @@ async def test_subscription_expired_clamps_to_free_without_granting_new_monthly_
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_subscription_past_due_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1749,6 +1765,7 @@ async def test_subscription_past_due_fails_closed_to_free_entitlements_but_prese
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_subscription_paused_fails_closed_to_free_entitlements_but_preserves_wallet_balance(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1831,6 +1848,7 @@ async def test_inactive_paid_subscription_cannot_start_pro_only_generation_lane(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_subscription_renewal_resets_allowance_and_is_idempotent(
     tmp_path: Path,
     _web_runtime_mode: None,
@@ -1878,6 +1896,7 @@ async def test_subscription_renewal_resets_allowance_and_is_idempotent(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_billing_summary_surfaces_recent_manual_refund_review_case_for_subscription_charge(
     tmp_path: Path,
     _web_runtime_mode: None,

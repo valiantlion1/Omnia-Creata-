@@ -168,6 +168,11 @@ function isRetryableOAuthAuthSyncError(error: unknown) {
   return /offline right now|temporarily unavailable|request failed with 503|timed out|timeout/i.test(message)
 }
 
+function isPendingAccessError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /access request received|review it before enabling studio access/i.test(message)
+}
+
 function isOAuthCallbackUrl() {
   if (typeof window === 'undefined') return false
   const currentUrl = new URL(window.location.href)
@@ -470,6 +475,14 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
       }
 
       if (authSyncError) {
+        if (isPendingAccessError(authSyncError)) {
+          try {
+            await supabaseBrowser.auth.signOut()
+          } catch {
+            // Best-effort cleanup only; the backend has already denied Studio access.
+          }
+          clearPersistedAuthState()
+        }
         clearOAuthCallbackUrl()
         throw authSyncError instanceof Error
           ? authSyncError

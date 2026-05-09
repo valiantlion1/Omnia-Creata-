@@ -1,4 +1,4 @@
-﻿import { LegalList, LegalPage, LegalPlaceholder, LegalSection, type LegalTocItem } from '@/components/LegalPage'
+import { LegalList, LegalPage, LegalPlaceholder, LegalSection, type LegalTocItem } from '@/components/LegalPage'
 import { LEGAL_EFFECTIVE_DATE_LABEL, LEGAL_LAST_UPDATED_LABEL } from '@/lib/legalConfig'
 
 const toc: LegalTocItem[] = [
@@ -7,7 +7,7 @@ const toc: LegalTocItem[] = [
   { id: 's3', title: '3. Eligibility and account' },
   { id: 's4', title: '4. The Service' },
   { id: 's5', title: '5. Subscriptions and credits' },
-  { id: 's6', title: '6. Payments, taxes, and Paddle' },
+  { id: 's6', title: '6. Payments and taxes' },
   { id: 's7', title: '7. Cancellation and refunds' },
   { id: 's8', title: '8. Free trials and promotional credits' },
   { id: 's9', title: '9. Your content and license grant' },
@@ -39,7 +39,7 @@ export default function TermsPage() {
       subtitle="These Terms are the agreement between you and Omnia Creata governing your use of the Omnia Creata Studio platform and related services. Read them carefully."
       lastUpdated={LEGAL_LAST_UPDATED_LABEL}
       effectiveDate={LEGAL_EFFECTIVE_DATE_LABEL}
-      summary="You can use Studio to generate images. You own what you make. We charge a monthly fee through Paddle for access and a credit allowance. You agree to follow the Acceptable Use Policy and you accept that generated images may occasionally resemble existing works, which is why you are responsible for reviewing them before commercial use."
+      summary="You can use Studio to generate images. You own what you make. Paid checkout is not open during hidden beta; when payments become available, the current provider, prices, and tax handling will be shown before purchase. You agree to follow the Acceptable Use Policy and you accept that generated images may occasionally resemble existing works, which is why you are responsible for reviewing them before commercial use."
       toc={toc}
     >
       <LegalSection id="s1" title="1. About these Terms">
@@ -77,7 +77,7 @@ export default function TermsPage() {
             <span><strong className="text-white">Content</strong> means any prompts, text, images, uploads, configurations, metadata, or other materials submitted to or produced through the Service, including Generated Output.</span>,
             <span><strong className="text-white">Credits</strong> means the metered usage units that are consumed when you use certain features of the Service, including image generation.</span>,
             <span><strong className="text-white">Generated Output</strong> means images, Chat responses, and other media produced by the Service in response to your prompts or inputs.</span>,
-            <span><strong className="text-white">Paddle</strong> means Paddle.com Market Limited (or its applicable affiliate), acting as our merchant of record and payment processor.</span>,
+            <span><strong className="text-white">Payment Provider</strong> means the payment processor or merchant-of-record service we select and disclose before any paid checkout is opened.</span>,
             <span><strong className="text-white">Plan</strong> means the subscription tier you select, which determines the price, monthly Credit allowance, and feature set available to your Account.</span>,
             <span><strong className="text-white">User Content</strong> means the Content you submit to the Service, excluding Generated Output.</span>,
           ]}
@@ -96,7 +96,7 @@ export default function TermsPage() {
           <strong className="text-white">3.2 Account creation.</strong> You agree to provide accurate,
           current, and complete information when registering, and to keep that information up to date.
           You are responsible for safeguarding your credentials and for all activity that occurs through
-          your Account. Notify us at <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> without undue delay
+          your Account. Notify us at <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a> without undue delay
           if you suspect unauthorized access.
         </p>
         <p>
@@ -108,7 +108,7 @@ export default function TermsPage() {
           you are not located in, under the control of, or a national or resident of any country subject
           to comprehensive sanctions, and that you are not on any restricted-person list administered by
           the United Nations, the European Union, the United Kingdom, the United States, or the Republic
-          of TÃ¼rkiye.
+          of Turkiye.
         </p>
       </LegalSection>
 
@@ -168,33 +168,32 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="s6" title="6. Payments, taxes, and Paddle">
+      <LegalSection id="s6" title="6. Payments and taxes">
         <p>
-          <strong className="text-white">6.1 Merchant of record.</strong> Paddle acts as the merchant
-          of record for all paid transactions on the Service. Paddle processes your payment, collects
-          and remits applicable sales, VAT, or GST, and issues the payment receipt. Your bank or card
-          statement will show "Paddle.net" or a similar identifier as the charging party.
+          <strong className="text-white">6.1 Paid checkout status.</strong> Paid checkout is not open
+          during hidden beta. We will disclose the active Payment Provider, merchant-of-record structure,
+          accepted payment methods, taxes, and receipt flow before accepting any paid transaction.
         </p>
         <p>
           <strong className="text-white">6.2 Authorization.</strong> By subscribing to a paid Plan, you
-          authorize Paddle to charge the payment method you provide for the fees and applicable taxes
-          associated with your Plan, for each billing cycle, until you cancel.
+          authorize the disclosed Payment Provider to charge the payment method you provide for the fees
+          and applicable taxes associated with your Plan, for each billing cycle, until you cancel.
         </p>
         <p>
           <strong className="text-white">6.3 Taxes.</strong> Prices shown at checkout may be exclusive
-          or inclusive of tax depending on your location. Paddle determines and applies the correct
-          tax treatment. If you have a valid VAT or tax identification number, enter it at checkout or
-          in Billing so Paddle can apply the reverse-charge mechanism where applicable.
+          or inclusive of tax depending on your location. The disclosed Payment Provider may determine,
+          collect, and remit the applicable sales, VAT, GST, or similar tax. If you have a valid VAT or
+          tax identification number, enter it at checkout or in Billing when that field is available.
         </p>
         <p>
           <strong className="text-white">6.4 Failed payments.</strong> If a renewal payment fails,
-          Paddle will retry the payment method over several days. During this period, your Account
-          enters a grace state and continues to function. If the payment cannot ultimately be
-          collected, the subscription is canceled and your Account reverts to the free tier.
+          we or the Payment Provider may retry the payment method over several days. During this period,
+          your Account may enter a grace state. If payment cannot ultimately be collected, the
+          subscription is canceled and your Account reverts to the free tier.
         </p>
         <p>
           <strong className="text-white">6.5 Billing disputes.</strong> Billing disputes should be sent
-          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>. Where Paddle is required to handle a dispute
+          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a>. Where the Payment Provider is required to handle a dispute
           under applicable consumer or payment law, we will cooperate with them to resolve it.
         </p>
       </LegalSection>
@@ -210,7 +209,7 @@ export default function TermsPage() {
           <strong className="text-white">7.2 Standard refund policy.</strong> Outside of cases where
           the Service materially malfunctions on our side or a charge is clearly unauthorized, we do
           not refund fees paid for elapsed time on a running subscription. Requests must be submitted
-          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> within 14 days of the disputed transaction.
+          to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a> within 14 days of the disputed transaction.
         </p>
         <p>
           <strong className="text-white">7.3 Mandatory consumer rights.</strong> This Section does not
@@ -318,7 +317,7 @@ export default function TermsPage() {
         <p>
           <strong className="text-white">11.3 DMCA / copyright notices.</strong> If you believe User
           Content or Generated Output published through the Service infringes your copyright, send a
-          written notice to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a> including: (a) your physical or
+          written notice to <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a> including: (a) your physical or
           electronic signature; (b) identification of the copyrighted work; (c) identification of the
           allegedly infringing material and a URL; (d) your contact information; (e) a statement of
           good-faith belief that the use is not authorized; and (f) a statement, under penalty of
@@ -337,7 +336,7 @@ export default function TermsPage() {
 
       <LegalSection id="s13" title="13. Third-party services">
         <p>
-          The Service integrates with or relies on third-party services, including Paddle (payments),
+          The Service integrates with or relies on third-party services, including payment providers,
           hosting and cloud infrastructure providers, email delivery providers, analytics, and error
           monitoring. Your use of those third-party services is subject to their own terms and privacy
           policies. We are not responsible for third-party services or their acts and omissions beyond
@@ -374,7 +373,9 @@ export default function TermsPage() {
         </p>
         <p>
           <strong className="text-white">15.4 Effects.</strong> On termination, your license to access
-          the Service ends and we may delete your Account and Content after a reasonable period.
+          the Service ends. If you request account deletion, Studio schedules a 30-day cancelable
+          countdown before final deletion processing, unless a legal, tax, security, fraud, abuse, or
+          dispute obligation requires a narrower record to be retained.
           Sections that by their nature should survive termination (including Sections 9.2, 10, 11,
           16, 17, 18, 26, 27) will survive.
         </p>
@@ -436,7 +437,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="s19" title="19. Consumer rights (EU, UK, TÃ¼rkiye)">
+      <LegalSection id="s19" title="19. Consumer rights (EU, UK, Turkiye)">
         <p>
           <strong className="text-white">19.1 EU/UK right of withdrawal.</strong> If you are a
           consumer located in the European Union or the United Kingdom, you may have a statutory
@@ -447,8 +448,8 @@ export default function TermsPage() {
           supplied.
         </p>
         <p>
-          <strong className="text-white">19.2 TÃ¼rkiye.</strong> If you are a consumer resident in
-          TÃ¼rkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
+          <strong className="text-white">19.2 Turkiye.</strong> If you are a consumer resident in
+          Turkiye, your rights under Law No. 6502 on the Protection of Consumers and the Regulation
           on Distance Contracts apply and are not limited by these Terms. Nothing in these Terms
           removes any non-waivable consumer right available to you under Turkish law.
         </p>
@@ -517,7 +518,7 @@ export default function TermsPage() {
         <p>
           We may send legal notices to the email address associated with your Account or display them
           in the Service. You must send legal notices to us at{' '}
-          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>, with a copy by post to{' '}
+          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a>, with a copy by post to{' '}
           <LegalPlaceholder>Registered Address</LegalPlaceholder>. Notices are deemed given when sent
           by email, or when delivered to the postal address, whichever is earlier.
         </p>
@@ -527,7 +528,7 @@ export default function TermsPage() {
         <p>
           These Terms and any dispute arising out of or relating to them or the Service are governed
           by the laws of the{' '}
-          <LegalPlaceholder>Governing Jurisdiction â€” e.g. Republic of TÃ¼rkiye</LegalPlaceholder>,
+          <LegalPlaceholder>Governing Jurisdiction - e.g. Republic of Turkiye</LegalPlaceholder>,
           without regard to its conflict of laws principles. The United Nations Convention on
           Contracts for the International Sale of Goods does not apply. This choice of law does not
           deprive consumers of the protection of mandatory provisions of the law of their country of
@@ -539,7 +540,7 @@ export default function TermsPage() {
         <p>
           <strong className="text-white">27.1 Informal resolution.</strong> Before bringing a formal
           claim, you agree to first contact us at{' '}
-          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a>{' '}
+          <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a>{' '}
           and attempt in good faith to resolve the dispute. Most concerns can be resolved quickly this
           way.
         </p>
@@ -572,10 +573,10 @@ export default function TermsPage() {
         </p>
         <LegalList
           items={[
-            <span>General legal inquiries: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
-            <span>Billing and refunds: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
-            <span>Product support: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
-            <span>Safety and abuse: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:founder@omniacreata.com">founder@omniacreata.com</a></span>,
+            <span>General legal inquiries: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a></span>,
+            <span>Billing and refunds: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:billing@omniacreata.com">billing@omniacreata.com</a></span>,
+            <span>Product support: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:hello@omniacreata.com">hello@omniacreata.com</a></span>,
+            <span>Safety and abuse: <a className="text-zinc-200 underline decoration-zinc-600 underline-offset-[3px]" href="mailto:privacy@omniacreata.com">privacy@omniacreata.com</a></span>,
             <span>Postal address: <LegalPlaceholder>Registered Address</LegalPlaceholder></span>,
           ]}
         />

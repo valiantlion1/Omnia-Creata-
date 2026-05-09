@@ -8,6 +8,7 @@ import { useStudioAuth } from '@/lib/studioAuth'
 
 const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
 const NEW_ACCOUNT_REDIRECT_PATH = '/create?welcome=1'
+const ACCESS_REQUEST_RECEIVED_PATTERN = /access request received|review it before enabling studio access/i
 
 type LegalDocumentId = 'terms' | 'privacy' | 'acceptable-use'
 
@@ -136,6 +137,7 @@ export default function SignupPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [accessRequestReceived, setAccessRequestReceived] = useState(false)
   const [selectedLegalDocument, setSelectedLegalDocument] =
     useState<LegalDocumentId | null>(null)
 
@@ -163,6 +165,7 @@ export default function SignupPage() {
 
     setSubmitting(true)
     setError(null)
+    setAccessRequestReceived(false)
 
     try {
       await signUp({
@@ -178,7 +181,19 @@ export default function SignupPage() {
       })
       navigate(NEW_ACCOUNT_REDIRECT_PATH, { replace: true })
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to create your account right now.')
+      const message = submitError instanceof Error ? submitError.message : 'Unable to request Studio access right now.'
+      if (ACCESS_REQUEST_RECEIVED_PATTERN.test(message)) {
+        setAccessRequestReceived(true)
+        setDisplayName('')
+        setUsername('')
+        setEmail('')
+        setPassword('')
+        setPasswordConfirmation('')
+        setAcceptedLegal(false)
+        setMarketingOptIn(false)
+      } else {
+        setError(message)
+      }
       if (TURNSTILE_SITE_KEY) {
         setCaptchaToken(null)
         setCaptchaResetKey((value) => value + 1)
@@ -191,6 +206,7 @@ export default function SignupPage() {
   async function handleProvider(provider: 'google') {
     setGoogleBusy(true)
     setError(null)
+    setAccessRequestReceived(false)
 
     try {
       await signInWithProvider(provider, NEW_ACCOUNT_REDIRECT_PATH)
@@ -224,18 +240,18 @@ export default function SignupPage() {
 
         <div className="grid flex-1 gap-12 py-12 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="max-w-2xl">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Create account</div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Hidden beta access</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl md:leading-[1.02]">
-              Create your account. Start in Create.
+              Request Studio access.
             </h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
-              Create the account first. Once you&apos;re in, Create is the direct starting point and plans stay available inside Studio whenever you need more capacity.
+              Studio is live in controlled access while production checks continue. Approved accounts can enter; new requests are reviewed first.
             </p>
             <div className="mt-8 max-w-xl space-y-3 text-sm text-zinc-400">
               {[
-                ['1', 'Create the account'],
-                ['2', 'Open Create and run your first image'],
-                ['3', 'Add credits or move up when you want Chat'],
+                ['1', 'Submit the access request'],
+                ['2', 'We review the account before opening Studio'],
+                ['3', 'Approved accounts enter Create'],
               ].map(([step, label]) => (
                 <div key={step} className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-zinc-200">
@@ -394,6 +410,11 @@ export default function SignupPage() {
             </div>
 
             {error ? <div className="text-sm text-rose-200">{error}</div> : null}
+            {accessRequestReceived ? (
+              <div className="rounded-[18px] border border-emerald-400/20 bg-emerald-400/[0.08] p-4 text-sm leading-6 text-emerald-100">
+                Access request received. We&apos;ll review it before enabling Studio access.
+              </div>
+            ) : null}
 
             {TURNSTILE_SITE_KEY ? (
               <TurnstileWidget
@@ -419,7 +440,7 @@ export default function SignupPage() {
                 className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
                 style={{ background: 'linear-gradient(135deg, rgb(var(--primary)), rgb(var(--accent)))', boxShadow: '0 0 20px rgba(124,58,237,0.18)' }}
               >
-                {submitting ? 'Creating account…' : 'Create account'}
+                {submitting ? 'Sending request...' : 'Request access'}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <div className="text-sm text-zinc-400">

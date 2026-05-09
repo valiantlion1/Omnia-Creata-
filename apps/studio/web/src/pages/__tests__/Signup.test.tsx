@@ -37,7 +37,7 @@ describe('SignupPage', () => {
     signInWithProviderMock.mockReset()
   })
 
-  it('sends new accounts directly into Create after email signup', async () => {
+  it('sends approved accounts directly into Create after email signup', async () => {
     signUpMock.mockResolvedValueOnce(undefined)
 
     renderWithProviders(<SignupPage />, { route: '/signup' })
@@ -48,10 +48,28 @@ describe('SignupPage', () => {
     await userEvent.type(screen.getByLabelText(/^password$/i), 'correct-password')
     await userEvent.type(screen.getByLabelText(/confirm password/i), 'correct-password')
     await userEvent.click(screen.getByRole('checkbox', { name: /terms/i }))
-    await userEvent.click(screen.getByRole('button', { name: /create account/i }))
+    await userEvent.click(screen.getByRole('button', { name: /request access/i }))
 
     expect(signUpMock).toHaveBeenCalledTimes(1)
     expect(navigateMock).toHaveBeenCalledWith('/create?welcome=1', { replace: true })
+  })
+
+  it('keeps unapproved signups as access requests instead of navigating into Studio', async () => {
+    signUpMock.mockRejectedValueOnce(new Error('Studio access request received. We will review it before enabling Studio access.'))
+
+    renderWithProviders(<SignupPage />, { route: '/signup' })
+
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'Future User')
+    await userEvent.type(screen.getByLabelText(/username/i), 'futureuser')
+    await userEvent.type(screen.getByLabelText(/^email$/i), 'future@example.com')
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'correct-password')
+    await userEvent.type(screen.getByLabelText(/confirm password/i), 'correct-password')
+    await userEvent.click(screen.getByRole('checkbox', { name: /terms/i }))
+    await userEvent.click(screen.getByRole('button', { name: /request access/i }))
+
+    expect(signUpMock).toHaveBeenCalledTimes(1)
+    expect(navigateMock).not.toHaveBeenCalled()
+    expect(screen.getByText(/access request received/i)).toBeInTheDocument()
   })
 
   it('starts Google signup with the Create welcome destination', async () => {

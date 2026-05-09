@@ -58,7 +58,7 @@ It is the React/Vite surface for:
   - `VITE_AUTH_REDIRECT_BASE_URL=http://127.0.0.1:5173`
 - For protected local staging with the Docker deployment pack, the frontend can use:
   - `VITE_API_BASE_URL=/api`
-- For the canonical public stack (`Vercel + Render + Supabase + Redis + Paddle`), set:
+- For the canonical public stack (`Vercel + Render + Supabase + Redis`; paid checkout disabled until a new provider is integrated), set:
   - `VITE_API_BASE_URL=https://your-render-api-host`
   - `VITE_AUTH_REDIRECT_BASE_URL=https://your-vercel-frontend-host`
 

@@ -11,7 +11,7 @@ Canonical launch stack:
 - worker: `Render`
 - auth / Postgres / storage: `Supabase`
 - queue broker: `Render Key Value / Redis`
-- billing backbone: `Paddle`
+- billing backbone: disabled for hidden beta (`BILLING_BACKBONE_PROVIDER=none`)
 
 The Docker compose pack below still matters, but now as a bounded protected-staging proof loop and local topology rehearsal, not as the canonical public deployment target.
 
@@ -93,11 +93,11 @@ python ..\backend\scripts\deployment_preflight.py --env-file .env.platform
 ```
 
 That preflight now validates:
-- canonical `Vercel + Render + Supabase + Redis + Paddle` stack alignment
+- canonical `Vercel + Render + Supabase + Redis` stack alignment
 - `PUBLIC_WEB_BASE_URL` and `PUBLIC_API_BASE_URL`
 - Supabase-backed asset storage
 - split API/worker runtime
-- Paddle billing backbone presence
+- paid checkout closed for hidden beta unless a new provider integration is selected and verified
 
 After a live Vercel/Render staging deploy exists, verify it through:
 
@@ -119,7 +119,7 @@ Current launch-critical secret families:
 - Core platform: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`
 - Active provider lanes: `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `RUNWARE_API_KEY`
 - Optional extra providers: `GEMINI_API_KEY`, `FAL_API_KEY`, `HUGGINGFACE_TOKEN`
-- Billing when Paddle is ready: `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CHECKOUT_BASE_URL`
+- Billing later: new payment-provider keys after provider selection and integration; no retired billing-provider keys are required
 - Owner/admin truth: `STUDIO_OWNER_EMAIL`, `STUDIO_OWNER_EMAILS`, `STUDIO_ROOT_ADMIN_EMAILS`
 
 Example one-time setup:
@@ -130,7 +130,7 @@ Example one-time setup:
 [Environment]::SetEnvironmentVariable("RUNWARE_API_KEY", "<value>", "User")
 ```
 
-`start-studio-local.ps1`, `start-studio-staging.ps1`, and `verify-studio-staging.ps1` now read those user-level variables automatically, so you do not have to keep retyping provider, billing, or owner secrets into repo-local env files.
+`start-studio-local.ps1`, `start-studio-staging.ps1`, and `verify-studio-staging.ps1` now read those user-level variables automatically, so you do not have to keep retyping provider or owner secrets into repo-local env files.
 
 ## Important expectations
 

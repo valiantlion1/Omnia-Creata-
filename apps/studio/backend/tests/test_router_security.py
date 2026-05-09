@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 import asyncio
 import hashlib
@@ -1139,6 +1140,159 @@ async def test_get_current_user_collapses_parallel_supabase_user_checks(
     assert {user.id for user in users if user is not None} == {"supabase-user-1"}
 
 
+@pytest.mark.asyncio
+async def test_get_current_user_records_pending_access_request_for_unapproved_supabase_oauth_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_auth()
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+    app = FastAPI()
+    app.state.studio_service = service
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+
+    class _SupabaseOAuthClient:
+        async def get_user(self, access_token: str) -> dict[str, object]:
+            return {
+                "id": "supabase-visitor-1",
+                "email": "Visitor@Example.com",
+                "email_confirmed_at": "2026-05-09T08:00:00+00:00",
+                "user_metadata": {
+                    "display_name": "Google Visitor",
+                    "full_name": "Google Visitor",
+                    "username": "google-visitor",
+                },
+                "app_metadata": {"provider": "google", "providers": ["google"]},
+            }
+
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+    settings.studio_owner_email = None
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+    monkeypatch.setattr(auth_module, "get_supabase_auth_client", lambda: _SupabaseOAuthClient())
+    auth_module._clear_supabase_user_cache()
+
+    request = StarletteRequest(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/auth/me",
+            "headers": [
+                (b"cf-ipcountry", b"CN"),
+                (b"cf-connecting-ip", b"198.51.100.44"),
+                (b"referer", b"https://www.google.com/search?q=omniacreata"),
+                (b"user-agent", b"Mozilla/5.0 Chrome/123"),
+                (b"host", b"studio.omniacreata.com"),
+            ],
+            "query_string": b"",
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "app": app,
+        }
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="supabase-oauth-token-access-gate")
+
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(request, credentials)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Studio access request received. We will review it before enabling Studio access."
+        requests = await service.list_access_requests()
+        assert len(requests) == 1
+        pending = requests[0]
+        assert pending["email"] == "visitor@example.com"
+        assert pending["display_name"] == "Google Visitor"
+        assert pending["username"] == "google-visitor"
+        assert pending["auth_provider"] == "google"
+        assert pending["auth_providers"] == ["google"]
+        assert pending["source"] == "oauth"
+        assert pending["status"] == "pending"
+        assert pending["country_code"] == "CN"
+        assert pending["referrer"] == "https://www.google.com/search?q=omniacreata"
+        assert pending["host_label"] == "studio.omniacreata.com"
+        assert pending["ip_label"] == "198.51.*.*"
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        auth_module._clear_supabase_user_cache()
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_ignores_user_metadata_for_owner_root_and_local_privileges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup_auth()
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+
+    class _SupabaseMetadataClient:
+        async def get_user(self, access_token: str) -> dict[str, object]:
+            return {
+                "id": "supabase-metadata-user",
+                "email": "metadata-user@example.com",
+                "email_confirmed_at": "2026-05-09T08:00:00+00:00",
+                "user_metadata": {
+                    "display_name": "Metadata User",
+                    "owner_mode": True,
+                    "root_admin": True,
+                    "local_access": True,
+                },
+                "app_metadata": {"provider": "google", "providers": ["google"]},
+            }
+
+    settings.studio_access_mode = "open"
+    settings.studio_owner_email = None
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+    monkeypatch.setattr(auth_module, "get_supabase_auth_client", lambda: _SupabaseMetadataClient())
+    auth_module._clear_supabase_user_cache()
+    request = StarletteRequest(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/auth/me",
+            "headers": [],
+            "query_string": b"",
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="supabase-user-metadata-privilege-token")
+
+    try:
+        user = await get_current_user(request, credentials)
+
+        assert user is not None
+        assert user.role == UserRole.USER
+        assert user.metadata["owner_mode"] is False
+        assert user.metadata["root_admin"] is False
+        assert user.metadata["local_access"] is False
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        auth_module._clear_supabase_user_cache()
+
+
 def test_create_user_tokens_share_one_session_family_across_access_and_refresh_tokens() -> None:
     setup_auth()
     token_payload = create_user_tokens(
@@ -1730,6 +1884,7 @@ async def test_profiles_export_and_delete_routes_round_trip_safely(tmp_path: Pat
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         export_response = await client.get("/v1/profiles/me/export", headers={"X-Test-User": "user-1"})
         delete_response = await client.delete("/v1/profiles/me", headers={"X-Test-User": "user-1"})
+        cancel_response = await client.post("/v1/profiles/me/deletion/cancel", headers={"X-Test-User": "user-1"})
 
     try:
         assert export_response.status_code == 200
@@ -1737,9 +1892,20 @@ async def test_profiles_export_and_delete_routes_round_trip_safely(tmp_path: Pat
         assert export_payload["identity"]["id"] == "user-1"
         assert "assets" in export_payload
         assert delete_response.status_code == 200
+        delete_payload = delete_response.json()
+        assert delete_payload["status"] == "scheduled"
+        assert delete_payload["deletion_request"]["status"] == "scheduled"
+        assert delete_payload["deletion_request"]["days_remaining"] == 30
+        assert cancel_response.status_code == 200
+        cancel_payload = cancel_response.json()
+        assert cancel_payload["status"] == "cancelled"
+        assert cancel_payload["deletion_request"]["status"] == "none"
         snapshot = await service.store.snapshot()
-        assert "user-1" not in snapshot.identities
-        assert "user-1" in snapshot.deleted_identity_tombstones
+        assert "user-1" in snapshot.identities
+        assert snapshot.identities["user-1"].deletion_requested_at is None
+        assert snapshot.identities["user-1"].deletion_scheduled_for is None
+        assert snapshot.identities["user-1"].deletion_cancelled_at is not None
+        assert "user-1" not in snapshot.deleted_identity_tombstones
     finally:
         await service.shutdown()
 
@@ -1844,13 +2010,215 @@ async def test_admin_telemetry_route_rejects_header_only_root_admin_claim(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_invite_only_signup_records_pending_access_request_without_creating_supabase_user(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+    signup_calls: list[str] = []
+
+    class FakeSupabaseAuthClient:
+        async def sign_up(self, **kwargs):
+            signup_calls.append(str(kwargs.get("email") or ""))
+            raise AssertionError("sign_up should not run before invite-only access is approved")
+
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+    settings.studio_owner_email = None
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+    monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/auth/signup",
+                headers={
+                    "cf-connecting-ip": "203.0.113.22",
+                    "cf-ipcountry": "FR",
+                    "referer": "https://x.com/OmniaCreata",
+                    "user-agent": "Mozilla/5.0 Chrome/123",
+                },
+                json={
+                    "email": "Visitor@Example.com",
+                    "password": "Password123!",
+                    "display_name": "Visitor One",
+                    "username": "visitor-one",
+                    "accepted_terms": True,
+                    "accepted_privacy": True,
+                    "accepted_usage_policy": True,
+                    "marketing_opt_in": False,
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {
+            "detail": "Studio access request received. We will review it before enabling Studio access."
+        }
+        assert signup_calls == []
+        requests = await service.list_access_requests()
+        assert len(requests) == 1
+        pending = requests[0]
+        assert pending["email"] == "visitor@example.com"
+        assert pending["display_name"] == "Visitor One"
+        assert pending["username"] == "visitor-one"
+        assert pending["auth_provider"] == "email"
+        assert pending["status"] == "pending"
+        assert pending["source"] == "signup"
+        assert pending["country_code"] == "FR"
+        assert pending["referrer"] == "https://x.com/OmniaCreata"
+        assert pending["ip_label"] == "203.0.*.*"
+        assert pending["ip_hash"]
+        assert pending["user_agent_hash"]
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_admin_access_request_routes_require_persisted_root_admin_and_approve_request(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+
+    root_identity = await service.ensure_identity(
+        user_id="root-1",
+        email="root@example.com",
+        display_name="Root One",
+        username="root-1",
+        owner_mode=True,
+        root_admin=True,
+        local_access=True,
+    )
+    decision = await service.evaluate_access_gate(
+        email="visitor@example.com",
+        display_name="Visitor One",
+        auth_provider="google",
+        auth_providers=["google"],
+        source="oauth",
+        country_code="CN",
+        referrer="https://www.google.com/search?q=omniacreata",
+    )
+    assert decision["allowed"] is False
+    request_id = str(decision["request_id"])
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            denied = await client.get(
+                "/v1/admin/access-requests",
+                headers={
+                    "X-Test-User": "header-only-root",
+                    "X-Test-Email": "header-only-root@example.com",
+                    "X-Test-Owner-Mode": "true",
+                    "X-Test-Root-Admin": "true",
+                },
+            )
+            listed = await client.get(
+                "/v1/admin/access-requests",
+                headers={"X-Test-User": root_identity.id, "X-Test-Email": root_identity.email},
+            )
+            approved = await client.patch(
+                f"/v1/admin/access-requests/{request_id}",
+                headers={"X-Test-User": root_identity.id, "X-Test-Email": root_identity.email},
+                json={"status": "approved", "operator_note": "Hidden beta approval"},
+            )
+
+        assert denied.status_code == 403
+        assert listed.status_code == 200
+        assert listed.json()["requests"][0]["id"] == request_id
+        assert approved.status_code == 200
+        approved_payload = approved.json()["request"]
+        assert approved_payload["status"] == "approved"
+        assert approved_payload["approved_by"] == root_identity.id
+        assert approved_payload["operator_note"] == "Hidden beta approval"
+
+        unlocked = await service.evaluate_access_gate(
+            email="visitor@example.com",
+            auth_provider="google",
+            auth_providers=["google"],
+            source="oauth",
+        )
+        assert unlocked == {"allowed": True, "status": "approved"}
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_root_admin_can_process_due_identity_deletions(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    root_identity = await service.ensure_identity(
+        user_id="root-1",
+        email="root@example.com",
+        display_name="Root One",
+        username="root-1",
+        owner_mode=True,
+        root_admin=True,
+        local_access=True,
+    )
+    delete_identity = await service.ensure_identity(
+        user_id="delete-me",
+        email="delete-me@example.com",
+        display_name="Delete Me",
+        username="delete-me",
+    )
+    await service.request_identity_deletion(delete_identity.id)
+
+    def force_due(state):
+        current = state.identities[delete_identity.id]
+        current.deletion_scheduled_for = utc_now() - timedelta(seconds=1)
+        state.identities[current.id] = current
+
+    await service.store.mutate(force_due)
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            denied = await client.post("/v1/admin/identity-deletions/process-due", headers={"X-Test-User": "user-1"})
+            processed = await client.post(
+                "/v1/admin/identity-deletions/process-due?limit=10",
+                headers={"X-Test-User": root_identity.id, "X-Test-Email": root_identity.email},
+            )
+
+        assert denied.status_code == 403
+        assert processed.status_code == 200
+        payload = processed.json()
+        assert payload["status"] == "processed"
+        assert payload["deleted_count"] == 1
+        assert payload["deleted_identity_ids"] == [delete_identity.id]
+        snapshot = await service.store.snapshot()
+        assert delete_identity.id not in snapshot.identities
+        assert delete_identity.id in snapshot.deleted_identity_tombstones
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_billing_checkout_route_refuses_demo_activation_outside_development(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
     original_environment = settings.environment
-    original_checkout_url = settings.paddle_checkout_base_url
+    original_billing_provider = settings.billing_backbone_provider
     settings.environment = Environment.STAGING
-    settings.paddle_checkout_base_url = None
+    settings.billing_backbone_provider = "none"
 
     transport = httpx.ASGITransport(app=app)
     try:
@@ -1862,10 +2230,10 @@ async def test_billing_checkout_route_refuses_demo_activation_outside_developmen
             )
 
         assert response.status_code == 503
-        assert response.json() == {"detail": "Billing checkout is not configured for this environment"}
+        assert response.json() == {"detail": "Paid checkout is disabled while OmniaCreata selects a new payment provider."}
     finally:
         settings.environment = original_environment
-        settings.paddle_checkout_base_url = original_checkout_url
+        settings.billing_backbone_provider = original_billing_provider
         await service.shutdown()
 
 
@@ -2730,14 +3098,16 @@ def test_share_routes_require_no_store_headers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
+async def test_paddle_webhook_is_retired_even_with_valid_signature(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
     original_secret = settings.paddle_webhook_secret
+    original_billing_provider = settings.billing_backbone_provider
     settings.paddle_webhook_secret = SecretStr("whsec_test")
+    settings.billing_backbone_provider = "none"
     received_payloads: list[dict] = []
 
     async def fake_process_paddle_webhook(payload: dict) -> None:
@@ -2752,7 +3122,6 @@ async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
 
     transport = httpx.ASGITransport(app=app)
     try:
-        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.post(
                 "/v1/webhooks/paddle",
@@ -2763,10 +3132,12 @@ async def test_paddle_webhook_accepts_valid_signature_with_secretstr(
                 },
             )
 
-        assert response.status_code == 200
-        assert received_payloads == [payload]
+        assert response.status_code == 410
+        assert response.text == "Paddle webhook is retired and disabled."
+        assert received_payloads == []
     finally:
         settings.paddle_webhook_secret = original_secret
+        settings.billing_backbone_provider = original_billing_provider
         await service.shutdown()
 
 
@@ -2779,8 +3150,10 @@ async def test_paddle_webhook_rejects_oversized_payload_before_processing(
     settings = get_settings()
     original_secret = settings.paddle_webhook_secret
     original_limit = settings.paddle_webhook_max_body_bytes
+    original_billing_provider = settings.billing_backbone_provider
     settings.paddle_webhook_secret = SecretStr("whsec_test")
     settings.paddle_webhook_max_body_bytes = 24
+    settings.billing_backbone_provider = "none"
     process_called = False
 
     async def fake_process_paddle_webhook(payload: dict) -> None:
@@ -2794,7 +3167,6 @@ async def test_paddle_webhook_rejects_oversized_payload_before_processing(
 
     transport = httpx.ASGITransport(app=app)
     try:
-        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.post(
                 "/v1/webhooks/paddle",
@@ -2805,12 +3177,13 @@ async def test_paddle_webhook_rejects_oversized_payload_before_processing(
                 },
             )
 
-        assert response.status_code == 413
-        assert response.text == "Webhook payload too large"
+        assert response.status_code == 410
+        assert response.text == "Paddle webhook is retired and disabled."
         assert process_called is False
     finally:
         settings.paddle_webhook_secret = original_secret
         settings.paddle_webhook_max_body_bytes = original_limit
+        settings.billing_backbone_provider = original_billing_provider
         await service.shutdown()
 
 
@@ -2822,9 +3195,14 @@ async def test_paddle_webhook_maps_processing_validation_errors_to_bad_request(
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
     original_secret = settings.paddle_webhook_secret
+    original_billing_provider = settings.billing_backbone_provider
     settings.paddle_webhook_secret = SecretStr("whsec_test")
+    settings.billing_backbone_provider = "none"
+    process_called = False
 
     async def fake_process_paddle_webhook(payload: dict) -> None:
+        nonlocal process_called
+        process_called = True
         raise ValueError("Paddle webhook is missing identity_id custom_data.")
 
     monkeypatch.setattr(service, "process_paddle_webhook", fake_process_paddle_webhook)
@@ -2835,7 +3213,6 @@ async def test_paddle_webhook_maps_processing_validation_errors_to_bad_request(
 
     transport = httpx.ASGITransport(app=app)
     try:
-        monkeypatch.setattr(router_module.time, "time", lambda: int(timestamp))
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.post(
                 "/v1/webhooks/paddle",
@@ -2846,10 +3223,12 @@ async def test_paddle_webhook_maps_processing_validation_errors_to_bad_request(
                 },
             )
 
-        assert response.status_code == 400
-        assert response.text == "Paddle webhook is missing identity_id custom_data."
+        assert response.status_code == 410
+        assert response.text == "Paddle webhook is retired and disabled."
+        assert process_called is False
     finally:
         settings.paddle_webhook_secret = original_secret
+        settings.billing_backbone_provider = original_billing_provider
         await service.shutdown()
 
 
@@ -3142,8 +3521,27 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
     async def fake_export_identity_data(identity_id: str) -> dict:
         return {"identity": {"id": identity_id}, "assets": []}
 
-    async def fake_delete_identity(identity_id: str) -> None:
-        return None
+    async def fake_request_identity_deletion(identity_id: str) -> dict:
+        return {
+            "status": "scheduled",
+            "requested_at": "2026-05-09T00:00:00+00:00",
+            "scheduled_for": "2026-06-08T00:00:00+00:00",
+            "cancelled_at": None,
+            "grace_period_days": 30,
+            "days_remaining": 30,
+            "can_cancel": True,
+        }
+
+    async def fake_cancel_identity_deletion(identity_id: str) -> dict:
+        return {
+            "status": "none",
+            "requested_at": None,
+            "scheduled_for": None,
+            "cancelled_at": "2026-05-09T00:00:00+00:00",
+            "grace_period_days": 30,
+            "days_remaining": None,
+            "can_cancel": False,
+        }
 
     captured_updates: list[dict[str, object]] = []
 
@@ -3175,7 +3573,8 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
 
     monkeypatch.setattr(rate_limiter, "check", fake_check)
     service.export_identity_data = fake_export_identity_data  # type: ignore[method-assign]
-    service.permanently_delete_identity = fake_delete_identity  # type: ignore[method-assign]
+    service.request_identity_deletion = fake_request_identity_deletion  # type: ignore[method-assign]
+    service.cancel_identity_deletion = fake_cancel_identity_deletion  # type: ignore[method-assign]
     service.update_profile = fake_update_profile  # type: ignore[method-assign]
     service.get_profile_payload = fake_get_profile_payload  # type: ignore[method-assign]
 
@@ -3188,11 +3587,13 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
             json={"display_name": "User One", "featured_asset_id": "asset-hero-1"},
         )
         delete_response = await client.delete("/v1/profiles/me", headers={"X-Test-User": "user-1"})
+        cancel_response = await client.post("/v1/profiles/me/deletion/cancel", headers={"X-Test-User": "user-1"})
 
     try:
         assert export_response.status_code == 200
         assert patch_response.status_code == 200
         assert delete_response.status_code == 200
+        assert cancel_response.status_code == 200
         assert captured_updates == [
             {
                 "identity_id": "user-1",
@@ -3207,6 +3608,7 @@ async def test_profile_self_service_routes_use_explicit_rate_limits(
         assert any("profiles:export" in key and limit == 6 and window == 3600 for key, limit, window in calls)
         assert any("profiles:update" in key and limit == 24 and window == 3600 for key, limit, window in calls)
         assert any("profiles:delete" in key and limit == 3 and window == 3600 for key, limit, window in calls)
+        assert any("profiles:delete:cancel" in key and limit == 6 and window == 3600 for key, limit, window in calls)
     finally:
         await service.shutdown()
 

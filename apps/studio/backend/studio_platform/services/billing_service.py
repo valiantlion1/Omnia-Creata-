@@ -17,14 +17,8 @@ from ..models import (
 from ..billing_ops import (
     BillingStateSnapshot,
     CheckoutKind,
-    apply_demo_checkout,
-    apply_paddle_webhook_event,
     build_billing_summary,
     build_refund_policy_summary,
-    build_paddle_checkout_url,
-    build_paddle_webhook_receipt,
-    checkout_catalog_kind_to_plan,
-    is_supported_paddle_event,
     resolve_billing_state,
 )
 from ..cost_telemetry_ops import build_cost_telemetry_summary
@@ -54,7 +48,11 @@ class BillingService:
         self.providers = service.providers
 
     def _demo_checkout_fallback_allowed(self) -> bool:
-        return get_settings().environment == Environment.DEVELOPMENT
+        settings = get_settings()
+        return settings.environment == Environment.DEVELOPMENT and settings.billing_backbone_provider == "demo"
+
+    def _checkout_catalog_available(self) -> bool:
+        return get_settings().billing_backbone_provider not in {"", "none"}
 
     async def _resolve_billing_state_for_identity(self, identity: OmniaIdentity) -> BillingStateSnapshot:
         def query(state: StudioState) -> BillingStateSnapshot:
@@ -111,7 +109,6 @@ class BillingService:
             billing_state=billing_state,
             ledger_entries=ledger,
             plan_catalog=self.service.plan_catalog,
-            checkout_catalog=self.service.checkout_catalog,
             entitlements=self.service.serialize_entitlements(identity, billing_state=billing_state),
             generation_credit_guide=build_generation_credit_forecasts(
                 identity_plan=identity.plan,
@@ -127,38 +124,31 @@ class BillingService:
                 now=utc_now(),
                 contact_email=mailer.sender,
             ),
+            checkout_catalog=self.service.checkout_catalog if self._checkout_catalog_available() else {},
         )
 
 
     async def checkout(self, identity_id: str, kind: CheckoutKind) -> Dict[str, Any]:
         identity = await self.service.get_identity(identity_id)
-        config = self.service.checkout_catalog[kind]
         settings = get_settings()
+        active_provider = str(settings.billing_backbone_provider or "none").strip().lower() or "none"
 
-        if settings.paddle_checkout_base_url:
-            logger.info(
-                "Checkout initiated: identity=%s kind=%s provider=%s",
-                identity_id, kind.value, "paddle",
-            )
-            return {
-                "status": "redirect",
-                "provider": "paddle",
-                "kind": kind.value,
-                "checkout_url": build_paddle_checkout_url(
-                    base_url=settings.paddle_checkout_base_url,
-                    identity_id=identity_id,
-                    email=identity.email,
-                    kind=kind,
-                ),
-            }
+        if active_provider in {"none", "paddle"}:
+            raise RuntimeError("Paid checkout is disabled while OmniaCreata selects a new payment provider.")
+
+        if active_provider != "demo":
+            raise RuntimeError("Paid checkout provider is selected but not integrated yet.")
 
         if not self._demo_checkout_fallback_allowed():
             raise RuntimeError("Billing checkout is not configured for this environment")
 
+        config = self.service.checkout_catalog[kind]
         logger.info(
             "Checkout initiated: identity=%s kind=%s provider=%s",
             identity_id, kind.value, "demo",
         )
+        from ..billing_ops import apply_demo_checkout
+
         # Fallback to demo local mutation only for local development.
         updated_holder: Dict[str, OmniaIdentity] = {}
 
@@ -365,94 +355,7 @@ class BillingService:
 
 
     async def process_paddle_webhook(self, payload: Dict[str, Any]) -> None:
-        """Handle Paddle webhook events to update user subscription state and wallet credits."""
-        event_name = str(payload.get("event_type") or "").strip().lower()
-        data = payload.get("data", {}) if isinstance(payload.get("data"), dict) else {}
-        subscription_status = str(
-            data.get("status")
-            or (data.get("attributes", {}) if isinstance(data.get("attributes"), dict) else {}).get("status")
-            or ""
-        ).strip().lower()
-        if event_name == "subscription.updated":
-            if subscription_status == "expired":
-                event_name = "subscription.expired"
-            elif subscription_status in {"canceled", "cancelled"}:
-                event_name = "subscription.canceled"
-            elif subscription_status == "paused":
-                event_name = "subscription.paused"
-            elif subscription_status == "past_due":
-                event_name = "subscription.past_due"
-        custom_data = data.get("custom_data", {})
-        if not isinstance(custom_data, dict):
-            custom_data = payload.get("meta", {}).get("custom_data", {})
-        if not isinstance(custom_data, dict):
-            custom_data = {}
-        identity_id = custom_data.get("identity_id")
-        checkout_kind_raw = custom_data.get("checkout_kind")
-        checkout_kind = None
-        if isinstance(checkout_kind_raw, str):
-            try:
-                checkout_kind = CheckoutKind(checkout_kind_raw)
-            except ValueError:
-                checkout_kind = None
-
-        if not identity_id:
-            raise ValueError("Paddle webhook is missing identity_id custom_data.")
-
-        if not is_supported_paddle_event(event_name):
-            return
-
-        logger.info(
-            "Paddle webhook received: event=%s identity=%s checkout_kind=%s",
-            event_name, identity_id, checkout_kind_raw,
-        )
-        now = utc_now()
-        receipt = build_paddle_webhook_receipt(
-            payload=payload,
-            identity_id=identity_id,
-            checkout_kind=checkout_kind,
-            now=now,
-        )
-        upgraded_email = None
-        upgraded_label = None
-        already_processed = False
-
-        def mutation(state: StudioState) -> None:
-            nonlocal already_processed, upgraded_email, upgraded_label
-            if receipt.id in state.billing_webhook_receipts:
-                already_processed = True
-                logger.info(
-                    "Paddle webhook already processed: receipt=%s",
-                    receipt.id,
-                )
-                return
-            result = apply_paddle_webhook_event(
-                state=state,
-                identity_id=identity_id,
-                event_name=event_name,
-                now=now,
-                plan_catalog=self.service.plan_catalog,
-                checkout_catalog=self.service.checkout_catalog,
-                checkout_kind=checkout_kind,
-                receipt_id=receipt.id,
-            )
-            state.billing_webhook_receipts[receipt.id] = receipt
-            upgraded_email = result.upgraded_email
-            if upgraded_email and checkout_kind in {CheckoutKind.CREATOR_MONTHLY, CheckoutKind.PRO_MONTHLY}:
-                upgraded_label = self.service.plan_catalog[checkout_catalog_kind_to_plan(checkout_kind)].label
-
-        await self.service.store.mutate(mutation)
-        if not already_processed:
-            logger.info(
-                "Paddle webhook applied: event=%s identity=%s receipt=%s",
-                event_name, identity_id, receipt.id,
-            )
-        if upgraded_email and upgraded_label and not already_processed:
-            await mailer.send_subscription_update(upgraded_email, upgraded_label)
-            logger.info(
-                "Subscription upgrade email sent: email=%s plan=%s",
-                upgraded_email, upgraded_label,
-            )
+        raise RuntimeError("Paddle webhook processing is retired and disabled.")
 
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
-        raise RuntimeError("LemonSqueezy webhooks have been retired. Use Paddle webhook processing instead.")
+        raise RuntimeError("Payment provider webhooks are disabled until a new provider is selected.")

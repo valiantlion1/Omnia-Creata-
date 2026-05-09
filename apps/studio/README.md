@@ -10,14 +10,14 @@ Studio has two intentional product surfaces:
 
 ## Current Snapshot
 
-- Active frame: `Controlled Public Paid Launch`
+- Active frame: `Hidden Production Beta -> Controlled Public Paid Launch`
 - `Protected Beta Hardening` is the closed baseline that got Studio here; it is no longer the main planning target
-- Public launch doctrine: broad public access, self-serve account flow, controlled capacity, and honest paid-product truth
+- Hidden beta doctrine: invite-only access, no public self-serve checkout, controlled capacity, and honest paid-product truth
 - Commercial packaging is `Free Account`, `Creator`, `Pro`, and `Credit Packs`
 - Exact package numbers and checkout availability come from the server-authoritative catalog, not hardcoded UI copy
 - `Create` and `Chat` launch together and share one account, billing, and entitlement contract
 - `OCOS` is future internal operating-system work; it is not a Studio deliverable in this wave
-- Canonical deployment stack is `Vercel + Render + Supabase + Redis + Paddle`; local Docker/protected staging remains a proof loop, not the final public hosting contract
+- Canonical deployment stack is `Vercel + Render + Supabase + Redis`, with paid checkout intentionally disabled until a new payment provider is selected and integrated; local Docker/protected staging remains a proof loop, not the final public hosting contract
 
 ## Current Launch Gaps
 

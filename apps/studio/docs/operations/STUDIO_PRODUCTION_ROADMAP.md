@@ -8,7 +8,7 @@ Assumptions used throughout this plan:
 - Concurrent-user numbers refer to Studio-origin active sessions, not CDN-only static asset viewers.
 - RPS numbers are mixed Studio API request rates and exclude direct third-party model inference throughput.
 - Infra cost bands are rough platform-only ranges and do not include variable provider/model spend.
-- The current baseline is a single-region web + worker deployment on Render, Vercel web delivery, Supabase-backed persistence/storage, Paddle billing, and a free Render key/value Redis layer.
+- The current baseline is a single-region web + worker deployment on Render, Vercel web delivery, Supabase-backed persistence/storage, paid checkout intentionally disabled, and a free Render key/value Redis layer.
 
 ## 1. Executive Summary
 
@@ -30,7 +30,7 @@ Primary risks that currently cap Studio far below real public scale:
 ### L0 - Current (alpha)
 
 - Target envelope: up to `200` concurrent active users, `10-15` mixed API RPS, `3` simultaneous generation executions.
-- Likely bottlenecks: single API instance, single worker, free Redis ops/memory ceilings, Postgres connection cap, whole-state persistence rewrites, Paddle webhook throughput on one process, provider rate limits, and local fallback paths that hide broken shared coordination.
+- Likely bottlenecks: single API instance, single worker, free Redis ops/memory ceilings, Postgres connection cap, whole-state persistence rewrites, future payment webhook throughput on one process, provider rate limits, and local fallback paths that hide broken shared coordination.
 - Packages required to unlock L1:
   1. `P01` Correlation IDs and structured request logging
   2. `P02` Prometheus metrics and RED/USE telemetry
@@ -69,7 +69,7 @@ Primary risks that currently cap Studio far below real public scale:
   6. `P26` Redis response caching for hot reads
   7. `P27` CDN and validator strategy for public/generated assets
   8. `P30` Canonical quota service
-  9. `P31` Plan enforcement from Paddle to runtime rights
+  9. `P31` Plan enforcement from payment provider to runtime rights
   10. `P41` PII redaction v2 and log classification
   11. `P48` Environment parity and config contract checks
   12. `P50` Runbooks and on-call readiness
@@ -83,7 +83,7 @@ Primary risks that currently cap Studio far below real public scale:
 ### L2 - Public launch (10K concurrent)
 
 - Target envelope: `10K` concurrent active users, `500-1,000` mixed API RPS.
-- Likely bottlenecks: horizontal API scale, read-heavy Postgres traffic, Redis memory and ops/sec, Supabase asset egress, Paddle retry storms, and provider rate limits during peak bursts.
+- Likely bottlenecks: horizontal API scale, read-heavy Postgres traffic, Redis memory and ops/sec, Supabase asset egress, future payment-provider retry storms, and provider rate limits during peak bursts.
 - Packages required to unlock L3:
   1. `P03` OpenTelemetry distributed tracing
   2. `P06` Centralized log shipping and retention
@@ -231,7 +231,7 @@ Legend:
 #### P03 - OpenTelemetry Distributed Tracing
 `Priority: P1 | Owner: Platform | Effort: 2.0 engineer-weeks | Unlocks: L3`
 - Current gap: `opentelemetry_endpoint` exists as config, but tracing is not a wired runtime feature and cross-service latency attribution is opaque.
-- Deliverable: OpenTelemetry spans across web, API, worker, Redis, Postgres, Supabase, Paddle, and provider clients.
+- Deliverable: OpenTelemetry spans across web, API, worker, Redis, Postgres, Supabase, the selected payment provider, and provider clients.
 - Depends on: P01, P02.
 - Exit: one user action can be visualized as a full trace across queueing and provider work.
 
@@ -274,7 +274,7 @@ Legend:
 
 #### P09 - Unified Circuit Breakers for External Dependencies
 `Priority: P0 | Owner: Backend/Platform | Effort: 1.5 engineer-weeks | Unlocks: L1`
-- Current gap: provider pathways already contain partial cooldown/circuit logic, but Redis, Postgres, Supabase, Paddle, and all provider clients do not share one breaker policy.
+- Current gap: provider pathways already contain partial cooldown/circuit logic, but Redis, Postgres, Supabase, the selected payment provider, and all provider clients do not share one breaker policy.
 - Deliverable: common dependency client wrappers with open/half-open/closed state, telemetry, and per-surface fallback behavior.
 - Depends on: P08, P02.
 - Exit: dependency failures trip visibly and recover predictably instead of causing cascading timeouts.
@@ -432,7 +432,7 @@ Legend:
 - Depends on: P22, P23.
 - Exit: every write path checks one quota service before allocating shared capacity.
 
-#### P31 - Plan Enforcement from Paddle to Runtime Rights
+#### P31 - Plan Enforcement from Payment Provider to Runtime Rights
 `Priority: P0 | Owner: Backend/Billing | Effort: 2.0 engineer-weeks | Unlocks: L2`
 - Current gap: plan/catalog truth and billing-webhook truth can still drift without a durable entitlement contract.
 - Deliverable: durable entitlements table, webhook idempotency, grace windows, downgrade handling, and runtime cache invalidation.
@@ -513,7 +513,7 @@ Legend:
 
 #### P42 - Secret Storage and Rotation Runbooks
 `Priority: P2 | Owner: Security/Ops | Effort: 1.0 engineer-week | Unlocks: L4`
-- Current gap: Studio spans Render, Vercel, Supabase, Paddle, and provider credentials, but rotation remains too manual and person-dependent.
+- Current gap: Studio spans Render, Vercel, Supabase, future payment-provider credentials, and AI provider credentials, but rotation remains too manual and person-dependent.
 - Deliverable: secret inventory, ownership map, rotation cadence, dual-secret rollout steps, and rollback instructions.
 - Depends on: P45, P50.
 - Exit: a quarterly rotation drill can be run without service outage.

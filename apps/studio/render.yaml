@@ -47,7 +47,7 @@ services:
       - key: STORAGE_DEPLOY_PLATFORM
         value: supabase
       - key: BILLING_BACKBONE_PROVIDER
-        value: paddle
+        value: none
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -62,12 +62,6 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: JWT_SECRET
-        sync: false
-      - key: PADDLE_API_KEY
-        sync: false
-      - key: PADDLE_WEBHOOK_SECRET
-        sync: false
-      - key: PADDLE_CHECKOUT_BASE_URL
         sync: false
       - key: GEMINI_API_KEY
         sync: false
@@ -116,7 +110,7 @@ services:
       - key: STORAGE_DEPLOY_PLATFORM
         value: supabase
       - key: BILLING_BACKBONE_PROVIDER
-        value: paddle
+        value: none
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -131,12 +125,6 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: JWT_SECRET
-        sync: false
-      - key: PADDLE_API_KEY
-        sync: false
-      - key: PADDLE_WEBHOOK_SECRET
-        sync: false
-      - key: PADDLE_CHECKOUT_BASE_URL
         sync: false
       - key: GEMINI_API_KEY
         sync: false

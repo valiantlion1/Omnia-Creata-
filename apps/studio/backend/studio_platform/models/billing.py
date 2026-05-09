@@ -58,7 +58,7 @@ class CreditLedgerEntry(BaseModel):
 
 class BillingWebhookReceipt(BaseModel):
     id: str
-    provider: str = "paddle"
+    provider: str = "payment_provider"
     event_name: str
     resource_type: str
     resource_id: str

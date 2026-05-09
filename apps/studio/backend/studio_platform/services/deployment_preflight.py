@@ -132,7 +132,7 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
             add_check(
                 "deployment_stack",
                 "pass",
-                "Deployment stack matches the locked Vercel/Render/Supabase/Redis/Paddle contract.",
+                "Deployment stack matches the locked Vercel/Render/Supabase/Redis contract.",
                 (
                     f"frontend={configured_stack['frontend']}, api={configured_stack['api']}, "
                     f"worker={configured_stack['worker']}, redis={configured_stack['redis']}, "
@@ -287,23 +287,27 @@ def build_deployment_preflight(env_values: dict[str, str]) -> dict[str, object]:
             "Supabase, JWT, database, and Redis secrets are populated.",
         )
 
-    paddle_ready = all(
-        _has_real_value(env_values, key)
-        for key in ("PADDLE_API_KEY", "PADDLE_WEBHOOK_SECRET", "PADDLE_CHECKOUT_BASE_URL")
-    )
-    if paddle_ready:
+    billing_provider = str(env_values.get("BILLING_BACKBONE_PROVIDER", "") or "none").strip().lower() or "none"
+    if billing_provider == "paddle":
+        add_check(
+            "billing_backbone",
+            "blocked",
+            "Paddle billing is retired and must not be used.",
+            "Set BILLING_BACKBONE_PROVIDER=none for hidden beta, or select a new provider after integration.",
+        )
+    elif billing_provider == "none":
         add_check(
             "billing_backbone",
             "pass",
-            "Paddle billing backbone is configured.",
-            "Checkout API key, webhook secret, and checkout base URL are present.",
+            "Paid checkout is intentionally disabled for hidden beta.",
+            "BILLING_BACKBONE_PROVIDER=none.",
         )
     else:
         add_check(
             "billing_backbone",
             "warning",
-            "Paddle billing backbone is not fully configured.",
-            "Missing one or more of PADDLE_API_KEY, PADDLE_WEBHOOK_SECRET, or PADDLE_CHECKOUT_BASE_URL.",
+            "A future billing provider is selected but not launch-verified yet.",
+            f"BILLING_BACKBONE_PROVIDER={billing_provider}. Keep checkout closed until the provider integration is implemented and tested.",
         )
 
     protected_beta_chat_provider = _protected_beta_chat_provider(env_values)

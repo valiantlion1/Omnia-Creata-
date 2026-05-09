@@ -581,6 +581,59 @@ def _get_studio_service_from_request(request: Request):
     return getattr(state, "studio_service", None)
 
 
+def _access_request_client_ip_from_request(request: Request) -> str | None:
+    for header_name in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
+        raw_value = str(request.headers.get(header_name) or "").strip()
+        if raw_value:
+            return raw_value.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+def _access_request_country_code_from_request(request: Request) -> str | None:
+    for header_name in ("cf-ipcountry", "x-vercel-ip-country", "cloudfront-viewer-country"):
+        candidate = str(request.headers.get(header_name) or "").strip().upper()
+        if candidate:
+            return candidate[:8]
+    return None
+
+
+async def _enforce_studio_access_gate(
+    request: Request,
+    *,
+    email: str,
+    display_name: str | None,
+    username: str | None,
+    auth_provider: str | None,
+    auth_providers: list[str],
+    source: str,
+) -> None:
+    service = _get_studio_service_from_request(request)
+    if service is None:
+        return
+    evaluate_access_gate = getattr(service, "evaluate_access_gate", None)
+    if not callable(evaluate_access_gate):
+        return
+    decision = await evaluate_access_gate(
+        email=email,
+        display_name=display_name,
+        username=username,
+        auth_provider=auth_provider,
+        auth_providers=auth_providers,
+        source=source,
+        country_code=_access_request_country_code_from_request(request),
+        referrer=request.headers.get("referer"),
+        host_label=request.headers.get("host"),
+        client_ip=_access_request_client_ip_from_request(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    if decision.get("allowed"):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Studio access request received. We will review it before enabling Studio access.",
+    )
+
+
 def _bind_authenticated_identity_context(request: Request, identity_id: str) -> None:
     normalized_identity_id = str(identity_id or "").strip()
     bind_identity_id(normalized_identity_id)
@@ -655,11 +708,21 @@ async def get_current_user(
                 or email.split("@")[0]
                 or "Creator"
             )
+            username = (user_metadata.get("username") or email.split("@")[0] or "").strip().lower()
+            await _enforce_studio_access_gate(
+                request,
+                email=email,
+                display_name=display_name,
+                username=username,
+                auth_provider=auth_provider,
+                auth_providers=auth_providers,
+                source="oauth",
+            )
             metadata: Dict[str, Any] = {
-                "owner_mode": bool(app_metadata.get("owner_mode") or user_metadata.get("owner_mode") or owner_email_match),
-                "root_admin": bool(app_metadata.get("root_admin") or user_metadata.get("root_admin") or root_admin_match),
-                "local_access": bool(app_metadata.get("local_access") or user_metadata.get("local_access") or owner_email_match),
-                "username": (user_metadata.get("username") or email.split("@")[0] or "").strip().lower(),
+                "owner_mode": bool(app_metadata.get("owner_mode") or owner_email_match),
+                "root_admin": bool(app_metadata.get("root_admin") or root_admin_match),
+                "local_access": bool(app_metadata.get("local_access") or owner_email_match or root_admin_match),
+                "username": username,
                 "accepted_terms": bool(user_metadata.get("accepted_terms")),
                 "accepted_terms_at": user_metadata.get("accepted_terms_at"),
                 "terms_version": user_metadata.get("terms_version"),

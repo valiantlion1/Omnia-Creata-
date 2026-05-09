@@ -441,6 +441,67 @@ async def test_permanently_delete_identity_cleans_related_state(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_identity_deletion_request_uses_cancelable_30_day_grace_period(tmp_path: Path):
+    settings = get_settings()
+    original_supabase_url = settings.supabase_url
+    original_service_role_key = settings.supabase_service_role_key
+    settings.supabase_url = None
+    settings.supabase_service_role_key = None
+    service = None
+
+    try:
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        await service.initialize()
+
+        identity = await service.ensure_identity(
+            user_id="user-delete",
+            email="delete@example.com",
+            display_name="Delete Me",
+            username="delete-me",
+        )
+
+        scheduled = await service.request_identity_deletion(identity.id)
+        snapshot = await store.snapshot()
+        pending_identity = snapshot.identities[identity.id]
+
+        assert scheduled["status"] == "scheduled"
+        assert scheduled["grace_period_days"] == 30
+        assert scheduled["days_remaining"] == 30
+        assert pending_identity.deletion_requested_at is not None
+        assert pending_identity.deletion_scheduled_for is not None
+
+        cancelled = await service.cancel_identity_deletion(identity.id)
+        snapshot = await store.snapshot()
+        cancelled_identity = snapshot.identities[identity.id]
+
+        assert cancelled["status"] == "none"
+        assert cancelled_identity.deletion_requested_at is None
+        assert cancelled_identity.deletion_scheduled_for is None
+        assert cancelled_identity.deletion_cancelled_at is not None
+
+        await service.request_identity_deletion(identity.id)
+
+        def force_due(state):
+            current = state.identities[identity.id]
+            current.deletion_scheduled_for = utc_now() - timedelta(seconds=1)
+            state.identities[current.id] = current
+
+        await store.mutate(force_due)
+        processed = await service.process_due_identity_deletions()
+        snapshot = await store.snapshot()
+
+        assert processed["deleted_count"] == 1
+        assert identity.id not in snapshot.identities
+        assert identity.id in snapshot.deleted_identity_tombstones
+    finally:
+        settings.supabase_url = original_supabase_url
+        settings.supabase_service_role_key = original_service_role_key
+        if service is not None:
+            await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_ensure_identity_refuses_tombstoned_identity(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -515,10 +576,10 @@ async def test_delete_project_removes_project_bound_shares(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
+async def test_checkout_is_disabled_while_payment_provider_is_unselected(tmp_path: Path):
     settings = get_settings()
-    original_checkout_url = settings.paddle_checkout_base_url
-    settings.paddle_checkout_base_url = "https://checkout.paddle.test/omnia"
+    original_billing_provider = settings.billing_backbone_provider
+    settings.billing_backbone_provider = "none"
 
     try:
         store = StudioStateStore(tmp_path / "state.json")
@@ -542,14 +603,10 @@ async def test_checkout_uses_subscription_variant_for_pro_plan(tmp_path: Path):
             )
         )
 
-        payload = await service.checkout(identity.id, CheckoutKind.PRO_MONTHLY)
-
-        assert payload["provider"] == "paddle"
-        assert payload["checkout_url"].startswith("https://checkout.paddle.test/omnia?")
-        assert "checkout_kind=pro_monthly" in payload["checkout_url"]
-        assert "identity_id=user-1" in payload["checkout_url"]
+        with pytest.raises(RuntimeError, match="Paid checkout is disabled"):
+            await service.checkout(identity.id, CheckoutKind.PRO_MONTHLY)
     finally:
-        settings.paddle_checkout_base_url = original_checkout_url
+        settings.billing_backbone_provider = original_billing_provider
 
 
 @pytest.mark.asyncio
@@ -557,10 +614,10 @@ async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Pa
     settings = get_settings()
     original_environment = settings.environment
     original_mode = settings.generation_runtime_mode
-    original_checkout_url = settings.paddle_checkout_base_url
+    original_billing_provider = settings.billing_backbone_provider
     settings.environment = Environment.STAGING
     settings.generation_runtime_mode = "web"
-    settings.paddle_checkout_base_url = None
+    settings.billing_backbone_provider = "none"
     service: StudioService | None = None
 
     try:
@@ -590,14 +647,14 @@ async def test_checkout_refuses_demo_activation_outside_development(tmp_path: Pa
             )
         )
 
-        with pytest.raises(RuntimeError, match="Billing checkout is not configured for this environment"):
+        with pytest.raises(RuntimeError, match="Paid checkout is disabled"):
             await service.checkout(identity.id, CheckoutKind.PRO_MONTHLY)
     finally:
         if service is not None:
             await service.shutdown()
         settings.environment = original_environment
         settings.generation_runtime_mode = original_mode
-        settings.paddle_checkout_base_url = original_checkout_url
+        settings.billing_backbone_provider = original_billing_provider
 
 
 @pytest.mark.asyncio
@@ -1613,6 +1670,20 @@ async def test_update_post_rejects_public_visibility_for_nonshareable_results(tm
 
 
 @pytest.mark.asyncio
+async def test_retired_paddle_webhook_processing_fails_closed(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    try:
+        with pytest.raises(RuntimeError, match="Paddle webhook processing is retired and disabled"):
+            await service.process_paddle_webhook({"event_type": "transaction.completed", "data": {}})
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
+@pytest.mark.asyncio
 async def test_paddle_subscription_webhook_activates_pro_plan(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -1655,6 +1726,7 @@ async def test_paddle_subscription_webhook_activates_pro_plan(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_paddle_credit_pack_webhook_uses_checkout_kind_credit_amount(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -1704,6 +1776,7 @@ async def test_paddle_credit_pack_webhook_uses_checkout_kind_credit_amount(tmp_p
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_paddle_duplicate_credit_pack_webhook_is_idempotent(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -1751,6 +1824,7 @@ async def test_paddle_duplicate_credit_pack_webhook_is_idempotent(tmp_path: Path
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_paddle_webhook_requires_identity_custom_data(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -1773,6 +1847,7 @@ async def test_paddle_webhook_requires_identity_custom_data(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_paddle_webhook_unknown_identity_fails_closed(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -1799,6 +1874,7 @@ async def test_paddle_webhook_unknown_identity_fails_closed(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Paddle billing is retired; legacy behavior kept only as history.")
 async def test_paddle_pro_checkout_transaction_waits_for_subscription_event(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -5836,6 +5912,75 @@ async def test_ensure_identity_applies_privileged_overrides_for_configured_owner
         assert identity.monthly_credits_remaining >= 999999999
         assert identity.extra_credits >= 999999999
     finally:
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        if service is not None:
+            await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_invite_only_access_records_pending_request_and_approval_unlocks_email(tmp_path: Path):
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+    service = None
+
+    try:
+        store = StudioStateStore(tmp_path / "state.json")
+        service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+        await service.initialize()
+
+        decision = await service.evaluate_access_gate(
+            email="visitor@example.com",
+            display_name="Visitor",
+            username="visitor",
+            auth_provider="google",
+            auth_providers=["google"],
+            source="oauth",
+            country_code="FR",
+            referrer="https://google.com/",
+            host_label="studio.omniacreata.com",
+            client_ip="95.10.11.12",
+            user_agent="Mozilla/5.0 Chrome/123",
+        )
+
+        assert decision["allowed"] is False
+        requests = await service.list_access_requests()
+        assert len(requests) == 1
+        request_payload = requests[0]
+        assert request_payload["email"] == "visitor@example.com"
+        assert request_payload["status"] == "pending"
+        assert request_payload["auth_provider"] == "google"
+        assert request_payload["country_code"] == "FR"
+        assert request_payload["ip_label"] == "95.10.*.*"
+        assert request_payload["ip_hash"]
+        assert request_payload["user_agent_hash"]
+
+        approved = await service.update_access_request_status(
+            request_id=request_payload["id"],
+            status="approved",
+            operator_identity_id="root-admin",
+            operator_note="Manual beta approval.",
+        )
+        assert approved["status"] == "approved"
+        assert approved["approved_by"] == "root-admin"
+
+        unlocked = await service.evaluate_access_gate(
+            email="visitor@example.com",
+            auth_provider="google",
+            auth_providers=["google"],
+            source="oauth",
+        )
+        assert unlocked["allowed"] is True
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         settings.studio_owner_emails = original_owner_emails
         settings.studio_root_admin_emails = original_root_admin_emails
         if service is not None:

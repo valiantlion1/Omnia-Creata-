@@ -11,7 +11,7 @@ _CANONICAL_STACK = {
     "redis": "render",
     "data": "supabase",
     "storage": "supabase",
-    "billing": "paddle",
+    "billing": "none",
 }
 
 
@@ -42,18 +42,14 @@ def build_deployment_stack_summary(settings: Settings) -> dict[str, Any]:
             and has_configured_secret(settings.supabase_service_role_key)
         ),
         "redis": bool((settings.redis_url or "").strip()),
-        "paddle": bool(
-            has_configured_secret(settings.paddle_api_key)
-            and has_configured_secret(settings.paddle_webhook_secret)
-            and (settings.paddle_checkout_base_url or "").strip()
-        ),
+        "billing_provider_selected": settings.billing_backbone_provider not in {"", "none"},
     }
     if mismatches:
         status = "warning"
         summary = "Configured deployment stack drifts from the locked launch stack."
     else:
         status = "pass"
-        summary = "Configured deployment stack matches the locked Vercel/Render/Supabase/Redis/Paddle contract."
+        summary = "Configured deployment stack matches the locked Vercel/Render/Supabase/Redis contract with billing intentionally disabled."
     return {
         "status": status,
         "summary": summary,

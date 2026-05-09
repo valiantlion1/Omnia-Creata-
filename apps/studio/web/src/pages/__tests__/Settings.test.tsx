@@ -4,6 +4,30 @@ import userEvent from '@testing-library/user-event'
 
 const mockState = vi.hoisted(() => ({
   updateMyProfile: vi.fn(),
+  deleteProfile: vi.fn().mockResolvedValue({
+    status: 'scheduled',
+    deletion_request: {
+      status: 'scheduled',
+      requested_at: '2026-05-09T00:00:00Z',
+      scheduled_for: '2026-06-08T00:00:00Z',
+      cancelled_at: null,
+      grace_period_days: 30,
+      days_remaining: 30,
+      can_cancel: true,
+    },
+  }),
+  cancelProfileDeletion: vi.fn().mockResolvedValue({
+    status: 'cancelled',
+    deletion_request: {
+      status: 'none',
+      requested_at: null,
+      scheduled_for: null,
+      cancelled_at: '2026-05-09T00:00:00Z',
+      grace_period_days: 30,
+      days_remaining: null,
+      can_cancel: false,
+    },
+  }),
   getSettingsBootstrap: vi.fn().mockResolvedValue({
     active_sessions: {
       current_session_id: 'session-current',
@@ -86,6 +110,17 @@ const mockState = vi.hoisted(() => ({
       auth_provider: 'email',
       auth_providers: ['email'],
       credentials_managed_by_provider: false,
+      deletion_request: undefined as
+        | {
+            status: 'none' | 'scheduled' | 'due'
+            requested_at: string | null
+            scheduled_for: string | null
+            cancelled_at: string | null
+            grace_period_days: number
+            days_remaining: number | null
+            can_cancel: boolean
+          }
+        | undefined,
     },
     credits: {
       remaining: 50,
@@ -110,6 +145,8 @@ vi.mock('@/lib/studioApi', () => ({
     getHealth: mockState.getHealth,
     getHealthDetail: mockState.getHealthDetail,
     updateMyProfile: mockState.updateMyProfile,
+    deleteProfile: mockState.deleteProfile,
+    cancelProfileDeletion: mockState.cancelProfileDeletion,
     endOtherSettingsSessions: mockState.endOtherSettingsSessions,
     exportProfile: vi.fn(),
   },
@@ -169,6 +206,8 @@ describe('SettingsPage credentials flow', () => {
     mockState.getHealth.mockClear()
     mockState.getHealthDetail.mockClear()
     mockState.updateUser.mockReset()
+    mockState.deleteProfile.mockClear()
+    mockState.cancelProfileDeletion.mockClear()
     mockState.endOtherSettingsSessions.mockClear()
     mockState.signOut.mockReset()
     mockState.signOutScopes.mockClear()
@@ -181,6 +220,7 @@ describe('SettingsPage credentials flow', () => {
     mockState.auth.identity.auth_provider = 'email'
     mockState.auth.identity.auth_providers = ['email']
     mockState.auth.identity.credentials_managed_by_provider = false
+    mockState.auth.identity.deletion_request = undefined
   })
 
   it('shows provider-managed messaging for Google accounts', async () => {
@@ -284,5 +324,40 @@ describe('SettingsPage credentials flow', () => {
       expect(mockState.signOutScopes).toHaveBeenCalledWith({ scope: 'others' })
       expect(mockState.endOtherSettingsSessions).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('starts the cancelable 30-day account deletion countdown', async () => {
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    await userEvent.click(screen.getByRole('button', { name: /start 30-day deletion/i }))
+
+    await waitFor(() => {
+      expect(mockState.deleteProfile).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText(/account deletion scheduled/i)).toBeInTheDocument()
+  })
+
+  it('cancels a pending account deletion from settings', async () => {
+    mockState.auth.identity.deletion_request = {
+      status: 'scheduled',
+      requested_at: '2026-05-09T00:00:00Z',
+      scheduled_for: '2026-06-08T00:00:00Z',
+      cancelled_at: null,
+      grace_period_days: 30,
+      days_remaining: 30,
+      can_cancel: true,
+    }
+
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    expect(screen.getByText(/30 days left before permanent deletion/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /cancel deletion/i }))
+
+    await waitFor(() => {
+      expect(mockState.cancelProfileDeletion).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText(/deletion cancelled/i)).toBeInTheDocument()
   })
 })

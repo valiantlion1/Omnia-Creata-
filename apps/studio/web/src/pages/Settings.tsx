@@ -26,7 +26,7 @@ import {
 
 import { AppPage, StatusPill } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
-import { studioApi, type ActiveSessionsPayload, type HealthProvider, type HealthResponse, type Visibility } from '@/lib/studioApi'
+import { studioApi, type ActiveSessionsPayload, type HealthProvider, type HealthResponse, type ProfileDeletionRequest, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
@@ -151,6 +151,27 @@ function formatSessionTimestamp(value?: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(parsed)
+}
+
+function formatDeletionDate(value?: string | null) {
+  if (!value) return 'Not scheduled'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Not scheduled'
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(parsed)
+}
+
+function getDeletionRequestSummary(request?: ProfileDeletionRequest | null) {
+  if (!request || request.status === 'none') {
+    return 'No deletion request is active.'
+  }
+  if (request.status === 'due') {
+    return 'Deletion is due for final processing.'
+  }
+  const days = request.days_remaining ?? request.grace_period_days
+  return `${days} day${days === 1 ? '' : 's'} left before permanent deletion.`
 }
 
 function formatSessionRelativeTime(value?: string | null) {
@@ -703,7 +724,7 @@ function CredentialsDialog({
 export default function SettingsPage() {
   usePageMeta('Settings', 'Customize your Omnia Creata Studio preferences and account.')
   const { auth, isAuthenticated, isLoading, signOut } = useStudioAuth()
-  const { openPreferences, preferences: cookiePreferences } = useStudioCookiePreferences()
+  const { globalPrivacyControl, openPreferences, preferences: cookiePreferences } = useStudioCookiePreferences()
   const { prefs, setTipsEnabled, setTheme, resetTips } = useStudioUiPrefs()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'security' | 'gm'>('general')
@@ -794,12 +815,58 @@ export default function SettingsPage() {
     },
   })
 
+  const deletionRequestMutation = useMutation({
+    mutationFn: () => studioApi.deleteProfile(),
+    onSuccess: async (payload) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
+        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+      ])
+      setNotice({
+        tone: 'warning',
+        title: 'Account deletion scheduled',
+        body: `The 30-day countdown is active. Permanent deletion is scheduled for ${formatDeletionDate(payload.deletion_request.scheduled_for)} unless you cancel it first.`,
+      })
+    },
+    onError: (error) => {
+      setNotice({
+        tone: 'warning',
+        title: 'Could not schedule deletion',
+        body: toUserFacingErrorMessage(error, 'Try again in a moment.'),
+      })
+    },
+  })
+
+  const deletionCancelMutation = useMutation({
+    mutationFn: () => studioApi.cancelProfileDeletion(),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['studio-auth'] }),
+        queryClient.invalidateQueries({ queryKey: ['settings-bootstrap'] }),
+      ])
+      setNotice({
+        tone: 'success',
+        title: 'Deletion cancelled',
+        body: 'Your Studio account is no longer scheduled for deletion.',
+      })
+    },
+    onError: (error) => {
+      setNotice({
+        tone: 'warning',
+        title: 'Could not cancel deletion',
+        body: toUserFacingErrorMessage(error, 'Try again in a moment.'),
+      })
+    },
+  })
+
   const [passwordSaving, setPasswordSaving] = useState(false)
 
   const health = healthQuery.data as HealthResponse | undefined
   const activeSessions = settingsBootstrapQuery.data?.active_sessions
   const providerHealth = useMemo<HealthProvider[]>(() => health?.providers ?? [], [health?.providers])
-  const cookiePreferenceSummary = getCookiePreferenceSummary(cookiePreferences)
+  const cookiePreferenceSummary = getCookiePreferenceSummary(cookiePreferences, globalPrivacyControl)
+  const deletionRequest = auth?.identity.deletion_request
+  const deletionScheduled = Boolean(deletionRequest && deletionRequest.status !== 'none')
   useEffect(() => {
     setPendingVisibility(null)
   }, [auth?.identity.default_visibility])
@@ -1165,7 +1232,7 @@ export default function SettingsPage() {
                     description="Revisit analytics consent for this browser. Essential storage stays on; optional PostHog analytics only runs when you allow it."
                     action={
                       <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
-                        <StatusPill tone={cookiePreferences?.analytics ? 'brand' : 'neutral'}>{cookiePreferenceSummary}</StatusPill>
+                        <StatusPill tone={cookiePreferences?.analytics && !globalPrivacyControl ? 'brand' : 'neutral'}>{cookiePreferenceSummary}</StatusPill>
                         <button
                           type="button"
                           onClick={openPreferences}
@@ -1224,17 +1291,33 @@ export default function SettingsPage() {
                 <SettingsCard compact>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 md:p-8 bg-red-950/20">
                     <div className="min-w-0">
-                      <h4 className="text-[16px] font-bold text-red-400">Delete workspace</h4>
+                      <h4 className="text-[16px] font-bold text-red-400">Delete account</h4>
                       <p className="mt-1.5 text-[13px] leading-relaxed text-red-400/80 max-w-sm">
-                        For now, deletion requests go through support so billing, exports, and active workspace state can be handled cleanly.
+                        {getDeletionRequestSummary(deletionRequest)}
+                        {deletionScheduled ? ` Final date: ${formatDeletionDate(deletionRequest?.scheduled_for)}.` : ' You get a 30-day countdown before permanent deletion.'}
                       </p>
                     </div>
-                    <a
-                      href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
-                      className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] hover:scale-105"
-                    >
-                      <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" /> Contact Support
-                    </a>
+                    {deletionScheduled ? (
+                      <button
+                        type="button"
+                        onClick={() => deletionCancelMutation.mutate()}
+                        disabled={deletionCancelMutation.isPending}
+                        className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-3.5 text-[14px] font-bold text-emerald-300 transition-all duration-300 hover:bg-emerald-500/20 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <RefreshCw className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12" />
+                        {deletionCancelMutation.isPending ? 'Cancelling...' : 'Cancel deletion'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => deletionRequestMutation.mutate()}
+                        disabled={deletionRequestMutation.isPending}
+                        className="group shrink-0 flex items-center justify-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-3.5 text-[14px] font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:text-red-300 hover:shadow-[0_0_30px_rgba(239,68,68,0.2)] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <AlertTriangle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                        {deletionRequestMutation.isPending ? 'Scheduling...' : 'Start 30-day deletion'}
+                      </button>
+                    )}
                   </div>
                 </SettingsCard>
               </div>

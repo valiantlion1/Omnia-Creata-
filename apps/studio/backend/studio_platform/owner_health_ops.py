@@ -387,12 +387,18 @@ async def load_owner_security_summary(store) -> dict[str, int]:
         active_shares = sum(1 for share in state.shares.values() if share.revoked_at is None)
         revoked_shares = sum(1 for share in state.shares.values() if share.revoked_at is not None)
         deleted_identity_tombstones = len(state.deleted_identity_tombstones)
+        pending_access_requests = sum(1 for request in state.access_requests.values() if request.status == "pending")
+        approved_access_requests = sum(1 for request in state.access_requests.values() if request.status == "approved")
+        rejected_access_requests = sum(1 for request in state.access_requests.values() if request.status == "rejected")
         return {
             "temp_blocked_identities": temp_blocked,
             "manual_review_required_identities": manual_review_required,
             "active_shares": active_shares,
             "revoked_shares": revoked_shares,
             "deleted_identity_tombstones": deleted_identity_tombstones,
+            "pending_access_requests": pending_access_requests,
+            "approved_access_requests": approved_access_requests,
+            "rejected_access_requests": rejected_access_requests,
         }
 
     return await store.read(query)

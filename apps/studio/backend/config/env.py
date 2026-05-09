@@ -217,6 +217,8 @@ class Settings(BaseSettings):
     studio_owner_email: Optional[str] = None
     studio_owner_emails: str = ""
     studio_root_admin_emails: str = ""
+    studio_access_mode: str = "open"
+    studio_access_allowed_emails: str = ""
 
     # Database Configuration
     database_url: Optional[SecretStr] = None
@@ -255,7 +257,7 @@ class Settings(BaseSettings):
     redis_deploy_platform: str = "render"
     data_deploy_platform: str = "supabase"
     storage_deploy_platform: str = "supabase"
-    billing_backbone_provider: str = "paddle"
+    billing_backbone_provider: str = "none"
 
     # Server Configuration
     port: int = 8000
@@ -289,7 +291,7 @@ class Settings(BaseSettings):
     max_request_header_bytes: int = 16 * 1024
     max_request_body_bytes: int = 8 * 1024 * 1024
 
-    # Paddle Configuration
+    # Legacy Paddle Configuration (retired; do not use for new checkout)
     paddle_api_key: Optional[SecretStr] = None
     paddle_webhook_secret: Optional[SecretStr] = None
     paddle_checkout_base_url: Optional[str] = None
@@ -379,6 +381,36 @@ class Settings(BaseSettings):
             if value and value not in deduped:
                 deduped.append(value)
         return deduped
+
+    @property
+    def access_allowed_emails_list(self) -> List[str]:
+        """Parse extra non-owner emails allowed through invite-only Studio access."""
+        values: List[str] = []
+        if self.studio_access_allowed_emails:
+            values.extend(
+                email.strip().lower()
+                for email in self.studio_access_allowed_emails.split(",")
+                if email.strip()
+            )
+
+        deduped: List[str] = []
+        for value in values:
+            if value and value not in deduped:
+                deduped.append(value)
+        return deduped
+
+    @property
+    def invite_only_access_enabled(self) -> bool:
+        return self.studio_access_mode.strip().lower() in {
+            "invite_only",
+            "invite-only",
+            "owner_only",
+            "owner-only",
+            "closed",
+            "waitlist",
+            "hidden_beta",
+            "hidden-beta",
+        }
 
     @property
     def provider_spend_emergency_disabled_list(self) -> List[str]:
@@ -625,8 +657,11 @@ class Settings(BaseSettings):
     @classmethod
     def validate_billing_backbone_provider(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"paddle", "lemonsqueezy", "none"}:
-            raise ValueError("BILLING_BACKBONE_PROVIDER must be paddle, lemonsqueezy, or none")
+        if normalized == "paddle":
+            logger.warning("Paddle billing is retired; normalizing BILLING_BACKBONE_PROVIDER=paddle to none.")
+            return "none"
+        if normalized not in {"none", "manual", "lemonsqueezy", "fastspring", "payproglobal", "dodo", "polar", "creem"}:
+            raise ValueError("BILLING_BACKBONE_PROVIDER must be none or a supported future provider id")
         return normalized
 
     @model_validator(mode="after")

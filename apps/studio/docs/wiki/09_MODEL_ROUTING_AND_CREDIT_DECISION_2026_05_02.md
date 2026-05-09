@@ -7,7 +7,7 @@
 - Status: `implemented in build 2026.05.02.245`
 - This document is implemented in the backend model catalog, pricing quote path, provider cost estimates, Chat blueprint defaults, Create defaults, and frontend model labels.
 - It supersedes the older model-choice and credit-number recommendations in `08_LAUNCH_ECONOMICS_LOCK.md` for Studio image generation economics.
-- Live Runware smoke, protected staging, Paddle live checkout, and Turnstile activation are still separate launch gates.
+- Live Runware smoke, protected staging, future payment-provider checkout, and Turnstile activation are still separate launch gates.
 
 ## Current Repo Truth
 
@@ -52,7 +52,7 @@ Build `2026.05.02.245` keeps those ids for compatibility/internal paths, but pub
 
 ## Candidate Economics
 
-The recommended credit numbers assume `Recommended launch Pro` at `$29 / 1200 credits`, Paddle-style payment fees, and a reserve. Final implementation should use live provider quote whenever the provider returns exact cost.
+The recommended credit numbers assume `Recommended launch Pro` at `$29 / 1200 credits`, merchant-of-record/payment-provider fees, and a reserve. Final implementation should use live provider quote whenever the provider returns exact cost.
 
 | Model | Source cost anchor | Recommended credit | Stress credit | Decision |
 | --- | ---: | ---: | ---: | --- |
@@ -118,4 +118,3 @@ If future discounts lower the effective Pro revenue per credit, premium and chat
 - Runware Ideogram 3.0: https://runware.ai/docs/models/ideogram-3-0
 - Runware Recraft V4: https://runware.ai/docs/models/recraft-v4
 - Google Gemini API pricing: https://ai.google.dev/gemini-api/docs/pricing
-- Paddle pricing: https://www.paddle.com/pricing

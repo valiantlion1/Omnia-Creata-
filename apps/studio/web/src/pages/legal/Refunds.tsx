@@ -24,7 +24,7 @@ export default function RefundPolicyPage() {
       subtitle="How Omnia Creata Studio handles failed runs, cancellations, billing mistakes, and legally required consumer refunds."
       lastUpdated={LEGAL_LAST_UPDATED_LABEL}
       effectiveDate={LEGAL_EFFECTIVE_DATE_LABEL}
-      summary="If Studio burns credits because of a platform-side failure, we reverse those credits automatically. Subscription cancellations stop the next renewal but normally do not refund already elapsed time. If you were charged by mistake or local consumer law gives you a mandatory right, contact us and we will review it quickly."
+      summary="Paid checkout is closed during hidden beta, so there should be no public Studio charges today. If Studio burns test credits because of a platform-side failure, we reverse those credits automatically. When paid checkout opens, subscription, credit-pack, billing-error, payment-provider, and mandatory consumer refund rules will apply."
       toc={TOC}
     >
       <LegalSection id="overview" title="1. Overview">
@@ -35,6 +35,10 @@ export default function RefundPolicyPage() {
             Terms of Service
           </Link>{' '}
           and the billing experience shown inside Studio.
+        </p>
+        <p>
+          Current hidden beta status: public paid checkout is closed. If you see a real Studio charge before checkout
+          is officially opened, treat it as urgent and contact <a href={`mailto:${LEGAL_CONTACTS.billing}`} className="text-white underline decoration-white/30 underline-offset-4 hover:decoration-white">{LEGAL_CONTACTS.billing}</a>.
         </p>
         <p>
           We try to keep this policy straightforward: platform-side failures should not silently burn value, but a
@@ -65,7 +69,7 @@ export default function RefundPolicyPage() {
           items={[
             'Canceling a subscription does not normally refund time that has already elapsed in the active billing period.',
             'If a renewal happened by mistake, or if Studio was materially unavailable for reasons attributable to us, contact us for review.',
-            'Where Paddle, acting as merchant of record, must handle the payment event directly, we will coordinate with Paddle to resolve the refund or charge dispute.',
+            'Where the disclosed payment provider or merchant of record must handle the payment event directly, we will coordinate with that provider to resolve the refund or charge dispute.',
           ]}
         />
       </LegalSection>
@@ -103,7 +107,7 @@ export default function RefundPolicyPage() {
         <LegalList
           items={[
             'Send the request from the email address on the account whenever possible.',
-            'Include the invoice, Paddle receipt, or the last 4 digits and date of the card charge if available.',
+            'Include the invoice, payment-provider receipt, or the last 4 digits and date of the card charge if available.',
             'Tell us whether the issue is a failed run, a duplicate charge, an unauthorized charge, or a cancellation dispute.',
           ]}
         />

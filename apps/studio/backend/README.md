@@ -165,7 +165,7 @@ The current canonical public stack is now:
 - worker on `Render`
 - auth / Postgres / storage on `Supabase`
 - queue broker on `Render` Redis / Key Value
-- billing on `Paddle`
+- paid checkout disabled for hidden beta until a new payment provider is selected and integrated
 
 The Docker compose pack is still useful, but it now serves as a bounded protected-staging rehearsal rather than the final public hosting contract.
 

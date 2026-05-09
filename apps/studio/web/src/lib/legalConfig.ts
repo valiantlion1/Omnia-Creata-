@@ -1,37 +1,36 @@
-export const LEGAL_LAST_UPDATED_LABEL = 'April 19, 2026'
-export const LEGAL_EFFECTIVE_DATE_LABEL = 'April 19, 2026'
+export const LEGAL_LAST_UPDATED_LABEL = 'May 9, 2026'
+export const LEGAL_EFFECTIVE_DATE_LABEL = 'May 9, 2026'
 
 /**
- * All contact addresses currently route to founder@omniacreata.com.
- * When department aliases (Google Workspace groups or additional mailboxes)
- * are set up, update only the values below — every legal page, help page,
- * and signup flow pulls from this single source.
+ * Public role aliases route into the founder-operated mailbox today.
+ * Keep pages on role addresses so Studio can scale without exposing hidden
+ * owner/admin accounts.
  */
 export const LEGAL_CONTACTS = {
-  support: 'founder@omniacreata.com',
-  billing: 'founder@omniacreata.com',
-  safety: 'founder@omniacreata.com',
-  privacy: 'founder@omniacreata.com',
-  legal: 'founder@omniacreata.com',
-  security: 'founder@omniacreata.com',
+  support: 'hello@omniacreata.com',
+  billing: 'billing@omniacreata.com',
+  safety: 'privacy@omniacreata.com',
+  privacy: 'privacy@omniacreata.com',
+  legal: 'privacy@omniacreata.com',
+  security: 'privacy@omniacreata.com',
+  partnerships: 'partnerships@omniacreata.com',
 } as const
 
 export const LEGAL_PRELAUNCH_DISCLOSURE =
   'OmniaCreata Studio is currently operating under the OmniaCreata brand while formal business registration and public billing details are being finalized. Registered business details and any required regional representatives will be published before the self-serve public paid launch opens.'
 
 const LEGAL_PLACEHOLDER_MAP: Record<string, string> = {
-  'Omnia Creata Legal Entity Name': 'Omnia Creata, a founder-operated service',
-  'Registered Address': 'Our registered business address will be published before the self-serve public paid launch opens.',
-  'Company Registration No.': 'Formal company registration details will be published before the self-serve public paid launch opens.',
-  'Governing Jurisdiction — e.g. Republic of Türkiye': 'Republic of Turkiye',
-  'Governing Jurisdiction - e.g. Republic of Turkiye': 'Republic of Turkiye',
-  'City, Country': 'Istanbul, Turkiye',
+  'Omnia Creata Legal Entity Name': import.meta.env.VITE_LEGAL_ENTITY_NAME || 'Omnia Creata, a founder-operated service',
+  'Registered Address': import.meta.env.VITE_LEGAL_ADDRESS || 'Our registered business address will be published before the self-serve public paid launch opens.',
+  'Company Registration No.': import.meta.env.VITE_LEGAL_REGISTRATION_NO || 'Registration details pending public launch.',
+  'Governing Jurisdiction - e.g. Republic of Turkiye': import.meta.env.VITE_LEGAL_JURISDICTION || 'Republic of Turkiye',
+  'City, Country': import.meta.env.VITE_LEGAL_CITY_COUNTRY || 'Istanbul, Turkiye',
   'privacy@omniacreata.com': LEGAL_CONTACTS.privacy,
   'dpo@omniacreata.com': LEGAL_CONTACTS.privacy,
   'kvkk@omniacreata.com': LEGAL_CONTACTS.privacy,
   'security@omniacreata.com': LEGAL_CONTACTS.security,
   'help.omniacreata.com/wellbeing': '/help',
-  'partnerships@omniacreata.com': LEGAL_CONTACTS.support,
+  'partnerships@omniacreata.com': LEGAL_CONTACTS.partnerships,
   'child-safety@omniacreata.com': LEGAL_CONTACTS.safety,
   'abuse@omniacreata.com': LEGAL_CONTACTS.safety,
   'appeals@omniacreata.com': LEGAL_CONTACTS.safety,
@@ -40,12 +39,13 @@ const LEGAL_PLACEHOLDER_MAP: Record<string, string> = {
   'CDN Provider, Region': 'Vercel Edge Network and Cloudflare security services when enabled',
   'CDN Provider': 'Vercel Edge Network and Cloudflare security services when enabled',
   'Upstream Model Provider(s)': 'OpenAI, OpenRouter, Runware, and any explicitly enabled Google provider lanes',
+  'Payment Provider Name, Region': 'To be published before paid checkout opens',
   'Email Provider': 'Resend when transactional email is enabled',
   'Analytics/Monitoring Provider': 'PostHog, only after analytics consent',
   'Support Tool': 'Direct email support plus internal operator tooling',
-  'Primary Operating Jurisdiction': 'Republic of Turkiye',
+  'Primary Operating Jurisdiction': import.meta.env.VITE_LEGAL_JURISDICTION || 'Republic of Turkiye',
   'analytics_provider_*': 'PostHog-managed analytics storage',
-  'paddle_*': 'Paddle checkout storage when billing is enabled',
+  'payment_provider_*': 'Payment-provider checkout storage when paid billing is enabled',
 }
 
 export function resolveLegalPlaceholder(label: string) {

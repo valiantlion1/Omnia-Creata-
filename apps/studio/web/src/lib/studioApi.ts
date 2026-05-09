@@ -74,6 +74,25 @@ export type IdentityPayload = {
   default_visibility?: Visibility
   temp_block_until?: string | null
   manual_review_state?: 'none' | 'required' | 'approved'
+  deletion_requested_at?: string | null
+  deletion_scheduled_for?: string | null
+  deletion_cancelled_at?: string | null
+  deletion_request?: ProfileDeletionRequest
+}
+
+export type ProfileDeletionRequest = {
+  status: 'none' | 'scheduled' | 'due'
+  requested_at: string | null
+  scheduled_for: string | null
+  cancelled_at: string | null
+  grace_period_days: number
+  days_remaining: number | null
+  can_cancel: boolean
+}
+
+export type ProfileDeletionResponse = {
+  status: 'scheduled' | 'cancelled'
+  deletion_request: ProfileDeletionRequest
 }
 
 export type AuthMeResponse = {
@@ -130,7 +149,7 @@ export type PublicPlansPayload = {
     billing_period: 'month' | null
     checkout_kind: null
     recommended: false
-    availability: 'included' | 'self_serve'
+    availability: 'included' | 'self_serve' | 'not_open'
   }
   subscriptions: Array<Omit<PlanInfo, 'id'> & {
     id: 'creator' | 'pro'
@@ -141,7 +160,7 @@ export type PublicPlansPayload = {
     billing_period: 'month' | null
     checkout_kind: CheckoutKind | null
     recommended: boolean
-    availability: 'included' | 'self_serve'
+    availability: 'included' | 'self_serve' | 'not_open'
   }>
   credit_packs: Array<{
     kind: CheckoutKind
@@ -185,7 +204,7 @@ export type PublicPlansPayload = {
     billing_period: 'month' | null
     checkout_kind: CheckoutKind | null
     recommended: boolean
-    availability: 'included' | 'self_serve'
+    availability: 'included' | 'self_serve' | 'not_open'
   }>
   top_up?: {
     id: 'credit_packs'
@@ -1405,7 +1424,9 @@ export const studioApi = {
   getMyProfile: () => apiFetch<ProfilePayload>('/profiles/me'),
   listFavoritePosts: () => apiFetch<{ posts: PublicPost[] }>('/profiles/me/favorites'),
   exportProfile: () => apiFetch<Record<string, unknown>>('/profiles/me/export'),
-  deleteProfile: () => apiFetch<{ status: string }>('/profiles/me', { method: 'DELETE' }),
+  getProfileDeletionRequest: () => apiFetch<{ deletion_request: ProfileDeletionRequest }>('/profiles/me/deletion'),
+  deleteProfile: () => apiFetch<ProfileDeletionResponse>('/profiles/me', { method: 'DELETE' }),
+  cancelProfileDeletion: () => apiFetch<ProfileDeletionResponse>('/profiles/me/deletion/cancel', { method: 'POST' }),
   updateMyProfile: (payload: { display_name?: string; bio?: string; default_visibility?: Visibility; featured_asset_id?: string | null; featured_asset_position?: 'top' | 'center' | 'bottom' }) =>
     apiFetch<ProfilePayload>('/profiles/me', { method: 'PATCH', body: JSON.stringify(payload) }),
 }

@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from fastapi import Request
 import asyncio
+import hashlib
+import hmac
 import logging
 import json
 import re
@@ -18,6 +20,7 @@ from ..models import (
     OmniaIdentity,
     PlanCatalogEntry,
     PublicPost,
+    StudioAccessRequest,
     StudioState,
     StudioWorkspace,
     SubscriptionStatus,
@@ -40,6 +43,8 @@ from ..billing_ops import BillingStateSnapshot, resolve_billing_state
 logger = logging.getLogger(__name__)
 
 _PROFILE_FEATURED_ASSET_POSITIONS = frozenset({"top", "center", "bottom"})
+_ACCESS_REQUEST_HASH_SCOPE = "studio-access-request:v1"
+_ACCOUNT_DELETION_GRACE_PERIOD_DAYS = 30
 
 
 class DeletedIdentityError(PermissionError):
@@ -67,6 +72,48 @@ def _coerce_optional_datetime(value: datetime | str | None) -> datetime | None:
             return None
         return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
     return None
+
+
+def _normalize_email(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def _clamp_optional_text(value: str | None, limit: int) -> str | None:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+    return candidate[:limit]
+
+
+def _mask_access_request_ip(value: str | None) -> str | None:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+    if candidate in {"127.0.0.1", "::1", "localhost", "testclient"}:
+        return "Local development"
+    if ":" in candidate:
+        chunks = [chunk for chunk in candidate.split(":") if chunk]
+        if len(chunks) >= 2:
+            return f"{chunks[0]}:{chunks[1]}::*"
+        return "Private network"
+    parts = candidate.split(".")
+    if len(parts) != 4:
+        return candidate[:80]
+    try:
+        octets = [int(part) for part in parts]
+    except ValueError:
+        return candidate[:80]
+    if octets[0] == 10 or octets[0] == 127:
+        return "Local development"
+    if octets[0] == 192 and octets[1] == 168:
+        return "Private network"
+    if octets[0] == 172 and 16 <= octets[1] <= 31:
+        return "Private network"
+    return f"{octets[0]}.{octets[1]}.*.*"
+
+
+def _datetime_or_none_iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
 
 if TYPE_CHECKING:
     from ..service import StudioService
@@ -213,6 +260,186 @@ class IdentityService:
 
     async def is_identity_deleted(self, identity_id: str) -> bool:
         return (await self.get_deleted_identity_tombstone(identity_id)) is not None
+
+
+    def _hash_access_request_value(self, value: str | None, *, scope: str) -> str | None:
+        candidate = str(value or "").strip()
+        if not candidate:
+            return None
+        secret = (self.service._asset_token_secret or "").strip() or "omnia-creata-local-access-request-secret"
+        return hmac.new(
+            secret.encode("utf-8"),
+            f"{scope}:{candidate}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+
+    def _access_request_id_for_email(self, email: str) -> str:
+        normalized_email = _normalize_email(email)
+        return hashlib.sha256(f"studio-access-request:{normalized_email}".encode("utf-8")).hexdigest()[:32]
+
+
+    def _access_allowed_email_set(self) -> set[str]:
+        return (
+            set(self.service.settings.owner_emails_list)
+            | set(self.service.settings.root_admin_emails_list)
+            | set(self.service.settings.access_allowed_emails_list)
+        )
+
+
+    def _is_email_allowed_for_access_locked(self, state: StudioState, email: str) -> bool:
+        normalized_email = _normalize_email(email)
+        if not normalized_email:
+            return False
+        if not self.service.settings.invite_only_access_enabled:
+            return True
+        if normalized_email in self._access_allowed_email_set():
+            return True
+        return any(
+            request.email == normalized_email and request.status == "approved"
+            for request in state.access_requests.values()
+        )
+
+
+    async def evaluate_access_gate(
+        self,
+        *,
+        email: str,
+        display_name: str | None = None,
+        username: str | None = None,
+        auth_provider: str | None = None,
+        auth_providers: list[str] | None = None,
+        source: str = "unknown",
+        country_code: str | None = None,
+        referrer: str | None = None,
+        host_label: str | None = None,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_email = _normalize_email(email)
+        if not self.service.settings.invite_only_access_enabled:
+            return {"allowed": True, "status": "open"}
+        if not normalized_email:
+            return {"allowed": False, "status": "pending"}
+
+        request_id = self._access_request_id_for_email(normalized_email)
+        now = utc_now()
+        holder: dict[str, Any] = {}
+
+        def mutation(state: StudioState) -> None:
+            if self._is_email_allowed_for_access_locked(state, normalized_email):
+                holder["decision"] = {"allowed": True, "status": "approved"}
+                return
+
+            existing = state.access_requests.get(request_id)
+            normalized_providers: list[str] = []
+            for provider_name in auth_providers or []:
+                provider_candidate = str(provider_name or "").strip().lower()
+                if provider_candidate and provider_candidate not in normalized_providers:
+                    normalized_providers.append(provider_candidate)
+            primary_provider = str(auth_provider or "").strip().lower() or (normalized_providers[0] if normalized_providers else None)
+            if primary_provider and primary_provider not in normalized_providers:
+                normalized_providers.insert(0, primary_provider)
+
+            if existing is None:
+                existing = StudioAccessRequest(
+                    id=request_id,
+                    email=normalized_email,
+                    display_name=_clamp_optional_text(display_name, 120),
+                    username=_clamp_optional_text(username, 64),
+                    auth_provider=primary_provider,
+                    auth_providers=normalized_providers,
+                    source=_clamp_optional_text(source, 80) or "unknown",
+                    country_code=_clamp_optional_text(country_code, 8),
+                    referrer=_clamp_optional_text(referrer, 500),
+                    host_label=_clamp_optional_text(host_label, 160),
+                    ip_label=_mask_access_request_ip(client_ip),
+                    ip_hash=self._hash_access_request_value(client_ip, scope=_ACCESS_REQUEST_HASH_SCOPE),
+                    user_agent_hash=self._hash_access_request_value(user_agent, scope=_ACCESS_REQUEST_HASH_SCOPE),
+                    first_seen_at=now,
+                    last_seen_at=now,
+                )
+            else:
+                existing.request_count += 1
+                existing.last_seen_at = now
+                existing.display_name = _clamp_optional_text(display_name, 120) or existing.display_name
+                existing.username = _clamp_optional_text(username, 64) or existing.username
+                existing.auth_provider = primary_provider or existing.auth_provider
+                if normalized_providers:
+                    merged = list(existing.auth_providers)
+                    for provider_name in normalized_providers:
+                        if provider_name not in merged:
+                            merged.append(provider_name)
+                    existing.auth_providers = merged
+                existing.source = _clamp_optional_text(source, 80) or existing.source
+                existing.country_code = _clamp_optional_text(country_code, 8) or existing.country_code
+                existing.referrer = _clamp_optional_text(referrer, 500) or existing.referrer
+                existing.host_label = _clamp_optional_text(host_label, 160) or existing.host_label
+                existing.ip_label = _mask_access_request_ip(client_ip) or existing.ip_label
+                existing.ip_hash = self._hash_access_request_value(client_ip, scope=_ACCESS_REQUEST_HASH_SCOPE) or existing.ip_hash
+                existing.user_agent_hash = (
+                    self._hash_access_request_value(user_agent, scope=_ACCESS_REQUEST_HASH_SCOPE)
+                    or existing.user_agent_hash
+                )
+
+            state.access_requests[request_id] = existing
+            holder["decision"] = {
+                "allowed": False,
+                "status": existing.status,
+                "request_id": existing.id,
+            }
+
+        await self.service.store.mutate(mutation)
+        return holder.get("decision", {"allowed": False, "status": "pending", "request_id": request_id})
+
+
+    async def list_access_requests(self, *, status_filter: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        normalized_status = str(status_filter or "").strip().lower() or None
+
+        def query(state: StudioState) -> list[StudioAccessRequest]:
+            requests = list(state.access_requests.values())
+            if normalized_status:
+                requests = [request for request in requests if request.status == normalized_status]
+            requests.sort(key=lambda request: request.last_seen_at, reverse=True)
+            return [request.model_copy(deep=True) for request in requests[:limit]]
+
+        requests = await self.service.store.read(query)
+        return [request.model_dump(mode="json") for request in requests]
+
+
+    async def update_access_request_status(
+        self,
+        *,
+        request_id: str,
+        status: str,
+        operator_identity_id: str,
+        operator_note: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"pending", "approved", "rejected"}:
+            raise ValueError("Access request status must be pending, approved, or rejected.")
+        now = utc_now()
+        holder: dict[str, StudioAccessRequest] = {}
+
+        def mutation(state: StudioState) -> None:
+            request = state.access_requests.get(request_id)
+            if request is None:
+                raise KeyError(request_id)
+            request.status = normalized_status  # type: ignore[assignment]
+            request.operator_note = _clamp_optional_text(operator_note, 500)
+            if normalized_status == "approved":
+                request.approved_at = now
+                request.approved_by = operator_identity_id
+                request.rejected_at = None
+                request.rejected_by = None
+            elif normalized_status == "rejected":
+                request.rejected_at = now
+                request.rejected_by = operator_identity_id
+            state.access_requests[request.id] = request
+            holder["request"] = request.model_copy(deep=True)
+
+        await self.service.store.mutate(mutation)
+        return holder["request"].model_dump(mode="json")
 
 
     async def ensure_identity(
@@ -443,7 +670,37 @@ class IdentityService:
             exclude={"flag_count", "last_flagged_at", "last_flagged_reason"},
         )
         payload["manual_review_state"] = identity.manual_review_state.value
+        payload["deletion_request"] = self._serialize_identity_deletion_request(identity)
         return payload
+
+
+    def _serialize_identity_deletion_request(self, identity: OmniaIdentity) -> Dict[str, Any]:
+        requested_at = _coerce_optional_datetime(identity.deletion_requested_at)
+        scheduled_for = _coerce_optional_datetime(identity.deletion_scheduled_for)
+        cancelled_at = _coerce_optional_datetime(identity.deletion_cancelled_at)
+        now = utc_now()
+        if scheduled_for is None:
+            return {
+                "status": "none",
+                "requested_at": None,
+                "scheduled_for": None,
+                "cancelled_at": _datetime_or_none_iso(cancelled_at),
+                "grace_period_days": _ACCOUNT_DELETION_GRACE_PERIOD_DAYS,
+                "days_remaining": None,
+                "can_cancel": False,
+            }
+
+        remaining_seconds = (scheduled_for - now).total_seconds()
+        days_remaining = max(0, int((remaining_seconds + 86399) // 86400))
+        return {
+            "status": "scheduled" if remaining_seconds > 0 else "due",
+            "requested_at": _datetime_or_none_iso(requested_at),
+            "scheduled_for": _datetime_or_none_iso(scheduled_for),
+            "cancelled_at": None,
+            "grace_period_days": _ACCOUNT_DELETION_GRACE_PERIOD_DAYS,
+            "days_remaining": days_remaining,
+            "can_cancel": remaining_seconds > 0,
+        }
 
 
     def _auth_provider_context_for_user(self, auth_user: Any | None) -> Dict[str, Any]:
@@ -498,6 +755,18 @@ class IdentityService:
             "workspace_id": None,
             "temp_block_until": None,
             "manual_review_state": ManualReviewState.NONE.value,
+            "deletion_requested_at": None,
+            "deletion_scheduled_for": None,
+            "deletion_cancelled_at": None,
+            "deletion_request": {
+                "status": "none",
+                "requested_at": None,
+                "scheduled_for": None,
+                "cancelled_at": None,
+                "grace_period_days": _ACCOUNT_DELETION_GRACE_PERIOD_DAYS,
+                "days_remaining": None,
+                "can_cancel": False,
+            },
         }
 
 
@@ -1172,6 +1441,90 @@ class IdentityService:
                 viewer_identity_id=viewer_identity_id,
             ),
         )
+
+
+    async def get_identity_deletion_request(self, identity_id: str) -> Dict[str, Any]:
+        identity = await self.get_identity(identity_id)
+        return self._serialize_identity_deletion_request(identity)
+
+
+    async def request_identity_deletion(self, identity_id: str) -> Dict[str, Any]:
+        """Schedule account deletion after the grace period instead of deleting immediately."""
+        now = utc_now()
+        scheduled_for = now + timedelta(days=_ACCOUNT_DELETION_GRACE_PERIOD_DAYS)
+        holder: dict[str, OmniaIdentity] = {}
+
+        def mutation(state: StudioState) -> None:
+            identity = state.identities.get(identity_id)
+            if identity is None:
+                raise KeyError("Identity not found")
+
+            if identity.deletion_scheduled_for is None:
+                identity.deletion_requested_at = now
+                identity.deletion_scheduled_for = scheduled_for
+            identity.deletion_cancelled_at = None
+            identity.updated_at = now
+            state.identities[identity.id] = identity
+            holder["identity"] = identity.model_copy(deep=True)
+
+        await self.service.store.mutate(mutation)
+        return self._serialize_identity_deletion_request(holder["identity"])
+
+
+    async def cancel_identity_deletion(self, identity_id: str) -> Dict[str, Any]:
+        """Cancel a pending account deletion while the 30-day grace window is active."""
+        now = utc_now()
+        holder: dict[str, OmniaIdentity] = {}
+
+        def mutation(state: StudioState) -> None:
+            identity = state.identities.get(identity_id)
+            if identity is None:
+                raise KeyError("Identity not found")
+            if identity.deletion_scheduled_for is not None and identity.deletion_scheduled_for <= now:
+                raise ValueError("Deletion is already due and can no longer be cancelled.")
+
+            identity.deletion_requested_at = None
+            identity.deletion_scheduled_for = None
+            identity.deletion_cancelled_at = now
+            identity.updated_at = now
+            state.identities[identity.id] = identity
+            holder["identity"] = identity.model_copy(deep=True)
+
+        await self.service.store.mutate(mutation)
+        return self._serialize_identity_deletion_request(holder["identity"])
+
+
+    async def process_due_identity_deletions(self, *, limit: int = 50) -> Dict[str, Any]:
+        """Permanently delete accounts whose grace window has elapsed.
+
+        This is intentionally explicit so hidden beta can run it from an operator job
+        or maintenance task after exports/support checks are complete.
+        """
+        now = utc_now()
+
+        def query(state: StudioState) -> list[str]:
+            due: list[str] = []
+            for identity in state.identities.values():
+                scheduled_for = _coerce_optional_datetime(identity.deletion_scheduled_for)
+                if scheduled_for is not None and scheduled_for <= now:
+                    due.append(identity.id)
+            return due[: max(1, min(limit, 200))]
+
+        identity_ids = await self.service.store.read(query)
+        deleted_ids: list[str] = []
+        for due_identity_id in identity_ids:
+            try:
+                await self.permanently_delete_identity(due_identity_id)
+                deleted_ids.append(due_identity_id)
+            except KeyError:
+                continue
+
+        return {
+            "status": "processed",
+            "checked_at": now.isoformat(),
+            "deleted_count": len(deleted_ids),
+            "deleted_identity_ids": deleted_ids,
+        }
 
 
     async def permanently_delete_identity(self, identity_id: str) -> bool:

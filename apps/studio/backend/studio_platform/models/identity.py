@@ -77,6 +77,9 @@ class OmniaIdentity(BaseModel):
     last_flagged_reason: Optional[str] = None
     temp_block_until: Optional[datetime] = None
     manual_review_state: ManualReviewState = ManualReviewState.NONE
+    deletion_requested_at: Optional[datetime] = None
+    deletion_scheduled_for: Optional[datetime] = None
+    deletion_cancelled_at: Optional[datetime] = None
     last_credit_refresh_at: datetime = Field(default_factory=utc_now)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

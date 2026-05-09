@@ -50,6 +50,53 @@ class StudioServiceDelegatesMixin:
     def get_access_session_context_from_token(self, access_token: str | None) -> Dict[str, Any]:
         return self.access_sessions.session_context_from_token(access_token)
 
+    async def evaluate_access_gate(
+        self,
+        *,
+        email: str,
+        display_name: str | None = None,
+        username: str | None = None,
+        auth_provider: str | None = None,
+        auth_providers: list[str] | None = None,
+        source: str = "unknown",
+        country_code: str | None = None,
+        referrer: str | None = None,
+        host_label: str | None = None,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> Dict[str, Any]:
+        return await self.identity.evaluate_access_gate(
+            email=email,
+            display_name=display_name,
+            username=username,
+            auth_provider=auth_provider,
+            auth_providers=auth_providers,
+            source=source,
+            country_code=country_code,
+            referrer=referrer,
+            host_label=host_label,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
+
+    async def list_access_requests(self, *, status_filter: str | None = None, limit: int = 200) -> list[Dict[str, Any]]:
+        return await self.identity.list_access_requests(status_filter=status_filter, limit=limit)
+
+    async def update_access_request_status(
+        self,
+        *,
+        request_id: str,
+        status: str,
+        operator_identity_id: str,
+        operator_note: str | None = None,
+    ) -> Dict[str, Any]:
+        return await self.identity.update_access_request_status(
+            request_id=request_id,
+            status=status,
+            operator_identity_id=operator_identity_id,
+            operator_note=operator_note,
+        )
+
     async def list_models_for_identity(self, identity: OmniaIdentity | None = None) -> List[ModelCatalogEntry]:
         return await self.shell.list_models_for_identity(identity)
 
@@ -146,6 +193,18 @@ class StudioServiceDelegatesMixin:
     async def export_identity_data(self, identity_id: str) -> Dict[str, Any]:
         return await self.identity.export_identity_data(identity_id=identity_id)
 
+    async def get_identity_deletion_request(self, identity_id: str) -> Dict[str, Any]:
+        return await self.identity.get_identity_deletion_request(identity_id=identity_id)
+
+    async def request_identity_deletion(self, identity_id: str) -> Dict[str, Any]:
+        return await self.identity.request_identity_deletion(identity_id=identity_id)
+
+    async def cancel_identity_deletion(self, identity_id: str) -> Dict[str, Any]:
+        return await self.identity.cancel_identity_deletion(identity_id=identity_id)
+
+    async def process_due_identity_deletions(self, *, limit: int = 50) -> Dict[str, Any]:
+        return await self.identity.process_due_identity_deletions(limit=limit)
+
     async def permanently_delete_identity(self, identity_id: str) -> bool:
         return await self.identity.permanently_delete_identity(identity_id=identity_id)
 
@@ -153,4 +212,4 @@ class StudioServiceDelegatesMixin:
         return await self.billing.process_paddle_webhook(payload=payload)
 
     async def process_lemonsqueezy_webhook(self, payload: Dict[str, Any]) -> None:
-        raise RuntimeError("LemonSqueezy webhooks have been retired. Use Paddle webhook processing instead.")
+        raise RuntimeError("Payment provider webhooks are disabled until a new provider is selected.")

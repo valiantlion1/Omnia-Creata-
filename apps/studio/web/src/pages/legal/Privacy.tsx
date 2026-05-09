@@ -18,6 +18,7 @@ const TOC: LegalTocItem[] = [
   { id: 'purposes', title: '5. Purposes and legal bases' },
   { id: 'prompts-outputs', title: '6. Prompts and generated outputs' },
   { id: 'cookies', title: '7. Cookies and similar technologies' },
+  { id: 'consent-analytics', title: '7A. Cookie consent and analytics controls' },
   { id: 'sub-processors', title: '8. Service providers and sub-processors' },
   { id: 'international', title: '9. International transfers' },
   { id: 'retention', title: '10. Retention' },
@@ -25,6 +26,7 @@ const TOC: LegalTocItem[] = [
   { id: 'your-rights', title: '12. Your rights (EU / UK / EEA)' },
   { id: 'kvkk', title: '13. Turkiye - KVKK rights' },
   { id: 'ccpa', title: '14. California - CCPA / CPRA rights' },
+  { id: 'other-regions', title: '14A. Other regional privacy rights' },
   { id: 'children', title: '15. Children' },
   { id: 'automated', title: '16. Automated decision-making' },
   { id: 'marketing', title: '17. Marketing communications' },
@@ -41,7 +43,7 @@ export default function PrivacyPolicy() {
       subtitle="How Omnia Creata Studio collects, uses, protects, and shares personal data - and the choices you have."
       lastUpdated={LEGAL_LAST_UPDATED_LABEL}
       effectiveDate={LEGAL_EFFECTIVE_DATE_LABEL}
-      summary="We collect the minimum data needed to run the Service: your account details, your prompts and generated images, billing records via Paddle, and basic technical logs. We do not sell your data, we do not use your content to train third-party AI models, and we honour the rights granted to you under the GDPR, Turkiye's KVKK, and the CCPA. You can request access, correction, export, or deletion at any time."
+      summary="We collect the data needed to run Studio safely: account details, prompts, reference uploads, generated images, credit and billing records if paid checkout is enabled, support messages, security logs, and optional analytics only after consent. We do not sell personal data, do not share it for cross-context behavioural advertising, and do not use your prompts or outputs to train third-party generative models. We honour GDPR/UK GDPR, Turkiye KVKK, CCPA/CPRA, and comparable access, correction, deletion, portability, objection, and opt-out rights where they apply."
       toc={TOC}
     >
       <LegalSection id="overview" title="1. Overview">
@@ -84,7 +86,7 @@ export default function PrivacyPolicy() {
           ]}
         />
         <p>
-          Where we are required to register with a data protection authority or appoint a representative — including
+          Where we are required to register with a data protection authority or appoint a representative - including
           under Article 27 GDPR for EU representation or VERBIS registration in Turkiye - the designated contact point
           will be published here.
         </p>
@@ -96,7 +98,7 @@ export default function PrivacyPolicy() {
           items={[
             'Visit any public Omnia Creata Studio page;',
             'Register for, sign in to, or use an Omnia Creata Studio account;',
-            'Purchase or manage a subscription via our payment processor, Paddle;',
+            'Purchase or manage a subscription if paid checkout is enabled;',
             'Submit prompts, upload reference images, or generate outputs in the Service;',
             'Contact our support channels or engage with our marketing.',
           ]}
@@ -112,7 +114,7 @@ export default function PrivacyPolicy() {
           <LegalList
             items={[
               'Account data: email, display name, password (hashed), profile picture if you upload one, preferred language.',
-              'Billing data: plan selected, subscription status, purchase history, invoice metadata, VAT/tax identifier where you provide one. Card numbers and banking details are handled exclusively by Paddle; we never see or store them.',
+              'Billing data: plan selected, subscription status, purchase history, invoice metadata, VAT/tax identifier where you provide one. Card numbers and banking details are handled by the disclosed payment provider; we do not store full card numbers.',
               'Content: prompts you write, negative prompts, seeds, parameters, reference images you upload, and the generated images we produce for you.',
               'Support data: the content of messages you send us, and any attachments you include.',
             ]}
@@ -123,16 +125,18 @@ export default function PrivacyPolicy() {
             items={[
               'Technical data: IP address, user-agent string, device and browser information, approximate location (derived from IP at city/country level), time zone.',
               'Usage data: pages visited, features used, number of generations, response times, error logs, session duration.',
+              'Attribution data: referring page, landing page, campaign parameters such as UTM tags, source/medium labels, and similar information that helps us understand whether a visit came from search, social media, a direct link, a referral, or a paid campaign.',
               'Security data: login attempts, session tokens, fingerprints used to detect abuse, and records of blocked requests (including the reason for blocking).',
-              'Cookies and similar technologies — see Section 7 and our Cookie Policy.',
+              'Cookie and browser-storage choices, including whether this browser selected essential-only mode, allowed optional analytics, or sent Global Privacy Control.',
+              'Cookies and similar technologies - see Section 7 and our Cookie Policy.',
             ]}
           />
         </LegalSubsection>
         <LegalSubsection title="4.3 Data from third parties">
           <LegalList
             items={[
-              'Payment confirmations, tax residency, currency, and subscription lifecycle events from Paddle.',
-              'Authentication signals (if you sign in with a third-party identity provider) — limited to the identifiers that provider releases to us.',
+              'Payment confirmations, tax residency, currency, and subscription lifecycle events from the disclosed payment provider when paid checkout is enabled.',
+              'Authentication signals (if you sign in with a third-party identity provider) - limited to the identifiers that provider releases to us.',
               'Abuse and fraud signals from upstream infrastructure providers (e.g., CDN, DDoS protection).',
             ]}
           />
@@ -153,23 +157,25 @@ export default function PrivacyPolicy() {
         </LegalSubsection>
         <LegalSubsection title="5.2 Billing and financial records">
           <p>
-            Processing subscriptions via Paddle, issuing invoices, keeping accounting records.{' '}
+            Processing subscriptions through the disclosed payment provider when paid checkout is enabled, issuing invoices, keeping accounting records.{' '}
             <strong>Legal basis:</strong> performance of a contract (Art. 6(1)(b)) and compliance with legal obligations
-            (Art. 6(1)(c)) — including tax and accounting laws.
+            (Art. 6(1)(c)) - including tax and accounting laws.
           </p>
         </LegalSubsection>
         <LegalSubsection title="5.3 Security, abuse prevention, and fraud detection">
           <p>
             Detecting unauthorised access, rate-limiting, blocking prompts that violate the Acceptable Use Policy,
-            investigating abuse reports. <strong>Legal basis:</strong> legitimate interests (Art. 6(1)(f)) — our
+            investigating abuse reports. <strong>Legal basis:</strong> legitimate interests (Art. 6(1)(f)) - our
             interest in keeping the Service safe and usable, balanced against your interests.
           </p>
         </LegalSubsection>
         <LegalSubsection title="5.4 Service improvement and analytics">
           <p>
             Understanding which features are used, measuring quality of results, investigating bugs, performance
-            tuning. We use aggregated or pseudonymised data where possible. <strong>Legal basis:</strong> legitimate
-            interests (Art. 6(1)(f)) and, where we use non-essential analytics cookies, your consent (Art. 6(1)(a)).
+            tuning, and learning which public channels bring people into Studio. We use aggregated or pseudonymised
+            data where possible and do not use optional analytics for advertising audiences. <strong>Legal basis:</strong>{' '}
+            legitimate interests (Art. 6(1)(f)) for essential reliability and security telemetry, and your consent
+            (Art. 6(1)(a)) where we use non-essential analytics cookies or similar technologies.
           </p>
         </LegalSubsection>
         <LegalSubsection title="5.5 Legal compliance and dispute handling">
@@ -196,7 +202,9 @@ export default function PrivacyPolicy() {
           items={[
             'We store your prompts, reference images, parameters, and generated outputs so that your history, credits, and billing reconcile correctly, and so that abuse investigations can be carried out if a report is filed.',
             'We do not sell your prompts or outputs, and we do not share them with third-party AI model vendors for training their models.',
+            'We do not use private prompts, private uploads, or private outputs to train a public OmniaCreata model unless we first publish a separate opt-in control and obtain the consent required by law.',
             'We may process prompts and outputs through our upstream generation providers solely for the purpose of producing the image you requested. These providers act as processors under contract and are bound to use the data only for that purpose.',
+            'Published images and public profile material are public by your choice. Public visibility does not convert private account data into analytics training data; it only makes the selected public item visible to other users and visitors.',
             'We may use aggregated, de-identified telemetry about generations (e.g., distribution of resolutions, failure rates) to improve the Service. Aggregated telemetry cannot be linked back to you.',
             'We may review prompts and outputs flagged by automated safety systems or by user reports to enforce our Acceptable Use Policy. Access is limited to staff who need it.',
             'If you delete content or your account, we delete or anonymise associated prompts and outputs on the schedule in Section 10.',
@@ -207,9 +215,9 @@ export default function PrivacyPolicy() {
       <LegalSection id="cookies" title="7. Cookies and similar technologies">
         <p>
           We use cookies, local storage, and similar technologies to keep you signed in, remember preferences, measure
-          usage, and keep the Service secure. Strictly necessary cookies are set without consent because the Service
-          cannot function without them. Non-essential analytics and preference cookies are set only with your consent
-          where the law requires it.
+          usage, remember local workspace choices, understand where visits came from, and keep the Service secure.
+          Strictly necessary storage is used without consent because Studio cannot function safely without it.
+          Optional analytics storage is off by default and only runs after consent.
         </p>
         <p>
           Full detail - including a list of each cookie, its purpose, and its duration - is in our{' '}
@@ -220,6 +228,24 @@ export default function PrivacyPolicy() {
         </p>
       </LegalSection>
 
+      <LegalSection id="consent-analytics" title="7A. Cookie consent and analytics controls">
+        <p>
+          Studio separates essential storage from optional analytics. Essential storage keeps accounts signed in,
+          records cookie choices, supports security controls, and remembers local workspace continuity. Optional
+          analytics helps us understand aggregate product quality, reliability, feature usage, and source attribution.
+        </p>
+        <LegalList
+          items={[
+            'Optional analytics is not loaded until this browser allows it.',
+            'You can choose essential-only mode, allow analytics, or reopen cookie preferences later.',
+            'If your browser sends Global Privacy Control, Studio treats that as an opt-out signal and keeps optional analytics off for that browser.',
+            'We do not use analytics cookies for advertising audiences, retargeting, or cross-context behavioural advertising.',
+            'We do not sell personal data and do not share cookie data for sale/share-style processing.',
+            'Campaign and referral information may be used to understand whether visitors came from search, social media, a shared link, an owned campaign, or paid marketing, but only within the limits of the consent and law that apply to that visitor.',
+          ]}
+        />
+      </LegalSection>
+
       <LegalSection id="sub-processors" title="8. Service providers and sub-processors">
         <p>
           We rely on a small number of vendors to run the Service. Each is bound by a written agreement that restricts
@@ -228,39 +254,39 @@ export default function PrivacyPolicy() {
         <LegalList
           items={[
             <>
-              <strong>Paddle.com Market Limited</strong> (United Kingdom) - merchant of record, payment processing,
-              invoicing, tax collection and remittance.
+              <strong>Payment provider</strong> (<LegalPlaceholder>Payment Provider Name, Region</LegalPlaceholder>) -
+              payment processing, invoicing, tax collection and remittance when paid checkout is enabled.
             </>,
             <>
               <strong>Cloud hosting provider</strong> (<LegalPlaceholder>Hosting Provider Name, Region</LegalPlaceholder>
-              ) — application hosting, databases, object storage for generated images.
+              ) - application hosting, databases, object storage for generated images.
             </>,
             <>
-              <strong>CDN &amp; DDoS protection</strong> (<LegalPlaceholder>CDN Provider, Region</LegalPlaceholder>) —
+              <strong>CDN &amp; DDoS protection</strong> (<LegalPlaceholder>CDN Provider, Region</LegalPlaceholder>) -
               edge caching, traffic security.
             </>,
             <>
               <strong>Generation infrastructure</strong> (
-              <LegalPlaceholder>Upstream Model Provider(s)</LegalPlaceholder>) — executing the generation request you
+              <LegalPlaceholder>Upstream Model Provider(s)</LegalPlaceholder>) - executing the generation request you
               submit. Bound by contract not to reuse your prompts or outputs for model training.
             </>,
             <>
-              <strong>Transactional email</strong> (<LegalPlaceholder>Email Provider</LegalPlaceholder>) — sign-in
+              <strong>Transactional email</strong> (<LegalPlaceholder>Email Provider</LegalPlaceholder>) - sign-in
               links, receipts, security alerts.
             </>,
             <>
               <strong>Product analytics and error monitoring</strong> (
-              <LegalPlaceholder>Analytics/Monitoring Provider</LegalPlaceholder>) — only where consent is obtained, and
+              <LegalPlaceholder>Analytics/Monitoring Provider</LegalPlaceholder>) - only where consent is obtained, and
               scoped to pseudonymous identifiers.
             </>,
             <>
-              <strong>Customer support tooling</strong> (<LegalPlaceholder>Support Tool</LegalPlaceholder>) — handling
+              <strong>Customer support tooling</strong> (<LegalPlaceholder>Support Tool</LegalPlaceholder>) - handling
               and tracking support conversations.
             </>,
           ]}
         />
         <p>
-          An up-to-date list — including entity names and regions — is available on request at{' '}
+          An up-to-date list - including entity names and regions - is available on request at{' '}
           <LegalPlaceholder>privacy@omniacreata.com</LegalPlaceholder>. We notify subscribers of material changes to
           the sub-processor list where required.
         </p>
@@ -290,15 +316,24 @@ export default function PrivacyPolicy() {
         <p>We keep personal data only as long as we need it. Indicative retention periods:</p>
         <LegalList
           items={[
-            'Account data — while your account is active. Deleted or anonymised within 30 days after account closure, subject to Section 10.1.',
-            'Content (prompts, uploads, outputs) — while your account is active. You can delete individual items at any time. Deleted items are removed from active storage immediately and from backups on rolling schedule (typically up to 35 days).',
-            'Billing and tax records — retained for the period required by applicable tax and accounting law (generally 7–10 years).',
-            'Security logs — up to 12 months, extended only where needed for an active investigation.',
-            'Marketing preferences and suppression lists — until you ask us to delete them or for as long as needed to honour an opt-out.',
-            'Support conversations — up to 24 months after the conversation is closed.',
+            'Account data - while your account is active. A self-service account deletion request starts a 30-day grace period before permanent deletion, subject to Section 10.2.',
+            'Content (prompts, uploads, outputs) - while your account is active. You can delete individual items at any time. Deleted items are removed from active storage immediately and from backups on rolling schedule (typically up to 35 days).',
+            'Billing and tax records - retained for the period required by applicable tax and accounting law (generally 7-10 years).',
+            'Security logs - up to 12 months, extended only where needed for an active investigation.',
+            'Marketing preferences and suppression lists - until you ask us to delete them or for as long as needed to honour an opt-out.',
+            'Support conversations - up to 24 months after the conversation is closed.',
           ]}
         />
-        <LegalSubsection title="10.1 Legal holds">
+        <LegalSubsection title="10.1 Account deletion countdown">
+          <p>
+            When you request account deletion in Settings, Studio schedules deletion 30 days later. During that period
+            you can cancel the request, export your data, or contact us about billing, safety, or ownership issues. Once
+            the grace period ends, we may permanently delete or anonymise the account and workspace data, except for
+            records we must keep for legal, tax, security, fraud, chargeback, abuse-prevention, or dispute-resolution
+            purposes.
+          </p>
+        </LegalSubsection>
+        <LegalSubsection title="10.2 Legal holds">
           <p>
             Where we are legally required to preserve data (e.g., in response to a valid court order, ongoing fraud
             investigation, or pending legal claim), we may retain it beyond the periods above until the obligation
@@ -311,7 +346,7 @@ export default function PrivacyPolicy() {
         <p>We apply layered security measures appropriate to the risks of the data we process:</p>
         <LegalList
           items={[
-            'Encryption in transit (TLS 1.2+) for all client–server traffic.',
+            'Encryption in transit (TLS 1.2+) for all client-server traffic.',
             'Encryption at rest for databases and object storage.',
             'Hashed and salted password storage. We never see your password in plaintext.',
             'Role-based access control, least-privilege defaults, multi-factor authentication for staff access to production systems.',
@@ -333,28 +368,28 @@ export default function PrivacyPolicy() {
         <LegalList
           items={[
             <>
-              <strong>Access</strong> — a copy of the personal data we hold about you.
+              <strong>Access</strong> - a copy of the personal data we hold about you.
             </>,
             <>
-              <strong>Rectification</strong> — correction of inaccurate or incomplete data.
+              <strong>Rectification</strong> - correction of inaccurate or incomplete data.
             </>,
             <>
-              <strong>Erasure</strong> ("right to be forgotten") — deletion where no overriding ground for
+              <strong>Erasure</strong> ("right to be forgotten") - deletion where no overriding ground for
               retention applies.
             </>,
             <>
-              <strong>Restriction</strong> — limit how we process your data in specified circumstances.
+              <strong>Restriction</strong> - limit how we process your data in specified circumstances.
             </>,
             <>
-              <strong>Portability</strong> — receive your data in a structured, commonly used, machine-readable format,
+              <strong>Portability</strong> - receive your data in a structured, commonly used, machine-readable format,
               and transmit it to another controller.
             </>,
             <>
-              <strong>Objection</strong> — object to processing based on legitimate interest, including profiling and
+              <strong>Objection</strong> - object to processing based on legitimate interest, including profiling and
               direct marketing.
             </>,
             <>
-              <strong>Withdraw consent</strong> — where we rely on consent, you can withdraw it at any time without
+              <strong>Withdraw consent</strong> - where we rely on consent, you can withdraw it at any time without
               affecting the lawfulness of prior processing.
             </>,
             <>
@@ -367,6 +402,10 @@ export default function PrivacyPolicy() {
           respond within one month. We may ask for identity verification before acting on a request, and in complex
           cases may extend the deadline by up to two further months, notifying you of the reason. We do not charge a
           fee unless requests are manifestly unfounded or excessive.
+        </p>
+        <p>
+          Account deletion can also be started directly from Settings. That self-service request stays cancelable for
+          30 days before final deletion processing.
         </p>
       </LegalSection>
 
@@ -395,7 +434,7 @@ export default function PrivacyPolicy() {
         </p>
         <p>
           You have the right to lodge a complaint with the Turkish Personal Data Protection Authority (
-          <em>Kişisel Verileri Koruma Kurumu</em>) if you believe your rights under the KVKK have been infringed.
+          <em>Kisisel Verileri Koruma Kurumu</em>) if you believe your rights under the KVKK have been infringed.
         </p>
       </LegalSection>
 
@@ -412,7 +451,7 @@ export default function PrivacyPolicy() {
             'Correct inaccurate personal information;',
             'Limit the use and disclosure of sensitive personal information;',
             'Opt out of the sale or sharing of personal information (we do not sell personal information and do not share it for cross-context behavioural advertising);',
-            'Non-discrimination — we will not deny service or charge you a different price for exercising these rights.',
+            'Non-discrimination - we will not deny service or charge you a different price for exercising these rights.',
           ]}
         />
         <p>
@@ -420,13 +459,53 @@ export default function PrivacyPolicy() {
           <LegalPlaceholder>privacy@omniacreata.com</LegalPlaceholder>. You may designate an authorised agent, in which
           case we will require proof of authorisation and may verify the request directly with you.
         </p>
+        <LegalSubsection title="14.1 California notice at collection">
+          <p>In the past 12 months, Studio may have collected the following categories of personal information:</p>
+          <LegalList
+            items={[
+              'Identifiers such as email address, account ID, display name, IP address, device identifiers, and session identifiers.',
+              'Commercial information such as selected plan, credit balance, subscription state, invoice metadata, refund records, and payment-provider events if paid checkout is enabled.',
+              'Internet or electronic network activity such as pages viewed, feature usage, referring source, campaign parameters, error events, and security events.',
+              'Approximate geolocation derived from IP address at country, region, or city level.',
+              'User-generated content such as prompts, reference uploads, generated outputs, public profile fields, support messages, and moderation reports.',
+              'Inferences used for security, abuse prevention, product quality, and account protection.',
+            ]}
+          />
+          <p>
+            We disclose those categories to service providers for the business purposes described in this policy. We do
+            not sell personal information and do not share it for cross-context behavioural advertising.
+          </p>
+        </LegalSubsection>
+      </LegalSection>
+
+      <LegalSection id="other-regions" title="14A. Other regional privacy rights">
+        <p>
+          Studio is intended to be global. If privacy law in your region gives you rights similar to access,
+          correction, deletion, portability, objection, consent withdrawal, appeal, or opt-out of sale/share-style
+          processing, contact <LegalPlaceholder>privacy@omniacreata.com</LegalPlaceholder>. We will handle the request
+          under the law that applies to you and our Service.
+        </p>
+        <LegalList
+          items={[
+            'Brazil / LGPD: you may request confirmation, access, correction, anonymisation, deletion, portability, information about sharing, and review of automated decisions where applicable.',
+            'Canada / PIPEDA and provincial privacy laws: you may request access, correction, and information about our privacy practices where applicable.',
+            'US state privacy laws beyond California: where applicable, we will honour access, deletion, correction, portability, opt-out, and appeal rights required by that state law.',
+            'Other jurisdictions: if your local law grants a mandatory privacy right, tell us your country/region and the request type so we can route it correctly.',
+          ]}
+        />
       </LegalSection>
 
       <LegalSection id="children" title="15. Children">
         <p>
-          The Service is not directed to children under sixteen (16) and we do not knowingly collect personal data
-          from them. If you believe a child has provided us personal data, contact{' '}
+          The Service is not directed to children under sixteen (16). We do not knowingly collect personal data from
+          children under thirteen (13) or from any child where parental consent would be required under applicable law,
+          including COPPA in the United States. If you believe a child has provided us personal data, contact{' '}
           <LegalPlaceholder>privacy@omniacreata.com</LegalPlaceholder> and we will delete it.
+        </p>
+        <p>
+          Accounts used for underage access, child sexual exploitation material, grooming, or attempts to generate
+          sexual content involving minors are terminated and escalated where law or platform safety obligations require
+          it.
         </p>
       </LegalSection>
 
@@ -479,10 +558,10 @@ export default function PrivacyPolicy() {
         </p>
         <LegalList
           items={[
-            'EEA — the authority in the Member State of your habitual residence, place of work, or place of the alleged infringement (list: edpb.europa.eu).',
-            'United Kingdom — the Information Commissioner\'s Office (ico.org.uk).',
-            'Türkiye — the Personal Data Protection Authority (kvkk.gov.tr).',
-            'California — the California Privacy Protection Agency or the Attorney General\'s office.',
+            'EEA - the authority in the Member State of your habitual residence, place of work, or place of the alleged infringement (list: edpb.europa.eu).',
+            'United Kingdom - the Information Commissioner\'s Office (ico.org.uk).',
+            'Turkiye - the Personal Data Protection Authority (kvkk.gov.tr).',
+            'California - the California Privacy Protection Agency or the Attorney General\'s office.',
           ]}
         />
       </LegalSection>

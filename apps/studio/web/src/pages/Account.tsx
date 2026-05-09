@@ -790,8 +790,8 @@ function AccountSideRail({
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
             </button>
-            <a
-              href="mailto:founder@omniacreata.com?subject=Studio%20workspace%20deletion%20request"
+            <Link
+              to="/settings"
               className="flex items-center justify-between gap-3 py-3 text-left transition hover:text-white"
             >
               <span className="flex min-w-0 items-start gap-3">
@@ -799,12 +799,12 @@ function AccountSideRail({
                 <span>
                   <span className="block text-[13px] font-semibold text-red-200">Delete account</span>
                   <span className="mt-1 block text-[12px] text-zinc-500">
-                    Request deletion with billing and exports handled cleanly.
+                    Start or cancel the 30-day deletion countdown in Settings.
                   </span>
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-zinc-600" />
-            </a>
+            </Link>
           </div>
         </section>
       ) : null}

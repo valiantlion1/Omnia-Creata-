@@ -127,7 +127,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <Link to="/signup" className="text-sm text-zinc-300 transition hover:text-white">
-            Create account
+            Request access
           </Link>
         </div>
 
@@ -136,7 +136,7 @@ export default function LoginPage() {
             <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Log in</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white font-display md:text-6xl md:leading-[1.02]">Pick up where you <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>left off</span>.</h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
-              Sign in with your email or Google account to continue creating.
+              Sign in with an approved Studio account to continue creating.
             </p>
           </div>
 
@@ -224,9 +224,9 @@ export default function LoginPage() {
                 <ArrowRight className="h-4 w-4" />
               </button>
               <div className="text-sm text-zinc-400">
-                Need an account?{' '}
+                Need access?{' '}
                 <Link to="/signup" className="text-white transition hover:text-zinc-200">
-                  Create one
+                  Request access
                 </Link>
               </div>
             </div>

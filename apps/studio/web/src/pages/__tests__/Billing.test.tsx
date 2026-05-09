@@ -117,7 +117,7 @@ describe('BillingPage', () => {
   it('shows an error banner when checkout fails', async () => {
     server.use(
       http.post('*/v1/billing/checkout', () =>
-        HttpResponse.json({ detail: 'Paddle rejected the session.' }, { status: 502 }),
+        HttpResponse.json({ detail: 'Paid checkout is disabled while OmniaCreata selects a new payment provider.' }, { status: 503 }),
       ),
     )
 
@@ -130,6 +130,6 @@ describe('BillingPage', () => {
     const alerts = await screen.findAllByRole('alert')
     const checkoutAlert = alerts.find((node) => /checkout unavailable/i.test(node.textContent ?? ''))
     expect(checkoutAlert).toBeDefined()
-    expect(checkoutAlert).toHaveTextContent(/Paddle rejected the session/i)
+    expect(checkoutAlert).toHaveTextContent(/Paid checkout is disabled/i)
   })
 })

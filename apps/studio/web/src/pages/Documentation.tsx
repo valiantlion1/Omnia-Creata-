@@ -1,10 +1,11 @@
-﻿import { useMemo, type ElementType } from 'react'
+import { useMemo, type ElementType } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   CreditCard,
   HelpCircle,
   Keyboard,
   Lightbulb,
+  SlidersHorizontal,
   Mail,
   Repeat,
   Send,
@@ -16,6 +17,7 @@ import {
 
 import { useStudioAuth } from '@/lib/studioAuth'
 import { AppPage, LegalFooter } from '@/components/StudioPrimitives'
+import { LEGAL_CONTACTS } from '@/lib/legalConfig'
 import { usePageMeta } from '@/lib/usePageMeta'
 
 type HelpLink = { label: string; to: string; external?: boolean }
@@ -36,6 +38,7 @@ type HelpSectionId =
   | 'faq'
   | 'billing'
   | 'account'
+  | 'privacy'
   | 'safety'
   | 'contact'
 type HelpSection = {
@@ -55,17 +58,17 @@ const sections: HelpSection[] = [
     intro: 'A walkthrough of what each part of Studio does, the order we recommend learning them in, and the shortest path from sign-up to a finished image you are happy with.',
     items: [
       {
-        title: 'Step 1 â€” Sign up and land in Create',
+        title: 'Step 1 - Sign up and land in Create',
         body: [
           'Create an account with email or a social provider. You land in Create, which is the main tool for generating images. The left sidebar is your navigation; the center is the prompt box and the result area.',
           'If you just want to browse first, Explore is open without an account. You can look around, open any piece in the lightbox, and send a prompt or a style straight into Create when something inspires you.',
         ],
       },
       {
-        title: 'Step 2 â€” Write your first prompt',
+        title: 'Step 2 - Write your first prompt',
         body: [
           'Start simple. One or two lines describing the subject, the setting, and the mood is enough. You do not need to memorize any keywords to get a good first result.',
-          'Pick an aspect ratio that matches how you plan to use the image â€” 1:1 for social, 16:9 for desktop, 4:5 for prints and portraits, 9:16 for vertical.',
+          'Pick an aspect ratio that matches how you plan to use the image - 1:1 for social, 16:9 for desktop, 4:5 for prints and portraits, 9:16 for vertical.',
         ],
         example: {
           prompt: 'A quiet mountain cabin at dusk, soft golden light through the windows, pine trees dusted with snow, cinematic wide shot',
@@ -73,39 +76,39 @@ const sections: HelpSection[] = [
         },
       },
       {
-        title: 'Step 3 â€” Wait, review, iterate',
+        title: 'Step 3 - Wait, review, iterate',
         body: [
-          'Most runs finish in under a minute. When your image lands, open it in the lightbox. If it is close but not right, do not start over â€” click "Reuse prompt" and edit a single piece at a time (the lighting, the camera angle, the color palette).',
+          'Most runs finish in under a minute. When your image lands, open it in the lightbox. If it is close but not right, do not start over - click "Reuse prompt" and edit a single piece at a time (the lighting, the camera angle, the color palette).',
           'Small, focused changes teach you what words actually move the image. Big rewrites every round make it harder to learn the system.',
         ],
       },
       {
-        title: 'Step 4 â€” Save what is working',
-        body: 'Click the heart on anything you want to find again. Favorites are accessible from the sidebar. When you have several images around the same idea, create a Project and keep them together â€” it is much easier than scrolling through the full library later.',
+        title: 'Step 4 - Save what is working',
+        body: 'Click the heart on anything you want to find again. Favorites are accessible from the sidebar. When you have several images around the same idea, create a Project and keep them together - it is much easier than scrolling through the full library later.',
       },
       {
-        title: 'Step 5 â€” Use Chat when you need a partner, not a button',
+        title: 'Step 5 - Use Chat when you need a partner, not a button',
         body: [
           'Create is fast and deterministic: you press a button, you get an image. Chat is slower but smarter. Use it when you want to describe a concept in plain language and get help turning it into a real prompt, when you want to iterate on a specific image, or when you want critique.',
           'A typical flow: generate a first pass in Create, pick the best result, send it to Chat, ask for variations or a focused edit, bring the winner back.',
         ],
       },
       {
-        title: 'Step 6 â€” Publish only when you are ready',
-        body: 'By default every image is private to your account. Publishing is a deliberate action â€” you hit the publish button on the lightbox, and the image shows up on your public profile and in Explore. You can unpublish anytime.',
+        title: 'Step 6 - Publish only when you are ready',
+        body: 'By default every image is private to your account. Publishing is a deliberate action - you hit the publish button on the lightbox, and the image shows up on your public profile and in Explore. You can unpublish anytime.',
       },
       {
         title: 'Where everything lives',
         list: [
-          'Create â€” the prompt box, aspect ratio picker, and run history',
-          'Chat â€” conversational editing and idea development',
-          'Library â†’ My images â€” every image you have made, grouped by prompt',
-          'Library â†’ Projects â€” folders for related runs',
-          'Library â†’ Favorites â€” the quick-access shelf',
-          'Library â†’ Trash â€” deletions, held for 30 days',
-          'Explore â€” the public community gallery',
-          'Billing â€” your plan, credit balance, invoices',
-          'Account â€” display name, bio, visibility defaults, exports, and privacy controls',
+          'Create - the prompt box, aspect ratio picker, and run history',
+          'Chat - conversational editing and idea development',
+          'Library -> My images - every image you have made, grouped by prompt',
+          'Library -> Projects - folders for related runs',
+          'Library -> Favorites - the quick-access shelf',
+          'Library -> Trash - deletions, held for 30 days',
+          'Explore - the public community gallery',
+          'Billing - your plan, credit balance, invoices',
+          'Account - display name, bio, visibility defaults, exports, and privacy controls',
         ],
       },
     ],
@@ -114,16 +117,16 @@ const sections: HelpSection[] = [
     id: 'prompt-craft',
     label: 'Prompt craft',
     title: 'Writing prompts that actually work',
-    intro: 'Prompting is a skill â€” a boring fact but a real one. Here is what we see in prompts that consistently produce good images, what to avoid, and a set of worked examples.',
+    intro: 'Prompting is a skill - a boring fact but a real one. Here is what we see in prompts that consistently produce good images, what to avoid, and a set of worked examples.',
     items: [
       {
         title: 'The five pieces of a strong prompt',
         list: [
-          'Subject â€” what is in the frame (a woman, a car, a coastline)',
-          'Action or state â€” what the subject is doing, or the emotional register',
-          'Setting â€” where this takes place, the environment, the time of day',
-          'Style â€” the visual language (photographic, illustrated, painted, 3D render, specific era)',
-          'Framing â€” composition cues (wide shot, close-up, low angle, centered)',
+          'Subject - what is in the frame (a woman, a car, a coastline)',
+          'Action or state - what the subject is doing, or the emotional register',
+          'Setting - where this takes place, the environment, the time of day',
+          'Style - the visual language (photographic, illustrated, painted, 3D render, specific era)',
+          'Framing - composition cues (wide shot, close-up, low angle, centered)',
         ],
         body: 'You do not need all five in every prompt, but a prompt that has all five tends to land closer to what you had in mind than a prompt that only has the subject.',
       },
@@ -142,29 +145,29 @@ const sections: HelpSection[] = [
         title: 'Concrete beats abstract',
         body: [
           '"Moody" is weaker than "low-key lighting with a single warm source from the left". "Futuristic" is weaker than "brushed steel surfaces, cyan ambient light, ceiling-to-floor glass, 2040s architecture".',
-          'Abstract words are not wrong â€” they just leave more of the decision to the model. If you have a specific look in mind, say it.',
+          'Abstract words are not wrong - they just leave more of the decision to the model. If you have a specific look in mind, say it.',
         ],
       },
       {
         title: 'Reference the medium, not the brand',
-        body: 'Style words like "cinematic", "35mm film", "studio portrait", "oil painting", "ink and watercolor", "editorial fashion photography" are reliable anchors. Brand names and living-artist names are discouraged â€” the result is less predictable, and for commercial work it puts you in a grey zone on rights.',
+        body: 'Style words like "cinematic", "35mm film", "studio portrait", "oil painting", "ink and watercolor", "editorial fashion photography" are reliable anchors. Brand names and living-artist names are discouraged - the result is less predictable, and for commercial work it puts you in a grey zone on rights.',
       },
       {
-        title: 'Example â€” weak prompt',
+        title: 'Example - weak prompt',
         example: {
           prompt: 'a cool warrior',
           note: 'No subject detail, no setting, no style, no framing. The result will be generic.',
         },
       },
       {
-        title: 'Example â€” medium prompt',
+        title: 'Example - medium prompt',
         example: {
           prompt: 'a female warrior in leather armor, standing in a forest, fantasy art',
-          note: 'Better â€” you have subject, setting, and style â€” but the lighting, mood, and framing are still doing no work.',
+          note: 'Better - you have subject, setting, and style - but the lighting, mood, and framing are still doing no work.',
         },
       },
       {
-        title: 'Example â€” strong prompt',
+        title: 'Example - strong prompt',
         example: {
           prompt: 'A female warrior in worn leather armor, rain-soaked braids, hand resting on a long sword, standing ankle-deep in a moss-covered forest stream, dawn mist between the trees, backlit, cinematic three-quarter portrait, muted earthy palette, volumetric light',
           note: 'Subject, state, setting, lighting, framing, palette. Much more likely to hit the image you had in mind.',
@@ -180,9 +183,9 @@ const sections: HelpSection[] = [
       {
         title: 'What to avoid',
         list: [
-          'Long lists of adjectives without direction ("beautiful amazing stunning detailed masterpiece") â€” the model discounts them',
+          'Long lists of adjectives without direction ("beautiful amazing stunning detailed masterpiece") - the model discounts them',
           'Contradictions in the same prompt (close-up portrait + wide establishing shot)',
-          'Famous living-artist names â€” unreliable and legally risky',
+          'Famous living-artist names - unreliable and legally risky',
           'Real identifiable people you do not have permission to depict',
           'Brand names and trademarks as style anchors',
         ],
@@ -198,28 +201,28 @@ const sections: HelpSection[] = [
       {
         title: 'The iteration loop',
         body: [
-          'Generate four variations in Create â†’ pick the strongest â†’ click Reuse prompt â†’ change one element â†’ generate four more â†’ repeat until the image locks in.',
+          'Generate four variations in Create -> pick the strongest -> click Reuse prompt -> change one element -> generate four more -> repeat until the image locks in.',
           'Five rounds of focused iteration almost always beat twenty rounds of rewriting from scratch. Group all of them in a Project so you can see the evolution side by side.',
         ],
       },
       {
         title: 'Using a reference image',
         body: [
-          'When you have a look in mind but cannot describe it, drop a reference into Chat and ask the assistant to help you write a prompt that captures what is in the image â€” the composition, the palette, the lighting.',
+          'When you have a look in mind but cannot describe it, drop a reference into Chat and ask the assistant to help you write a prompt that captures what is in the image - the composition, the palette, the lighting.',
           'Reference-guided generation uses the image as a visual anchor, not as a template to copy. Expect it to inform mood and composition more than exact detail.',
         ],
       },
       {
         title: 'Fixing one part of an image',
         body: [
-          'If an image is 90% right and 10% wrong, open it in Chat and describe the change â€” "lower the contrast on the face", "swap the background to a rooftop at dusk", "remove the lens flare". Chat will attempt a targeted edit and return the revised image.',
+          'If an image is 90% right and 10% wrong, open it in Chat and describe the change - "lower the contrast on the face", "swap the background to a rooftop at dusk", "remove the lens flare". Chat will attempt a targeted edit and return the revised image.',
           'Targeted edits are rarely perfect on the first try. You may need two or three rounds of refinement. That is normal.',
         ],
       },
       {
         title: 'Running a series for a campaign or a character',
         body: [
-          'When you need consistent output across many images â€” a recurring character, a brand palette, a photo series â€” define the shared elements once, then vary only the scene-specific parts in each prompt.',
+          'When you need consistent output across many images - a recurring character, a brand palette, a photo series - define the shared elements once, then vary only the scene-specific parts in each prompt.',
           'Keep the series in a single Project. That way every iteration inherits the Project\'s context, and you can review cohesion at a glance.',
         ],
       },
@@ -256,7 +259,7 @@ const sections: HelpSection[] = [
         title: 'What publishing does',
         body: [
           'The image appears on your public profile at /@yourhandle and becomes eligible for Explore.',
-          'Other signed-in users can like it and reuse the prompt or style. The image stays yours â€” a like does not give them the file, and the Reuse action regenerates with their own credits.',
+          'Other signed-in users can like it and reuse the prompt or style. The image stays yours - a like does not give them the file, and the Reuse action regenerates with their own credits.',
           'You can unpublish an image at any time. It disappears from Explore and from your profile immediately. Anything that was already downloaded or screenshotted is of course outside our control.',
         ],
       },
@@ -277,11 +280,11 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Attribution and remix',
-        body: 'When someone reuses a prompt from Explore, the action is logged but your original image is not linked from theirs. Studio is not a remix network â€” the prompt is the reusable artifact, not the exact file.',
+        body: 'When someone reuses a prompt from Explore, the action is logged but your original image is not linked from theirs. Studio is not a remix network - the prompt is the reusable artifact, not the exact file.',
       },
       {
         title: 'Removing your work from Explore',
-        body: 'Unpublishing an image removes it from Explore and your profile. Deleting it removes it from Explore, your profile, and your Library. If someone else published something that obviously copies your work (identical reference or screen-captured output), report it via the post menu or founder@omniacreata.com.',
+        body: `Unpublishing an image removes it from Explore and your profile. Deleting it removes it from Explore, your profile, and your Library. If someone else published something that obviously copies your work (identical reference or screen-captured output), report it via the post menu or ${LEGAL_CONTACTS.privacy}.`,
       },
     ],
   },
@@ -289,55 +292,55 @@ const sections: HelpSection[] = [
     id: 'shortcuts',
     label: 'Shortcuts',
     title: 'Keyboard shortcuts',
-    intro: 'The shortcuts we ship today. Most of them work on both Mac and Windows; where they differ, âŒ˜ is shown for Mac and Ctrl for everything else.',
+    intro: 'The shortcuts we ship today. Most of them work on both Mac and Windows; where they differ, Cmd is shown for Mac and Ctrl for everything else.',
     items: [
       {
         title: 'Navigation',
         list: [
-          'G then C â€” go to Create',
-          'G then H â€” go to Chat',
-          'G then L â€” go to Library',
-          'G then E â€” go to Explore',
-          'G then B â€” go to Billing',
-          '/ â€” focus the search input on the current page',
+          'G then C - go to Create',
+          'G then H - go to Chat',
+          'G then L - go to Library',
+          'G then E - go to Explore',
+          'G then B - go to Billing',
+          '/ - focus the search input on the current page',
         ],
       },
       {
         title: 'In Create',
         list: [
-          'âŒ˜ / Ctrl + Enter â€” run the current prompt',
-          'â†‘ in the prompt box â€” recall your last prompt',
-          'R â€” reuse the last prompt without changes',
-          '1 / 2 / 3 / 4 â€” pick an aspect ratio (portrait, square, landscape, wide)',
-          'Esc â€” close the lightbox or any open modal',
+          'Cmd / Ctrl + Enter - run the current prompt',
+          'Up in the prompt box - recall your last prompt',
+          'R - reuse the last prompt without changes',
+          '1 / 2 / 3 / 4 - pick an aspect ratio (portrait, square, landscape, wide)',
+          'Esc - close the lightbox or any open modal',
         ],
       },
       {
         title: 'In the lightbox',
         list: [
-          'â† / â†’ â€” previous / next image in the set',
-          'L â€” like the current image',
-          'C â€” copy the prompt to clipboard',
-          'D â€” download the current file',
-          'Esc â€” close',
+          '<- / -> - previous / next image in the set',
+          'L - like the current image',
+          'C - copy the prompt to clipboard',
+          'D - download the current file',
+          'Esc - close',
         ],
       },
       {
         title: 'In Chat',
         list: [
-          'Enter â€” send the message',
-          'Shift + Enter â€” new line within a message',
-          'â†‘ when the input is empty â€” edit your last message',
-          'âŒ˜ / Ctrl + K â€” open the conversation switcher',
+          'Enter - send the message',
+          'Shift + Enter - new line within a message',
+          'Up when the input is empty - edit your last message',
+          'Cmd / Ctrl + K - open the conversation switcher',
         ],
       },
       {
         title: 'Selection and bulk actions (Library)',
         list: [
           'Click a card corner to select; shift-click to extend',
-          'A â€” select all visible cards',
-          'Esc â€” clear selection',
-          'Del / Backspace â€” move the selection to Trash',
+          'A - select all visible cards',
+          'Esc - clear selection',
+          'Del / Backspace - move the selection to Trash',
         ],
       },
     ],
@@ -346,7 +349,7 @@ const sections: HelpSection[] = [
     id: 'troubleshooting',
     label: 'Tips & hints',
     title: 'Tips, hints, and common fixes',
-    intro: 'A practical catch-all for the things people trip over most often, plus the quick habits that make Studio smoother to use. If none of this helps, email founder@omniacreata.com with a screenshot and a description of what you expected to see.',
+    intro: `A practical catch-all for the things people trip over most often, plus the quick habits that make Studio smoother to use. If none of this helps, email ${LEGAL_CONTACTS.support} with a screenshot and a description of what you expected to see.`,
     items: [
       {
         title: 'My image is taking forever',
@@ -357,45 +360,45 @@ const sections: HelpSection[] = [
       },
       {
         title: 'I got an error and lost credits',
-        body: 'Failed runs are refunded automatically â€” the credit comes back to your balance, usually within a minute. If the refund does not appear, or if a clearly blocked run counted against your balance, email founder@omniacreata.com with the approximate time and prompt and we will restore it.',
+        body: `Failed runs are refunded automatically - the credit comes back to your balance, usually within a minute. If the refund does not appear, or if a clearly blocked run counted against your balance, email ${LEGAL_CONTACTS.billing} with the approximate time and prompt and we will restore it.`,
       },
       {
         title: 'Images look blurry or low-resolution',
         body: [
           'Check which quality setting you generated with. The default produces solid results for most use cases, but premium quality settings give sharper output at the same aspect ratio.',
-          'If you are viewing the thumbnail and not the full image, click into the lightbox â€” the preview grid uses compressed thumbnails for speed.',
+          'If you are viewing the thumbnail and not the full image, click into the lightbox - the preview grid uses compressed thumbnails for speed.',
         ],
       },
       {
         title: 'My prompt keeps getting blocked',
         body: [
           'If the same phrase keeps tripping the safety filter, try rephrasing the risky part in more neutral terms. Common culprits are ambiguous wording around real people, violent language used as intensifier, and medical or anatomical terms in contexts the filter reads as sexual.',
-          'If you believe the block is a false positive on creative work, send the full prompt to founder@omniacreata.com for a human review.',
+          `If you believe the block is a false positive on creative work, send the full prompt to ${LEGAL_CONTACTS.privacy} for a human review.`,
         ],
       },
       {
         title: 'The UI looks broken',
-        body: 'Hard refresh the page (âŒ˜ Shift R on Mac, Ctrl Shift R on Windows). If it still looks wrong, try a private window to rule out an extension interfering. If neither works, email support with your browser name and version and a screenshot.',
+        body: 'Hard refresh the page (Cmd Shift R on Mac, Ctrl Shift R on Windows). If it still looks wrong, try a private window to rule out an extension interfering. If neither works, email support with your browser name and version and a screenshot.',
       },
       {
         title: 'I cannot sign in',
         body: [
           'If you signed up with email, use the "Forgot password" link to reset.',
-          'If you signed up with a social provider, use the same provider â€” trying to log in with email+password on an account originally created with Google will not work.',
+          'If you signed up with a social provider, use the same provider - trying to log in with email+password on an account originally created with Google will not work.',
           'If you are being redirected in a loop, clear your cookies for the Studio domain and try again.',
         ],
       },
       {
         title: 'Billing looks wrong',
-        body: 'The live source of truth for your plan, credits, and invoices is the Billing tab. Paddle is our processor â€” you may see Paddle.net on your statement, which is expected. For anything that looks off (double charge, wrong plan, missing credits), email founder@omniacreata.com with the invoice ID.',
+        body: `The live source of truth for your plan, credits, and invoices is the Billing tab. Paid checkout is currently closed for hidden beta. When payments open, the active provider and statement descriptor will be shown before purchase. For anything that looks off, email ${LEGAL_CONTACTS.billing} with the invoice ID.`,
       },
       {
         title: 'An image I published is not showing up in Explore',
-        body: 'Published images are eligible for Explore but not auto-surfaced. They always appear on your public profile immediately. Explore selection considers freshness, engagement, and curation signals and updates continuously â€” work that is a good fit usually surfaces within a day.',
+        body: 'Published images are eligible for Explore but not auto-surfaced. They always appear on your public profile immediately. Explore selection considers freshness, engagement, and curation signals and updates continuously - work that is a good fit usually surfaces within a day.',
       },
       {
         title: 'I lost an image I was sure I saved',
-        body: 'Check Library â†’ Trash. Items you moved to Trash stay there for 30 days before permanent removal. If something is truly gone and it is not in Trash, email support and include the approximate date and the prompt â€” we can usually locate it in recent logs for a limited window.',
+        body: 'Check Library -> Trash. Items you moved to Trash stay there for 30 days before permanent removal. If something is truly gone and it is not in Trash, email support and include the approximate date and the prompt - we can usually locate it in recent logs for a limited window.',
       },
     ],
   },
@@ -411,11 +414,11 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Is there a free account?',
-        body: 'Yes. You can create a free account to explore the workspace, keep a profile, and buy wallet credits. Creator and Pro add the bundled monthly credit allowance and the paid features tied to those plans.',
+        body: 'Yes. You can create a free account to explore the workspace and keep a profile. Paid checkout is closed during hidden beta, so public self-serve purchases are not available yet.',
       },
       {
         title: 'How do credits work?',
-        body: 'Creator and Pro include monthly credits, and wallet credit packs can be bought separately from Billing. Studio spends your included monthly allowance first, then wallet balance. One run spends one or more credits depending on the aspect ratio and quality you pick.',
+        body: 'Credits are the internal unit Studio uses to reserve and settle generation work. During hidden beta, credit balances and plan state are visible for testing, but self-serve paid top-ups and subscriptions are not open.',
       },
       {
         title: 'Do unused credits roll over?',
@@ -447,11 +450,11 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Can I upload reference images?',
-        body: 'Yes. Drop a reference into Chat to get help writing a prompt that matches its mood, or use it as a visual anchor for generation. The reference is not copied pixel-for-pixel â€” it informs direction.',
+        body: 'Yes. Drop a reference into Chat to get help writing a prompt that matches its mood, or use it as a visual anchor for generation. The reference is not copied pixel-for-pixel - it informs direction.',
       },
       {
         title: 'Can I edit just part of an image?',
-        body: 'Ask in Chat. Describe the specific change ("swap the background to a rainy street", "lighten the face"), and Studio will attempt a targeted edit. It is not surgical â€” expect a couple of refinement rounds.',
+        body: 'Ask in Chat. Describe the specific change ("swap the background to a rainy street", "lighten the face"), and Studio will attempt a targeted edit. It is not surgical - expect a couple of refinement rounds.',
       },
       {
         title: 'Can I batch-generate many variations?',
@@ -471,7 +474,7 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Is there a public API?',
-        body: 'No public API today. Commercial partners can reach out to founder@omniacreata.com.',
+        body: `No public API today. Commercial partners can reach out to ${LEGAL_CONTACTS.partnerships}.`,
       },
       {
         title: 'What do you do with my prompts?',
@@ -479,70 +482,70 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Can someone steal my prompts?',
-        body: 'Your prompts are private by default. The prompt is visible to other users only if you publish the image to Explore or your public profile â€” that is the point of publishing.',
+        body: 'Your prompts are private by default. The prompt is visible to other users only if you publish the image to Explore or your public profile - that is the point of publishing.',
       },
       {
         title: 'How do I contact support?',
-        body: 'founder@omniacreata.com for product questions, founder@omniacreata.com for money, founder@omniacreata.com for moderation, founder@omniacreata.com for data requests, founder@omniacreata.com for legal.',
+        body: `${LEGAL_CONTACTS.support} for product questions, ${LEGAL_CONTACTS.billing} for billing, ${LEGAL_CONTACTS.privacy} for privacy/legal/security, and ${LEGAL_CONTACTS.partnerships} for partnerships.`,
       },
     ],
   },
   {
     id: 'billing',
     label: 'Billing',
-    title: 'Plans, payments, and refunds',
-    intro: 'Everything you need to know about paying for Studio, changing plans, and getting money back when something goes wrong.',
+    title: 'Plans, checkout status, and refunds',
+    intro: 'What Billing shows today, what is intentionally closed during hidden beta, and what will change before any real payment is accepted.',
     items: [
       {
         title: 'How plans work',
-        body: 'Studio has a free account entry point plus monthly paid plans. Creator and Pro include bundled monthly credits and their paid features, and any eligible account can buy one-time wallet credit packs from Billing. You can switch subscription plans at any time; downgrades take effect at the end of your current billing cycle.',
+        body: 'Studio has a free account entry point and planned paid tiers, but paid checkout is currently closed for hidden beta. Billing can show plan, entitlement, and credit truth for testing; it should not ask for payment details while checkout is closed.',
       },
       {
         title: 'How you are charged',
-        body: 'Payments are processed by Paddle, our merchant of record. Paddle handles the charge, applicable sales tax and VAT, and issues the receipt. Your statement will show Paddle.net as the charging party.',
+        body: 'Paid checkout is currently closed for hidden beta. When payments open, the disclosed payment provider will handle the charge, applicable sales tax or VAT, and receipt flow before any purchase is accepted.',
       },
       {
         title: 'Supported payment methods',
-        body: 'Major credit and debit cards, plus the regional payment methods Paddle supports in your country â€” Apple Pay, Google Pay, iDEAL, SEPA, and similar where available.',
+        body: 'Supported methods will be shown by the disclosed payment provider before checkout opens. We will not ask for payment details while hidden beta checkout is closed.',
       },
       {
         title: 'Currencies',
-        body: 'Plans are quoted in USD by default. Paddle handles local-currency conversion and shows the final amount in your currency at checkout, including any tax.',
+        body: 'Plans are quoted in USD by default. The disclosed payment provider may show local-currency conversion and tax before purchase once checkout is open.',
       },
       {
         title: 'Canceling your subscription',
-        body: 'Cancel from Billing at any time. You keep access and remaining credits for the rest of the current billing cycle â€” we do not cut you off the moment you cancel. After the cycle ends, the subscription stops renewing.',
+        body: 'There is no active self-serve subscription to cancel while hidden beta checkout is closed. When subscriptions open, cancellation terms will be shown before purchase and Billing will provide the active cancellation path.',
       },
       {
         title: 'Changing plans',
         body: [
-          'Upgrades take effect immediately and are prorated. You get the new plan\'s credit allowance right away, minus what you already consumed on the lower plan.',
-          'Downgrades take effect at the end of your current billing cycle. You keep the higher plan until then.',
+          'Hidden beta plan changes are controlled by Studio operators or internal testing flows, not public self-serve checkout.',
+          'When public paid plans open, upgrade, downgrade, proration, and renewal behaviour will be disclosed before payment.',
         ],
       },
       {
         title: 'Top-up credit packs',
-        body: 'If you run through your monthly allowance before the cycle ends, you can buy a one-time credit pack from Billing. Top-up credits do not expire with the cycle â€” they stay on the account until used.',
+        body: 'Top-up credit packs are planned but not available through public checkout during hidden beta. Any test credit adjustments should be treated as internal beta balances, not paid customer purchases.',
       },
       {
         title: 'Refunds',
         body: [
-          'If something went clearly wrong on our side â€” an outage that cost you a generation, a charge you did not authorize, a mistaken double-charge â€” email founder@omniacreata.com within 14 days and we will refund it.',
-          'Outside those cases, we do not refund unused time on a running subscription. Cancel any time to stop the next renewal.',
+          `While checkout is closed, there should be no public Studio charges to refund. If you believe a charge exists, email ${LEGAL_CONTACTS.billing} immediately with any receipt or payment-provider reference.`,
+          'When paid checkout opens, the Refund Policy will govern failed runs, mistaken charges, subscription cancellation, mandatory consumer rights, and payment-provider disputes.',
           'This policy does not override refund rights you have under mandatory consumer law in your country.',
         ],
       },
       {
         title: 'Invoices and tax',
-        body: 'Every payment generates a PDF invoice from Paddle with the appropriate tax lines for your region. Invoices are emailed automatically and available in Billing.',
+        body: 'Once paid checkout opens, each payment should generate a receipt or invoice from the disclosed payment provider with the appropriate tax lines for your region.',
       },
       {
         title: 'Failed payments',
-        body: 'If a renewal charge fails, we retry over several days and notify you by email. Your account goes into grace mode - you keep access. If the payment cannot be collected, the subscription is canceled and the account reverts to the free tier.',
+        body: 'Failed-payment handling only applies after public paid checkout opens. During hidden beta, Studio should not retry payment methods or place users into a paid grace state.',
       },
       {
         title: 'VAT IDs and business accounts',
-        body: 'If you have a valid VAT or tax ID, add it at checkout or in Billing. Paddle validates the number and applies the reverse-charge mechanism where applicable.',
+        body: 'If you have a valid VAT or tax ID, add it at checkout or in Billing once those fields are available. The disclosed payment provider may validate the number and apply reverse-charge treatment where applicable.',
       },
     ],
   },
@@ -582,11 +585,69 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Deleting your account',
-        body: 'Account deletion is currently handled by support so we can confirm ownership. Email founder@omniacreata.com from the address on your account and we will remove it within 7 business days.',
+        body: 'Settings > Privacy & Security can start a 30-day account deletion countdown. During that window your account is still available so you can export data, review billing/support needs, or cancel the request. After the countdown, Studio can permanently delete the account and related workspace data unless a legal, fraud, security, billing, or abuse obligation requires a narrower record to be retained.',
       },
       {
         title: 'Deleting individual work',
         body: 'Anything in your Library can be moved to Trash. Anything in Trash can be permanently deleted. Trash auto-purges after 30 days. Permanent deletion is irreversible.',
+      },
+    ],
+  },
+  {
+    id: 'privacy',
+    label: 'Privacy & cookies',
+    title: 'Privacy, cookies, and data controls',
+    intro: 'What Studio stores, what stays private, how cookie choices work, and how to ask for access, correction, export, or deletion without needing to understand legal language.',
+    items: [
+      {
+        title: 'The short version',
+        body: [
+          'Studio stores the things needed to run your account: sign-in details, your prompts, uploaded references, generated images, credits, plan state, support messages, safety decisions, and security logs.',
+          'Optional analytics is off until this browser allows it. If your browser sends Global Privacy Control, Studio keeps optional analytics off for that browser.',
+          'We do not sell your personal data, do not use advertising cookies, and do not use private prompts or private images to train third-party AI models.',
+        ],
+      },
+      {
+        title: 'What we collect when someone visits',
+        body: [
+          'Public visits can create basic technical logs: IP address, user-agent, time, requested page, errors, and security signals. This is the normal plumbing needed to keep the site available and protected.',
+          'If optional analytics is allowed, Studio may also measure product-quality signals such as page views, feature usage, rough device/browser category, session duration, performance, and source attribution.',
+        ],
+      },
+      {
+        title: 'How we understand where people came from',
+        body: 'When allowed by consent and browser settings, Studio can read normal attribution signals such as referring page, landing page, UTM campaign tags, source/medium labels, and whether a visitor likely came from search, social media, a shared link, owned channels, or paid marketing. This is for product and marketing understanding, not ad retargeting.',
+      },
+      {
+        title: 'Cookie choices',
+        body: [
+          'Essential storage is always on because the app needs it for sign-in, security, abuse prevention, consent records, and basic workspace continuity.',
+          'Optional analytics can be allowed or rejected from the cookie banner, the footer cookie preferences link, or Settings > Privacy & Security. Clearing browser data removes the local choice, so Studio may ask again.',
+        ],
+      },
+      {
+        title: 'Global Privacy Control',
+        body: 'If your browser or privacy extension sends Global Privacy Control, Studio treats that as an opt-out signal and keeps optional analytics off. You can still use the service; the signal only blocks optional analytics-style tracking.',
+      },
+      {
+        title: 'Prompts, references, and generated images',
+        body: [
+          'Private work stays private by default. Your prompts, references, and generated outputs are stored so the Library works, credits reconcile, and support can investigate a failed run or abuse report.',
+          'Generation providers may process a prompt or reference only to produce the requested image. We do not send private prompts or outputs to third-party model vendors for training their models.',
+          'Publishing is a deliberate action. A public image can appear on your profile or Explore, but that does not turn the rest of your account into public data.',
+        ],
+      },
+      {
+        title: 'Exports, corrections, and deletion',
+        body: [
+          'You can download individual images from the Library, export account-level data from Settings when available, or ask support for an archive.',
+          'Account deletion starts from Settings > Privacy & Security and stays cancelable for 30 days. If you cannot access your account, email us from the account address so ownership can be verified manually.',
+          `For privacy rights such as access, correction, export, deletion, objection, withdrawal of consent, or questions about regional rights, email ${LEGAL_CONTACTS.privacy} from the account address.`,
+        ],
+      },
+      {
+        title: 'Public pages vs. private account data',
+        body: 'Public pages can be viewed by visitors. Your backend account data, private Library, private prompts, hidden admin controls, payment/provider keys, and security logs are not exposed to visitors. Downloading an image or opening a public profile does not reveal Studio backend systems.',
       },
     ],
   },
@@ -602,7 +663,7 @@ const sections: HelpSection[] = [
           'Sexual content involving minors, in any form, under any framing.',
           'Non-consensual intimate imagery of real people.',
           'Content that instructs or glorifies serious violence against a real person or group.',
-          'Content produced to deceive â€” forged documents, counterfeit currency, disinformation about real public figures.',
+          'Content produced to deceive - forged documents, counterfeit currency, disinformation about real public figures.',
           'Attempts to impersonate a real person for fraud, scams, or fabricated endorsements.',
         ],
       },
@@ -624,11 +685,11 @@ const sections: HelpSection[] = [
       },
       {
         title: 'Appealing a block',
-        body: 'If a block feels wrong â€” especially on ambiguous creative work â€” email founder@omniacreata.com with the exact prompt and a short explanation of intent. A human reviewer handles appeals within a few business days.',
+        body: `If a block feels wrong - especially on ambiguous creative work - email ${LEGAL_CONTACTS.privacy} with the exact prompt and a short explanation of intent. A human reviewer handles appeals within a few business days.`,
       },
       {
         title: 'Reporting something unsafe',
-        body: 'If you see published work on Explore that violates these policies, use the report button on the post, or email founder@omniacreata.com. Reported content is hidden pending review and removed when a violation is confirmed.',
+        body: `If you see published work on Explore that violates these policies, use the report button on the post, or email ${LEGAL_CONTACTS.privacy}. Reported content is hidden pending review and removed when a violation is confirmed.`,
       },
       {
         title: 'Repeated violations',
@@ -644,31 +705,31 @@ const sections: HelpSection[] = [
     items: [
       {
         title: 'Product help and general questions',
-        body: 'founder@omniacreata.com â€” how to use Studio, bug reports, feature questions, anything that does not fit the categories below.',
+        body: `${LEGAL_CONTACTS.support} - how to use Studio, bug reports, feature questions, anything that does not fit the categories below.`,
       },
       {
         title: 'Billing and refunds',
-        body: 'founder@omniacreata.com â€” plan changes, invoice questions, disputed charges, refunds.',
+        body: `${LEGAL_CONTACTS.billing} - plan changes, invoice questions, disputed charges, refunds.`,
       },
       {
         title: 'Safety, moderation, and appeals',
-        body: 'founder@omniacreata.com â€” unsafe content, abuse reports, appealing a block or a removal decision.',
+        body: `${LEGAL_CONTACTS.privacy} - unsafe content, abuse reports, appealing a block or a removal decision.`,
       },
       {
         title: 'Privacy and data requests',
-        body: 'founder@omniacreata.com â€” access, export, correction, or deletion of your personal data. Include the email on your account so we can verify ownership.',
+        body: `${LEGAL_CONTACTS.privacy} - access, export, correction, or deletion of your personal data. Include the email on your account so we can verify ownership.`,
       },
       {
         title: 'Legal and policy',
-        body: 'founder@omniacreata.com â€” DMCA and copyright notices, regulatory inquiries, questions about the Terms of Service.',
+        body: `${LEGAL_CONTACTS.privacy} - DMCA and copyright notices, regulatory inquiries, questions about the Terms of Service.`,
       },
       {
         title: 'Business and partnerships',
-        body: 'founder@omniacreata.com â€” agency and studio collaborations, bulk licensing, integration or API discussions.',
+        body: `${LEGAL_CONTACTS.partnerships} - agency and studio collaborations, bulk licensing, integration or API discussions.`,
       },
       {
         title: 'Security disclosures',
-        body: 'founder@omniacreata.com â€” responsible disclosure of vulnerabilities. Please give us reasonable time to fix an issue before publishing it.',
+        body: `${LEGAL_CONTACTS.privacy} - responsible disclosure of vulnerabilities. Please give us reasonable time to fix an issue before publishing it.`,
       },
       {
         title: 'Response time expectations',
@@ -688,13 +749,14 @@ const sectionIcons: Record<HelpSectionId, ElementType> = {
   'faq': HelpCircle,
   'billing': CreditCard,
   'account': UserCog,
+  'privacy': SlidersHorizontal,
   'safety': ShieldCheck,
   'contact': Mail,
 }
 
 const helpSectionGroups: Array<{ label: string; ids: HelpSectionId[] }> = [
   { label: 'Start here', ids: ['getting-started', 'faq'] },
-  { label: 'Account & money', ids: ['billing', 'account'] },
+  { label: 'Account & privacy', ids: ['billing', 'account', 'privacy'] },
   { label: 'Safety', ids: ['safety'] },
   { label: 'Reach us', ids: ['contact'] },
 ]
@@ -709,6 +771,7 @@ const helpSectionIds: HelpSectionId[] = [
   'faq',
   'billing',
   'account',
+  'privacy',
   'safety',
   'contact',
 ]
@@ -789,7 +852,7 @@ function ItemBody({
 export default function DocumentationPage() {
   const location = useLocation()
   const { sectionId } = useParams<{ sectionId?: string }>()
-  usePageMeta('Help â€” Omnia Creata Studio', 'Getting started, prompt craft, workflows, billing, safety, and legal pages for Omnia Creata Studio.')
+  usePageMeta('Help - Omnia Creata Studio', 'Getting started, prompt craft, workflows, billing, safety, and legal pages for Omnia Creata Studio.')
   const { auth, isAuthenticated, isAuthSyncing, isLoading } = useStudioAuth()
   const canRenderWithShell = !isLoading && !isAuthSyncing && isAuthenticated && !auth?.guest
   const isLearnSurface =
@@ -847,7 +910,7 @@ export default function DocumentationPage() {
               <Link to="/help" className={!isLearnSurface ? 'text-white font-medium' : 'transition hover:text-white'}>Help</Link>
               <Link to="/learn/prompt-craft" className={isLearnSurface ? 'text-white font-medium' : 'transition hover:text-white'}>Manual</Link>
               <Link to="/login" className="transition hover:text-white">Log in</Link>
-              <Link to="/signup" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95">Create account</Link>
+              <Link to="/signup" className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95">Request access</Link>
             </nav>
           </div>
         </header>

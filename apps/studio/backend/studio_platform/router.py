@@ -1,11 +1,7 @@
 from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-import hmac
-import hashlib
 import ipaddress
-import json
-import time
 from typing import Annotated, Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -13,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
-from config.env import Environment, get_settings, reveal_secret_with_audit
+from config.env import Environment, get_settings
 from config.runtime_topology import generation_broker_ready_for_runtime
 from security.auth import (
     User,
@@ -163,6 +159,12 @@ class SupabaseLoginRequest(BaseModel):
     email: ValidatedEmail
     password: str = Field(min_length=8, max_length=256)
     captcha_token: Optional[str] = Field(default=None, max_length=4096)
+
+
+class AccessRequestUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["pending", "approved", "rejected"]
+    operator_note: Optional[str] = Field(default=None, max_length=500)
 
 
 class PromptImproveRequest(BaseModel):
@@ -357,6 +359,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
         return current
 
+    async def _require_root_admin(auth_user: Optional[AuthUser]) -> AuthUser:
+        current = await _require_owner(auth_user)
+        try:
+            identity = await service.get_identity(current.id)
+        except KeyError:
+            identity = None
+        if identity is None or not identity.root_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Root Administrator Required")
+        return current
+
     def _serialize_generation(job: GenerationJob, identity_id: str) -> dict:
         return service.serialize_generation_for_identity(job, identity_id)
 
@@ -432,6 +444,43 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         if normalized_client_host:
             return normalized_client_host
         return client_host
+
+    def _request_country_code(request: Request) -> str | None:
+        for header_name in ("cf-ipcountry", "x-vercel-ip-country", "cloudfront-viewer-country"):
+            candidate = str(request.headers.get(header_name) or "").strip().upper()
+            if candidate:
+                return candidate[:8]
+        return None
+
+    async def _enforce_access_gate_for_request(
+        request: Request,
+        *,
+        email: str,
+        display_name: str | None = None,
+        username: str | None = None,
+        auth_provider: str | None = None,
+        auth_providers: list[str] | None = None,
+        source: str,
+    ) -> None:
+        decision = await service.evaluate_access_gate(
+            email=email,
+            display_name=display_name,
+            username=username,
+            auth_provider=auth_provider,
+            auth_providers=auth_providers,
+            source=source,
+            country_code=_request_country_code(request),
+            referrer=request.headers.get("referer"),
+            host_label=request.headers.get("host"),
+            client_ip=_request_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        if decision.get("allowed"):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Studio access request received. We will review it before enabling Studio access.",
+        )
 
     async def _touch_access_session(request: Request, auth_user: AuthUser) -> None:
         metadata = getattr(auth_user, "metadata", {}) or {}
@@ -609,6 +658,16 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def signup(payload: SupabaseSignupRequest, request: Request):
         await _consume_rate_limit(request, "auth:signup", limit=8)
         await _require_auth_captcha(request, token=payload.captcha_token, action="signup")
+        normalized_email = payload.email.strip().lower()
+        await _enforce_access_gate_for_request(
+            request,
+            email=normalized_email,
+            display_name=payload.display_name,
+            username=payload.username,
+            auth_provider="email",
+            auth_providers=["email"],
+            source="signup",
+        )
         if not (payload.accepted_terms and payload.accepted_privacy and payload.accepted_usage_policy):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -635,7 +694,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 "marketing_consent_version": MARKETING_CONSENT_VERSION if payload.marketing_opt_in else None,
             }
             session = await supabase_client.sign_up(
-                email=payload.email.strip().lower(),
+                email=normalized_email,
                 password=payload.password,
                 display_name=payload.display_name.strip() or "Omnia User",
                 username=payload.username.strip().lower(),
@@ -662,12 +721,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         display_name = (
             user_metadata.get("display_name")
             or payload.display_name.strip()
-            or payload.email.split("@")[0]
+            or normalized_email.split("@")[0]
             or "Omnia User"
         )
         identity = await service.ensure_identity(
             user_id=user_data["id"],
-            email=user_data.get("email", payload.email.strip().lower()),
+            email=user_data.get("email", normalized_email),
             display_name=display_name,
             username=(user_metadata.get("username") or payload.username).strip().lower(),
             desired_plan=IdentityPlan.FREE,
@@ -699,6 +758,13 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         await _require_auth_captcha(request, token=payload.captcha_token, action="login")
         normalized_email = payload.email.strip().lower()
         await _enforce_persistent_login_lockout(normalized_email)
+        await _enforce_access_gate_for_request(
+            request,
+            email=normalized_email,
+            auth_provider="email",
+            auth_providers=["email"],
+            source="login",
+        )
         supabase_client = get_supabase_auth_client()
         if supabase_client is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth is not configured")
@@ -770,11 +836,8 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
 
     @router.get("/admin/telemetry")
     async def admin_telemetry(current_user: Optional[AuthUser] = Depends(get_current_user)):
-        auth_user = await _require_owner(current_user)
+        auth_user = await _require_root_admin(current_user)
         await _ensure_identity_for_auth_user(auth_user)
-        identity = await service.get_identity(auth_user.id)
-        if not identity.root_admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Root Administrator Required")
 
         telemetry = await service._build_cost_telemetry_summary()
         counts = await service.store.get_counts_summary()
@@ -790,6 +853,52 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 "this field is intentionally unset instead of returning a fake value."
             ),
         }
+
+    @router.get("/admin/access-requests")
+    async def get_admin_access_requests(
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+        status_filter: Literal["pending", "approved", "rejected"] | None = Query(default=None, alias="status"),
+        limit: int = Query(default=200, ge=1, le=500),
+    ):
+        await _require_root_admin(current_user)
+        requests = await service.list_access_requests(status_filter=status_filter, limit=limit)
+        return {"requests": requests}
+
+    @router.patch("/admin/access-requests/{request_id}")
+    async def patch_admin_access_request(
+        request_id: str,
+        payload: AccessRequestUpdateRequest,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _require_root_admin(current_user)
+        try:
+            request_payload = await service.update_access_request_status(
+                request_id=request_id,
+                status=payload.status,
+                operator_identity_id=auth_user.id,
+                operator_note=payload.operator_note,
+            )
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Access request not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {"request": request_payload}
+
+    @router.post("/admin/identity-deletions/process-due")
+    async def process_due_identity_deletions(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+        limit: int = Query(default=50, ge=1, le=200),
+    ):
+        auth_user = await _require_root_admin(current_user)
+        await _consume_rate_limit(
+            request,
+            "admin:identity-deletions:process-due",
+            limit=6,
+            identifier=auth_user.id,
+            window_seconds=3600,
+        )
+        return await service.process_due_identity_deletions(limit=limit)
 
     def _startup_probe_payload() -> dict[str, object]:
         started = bool(getattr(service, "_initialized", False))
@@ -1120,6 +1229,14 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
+    @router.get("/profiles/me/deletion")
+    async def get_my_profile_deletion_request(current_user: Optional[AuthUser] = Depends(get_current_user)):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        try:
+            return {"deletion_request": await service.get_identity_deletion_request(identity_id=auth_user.id)}
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
     @router.delete("/profiles/me")
     async def delete_my_profile(
         request: Request,
@@ -1128,10 +1245,25 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "profiles:delete", limit=3, identifier=auth_user.id, window_seconds=3600)
         try:
-            await service.permanently_delete_identity(identity_id=auth_user.id)
-            return {"status": "deleted"}
+            deletion_request = await service.request_identity_deletion(identity_id=auth_user.id)
+            return {"status": "scheduled", "deletion_request": deletion_request}
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    @router.post("/profiles/me/deletion/cancel")
+    async def cancel_my_profile_deletion(
+        request: Request,
+        current_user: Optional[AuthUser] = Depends(get_current_user),
+    ):
+        auth_user = await _ensure_identity_for_auth_user(current_user)
+        await _consume_rate_limit(request, "profiles:delete:cancel", limit=6, identifier=auth_user.id, window_seconds=3600)
+        try:
+            deletion_request = await service.cancel_identity_deletion(identity_id=auth_user.id)
+            return {"status": "cancelled", "deletion_request": deletion_request}
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
     @router.patch("/profiles/me")
     async def patch_my_profile(
@@ -2125,82 +2257,12 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             reason="user_requested_sign_out_others",
         )
 
-    def _parse_paddle_signature(signature_header: str) -> tuple[str | None, list[str]]:
-        timestamp: str | None = None
-        signatures: list[str] = []
-        for raw_part in signature_header.split(";"):
-            key, _, value = raw_part.strip().partition("=")
-            normalized_key = key.strip().lower()
-            normalized_value = value.strip()
-            if normalized_key == "ts" and normalized_value:
-                timestamp = normalized_value
-            elif normalized_key == "h1" and normalized_value:
-                signatures.append(normalized_value)
-        return timestamp, signatures
-
-    def _verify_paddle_signature(*, payload_bytes: bytes, signature_header: str, secret: str) -> bool:
-        timestamp, signatures = _parse_paddle_signature(signature_header)
-        if not timestamp or not signatures:
-            return False
-        try:
-            event_ts = int(timestamp)
-        except ValueError:
-            return False
-        if abs(int(time.time()) - event_ts) > 300:
-            return False
-        signed_payload = timestamp.encode("utf-8") + b":" + payload_bytes
-        expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
-        return any(hmac.compare_digest(expected, candidate) for candidate in signatures)
-
     @router.post("/webhooks/paddle")
     async def post_paddle_webhook(request: Request):
-        settings = get_settings()
-        secret = reveal_secret_with_audit("PADDLE_WEBHOOK_SECRET", settings.paddle_webhook_secret).strip()
-        if not secret:
-            return Response("Webhook secret not configured", status_code=503)
-
-        content_type = str(request.headers.get("content-type") or "").strip().lower()
-        if content_type and "application/json" not in content_type:
-            return Response("Unsupported content type", status_code=415)
-
-        max_body_bytes = max(1, int(getattr(settings, "paddle_webhook_max_body_bytes", 256 * 1024) or 256 * 1024))
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                if int(content_length) > max_body_bytes:
-                    return Response("Webhook payload too large", status_code=413)
-            except ValueError:
-                return Response("Invalid content length", status_code=400)
-
-        payload_bytes = await request.body()
-        if len(payload_bytes) > max_body_bytes:
-            return Response("Webhook payload too large", status_code=413)
-
-        signature = request.headers.get("Paddle-Signature") or request.headers.get("paddle-signature")
-
-        if not signature:
-            return Response("Missing signature", status_code=401)
-
-        if not _verify_paddle_signature(payload_bytes=payload_bytes, signature_header=signature, secret=secret):
-            return Response("Invalid signature", status_code=401)
-
-        try:
-            payload = json.loads(payload_bytes)
-        except json.JSONDecodeError:
-            return Response("Invalid JSON", status_code=400)
-        if not isinstance(payload, dict):
-            return Response("Invalid JSON payload", status_code=400)
-
-        try:
-            await service.process_paddle_webhook(payload)
-        except ValueError as exc:
-            return Response(str(exc), status_code=400)
-        except KeyError as exc:
-            return Response(f"Webhook target not found: {exc}", status_code=400)
-        return {"status": "ok"}
+        return Response("Paddle webhook is retired and disabled.", status_code=410)
 
     @router.post("/webhooks/lemonsqueezy")
     async def post_legacy_lemonsqueezy_webhook():
-        return Response("LemonSqueezy webhook has been retired. Use /v1/webhooks/paddle.", status_code=410)
+        return Response("Payment provider webhooks are disabled until a new provider is selected.", status_code=410)
 
     return router

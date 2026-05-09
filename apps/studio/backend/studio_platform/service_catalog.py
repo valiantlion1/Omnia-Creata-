@@ -7,6 +7,10 @@ from config.env import get_settings
 from .models import CheckoutKind, IdentityPlan, PlanCatalogEntry
 
 
+def _billing_provider_id(settings) -> str:
+    return str(getattr(settings, "billing_backbone_provider", "none") or "none").strip().lower() or "none"
+
+
 def build_plan_catalog(settings=None) -> dict[IdentityPlan, PlanCatalogEntry]:
     settings = settings or get_settings()
     return {
@@ -105,13 +109,14 @@ PRESET_CATALOG: list[dict[str, Any]] = [
 
 def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
     settings = settings or get_settings()
+    billing_provider = _billing_provider_id(settings)
     return {
         CheckoutKind.CREATOR_MONTHLY: {
             "label": "Creator monthly",
             "credits": settings.creator_monthly_credits,
             "price_usd": settings.creator_monthly_price_usd,
             "plan": IdentityPlan.CREATOR,
-            "billing_provider": "paddle",
+            "billing_provider": billing_provider,
             "kind_group": "subscription",
         },
         CheckoutKind.PRO_MONTHLY: {
@@ -119,7 +124,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "credits": settings.pro_monthly_credits,
             "price_usd": settings.pro_monthly_price_usd,
             "plan": IdentityPlan.PRO,
-            "billing_provider": "paddle",
+            "billing_provider": billing_provider,
             "kind_group": "subscription",
         },
         CheckoutKind.CREDIT_PACK_SMALL: {
@@ -127,7 +132,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "credits": settings.credit_pack_small_credits,
             "price_usd": settings.credit_pack_small_price_usd,
             "plan": None,
-            "billing_provider": "paddle",
+            "billing_provider": billing_provider,
             "kind_group": "credit_pack",
         },
         CheckoutKind.CREDIT_PACK_LARGE: {
@@ -135,7 +140,7 @@ def build_checkout_catalog(settings=None) -> dict[CheckoutKind, dict[str, Any]]:
             "credits": settings.credit_pack_large_credits,
             "price_usd": settings.credit_pack_large_price_usd,
             "plan": None,
-            "billing_provider": "paddle",
+            "billing_provider": billing_provider,
             "kind_group": "credit_pack",
         },
     }
@@ -148,6 +153,7 @@ def build_public_plan_catalog(
 ) -> dict[IdentityPlan, dict[str, Any]]:
     settings = settings or get_settings()
     checkout_catalog = checkout_catalog or build_checkout_catalog(settings)
+    checkout_open = _billing_provider_id(settings) not in {"", "none"}
     return {
         IdentityPlan.FREE: {
             "public_id": "free_account",
@@ -179,7 +185,7 @@ def build_public_plan_catalog(
             "billing_period": "month",
             "checkout_kind": CheckoutKind.CREATOR_MONTHLY.value,
             "recommended": False,
-            "availability": "self_serve",
+            "availability": "self_serve" if checkout_open else "not_open",
         },
         IdentityPlan.PRO: {
             "public_id": "pro",
@@ -195,7 +201,7 @@ def build_public_plan_catalog(
             "billing_period": "month",
             "checkout_kind": CheckoutKind.PRO_MONTHLY.value,
             "recommended": True,
-            "availability": "self_serve",
+            "availability": "self_serve" if checkout_open else "not_open",
         },
     }
 

@@ -57,6 +57,7 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
   const {
     analyticsAllowed,
     closePreferences,
+    globalPrivacyControl,
     isManagerOpen,
     preferences,
     setAnalyticsConsent,
@@ -76,7 +77,7 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
   if (!isManagerOpen) return null
 
   const savedAt = formatDecisionTimestamp(preferences?.decided_at ?? null)
-  const summary = getCookiePreferenceSummary(preferences)
+  const summary = getCookiePreferenceSummary(preferences, globalPrivacyControl)
 
   return (
     <div
@@ -97,6 +98,11 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
             <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-400">
               Essential storage stays on so Studio can keep your session secure. Optional analytics only runs when you allow it for this browser.
             </p>
+            {globalPrivacyControl ? (
+              <p className="mt-3 max-w-xl rounded-2xl border border-cyan-400/15 bg-cyan-400/10 px-3 py-2 text-xs leading-5 text-cyan-100/85">
+                Your browser is sending Global Privacy Control, so Studio keeps optional analytics off for this browser.
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -139,7 +145,7 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
                     : 'border-amber-400/20 bg-amber-400/10 text-amber-100'
                 }`}
               >
-                {!analyticsAvailable ? 'Unavailable here' : analyticsAllowed ? 'Allowed' : 'Off'}
+                {!analyticsAvailable ? 'Unavailable here' : globalPrivacyControl ? 'Blocked by GPC' : analyticsAllowed ? 'Allowed' : 'Off'}
               </span>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -157,7 +163,7 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
               <button
                 type="button"
                 onClick={() => setAnalyticsConsent(true)}
-                disabled={!analyticsAvailable}
+                disabled={!analyticsAvailable || globalPrivacyControl}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                   analyticsAllowed
                     ? 'bg-white text-black'
@@ -170,6 +176,11 @@ export function CookiePreferencesDialog({ analyticsAvailable }: { analyticsAvail
             {!analyticsAvailable ? (
               <p className="mt-3 text-xs leading-5 text-amber-100/80">
                 Analytics are not configured in this environment, so Studio is running in essential-only mode.
+              </p>
+            ) : null}
+            {globalPrivacyControl ? (
+              <p className="mt-3 text-xs leading-5 text-cyan-100/80">
+                To allow optional analytics, first turn off Global Privacy Control in your browser or privacy extension, then reopen this panel.
               </p>
             ) : null}
           </section>

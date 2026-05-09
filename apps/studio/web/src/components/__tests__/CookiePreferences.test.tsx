@@ -33,6 +33,10 @@ describe('Cookie preferences', () => {
   let useStudioCookiePreferences: CookiePreferencesModule['useStudioCookiePreferences']
 
   beforeEach(async () => {
+    Object.defineProperty(window.navigator, 'globalPrivacyControl', {
+      configurable: true,
+      value: false,
+    })
     vi.resetModules()
     vi.stubEnv('VITE_POSTHOG_KEY', 'phc_test_cookie_controls')
     vi.stubEnv('VITE_POSTHOG_HOST', 'https://telemetry.example.test')
@@ -114,5 +118,46 @@ describe('Cookie preferences', () => {
 
     await waitFor(() => expect(posthogClient.stopSessionRecording).toHaveBeenCalled())
     await waitFor(() => expect(posthogClient.opt_out_capturing).toHaveBeenCalled())
+  })
+
+  it('honors Global Privacy Control by blocking optional analytics', async () => {
+    Object.defineProperty(window.navigator, 'globalPrivacyControl', {
+      configurable: true,
+      value: true,
+    })
+
+    function PreferenceHarness() {
+      const { analyticsAllowed, globalPrivacyControl, openPreferences, setAnalyticsConsent } = useStudioCookiePreferences()
+
+      return (
+        <div>
+          <span>{globalPrivacyControl ? 'GPC active' : 'GPC inactive'}</span>
+          <span>{analyticsAllowed ? 'analytics on' : 'analytics off'}</span>
+          <button type="button" onClick={openPreferences}>
+            Open preferences
+          </button>
+          <button type="button" onClick={() => setAnalyticsConsent(true)}>
+            Try analytics
+          </button>
+        </div>
+      )
+    }
+
+    const user = userEvent.setup()
+
+    render(
+      <StudioCookiePreferencesProvider>
+        <PreferenceHarness />
+      </StudioCookiePreferencesProvider>,
+    )
+
+    expect(screen.getByText(/GPC active/i)).toBeInTheDocument()
+    expect(screen.getByText(/analytics off/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /try analytics/i }))
+    expect(JSON.parse(window.localStorage.getItem(COOKIE_PREFERENCES_KEY) ?? '{}')).toMatchObject({
+      analytics: false,
+      version: 1,
+    })
   })
 })

@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.05.02.245",
+  "build": "2026.05.09.251",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-05-02",
-  "notes": "Model routing and launch credit economics now use a modern public image catalog, Nano Banana 2 as the default 2K image route, quote-aware dynamic credit holds, chat/create image credit parity, and updated launch package prices."
+  "releaseDate": "2026-05-09",
+  "notes": "Studio hidden-beta control pass: unapproved signup stays as an access request, guest account CTAs now say request access, and self-service account deletion uses a cancelable 30-day countdown before permanent deletion processing."
 }

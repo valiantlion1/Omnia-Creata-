@@ -93,7 +93,7 @@ export function LegalPage({
                 to="/signup"
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:scale-105 active:scale-95"
               >
-                Create account
+                Request access
               </Link>
             </nav>
           </div>

@@ -18,6 +18,67 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.09.251`
+- Date: `2026-05-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio is moving toward a staged hidden production beta where the live app can be checked in production without becoming a public signup launch. The account surface also needed a real, cancelable deletion window instead of immediate permanent deletion.
+- What:
+  `.251` keeps the existing hidden-beta access gate intact and aligns the visible signup/guest CTAs with that truth: signup now requests Studio access, unapproved email signups become a clean access-request confirmation instead of entering Studio, and guest CTAs across Create, Chat, Billing, Dashboard, Help, and legal pages say `Request access`. Account deletion is now self-service but delayed: `DELETE /v1/profiles/me` schedules a 30-day deletion countdown, `/v1/profiles/me/deletion` reports the active request, `/v1/profiles/me/deletion/cancel` cancels it while still cancelable, and the root-admin-only `/v1/admin/identity-deletions/process-due` endpoint processes final deletion after the grace window so a deploy cron/operator job can safely run it. Settings and Account now point users to this cancelable flow, while Help, Privacy, and Terms explain the 30-day window.
+  Verification on `.251` is focused on the hidden-beta gate and deletion countdown: from `apps/studio/backend`, the focused profile deletion/router regression shard including the root-admin due-deletion endpoint passes with `4 passed`, `tests/test_auth_policy.py` passes with `2 passed`, and backend compile passes. From `apps/studio/web`, `npm run test:ci -- Signup.test.tsx Login.test.tsx Settings.test.tsx Chat.test.tsx` passes with `16 passed`, the focused legal/help/billing shard passes with `12 passed`, the updated deletion/signup/chat shard passes with `14 passed`, `npm run type-check` passes, and `npm run build` passes. Browser route proof passes with zero failed routes for `/signup` desktop/mobile as guest and `/settings` desktop/mobile as demo Pro. No production deploy was performed in this build note.
+
+### `0.6.0-alpha` / build `2026.05.09.250`
+- Date: `2026-05-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio needs a heavier launch-readiness legal/help layer before hidden production beta continues. The public/user-facing legal surfaces must explain data collection, cookie consent, attribution, prompts/outputs, analytics, regional rights, and payment-closed status without implying live checkout.
+- What:
+  `.250` expands Studio Privacy and Cookie policies with detailed browser-storage inventory, source/UTM/referrer attribution notice, prompt/reference/output handling, no-sale/no-ad-cookie language, regional rights coverage, and child/privacy safety language. Cookie consent now enforces Global Privacy Control by keeping optional analytics off for browsers that send the signal. Help gains a dedicated `Privacy & cookies` section and billing/help copy now matches hidden beta checkout closure. Public role aliases replace founder-address copy across legal/help surfaces, and visible mojibake artifacts in the touched legal/help/footer files were cleaned.
+  Verification on `.250` is focused on the touched frontend/legal surface: from `apps/studio/web`, `npm run test:ci -- Documentation.test.tsx LegalPages.test.tsx CookiePreferences.test.tsx` passes with `12 passed`, `npm run type-check` passes, and `npm run build` passes. Browser route proof on the existing `127.0.0.1:5173` host passes with zero failed routes for `/help/privacy` desktop/mobile, `/legal/privacy` desktop, and `/legal/cookies` mobile. Final legal text should still receive qualified counsel review before broad public paid launch.
+
+### `0.6.0-alpha` / build `2026.05.09.249`
+- Date: `2026-05-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Paddle rejected the account application and the product decision is now to avoid Paddle entirely. Hidden production beta must therefore stay launchable without any live paid checkout, without requiring Paddle keys, and without letting stale Paddle env or webhooks accidentally grant paid entitlements.
+- What:
+  `.249` retires Paddle from active Studio billing. `BILLING_BACKBONE_PROVIDER` now defaults to `none`, stale `paddle` provider values normalize closed, billing summaries return no checkout options while payments are disabled, `/v1/billing/checkout` fails closed with a clear disabled-checkout message, and `/v1/webhooks/paddle` always returns `410`. Render and env examples now use `BILLING_BACKBONE_PROVIDER=none` and no longer request Paddle secrets. Deployment preflight treats `BILLING_BACKBONE_PROVIDER=paddle` as a blocker, while `none` is a pass for hidden beta. Active Studio legal/help copy now says paid checkout is closed and uses a generic future payment-provider contract instead of naming Paddle. Legacy Paddle billing tests are kept as skipped history, with new fail-closed tests covering the retired path.
+  Verification on `.249` is focused on billing deactivation and launch-readiness truth: from `apps/studio/backend`, `python -m compileall config security studio_platform` passes, `python -m pytest tests/test_deployment_preflight.py -q` passes with `6 passed`, `python -m pytest tests/test_router_security.py -q -k "billing_checkout or paddle_webhook"` passes with `5 passed`, `python -m pytest tests/test_service_regressions.py -q -k "checkout_is_disabled or retired_paddle_webhook_processing"` passes with `2 passed`, `python -m pytest tests/test_billing_ops.py -q -k "retired_paddle_webhook_processing or checkout_kind_is_not_treated or billing_summary"` passes with `4 passed, 1 skipped`, and the wider focused backend shard passes with `13 passed, 2 skipped`. From `apps/studio/web`, `npm run test:ci -- Billing.test.tsx` passes with `3 passed`, `npm run type-check` passes, and `npm run build` passes.
+
+### `0.6.0-alpha` / build `2026.05.09.248`
+- Date: `2026-05-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio is moving into a hidden production beta posture where the live site can exist without becoming a public launch. Owner/admin accounts must be able to enter, while every other email/password or OAuth attempt should become a reviewable access request instead of silently opening Studio.
+- What:
+  `.248` adds the server-side hidden-beta access gate. `STUDIO_ACCESS_MODE=invite_only` closes Studio to unapproved users; `STUDIO_OWNER_EMAILS`, `STUDIO_ROOT_ADMIN_EMAILS`, and `STUDIO_ACCESS_ALLOWED_EMAILS` keep the configured owner/admin accounts allowed. Email/password signup and login now stop before Supabase auth if the email is not allowed, and Supabase/Google OAuth sessions are denied at `/auth/me` while recording a pending access request with provider, source, country hint, referrer, host label, masked IP label, and hashed IP/user-agent. Root admins can list and approve/reject access requests through `/v1/admin/access-requests`. The frontend signs out cleanly when an OAuth callback is denied by the access gate, so an unapproved visitor does not stay half-signed-in. Privileged owner/root/local flags now come from server-side email allowlists or Supabase `app_metadata`, not user-editable `user_metadata`.
+  Local hidden-beta env was aligned for `founder@omniacreata.com`, `alierdincyigitaslan@gmail.com`, and `ghostsofter12@gmail.com`, and the stale local `VITE_SUPABASE_URL` in `apps/studio/.env` was corrected to the new `tfvkhefnrruemjkvlwwl` Supabase project. Deployment env examples now include the hidden-beta access gate variables.
+  Verification on `.248` is focused on auth/access safety: from `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "access_request or get_current_user"` passes with `8 passed`, `python -m pytest tests/test_service_regressions.py -q -k "access_records_pending_request"` passes with `1 passed`, and `python -m compileall config security studio_platform` passes. From `apps/studio/web`, `npm run test:ci -- Login.test.tsx Signup.test.tsx` passes with `8 passed`, `npm run type-check` passes, and `npm run build` passes. Live Google OAuth in Supabase is still pending external Google OAuth credentials and dashboard redirect setup, so no live browser OAuth roundtrip is counted as complete in this build.
+
+### `0.6.0-alpha` / build `2026.05.08.247`
+- Date: `2026-05-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Runware live credit is not available yet, so Chat's in-thread image experience needed a no-cost regression proof that does not depend on a paid provider balance.
+- What:
+  `.247` adds focused frontend proof for the Chat visual bridge: a paid signed-in chat can receive an assistant `generation_bridge`, create a Studio generation from that bridge, poll the generation result, and render the completed image inline in the chat timeline with Library navigation. No Create, Chat, auth, provider routing, credit engine, checkout service, asset behavior, or UI runtime behavior changed.
+  Verification is focused on this no-cost proof. From `apps/studio/web`, `npm run test:ci -- Create.test.tsx Chat.test.tsx` passes with `4 passed`, `npm run type-check` passes, and `npm run build` passes. Live local `/v1/version` reports source `build=2026.05.08.247`, while `bootBuild=2026.05.02.245` because the already-running backend process was not restarted during this test/docs cleanup. Live Runware image smoke is still not rerun because provider credits are not available.
+
+### `0.6.0-alpha` / build `2026.05.08.246`
+- Date: `2026-05-08`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio needed a narrow launch-truth cleanup before live-environment setup so tests, legal fallback copy, and deploy examples stop disagreeing with the current prelaunch position.
+- What:
+  `.246` keeps legal pages founder-operated by default while preserving environment overrides for formal business details once registration is ready. It also aligns staging/platform deploy example package prices with the `.245` catalog defaults: Creator `$12 / 400`, Pro `$29 / 1200`, Small Pack `$10 / 200`, and Large Pack `$29 / 800`. No Create, Chat, auth, provider routing, credit engine, checkout service, asset behavior, or UI architecture behavior changed.
+  Verification is intentionally focused on this launch-truth cleanup. From `apps/studio/web`, `npm run test:ci -- LegalPages.test.tsx` passes with `6 passed`, `npm run type-check` passes, and `npm run build` passes. From `apps/studio/backend`, `python -m pytest tests/test_deployment_preflight.py -q` passes with `6 passed`. Live local `/v1/version` reports source `build=2026.05.08.246`, while `bootBuild=2026.05.02.245` because the already-running backend process was not restarted during this config/docs cleanup. Deployment preflight against `apps/studio/deploy/.env.staging` remains blocked only by missing critical staging secrets (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`) and still warns for missing Paddle, OpenRouter, and Runware credentials.
+
 ### `0.6.0-alpha` / build `2026.05.02.245`
 - Date: `2026-05-02`
 - Codename: `Foundation`

@@ -1267,11 +1267,11 @@ export default function ChatPage() {
           </div>
           <h1 className="mt-6 text-4xl font-semibold tracking-[-0.05em] text-white md:text-5xl">Chat lives inside paid Studio plans</h1>
           <p className="mt-4 max-w-md text-base leading-7 text-zinc-400">
-            Create your account to enter Studio. Free accounts can start in Create, and Creator or Pro unlock the chat surface when you want live guidance.
+            Request access to enter Studio. Approved free accounts can start in Create, and Creator or Pro unlock the chat surface when checkout opens.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
-              Create account
+              Request access
             </Link>
             <Link to="/create" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20">
               Open Create
@@ -1321,7 +1321,7 @@ export default function ChatPage() {
           <div className="flex items-center gap-2">
             {auth?.guest ? (
               <Link to="/signup" className="rounded-full bg-white px-4 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90">
-                Create account
+                Request access
               </Link>
             ) : null}
             {!auth?.guest ? (

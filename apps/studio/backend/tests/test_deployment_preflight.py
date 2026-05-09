@@ -8,6 +8,8 @@ def test_deployment_preflight_passes_for_launch_shaped_staging_env() -> None:
         {
             "ENVIRONMENT": "staging",
             "PUBLIC_WEB_BASE_URL": "https://staging-studio.omniacreata.com",
+            "PUBLIC_API_BASE_URL": "https://staging-studio-api.onrender.com",
+            "ASSET_STORAGE_BACKEND": "supabase",
             "STATE_STORE_BACKEND": "postgres",
             "POSTGRES_DB": "studio",
             "POSTGRES_USER": "studio",
@@ -23,9 +25,7 @@ def test_deployment_preflight_passes_for_launch_shaped_staging_env() -> None:
             "OPENAI_API_KEY": "openai",
             "PROTECTED_BETA_CHAT_PROVIDER": "openai",
             "PROTECTED_BETA_IMAGE_PROVIDER": "openai",
-            "PADDLE_API_KEY": "paddle-api-key",
-            "PADDLE_WEBHOOK_SECRET": "paddle-webhook-secret",
-            "PADDLE_CHECKOUT_BASE_URL": "https://sandbox-checkout.paddle.test",
+            "BILLING_BACKBONE_PROVIDER": "none",
         }
     )
 
@@ -82,11 +82,11 @@ def test_deployment_preflight_warns_when_premium_provider_secrets_are_missing() 
 
     assert report["status"] == "warning"
     assert report["blocking_count"] == 0
-    assert report["warning_count"] == 3
+    assert report["warning_count"] == 2
     checks = {check["key"]: check for check in report["checks"]}
     assert checks["premium_chat_lane"]["status"] == "warning"
     assert checks["premium_image_lane"]["status"] == "warning"
-    assert checks["billing_backbone"]["status"] == "warning"
+    assert checks["billing_backbone"]["status"] == "pass"
 
 
 def test_deployment_preflight_treats_placeholders_as_missing_for_selected_beta_lanes() -> None:
@@ -156,7 +156,7 @@ def test_deployment_preflight_accepts_canonical_platform_env_with_external_postg
             "REDIS_DEPLOY_PLATFORM": "render",
             "DATA_DEPLOY_PLATFORM": "supabase",
             "STORAGE_DEPLOY_PLATFORM": "supabase",
-            "BILLING_BACKBONE_PROVIDER": "paddle",
+            "BILLING_BACKBONE_PROVIDER": "none",
             "STATE_STORE_BACKEND": "postgres",
             "ASSET_STORAGE_BACKEND": "supabase",
             "GENERATION_RUNTIME_MODE_WEB": "web",
@@ -170,9 +170,6 @@ def test_deployment_preflight_accepts_canonical_platform_env_with_external_postg
             "GEMINI_API_KEY": "gemini-key",
             "GEMINI_SERVICE_TIER": "paid",
             "RUNWARE_API_KEY": "runware-key",
-            "PADDLE_API_KEY": "paddle-api-key",
-            "PADDLE_WEBHOOK_SECRET": "paddle-webhook-secret",
-            "PADDLE_CHECKOUT_BASE_URL": "https://sandbox-checkout.paddle.test",
         }
     )
 

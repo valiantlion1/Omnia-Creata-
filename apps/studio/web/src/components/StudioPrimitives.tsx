@@ -216,19 +216,19 @@ export function LegalFooter({
     <footer className={clsx('border-t border-white/[0.04] pt-5 text-xs text-zinc-500', className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="hidden flex-wrap items-center gap-x-3 gap-y-1">
-          <span>© OmniaCreata 2026</span>
-          <span className="text-zinc-600">·</span>
+          <span>(c) OmniaCreata 2026</span>
+          <span className="text-zinc-600">|</span>
           <span className="hidden text-zinc-600" />
-          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-600">|</span>
           <span className="hidden text-zinc-600" />
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>OmniaCreata 2026</span>
           {showBuildInfo ? (
             <>
-              <span className="text-zinc-700">·</span>
+              <span className="text-zinc-700">|</span>
               <span className="text-zinc-500">{APP_VERSION_LABEL}</span>
-              <span className="text-zinc-700">·</span>
+              <span className="text-zinc-700">|</span>
               <span className="text-zinc-500">build {APP_BUILD_LABEL}</span>
             </>
           ) : null}
@@ -260,7 +260,7 @@ export function LegalFooter({
   )
 }
 
-/* ─── Skeleton loaders ───────────────────────────────────────────────────── */
+/* --- Skeleton loaders ----------------------------------------------------- */
 
 export function SkeletonImageGrid({ count = 8 }: { count?: number }) {
   return (

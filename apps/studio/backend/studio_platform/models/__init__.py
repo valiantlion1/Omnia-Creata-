@@ -36,6 +36,7 @@ from .persona import StudioPersona
 from .prompt_memory import PromptMemoryProfile
 from .access_session import StudioAccessSession
 from .login_attempt import StudioLoginAttemptRecord
+from .access_request import StudioAccessRequest
 from .state import StudioState
 from .style import StudioStyle
 from .moderation import (
@@ -101,6 +102,7 @@ __all__ = [
     "PromptMemoryProfile",
     "StudioAccessSession",
     "StudioLoginAttemptRecord",
+    "StudioAccessRequest",
     # State
     "StudioState",
 ]

@@ -9,9 +9,14 @@ export type CookiePreferences = {
   version: 1
 }
 
+type NavigatorWithGlobalPrivacyControl = Navigator & {
+  globalPrivacyControl?: boolean
+}
+
 type StudioCookiePreferencesContextValue = {
   preferences: CookiePreferences | null
   analyticsAllowed: boolean
+  globalPrivacyControl: boolean
   hasDecided: boolean
   isManagerOpen: boolean
   openPreferences: () => void
@@ -38,25 +43,35 @@ export function readCookiePreferences(): CookiePreferences | null {
   }
 }
 
+export function isGlobalPrivacyControlEnabled() {
+  if (typeof navigator === 'undefined') return false
+  return (navigator as NavigatorWithGlobalPrivacyControl).globalPrivacyControl === true
+}
+
 function writeCookiePreferences(preferences: CookiePreferences) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(COOKIE_PREFERENCES_KEY, JSON.stringify(preferences))
   window.dispatchEvent(new CustomEvent(COOKIE_PREFERENCES_EVENT))
 }
 
-export function getCookiePreferenceSummary(preferences: CookiePreferences | null) {
+export function getCookiePreferenceSummary(preferences: CookiePreferences | null, globalPrivacyControl = false) {
+  if (globalPrivacyControl) return 'Essential only (Global Privacy Control)'
   if (!preferences) return 'Not decided yet'
   return preferences.analytics ? 'Analytics allowed' : 'Essential only'
 }
 
 export function StudioCookiePreferencesProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = React.useState<CookiePreferences | null>(() => readCookiePreferences())
+  const [globalPrivacyControl, setGlobalPrivacyControl] = React.useState(() => isGlobalPrivacyControlEnabled())
   const [isManagerOpen, setIsManagerOpen] = React.useState(false)
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
-    const sync = () => setPreferences(readCookiePreferences())
+    const sync = () => {
+      setPreferences(readCookiePreferences())
+      setGlobalPrivacyControl(isGlobalPrivacyControlEnabled())
+    }
     const handleStorage = (event: StorageEvent) => {
       if (event.key === null || event.key === COOKIE_PREFERENCES_KEY) {
         sync()
@@ -81,27 +96,30 @@ export function StudioCookiePreferencesProvider({ children }: { children: React.
   }, [])
 
   const setAnalyticsConsent = React.useCallback((analytics: boolean) => {
+    const globalSignalActive = isGlobalPrivacyControlEnabled()
     const nextPreferences: CookiePreferences = {
-      analytics,
+      analytics: globalSignalActive ? false : analytics,
       decided_at: new Date().toISOString(),
       version: 1,
     }
     writeCookiePreferences(nextPreferences)
     setPreferences(nextPreferences)
+    setGlobalPrivacyControl(globalSignalActive)
     setIsManagerOpen(false)
   }, [])
 
   const value = React.useMemo<StudioCookiePreferencesContextValue>(
     () => ({
       preferences,
-      analyticsAllowed: Boolean(preferences?.analytics),
-      hasDecided: preferences !== null,
+      analyticsAllowed: Boolean(preferences?.analytics) && !globalPrivacyControl,
+      globalPrivacyControl,
+      hasDecided: preferences !== null || globalPrivacyControl,
       isManagerOpen,
       openPreferences,
       closePreferences,
       setAnalyticsConsent,
     }),
-    [closePreferences, isManagerOpen, openPreferences, preferences, setAnalyticsConsent],
+    [closePreferences, globalPrivacyControl, isManagerOpen, openPreferences, preferences, setAnalyticsConsent],
   )
 
   return <StudioCookiePreferencesContext.Provider value={value}>{children}</StudioCookiePreferencesContext.Provider>

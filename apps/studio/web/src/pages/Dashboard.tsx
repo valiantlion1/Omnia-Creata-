@@ -32,10 +32,10 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-white">
-            Create an account to continue
+            Request access to continue
           </h3>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Sign up to save favorites, start in Create, and keep your work inside Studio. Creator and Pro add the chat surface when you want it.
+          Studio is in controlled access. Request access to save favorites, start in Create, and keep your work inside Studio.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
@@ -43,7 +43,7 @@ function AuthPromptModal({ open, onClose }: { open: boolean; onClose: () => void
             to="/signup"
             className="flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-black transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
           >
-            Create account
+            Request access
           </Link>
           <Link
             to="/login"
@@ -1210,7 +1210,7 @@ export default function DashboardPage() {
                       to={canUseAccount ? '/create' : '/signup'}
                       className="inline-flex items-center gap-2 rounded-full bg-[rgba(232,239,246,0.95)] px-6 py-3 text-sm font-semibold text-[#0f1720] transition hover:opacity-92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                     >
-                      {canUseAccount ? 'Open Create' : 'Create account'}
+                      {canUseAccount ? 'Open Create' : 'Request access'}
                     </Link>
                     <button
                       type="button"

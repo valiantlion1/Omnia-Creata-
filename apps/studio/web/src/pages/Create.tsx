@@ -1043,7 +1043,7 @@ export default function CreatePage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup" className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-              Create account
+            Request access
             </Link>
             <Link to="/login" className="rounded-full bg-white/[0.05] px-6 py-3 text-sm font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.08]">
               Log in
