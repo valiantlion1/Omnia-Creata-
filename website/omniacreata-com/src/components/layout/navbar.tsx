@@ -10,7 +10,7 @@ import {
   cn,
   studioAccessHref,
   studioAccessLabel,
-  studioPageHref,
+  studioLandingHref,
   withLocalePrefix,
 } from "@/lib/utils";
 import { ButtonLink } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
 
   const navigation = useMemo(
     () => [
-      { id: "studio", label: "Studio", href: studioPageHref(locale) },
+      { id: "studio", label: "Studio", href: studioLandingHref(locale) },
       { id: "products", label: copy.nav.products, href: withLocalePrefix(locale, "/products") },
       { id: "pricing", label: copy.nav.pricing, href: withLocalePrefix(locale, "/pricing") },
       { id: "about", label: copy.nav.about, href: withLocalePrefix(locale, "/about") },
@@ -38,7 +38,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
   );
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.09] bg-[rgba(7,7,6,0.7)] px-4 backdrop-blur-2xl sm:px-6 lg:px-8">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.09] bg-[rgba(7,7,6,0.86)] px-4 backdrop-blur-md sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1340px]">
         <div className="overflow-hidden">
           <div className="flex h-20 items-center justify-between gap-4">
@@ -58,6 +58,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
                         : "hover:bg-white/[0.035] hover:text-foreground",
                     )}
                     href={item.href as Route}
+                    prefetch={false}
                   >
                     {item.label}
                   </Link>
@@ -67,19 +68,19 @@ export function Navbar({ locale, messages }: NavbarProps) {
 
             <div className="hidden items-center gap-3 lg:flex">
               <ButtonLink href={studioAccessHref(locale)} size="md" variant="primary">
-                {studioAccessLabel()}
+                {studioAccessLabel(locale)}
               </ButtonLink>
             </div>
 
             <button
               aria-controls="mobile-nav"
               aria-expanded={mobileOpen}
-              aria-label="Toggle navigation"
+              aria-label={locale === "tr" ? "Menuyu ac veya kapat" : "Toggle navigation"}
               className="inline-flex min-w-[84px] items-center justify-center rounded-full border border-[rgba(216,181,109,0.32)] bg-white/[0.03] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground transition hover:border-[rgba(216,181,109,0.5)] hover:bg-white/[0.06] lg:hidden"
               onClick={() => setMobileOpen((value) => !value)}
               type="button"
             >
-              {mobileOpen ? "Close" : "Menu"}
+              {mobileOpen ? (locale === "tr" ? "Kapat" : "Close") : "Menu"}
             </button>
           </div>
 
@@ -103,6 +104,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
                     )}
                     href={item.href as Route}
                     onClick={() => setMobileOpen(false)}
+                    prefetch={false}
                   >
                     {item.label}
                   </Link>
@@ -115,7 +117,7 @@ export function Navbar({ locale, messages }: NavbarProps) {
                 size="lg"
                 variant="primary"
               >
-                {studioAccessLabel()}
+                {studioAccessLabel(locale)}
               </ButtonLink>
             </div>
           </div>

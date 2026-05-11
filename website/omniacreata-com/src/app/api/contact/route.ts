@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message:
-          "Your inquiry has been received. The Omnia Creata team will follow up through the official omniacreata.com contact channels.",
+          "Your inquiry has been received. The OmniaCreata team will follow up through the official omniacreata.com contact channels.",
       },
       { status: 200 },
     );
@@ -297,6 +297,16 @@ export async function POST(request: Request) {
     );
   }
 
+  if (process.env.NODE_ENV === "production" && !process.env.CONTACT_WEBHOOK_URL) {
+    return NextResponse.json(
+      {
+        message:
+          "Contact delivery is not available yet. Please email hello@omniacreata.com directly.",
+      },
+      { status: 503 },
+    );
+  }
+
   const turnstileResult = await verifyTurnstile(payload.turnstileToken, ip, {
     enforceMetadata: process.env.NODE_ENV === "production",
     expectedAction: "contact",
@@ -349,7 +359,7 @@ export async function POST(request: Request) {
         throw new Error("Webhook delivery failed.");
       }
     } else {
-      console.info("Omnia Creata contact inquiry", {
+      console.info("OmniaCreata contact inquiry", {
         source: enrichedPayload.source,
         receivedAt: enrichedPayload.receivedAt,
         interest: enrichedPayload.interest,
@@ -370,7 +380,7 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       message:
-        "Your inquiry has been received. The Omnia Creata team will follow up through the official omniacreata.com contact channels.",
+        "Your inquiry has been received. The OmniaCreata team will follow up through the official omniacreata.com contact channels.",
     },
     { status: 200 },
   );

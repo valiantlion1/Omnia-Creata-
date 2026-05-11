@@ -149,7 +149,7 @@ const english: Messages = {
     legal: "Legal",
   },
   home: {
-    heroEyebrow: "Omnia Creata",
+    heroEyebrow: "OmniaCreata",
     heroTitle: "Studio ships first.",
     heroDescription:
       "The public site explains the company and routes people into the live product without duplicating the Studio landing.",
@@ -200,7 +200,7 @@ const english: Messages = {
     placeholderEmail: "you@company.com",
     placeholderCompany: "Company or studio",
     placeholderInterest: "Studio, partnership, pricing...",
-    placeholderMessage: "Tell us what you want to build with Omnia Creata.",
+    placeholderMessage: "Tell us what you want to build with OmniaCreata.",
     submit: "Send inquiry",
     sending: "Sending...",
     helper: "Share a short note and we will send it to the right inbox.",
@@ -291,7 +291,7 @@ const turkish: Messages = {
     eyebrow: "Erisim guncellemesi",
     title: "Bu platform girisi henuz canli degil.",
     description:
-      "Su an canli olan yuzeylerden devam edebilir veya Omnia Creata ekibinden erisim detayi talep edebilirsin.",
+      "Su an canli olan yuzeylerden devam edebilir veya OmniaCreata ekibinden erisim detayi talep edebilirsin.",
     availableNow: "Simdi kullanilabilir",
     openAlternative: "Alternatifi ac",
     backToHub: "Urun merkezine don",
@@ -308,7 +308,7 @@ const turkish: Messages = {
     placeholderEmail: "eposta@sirket.com",
     placeholderCompany: "Sirket veya ekip",
     placeholderInterest: "Studio, ortaklik, fiyatlandirma...",
-    placeholderMessage: "Omnia Creata ile ne kurmak istediginizi yazin.",
+    placeholderMessage: "OmniaCreata ile ne kurmak istediginizi yazin.",
     submit: "Mesaj gonder",
     sending: "Gonderiliyor...",
     helper: "Kisa bir not birak, dogru ekibe iletelim.",

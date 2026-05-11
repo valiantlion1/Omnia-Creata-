@@ -61,12 +61,12 @@ export const products: ProductRecord[] = [
     subheadline: "Built for people who want more than a lucky reroll.",
     roleTitle: "Studio comes first.",
     roleDescription:
-      "It is the first public expression of Omnia Creata.",
+      "It is the first public expression of OmniaCreata.",
     platformMatrix: [
       {
         platform: "web",
         status: "preview",
-        note: "Open now.",
+        note: "Controlled web preview.",
       },
       {
         platform: "pwa",
@@ -113,7 +113,7 @@ export const products: ProductRecord[] = [
       {
         id: "ecosystem-role",
         title: "Role",
-        description: "Why Studio is the first Omnia Creata product in public view.",
+        description: "Why Studio is the first OmniaCreata product in public view.",
       },
     ],
     surfaceType: ["web", "pwa", "desktop"],
@@ -138,7 +138,7 @@ export const products: ProductRecord[] = [
       {
         title: "The company becomes real through the product",
         description:
-          "Studio is the clearest expression of what Omnia Creata is building.",
+          "Studio is the clearest expression of what OmniaCreata is building.",
       },
       {
         title: "The launch stays honest",
@@ -148,7 +148,7 @@ export const products: ProductRecord[] = [
       {
         title: "Future products can arrive later",
         description:
-          "The rest of the Omnia Creata line can earn space when it is ready to stand on its own.",
+          "The rest of the OmniaCreata line can earn space when it is ready to stand on its own.",
       },
     ],
     companionSlugs: [],
@@ -156,10 +156,140 @@ export const products: ProductRecord[] = [
 ];
 
 export function getProducts(locale?: LocaleCode) {
-  void locale;
   return products.map((product) => ({
     ...product,
-    accessLinks: product.accessLinks.length ? product.accessLinks : product.platformMatrix,
+    ...(locale === "tr" && product.slug === "omnia-creata-studio"
+      ? {
+          shortDescription:
+            "Promptlar, referanslar, denemeler ve secimler tek gorsel calisma alaninda.",
+          summary:
+            "Studio, gorsel yonu, uretimi, incelemeyi ve kayitli gecmisi tek yerde tutar.",
+          headline: "Zevkli gorsel uretim.",
+          subheadline:
+            "Sansli bir tekrar denemesinden fazlasini isteyenler icin.",
+          roleTitle: "Studio once gelir.",
+          roleDescription:
+            "OmniaCreata'nin ilk public urun ifadesi Studio'dur.",
+          platformMatrix: [
+            {
+              platform: "web" as const,
+              status: "preview" as const,
+              note: "Kontrollu web onizlemesi.",
+            },
+            {
+              platform: "pwa" as const,
+              status: "preview" as const,
+              note: "Ayni calisma alani, daha sonra yuklenebilir.",
+            },
+            {
+              platform: "desktop" as const,
+              status: "preview" as const,
+              note: "Masaustu henuz public degil.",
+            },
+            {
+              platform: "ios" as const,
+              status: "planned" as const,
+              note: "iOS henuz public degil.",
+            },
+            {
+              platform: "android" as const,
+              status: "planned" as const,
+              note: "Android henuz public degil.",
+            },
+          ],
+          primaryCTA: {
+            href: "/products/omnia-creata-studio",
+            label: "Studio'yu gor",
+          },
+          hubNav: [
+            {
+              id: "overview" as const,
+              title: "Genel bakis",
+              description: "Studio nedir ve neden once gelir.",
+            },
+            {
+              id: "access" as const,
+              title: "Erisim",
+              description: "Studio'nun nasil acildigi.",
+            },
+            {
+              id: "capabilities" as const,
+              title: "Yetenekler",
+              description: "Studio'nun ana isleri.",
+            },
+            {
+              id: "ecosystem-role" as const,
+              title: "Rol",
+              description: "Studio neden public yuzdeki ilk OmniaCreata urunu.",
+            },
+          ],
+          capabilityHighlights: [
+            {
+              title: "Briefi sekillendir",
+              description:
+                "Ilk uretimden once promptlari, referanslari ve yonu bir arada tut.",
+            },
+            {
+              title: "Baglam icinde uret",
+              description:
+                "Proje izini kaybetmeden varyasyonlar arasinda ilerle.",
+            },
+            {
+              title: "Secimleri sakla",
+              description:
+                "Uzerine insa etmeye degen ciktilari ve kararlari kaydet.",
+            },
+          ],
+          ecosystemPoints: [
+            {
+              title: "Sirket urunle gerceklesir",
+              description:
+                "Studio, OmniaCreata'nin ne insa ettigini en net gosteren yerdir.",
+            },
+            {
+              title: "Lansman durust kalir",
+              description:
+                "Sahnenin merkezinde sadece yeterince gercek olan urun durur.",
+            },
+            {
+              title: "Diger urunler sonra gelebilir",
+              description:
+                "OmniaCreata cizgisindeki diger isler hazir olduklarinda yer kazanir.",
+            },
+          ],
+        }
+      : {}),
+    accessLinks: product.accessLinks.length
+      ? product.accessLinks
+      : locale === "tr" && product.slug === "omnia-creata-studio"
+        ? [
+            {
+              platform: "web" as const,
+              status: "preview" as const,
+              note: "Kontrollu web onizlemesi.",
+            },
+            {
+              platform: "pwa" as const,
+              status: "preview" as const,
+              note: "Ayni calisma alani, daha sonra yuklenebilir.",
+            },
+            {
+              platform: "desktop" as const,
+              status: "preview" as const,
+              note: "Masaustu henuz public degil.",
+            },
+            {
+              platform: "ios" as const,
+              status: "planned" as const,
+              note: "iOS henuz public degil.",
+            },
+            {
+              platform: "android" as const,
+              status: "planned" as const,
+              note: "Android henuz public degil.",
+            },
+          ]
+        : product.platformMatrix,
   }));
 }
 

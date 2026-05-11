@@ -47,7 +47,7 @@ export function IntroOverlay() {
       <div className="intro-overlay__core relative text-center">
         <div className="mx-auto w-[220px] rounded-[26px] border border-[rgba(217,181,109,0.28)] bg-black/55 p-5 backdrop-blur-xl sm:w-[260px]">
           <Image
-            alt="Omnia Creata logo"
+            alt="OmniaCreata logo"
             className="h-auto w-full object-contain"
             height={200}
             priority
@@ -56,7 +56,7 @@ export function IntroOverlay() {
           />
         </div>
         <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.44em] text-accent">
-          Omnia Creata
+          OmniaCreata
         </p>
       </div>
     </div>

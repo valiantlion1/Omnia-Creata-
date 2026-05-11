@@ -11,32 +11,40 @@ import { defaultLocale } from "@/i18n/config";
 import { absoluteUrl } from "@/lib/utils";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
+  display: "swap",
   subsets: ["latin"],
   variable: "--font-display",
 });
 
 const notoSans = Noto_Sans({
+  display: "swap",
   subsets: ["latin"],
   variable: "--font-sans-fallback",
 });
 
 const notoSansArabic = Noto_Sans_Arabic({
+  display: "swap",
+  preload: false,
   subsets: ["arabic"],
   variable: "--font-arabic",
 });
 
 const notoSansJp = Noto_Sans_JP({
+  display: "swap",
+  preload: false,
   subsets: ["latin"],
   variable: "--font-jp",
 });
 
 const notoSansSc = Noto_Sans_SC({
+  display: "swap",
+  preload: false,
   subsets: ["latin"],
   variable: "--font-sc",
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://omniacreata.com"),
+  metadataBase: new URL("https://www.omniacreata.com"),
   title: {
     default: "OmniaCreata | Creative software ecosystem",
     template: "%s | OmniaCreata",

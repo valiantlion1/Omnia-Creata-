@@ -9,7 +9,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "border border-[rgba(216,181,109,0.55)] bg-[linear-gradient(135deg,#f0ca74_0%,#c79843_100%)] text-[#15110a] shadow-[0_22px_58px_rgba(216,181,109,0.2)] hover:-translate-y-0.5 hover:border-[rgba(243,223,174,0.75)] hover:shadow-[0_28px_72px_rgba(216,181,109,0.24)]",
   secondary:
-    "border border-[rgba(216,181,109,0.38)] bg-transparent text-foreground backdrop-blur-md hover:-translate-y-0.5 hover:border-[rgba(243,223,174,0.58)] hover:bg-white/[0.05]",
+    "border border-[rgba(216,181,109,0.38)] bg-[rgba(255,255,255,0.015)] text-foreground hover:-translate-y-0.5 hover:border-[rgba(243,223,174,0.58)] hover:bg-white/[0.05]",
   ghost:
     "border border-transparent bg-transparent px-0 text-accent hover:text-accent-strong",
 };
@@ -54,7 +54,7 @@ export function ButtonLink({
   }
 
   return (
-    <Link className={classes} href={href as Route}>
+    <Link className={classes} href={href as Route} prefetch={false}>
       {children}
     </Link>
   );

@@ -17,6 +17,34 @@ type ProductsPageProps = {
   }>;
 };
 
+function getProductsPageCopy(locale: string) {
+  if (locale === "tr") {
+    return {
+      metadataTitle: "Urunler",
+      metadataDescription: "Studio ilk OmniaCreata urunudur.",
+      kicker: "Urunler",
+      title: "Tek urun, bilerek.",
+      copy:
+        "Su an burada public yuzde duran tek urun Studio. Bir gercek urun, raf dolusu tamamlanmamis isimden iyidir.",
+      seeStudio: "Studio'yu gor",
+      currentProduct: "Mevcut urun",
+      productPage: "Urun sayfasi",
+    };
+  }
+
+  return {
+    metadataTitle: "Products",
+    metadataDescription: "Studio is the first OmniaCreata product.",
+    kicker: "Products",
+    title: "One product, on purpose.",
+    copy:
+      "Studio is the only public product here right now. One real thing is better than a shelf of unfinished names.",
+    seeStudio: "See Studio",
+    currentProduct: "Current product",
+    productPage: "Product page",
+  };
+}
+
 export async function generateMetadata({
   params,
 }: ProductsPageProps): Promise<Metadata> {
@@ -26,11 +54,13 @@ export async function generateMetadata({
     return {};
   }
 
+  const copy = getProductsPageCopy(locale);
+
   return createPageMetadata({
     locale,
     path: "/products",
-    title: "Products",
-    description: "Studio is the first Omnia Creata product.",
+    title: copy.metadataTitle,
+    description: copy.metadataDescription,
   });
 }
 
@@ -42,28 +72,26 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
   }
 
   const studio = getProducts(locale)[0];
+  const copy = getProductsPageCopy(locale);
 
   return (
     <section className="px-6 pb-12 pt-8 sm:px-8 lg:px-10">
       <div className="mx-auto max-w-[1340px]">
         <div className="grid gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:items-center">
           <div className="space-y-5">
-            <p className="site-kicker">Products</p>
-            <h1 className="site-title max-w-[10ch]">One product, on purpose.</h1>
-            <p className="site-copy">
-              Studio is the only public product here right now. One real thing is better than a
-              shelf of placeholders.
-            </p>
+            <p className="site-kicker">{copy.kicker}</p>
+            <h1 className="site-title max-w-[10ch]">{copy.title}</h1>
+            <p className="site-copy">{copy.copy}</p>
             <div className="flex flex-wrap gap-3">
               <ButtonLink
                 href={withLocalePrefix(locale, `/products/${studio.slug}`)}
                 size="lg"
                 variant="secondary"
               >
-                See Studio
+                {copy.seeStudio}
               </ButtonLink>
               <ButtonLink href={studioAccessHref(locale)} size="lg" variant="primary">
-                {studioAccessLabel()}
+                {studioAccessLabel(locale)}
               </ButtonLink>
             </div>
           </div>
@@ -74,7 +102,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
         <div className="site-rule mt-12 pt-8">
           <article className="grid gap-8 lg:grid-cols-[0.72fr_1fr_auto] lg:items-start">
             <div>
-              <p className="site-kicker">Current product</p>
+              <p className="site-kicker">{copy.currentProduct}</p>
               <h2 className="site-title mt-3 max-w-[9ch]">{studio.name}</h2>
             </div>
 
@@ -89,7 +117,7 @@ export default async function ProductsPage({ params }: ProductsPageProps) {
                 size="lg"
                 variant="secondary"
               >
-                Product page
+                {copy.productPage}
               </ButtonLink>
             </div>
           </article>

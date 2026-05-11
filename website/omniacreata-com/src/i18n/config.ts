@@ -187,11 +187,17 @@ export function getPreferredLocale(options: {
 }
 
 export function buildLanguageAlternates(path: string) {
-  const canonical = `https://omniacreata.com${getLocalizedPath(defaultLocale, path)}`;
-  const englishTag = getLocaleDefinition(defaultLocale).hreflang;
+  const origin = "https://www.omniacreata.com";
+  const alternates = Object.fromEntries(
+    localeRegistry.map((locale) => [
+      locale.hreflang,
+      `${origin}${getLocalizedPath(locale.code, path)}`,
+    ]),
+  );
+  const canonical = `${origin}${getLocalizedPath(defaultLocale, path)}`;
 
   return {
-    [englishTag]: canonical,
+    ...alternates,
     "x-default": canonical,
   };
 }

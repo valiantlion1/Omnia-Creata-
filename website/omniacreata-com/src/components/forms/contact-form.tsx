@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import type { Messages } from "@/i18n/messages";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 
 declare global {
   interface Window {
@@ -31,6 +31,7 @@ type FormState = {
 
 type ContactFormProps = {
   copy?: Messages["contactForm"];
+  formEnabled?: boolean;
   prefill?: {
     name?: string;
     email?: string;
@@ -83,13 +84,27 @@ function loadTurnstileScript() {
   return turnstileScriptPromise;
 }
 
-export function ContactForm({ copy, prefill }: ContactFormProps) {
+export function ContactForm({ copy, formEnabled = true, prefill }: ContactFormProps) {
+  const formAvailable = formEnabled && Boolean(turnstileSiteKey);
+  const requiresEmailFallback = process.env.NODE_ENV === "production" && !formAvailable;
   const [isPending, startTransition] = useTransition();
   const [state, setState] = useState<FormState>(initialState);
   const [turnstileToken, setTurnstileToken] = useState("");
-  const [turnstileReady, setTurnstileReady] = useState(!turnstileSiteKey);
+  const [turnstileReady, setTurnstileReady] = useState(!formAvailable && !requiresEmailFallback);
+  const messageId = useId();
+  const statusId = useId();
   const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
   const turnstileWidgetIdRef = useRef<string | null>(null);
+  const isTurkish = copy?.submit === "Mesaj gonder";
+  const verificationLoadError = isTurkish
+    ? "Dogrulama yuklenemedi. Sayfayi yenileyip tekrar deneyin."
+    : "Verification could not load. Please refresh and try again.";
+  const verificationRequiredError = isTurkish
+    ? "Gondermeden once dogrulamayi tamamlayin."
+    : "Please complete verification before sending.";
+  const fallbackMessage = isTurkish
+    ? "Bize dogrudan hello@omniacreata.com adresinden yazin. En uygun inbox'tan yanitlayacagiz."
+    : "Email hello@omniacreata.com directly. We will reply from the right inbox.";
 
   const resolvedCopy = {
     labels: {
@@ -107,17 +122,18 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         copy?.placeholderInterest ?? "Studio, partnership, pricing...",
       message:
         copy?.placeholderMessage ??
-        "Tell us what you want to build with Omnia Creata.",
+        "Tell us what you want to build with OmniaCreata.",
     },
     submit: copy?.submit ?? "Send inquiry",
     sending: copy?.sending ?? "Sending...",
     helper:
-      copy?.helper ??
-      "Share a short note and we will get back to you.",
+      requiresEmailFallback
+        ? fallbackMessage
+        : copy?.helper ?? "Share a short note and we will get back to you.",
   };
 
   useEffect(() => {
-    if (!turnstileSiteKey || !turnstileContainerRef.current) {
+    if (!formAvailable || !turnstileContainerRef.current) {
       return;
     }
 
@@ -149,7 +165,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
             setTurnstileReady(false);
             setState({
               status: "error",
-              message: "Verification could not load. Please refresh and try again.",
+              message: verificationLoadError,
             });
           },
         });
@@ -161,7 +177,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         setTurnstileReady(false);
         setState({
           status: "error",
-          message: "Verification could not load. Please refresh and try again.",
+          message: verificationLoadError,
         });
       });
 
@@ -172,7 +188,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         turnstileWidgetIdRef.current = null;
       }
     };
-  }, []);
+  }, [formAvailable, verificationLoadError]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -182,11 +198,19 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
     startTransition(async () => {
       setState(initialState);
 
-      if (turnstileSiteKey && !turnstileToken) {
+      if (requiresEmailFallback) {
+        setState({
+          status: "error",
+          message: resolvedCopy.helper,
+        });
+        return;
+      }
+
+      if (formAvailable && !turnstileToken) {
         setTurnstileReady(false);
         setState({
           status: "error",
-          message: "Please complete verification before sending.",
+          message: verificationRequiredError,
         });
         return;
       }
@@ -287,13 +311,16 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         />
       </div>
 
-      <label className="block space-y-3">
-        <span className="text-sm font-medium text-foreground">
+      <label className="block space-y-3" htmlFor={messageId}>
+        <span className="text-sm font-medium text-foreground" id={`${messageId}-label`}>
           {resolvedCopy.labels.message}
         </span>
         <textarea
+          aria-describedby={statusId}
+          aria-labelledby={`${messageId}-label`}
           className="min-h-40 w-full rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(216,181,109,0.42)]"
           defaultValue={prefill?.message}
+          id={messageId}
           maxLength={2500}
           name="message"
           placeholder={resolvedCopy.placeholders.message}
@@ -301,7 +328,7 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
         />
       </label>
 
-      {turnstileSiteKey ? (
+      {formAvailable ? (
         <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-3">
           <div ref={turnstileContainerRef} />
         </div>
@@ -309,21 +336,29 @@ export function ContactForm({ copy, prefill }: ContactFormProps) {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p
+          id={statusId}
+          role={state.status === "error" ? "alert" : "status"}
           className={`text-sm ${
             state.status === "error" ? "text-[var(--danger)]" : "text-foreground-soft"
           }`}
         >
           {state.message || resolvedCopy.helper}
         </p>
-        <Button
-          className="min-w-40"
-          disabled={isPending || !turnstileReady}
-          size="lg"
-          type="submit"
-          variant="primary"
-        >
-          {isPending ? resolvedCopy.sending : resolvedCopy.submit}
-        </Button>
+        {requiresEmailFallback ? (
+          <ButtonLink href="mailto:hello@omniacreata.com" size="lg" variant="primary">
+            {isTurkish ? "E-posta gonder" : "Email us"}
+          </ButtonLink>
+        ) : (
+          <Button
+            className="min-w-40"
+            disabled={isPending || !turnstileReady}
+            size="lg"
+            type="submit"
+            variant="primary"
+          >
+            {isPending ? resolvedCopy.sending : resolvedCopy.submit}
+          </Button>
+        )}
       </div>
     </form>
   );
@@ -350,13 +385,17 @@ function Field({
   required = false,
   type = "text",
 }: FieldProps) {
+  const id = useId();
+
   return (
-    <label className="block space-y-3">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+    <label className="block space-y-3" htmlFor={id}>
+      <span className="text-sm font-medium text-foreground" id={`${id}-label`}>{label}</span>
       <input
+        aria-labelledby={`${id}-label`}
         autoComplete={autoComplete}
         className="h-[52px] w-full rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-[rgba(216,181,109,0.42)]"
         defaultValue={defaultValue}
+        id={id}
         maxLength={maxLength}
         name={name}
         placeholder={placeholder}

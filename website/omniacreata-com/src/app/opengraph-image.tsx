@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 
-export const alt = "Omnia Creata";
+export const alt = "OmniaCreata";
 export const size = {
   width: 1200,
   height: 630,
@@ -72,7 +72,7 @@ export default async function OpenGraphImage() {
             }}
           >
             <img
-              alt="Omnia Creata logo"
+              alt="OmniaCreata logo"
               src={logoDataUrl}
               style={{
                 width: "100%",

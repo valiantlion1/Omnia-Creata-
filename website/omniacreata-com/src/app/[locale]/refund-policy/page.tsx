@@ -25,7 +25,7 @@ export async function generateMetadata({
     path: "/refund-policy",
     title: "Refund Policy",
     description:
-      "Refund policy for Omnia Creata Studio subscriptions and credit purchases.",
+      "Refund policy for OmniaCreata Studio subscriptions and credit purchases.",
   });
 }
 
@@ -42,7 +42,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "1. Kapsam",
           content:
-            "Bu politika Omnia Creata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
+            "Bu politika OmniaCreata Studio abonelikleri ve kredi paketleri icin gecerli iade kurallarini aciklar.",
         },
         {
           title: "2. Abonelik iptalleri",
@@ -74,7 +74,7 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
         {
           title: "1. Scope",
           content:
-            "This policy explains how refund requests are handled for Omnia Creata Studio subscriptions and credit pack purchases.",
+            "This policy explains how refund requests are handled for OmniaCreata Studio subscriptions and credit pack purchases.",
         },
         {
           title: "2. Subscription cancellations",
@@ -118,8 +118,8 @@ export default async function RefundPolicyPage({ params }: RefundPolicyPageProps
       ]}
       description={
         isTurkish
-          ? "Bu sayfa Omnia Creata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
-          : "This page explains the refund process for Omnia Creata Studio subscriptions and credit packs."
+          ? "Bu sayfa OmniaCreata Studio abonelikleri ve kredi paketleri icin iade surecini aciklar."
+          : "This page explains the refund process for OmniaCreata Studio subscriptions and credit packs."
       }
       documentDescription={
         isTurkish

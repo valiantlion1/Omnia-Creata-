@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SITE_ORIGIN } from "@/lib/utils";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -6,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://omniacreata.com/sitemap.xml",
-    host: "https://omniacreata.com",
+    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
+    host: SITE_ORIGIN,
   };
 }

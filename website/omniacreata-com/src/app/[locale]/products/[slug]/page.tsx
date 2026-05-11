@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Fragment } from "react";
 import { StudioMotionScene } from "@/components/site/studio-motion-scene";
 import { ButtonLink } from "@/components/ui/button";
 import { getProductBySlug, products } from "@/content/products";
@@ -19,25 +20,78 @@ type ProductPageProps = {
   }>;
 };
 
-const useCases = [
-  "Character and portrait work",
-  "Concept art and key visuals",
-  "Product and editorial imagery",
-  "Moodboards and visual exploration",
-];
+function getProductPageCopy(locale: string) {
+  if (locale === "tr") {
+    return {
+      talkToUs: "Konusalim",
+      overview: "Genel bakis",
+      overviewTitle: "Yon, uretim ve inceleme birlikte kalir.",
+      useItFor: "Kullanim alanlari",
+      useItForTitle: "Tekrar tekrar donecegin isler.",
+      access: "Erisim",
+      accessTitle: "Once web. Diger her sey sirasi gelince.",
+      useCases: [
+        "Karakter ve portre isleri",
+        "Konsept art ve key visual",
+        "Urun ve editorial gorseller",
+        "Moodboard ve gorsel kesif",
+      ],
+      surfaces: {
+        web: "Web",
+        pwa: "PWA",
+        desktop: "Masaustu",
+        ios: "iOS",
+        android: "Android",
+      },
+      statuses: {
+        live: "Canli",
+        preview: "Onizleme",
+        planned: "Planli",
+      },
+    };
+  }
 
-function formatSurface(surface: "web" | "ios" | "android" | "pwa" | "desktop") {
-  if (surface === "ios") return "iOS";
-  if (surface === "android") return "Android";
-  if (surface === "desktop") return "Desktop";
-  if (surface === "pwa") return "PWA";
-  return "Web";
+  return {
+    talkToUs: "Talk to us",
+    overview: "Overview",
+    overviewTitle: "Direction, generation, and review stay together.",
+    useItFor: "Use it for",
+    useItForTitle: "The work you come back to again and again.",
+    access: "Access",
+    accessTitle: "Web first. Everything else earns its turn.",
+    useCases: [
+      "Character and portrait work",
+      "Concept art and key visuals",
+      "Product and editorial imagery",
+      "Moodboards and visual exploration",
+    ],
+    surfaces: {
+      web: "Web",
+      pwa: "PWA",
+      desktop: "Desktop",
+      ios: "iOS",
+      android: "Android",
+    },
+    statuses: {
+      live: "Live",
+      preview: "Preview",
+      planned: "Planned",
+    },
+  };
 }
 
-function formatStatus(status: "live" | "preview" | "planned") {
-  if (status === "live") return "Live";
-  if (status === "preview") return "Preview";
-  return "Planned";
+function formatSurface(
+  surface: "web" | "ios" | "android" | "pwa" | "desktop",
+  copy: ReturnType<typeof getProductPageCopy>,
+) {
+  return copy.surfaces[surface];
+}
+
+function formatStatus(
+  status: "live" | "preview" | "planned",
+  copy: ReturnType<typeof getProductPageCopy>,
+) {
+  return copy.statuses[status];
 }
 
 export function generateStaticParams() {
@@ -77,6 +131,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   const product = getProductBySlug(slug, locale);
+  const copy = getProductPageCopy(locale);
 
   if (!product) {
     notFound();
@@ -92,14 +147,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className="site-copy">{product.shortDescription}</p>
             <div className="flex flex-wrap gap-3">
               <ButtonLink href={studioPrimaryHref(locale)} size="lg" variant="primary">
-                {studioPrimaryLabel()}
+                {studioPrimaryLabel(locale)}
               </ButtonLink>
               <ButtonLink
                 href={`${withLocalePrefix(locale, "/contact")}?intent=studio_preview`}
                 size="lg"
                 variant="secondary"
               >
-                Talk to us
+                {copy.talkToUs}
               </ButtonLink>
             </div>
           </div>
@@ -109,65 +164,76 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Overview</p>
-            <h2 className="site-title max-w-[11ch]">
-              Direction, generation, and review stay together.
-            </h2>
+            <p className="site-kicker">{copy.overview}</p>
+            <h2 className="site-title max-w-[11ch]">{copy.overviewTitle}</h2>
             <p className="site-copy">{product.summary}</p>
           </div>
 
           <div className="site-line-list">
             {product.capabilityHighlights.map((item) => (
-              <article className="site-line-item" key={item.title}>
-                <strong>{item.title}</strong>
-                <span>{item.description}</span>
-              </article>
+              <Fragment key={item.title}>
+                <article className="site-line-item">
+                  <h3>{item.title} </h3>
+                  <p>{`${item.description}\u00a0`}</p>
+                  <span className="sr-only">&nbsp;</span>
+                </article>
+                {" "}
+              </Fragment>
             ))}
           </div>
         </div>
 
         <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Use it for</p>
-            <h2 className="site-title max-w-[10ch]">The work you come back to again and again.</h2>
+            <p className="site-kicker">{copy.useItFor}</p>
+            <h2 className="site-title max-w-[10ch]">{copy.useItForTitle}</h2>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {useCases.map((item) => (
-              <div key={item} className="site-line-item">
-                <strong>{item}</strong>
-              </div>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {copy.useCases.map((item) => (
+              <Fragment key={item}>
+                <li className="site-line-item">
+                  <strong>{`${item}\u00a0`}</strong>
+                  <span className="sr-only">&nbsp;</span>
+                </li>
+                {" "}
+              </Fragment>
             ))}
-          </div>
+          </ul>
         </div>
 
         <div className="site-rule mt-12 grid gap-10 pt-8 lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-4">
-            <p className="site-kicker">Access</p>
-            <h2 className="site-title max-w-[9ch]">Web first. Everything else earns its turn.</h2>
+            <p className="site-kicker">{copy.access}</p>
+            <h2 className="site-title max-w-[9ch]">{copy.accessTitle}</h2>
             <p className="site-copy">{product.roleDescription}</p>
           </div>
 
           <div className="site-line-list">
             {product.platformMatrix.map((entry) => (
-              <article
-                className="site-line-item md:grid md:grid-cols-[0.72fr_1fr_auto] md:items-center md:gap-4 md:pt-5"
-                key={`${entry.platform}-${entry.status}`}
-              >
-                <strong>{formatSurface(entry.platform)}</strong>
-                <span>{entry.note}</span>
-                <div className="flex items-center gap-3 md:justify-self-end">
-                  {entry.platform === "web" && STUDIO_PREVIEW_AVAILABLE ? (
-                    <ButtonLink href={studioPrimaryHref(locale)} size="md" variant="primary">
-                      {studioPrimaryLabel()}
-                    </ButtonLink>
-                  ) : (
-                    <span className="site-status-pill" data-status={entry.status}>
-                      {formatStatus(entry.status)}
-                    </span>
-                  )}
-                </div>
-              </article>
+              <Fragment key={`${entry.platform}-${entry.status}`}>
+                <article className="site-line-item md:grid md:grid-cols-[0.72fr_1fr_auto] md:items-center md:gap-4 md:pt-5">
+                  <h3>{formatSurface(entry.platform, copy)} </h3>
+                  <p>{`${entry.note}\u00a0`}</p>
+                  <div className="flex items-center gap-3 md:justify-self-end">
+                    {entry.platform === "web" && STUDIO_PREVIEW_AVAILABLE ? (
+                      <ButtonLink href={studioPrimaryHref(locale)} size="md" variant="primary">
+                        {studioPrimaryLabel(locale)}
+                      </ButtonLink>
+                    ) : (
+                      <span
+                        aria-label={`${formatSurface(entry.platform, copy)} status: ${formatStatus(entry.status, copy)}`}
+                        className="site-status-pill"
+                        data-status={entry.status}
+                      >
+                        {formatStatus(entry.status, copy)}
+                      </span>
+                    )}
+                  </div>
+                  <span className="sr-only">&nbsp;</span>
+                </article>
+                {" "}
+              </Fragment>
             ))}
           </div>
         </div>

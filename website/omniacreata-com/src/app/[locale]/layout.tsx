@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/footer";
 import { Navbar } from "@/components/layout/navbar";
-import { DepthBackdrop } from "@/components/experience/depth-backdrop";
 import {
   getLocaleDirection,
   isLocale,
@@ -34,7 +33,6 @@ export default async function LocaleLayout({
 
   return (
     <div dir={getLocaleDirection(locale)} lang={locale}>
-      <DepthBackdrop />
       <div className="relative z-10">
         <Navbar locale={locale} messages={messages} />
         <main className="relative min-h-screen pt-24 lg:pt-28">{children}</main>

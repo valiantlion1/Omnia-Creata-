@@ -21,6 +21,7 @@ export function BrandMark({
     <Link
       className={cn("group inline-flex items-center gap-3.5", className)}
       href={withLocalePrefix(locale, "/") as Route}
+      prefetch={false}
     >
       <div
         className={cn(
@@ -30,7 +31,7 @@ export function BrandMark({
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(188,209,229,0.2),transparent_58%)]" />
         <Image
-          alt="Omnia Creata"
+          alt="OmniaCreata"
           className="relative z-10 h-full w-full object-contain"
           height={compact ? 28 : 36}
           priority

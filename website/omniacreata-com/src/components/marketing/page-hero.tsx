@@ -79,7 +79,7 @@ export function PageHero({
                   <div className="flex items-start gap-4">
                     <div className="rounded-[20px] border border-[rgba(217,181,109,0.18)] bg-black/40 p-3">
                       <Image
-                        alt="Omnia Creata logo"
+                        alt="OmniaCreata logo"
                         className="h-auto w-[54px] object-contain"
                         height={54}
                         priority

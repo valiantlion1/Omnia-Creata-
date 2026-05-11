@@ -57,22 +57,27 @@ export default async function PrivacyPolicyPage({
             "Form verileri talebinizi yanitlamak ve destek surecini yonetmek icin islenebilir.",
         },
         {
-          title: "4. Cerezler ve tercihler",
+          title: "4. Iletisim formu guvenligi",
+          content:
+            "Iletisim formu etkin oldugunda otomatik kotuye kullanim denemelerini azaltmak icin Cloudflare Turnstile kullanilabilir. Turnstile, form isteginin gercek bir tarayici oturumundan geldigini dogrulamaya yardim eder.",
+        },
+        {
+          title: "5. Cerezler ve tercihler",
           content:
             "Dil ve bolge seciminizi korumak icin locale cerezleri kullanilabilir. Ilerleyen fazlarda guvenlik ve performans cerezleri eklenebilir.",
         },
         {
-          title: "5. Paylasim ve ifsa",
+          title: "6. Paylasim ve ifsa",
           content:
-            "Omnia Creata, website uzerinden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
+            "OmniaCreata, website uzerinden toplanan kisisel veriyi satmaz. Yasal zorunluluk, guvenlik veya hizmet operasyonu gerektiginde sinirli paylasim yapilabilir.",
         },
         {
-          title: "6. Veri saklama",
+          title: "7. Veri saklama",
           content:
             "Veriler, talep yonetimi, yasal yukumluluk ve urun destek ihtiyaci devam ettigi surece tutulur.",
         },
         {
-          title: "7. Kullanici talepleri",
+          title: "8. Kullanici talepleri",
           content:
             "Erisim, duzeltme veya silme talepleri icin privacy@omniacreata.com adresi uzerinden bize ulasabilirsiniz.",
         },
@@ -94,22 +99,27 @@ export default async function PrivacyPolicyPage({
             "Contact submissions are processed only as needed to review and respond to your request.",
         },
         {
-          title: "4. Cookies and preferences",
+          title: "4. Contact form security",
+          content:
+            "When the contact form is enabled, the website may use Cloudflare Turnstile to reduce automated abuse. Turnstile helps verify that a form request came from a real browser session.",
+        },
+        {
+          title: "5. Cookies and preferences",
           content:
             "The website may store a locale preference cookie so your language and region selection can persist across visits. Additional cookies may be added later for security, performance, or analytics purposes.",
         },
         {
-          title: "5. Sharing and disclosure",
+          title: "6. Sharing and disclosure",
           content:
-            "Omnia Creata does not sell personal information submitted through the website. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
+            "OmniaCreata does not sell personal information submitted through the website. Information may be disclosed only when required for service operation, legal compliance, security response, or legitimate business processing.",
         },
         {
-          title: "6. Data retention",
+          title: "7. Data retention",
           content:
             "We retain submitted data only as long as needed for inquiry handling, business records, security review, legal obligations, or product support operations.",
         },
         {
-          title: "7. Your requests",
+          title: "8. Your requests",
           content:
             "If you have privacy questions or want to request access, correction, or deletion where applicable, contact privacy@omniacreata.com.",
         },

@@ -1,10 +1,15 @@
 import { isLocale } from "@/i18n/config";
 
+export const SITE_ORIGIN = "https://www.omniacreata.com";
+export const STUDIO_ORIGIN = "https://studio.omniacreata.com";
+
 export const STUDIO_PREVIEW_URL =
   process.env.NEXT_PUBLIC_STUDIO_URL ||
   (process.env.NODE_ENV === "development"
     ? "http://127.0.0.1:5173"
-    : "");
+    : STUDIO_ORIGIN);
+
+const STUDIO_LANDING_PATH = "/landing";
 
 export const STUDIO_PREVIEW_AVAILABLE = Boolean(STUDIO_PREVIEW_URL);
 
@@ -13,11 +18,15 @@ export function cn(...values: Array<string | false | null | undefined>) {
 }
 
 export function absoluteUrl(path = "/") {
-  return new URL(path, "https://omniacreata.com").toString();
+  return new URL(path, SITE_ORIGIN).toString();
 }
 
 export function studioUrl(path = "/") {
   return new URL(path, STUDIO_PREVIEW_URL || absoluteUrl("/")).toString();
+}
+
+export function studioLandingHref(locale: string) {
+  return STUDIO_PREVIEW_AVAILABLE ? studioUrl(STUDIO_LANDING_PATH) : studioPageHref(locale);
 }
 
 export function withLocalePrefix(locale: string, href: string) {
@@ -46,19 +55,29 @@ export function studioPageHref(locale: string) {
 }
 
 export function studioPrimaryHref(locale: string) {
-  return STUDIO_PREVIEW_AVAILABLE ? studioUrl("/") : studioPageHref(locale);
+  return studioLandingHref(locale);
 }
 
-export function studioPrimaryLabel() {
-  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "See Studio";
+function isTurkish(locale?: string) {
+  return locale === "tr";
+}
+
+export function studioPrimaryLabel(locale?: string) {
+  if (STUDIO_PREVIEW_AVAILABLE) {
+    return isTurkish(locale) ? "Studio'yu ac" : "Open Studio";
+  }
+
+  return isTurkish(locale) ? "Studio'yu gor" : "See Studio";
 }
 
 export function studioAccessHref(locale: string) {
-  return STUDIO_PREVIEW_AVAILABLE
-    ? studioUrl("/")
-    : `${withLocalePrefix(locale, "/contact")}?intent=studio_preview`;
+  return studioLandingHref(locale);
 }
 
-export function studioAccessLabel() {
-  return STUDIO_PREVIEW_AVAILABLE ? "Open Studio" : "Contact us";
+export function studioAccessLabel(locale?: string) {
+  if (STUDIO_PREVIEW_AVAILABLE) {
+    return isTurkish(locale) ? "Studio'yu ac" : "Open Studio";
+  }
+
+  return isTurkish(locale) ? "Studio'yu gor" : "See Studio";
 }
