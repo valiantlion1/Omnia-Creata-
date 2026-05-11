@@ -23,7 +23,7 @@ void main() {
 
     expect(find.text('OmniaPixels'), findsOneWidget);
     expect(find.text('Photo editor & upscaler'), findsOneWidget);
-    expect(find.text('Choose Photos'), findsOneWidget);
+    expect(find.text('Open Omnia Gallery'), findsOneWidget);
   });
 
   testWidgets('OmniaPixels enters the gallery surface', (
@@ -31,12 +31,15 @@ void main() {
   ) async {
     await tester.pumpWidget(const OmniaPixelsApp());
 
-    await tester.tap(find.text('Continue without access'));
+    await tester.tap(find.text('Browse later'));
     await tester.pump();
 
     expect(find.text('Recent'), findsOneWidget);
     expect(find.text('Gallery'), findsOneWidget);
-    expect(find.text('Load Albums'), findsOneWidget);
+    expect(find.text('Open Gallery'), findsOneWidget);
+    expect(find.text('Import Photo'), findsOneWidget);
+    expect(find.text('Pick One'), findsNothing);
+    expect(find.text('Albums'), findsNothing);
   });
 
   testWidgets('OmniaPixels exposes premium editor controls', (
@@ -44,7 +47,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const OmniaPixelsApp());
 
-    await tester.tap(find.text('Continue without access'));
+    await tester.tap(find.text('Browse later'));
     await tester.pump();
     await tester.tap(find.text('Edit').last);
     await tester.pumpAndSettle();
@@ -91,7 +94,7 @@ void main() {
   testWidgets('OmniaPixels exposes upscale modes', (WidgetTester tester) async {
     await tester.pumpWidget(const OmniaPixelsApp());
 
-    await tester.tap(find.text('Continue without access'));
+    await tester.tap(find.text('Browse later'));
     await tester.pump();
     await tester.tap(find.text('Upscale').last);
     await tester.pumpAndSettle();
@@ -112,6 +115,8 @@ void main() {
             totalAssetCount: 0,
             loadedPages: 0,
             thumbnailCacheCount: 0,
+            nativeThumbnailCacheCount: 0,
+            nativeGalleryLabel: 'Waiting for gallery load',
             uiBuildLabel: '0.3.6+14',
             apkBuildLabel: '0.3.6+14',
             buildCheckLabel: 'Match',
@@ -120,6 +125,7 @@ void main() {
             frameSnapshot: FrameDiagnosticsSnapshot.empty,
             latestError: null,
             onClearDiagnostics: () {},
+            onClose: () {},
           ),
         ),
       ),
@@ -133,6 +139,8 @@ void main() {
     expect(find.text('Recent operations'), findsOneWidget);
     expect(find.text('No operations measured yet'), findsOneWidget);
     expect(find.text('Build check'), findsOneWidget);
+    expect(find.text('Library index'), findsOneWidget);
+    expect(find.text('Native cache'), findsOneWidget);
     expect(find.text('Neural model'), findsNothing);
   });
 
@@ -152,6 +160,44 @@ void main() {
       decoded!.width > decoded.height ? decoded.width : decoded.height,
       100,
     );
+  });
+
+  test('crop center changes the exported crop window', () async {
+    final source = img.Image(width: 200, height: 100);
+    for (var y = 0; y < source.height; y++) {
+      for (var x = 0; x < source.width; x++) {
+        source.setPixel(
+          x,
+          y,
+          x < source.width / 2
+              ? img.ColorRgb8(220, 28, 36)
+              : img.ColorRgb8(22, 88, 220),
+        );
+      }
+    }
+    final bytes = img.encodeJpg(source);
+
+    final leftCrop = img.decodeImage(
+      await renderEditedImage(
+        bytes: bytes,
+        edit: const EditValues(cropMode: CropMode.square, cropCenterX: 0.25),
+        maxLongEdge: 200,
+      ),
+    );
+    final rightCrop = img.decodeImage(
+      await renderEditedImage(
+        bytes: bytes,
+        edit: const EditValues(cropMode: CropMode.square, cropCenterX: 0.75),
+        maxLongEdge: 200,
+      ),
+    );
+
+    expect(leftCrop, isNotNull);
+    expect(rightCrop, isNotNull);
+    final leftPixel = leftCrop!.getPixel(50, 50);
+    final rightPixel = rightCrop!.getPixel(50, 50);
+    expect(leftPixel.r, greaterThan(leftPixel.b));
+    expect(rightPixel.b, greaterThan(rightPixel.r));
   });
 
   test('render bakes brush and text markup layers', () async {

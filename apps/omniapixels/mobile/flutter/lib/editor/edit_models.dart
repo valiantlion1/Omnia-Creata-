@@ -12,6 +12,8 @@ class EditValues {
     this.vignette = 0,
     this.rotationTurns = 0,
     this.cropMode = CropMode.original,
+    this.cropCenterX = 0.5,
+    this.cropCenterY = 0.5,
   });
 
   final double exposure;
@@ -26,6 +28,8 @@ class EditValues {
   final double vignette;
   final int rotationTurns;
   final CropMode cropMode;
+  final double cropCenterX;
+  final double cropCenterY;
 
   List<double> get previewMatrix {
     const lumR = 0.213;
@@ -84,6 +88,8 @@ class EditValues {
     double? vignette,
     int? rotationTurns,
     CropMode? cropMode,
+    double? cropCenterX,
+    double? cropCenterY,
   }) {
     return EditValues(
       exposure: exposure ?? this.exposure,
@@ -98,6 +104,8 @@ class EditValues {
       vignette: vignette ?? this.vignette,
       rotationTurns: rotationTurns ?? this.rotationTurns,
       cropMode: cropMode ?? this.cropMode,
+      cropCenterX: cropCenterX ?? this.cropCenterX,
+      cropCenterY: cropCenterY ?? this.cropCenterY,
     );
   }
 
@@ -130,7 +138,9 @@ class EditValues {
         other.fade == fade &&
         other.vignette == vignette &&
         other.rotationTurns == rotationTurns &&
-        other.cropMode == cropMode;
+        other.cropMode == cropMode &&
+        other.cropCenterX == cropCenterX &&
+        other.cropCenterY == cropCenterY;
   }
 
   @override
@@ -147,6 +157,8 @@ class EditValues {
     vignette,
     rotationTurns,
     cropMode,
+    cropCenterX,
+    cropCenterY,
   );
 }
 
@@ -174,6 +186,13 @@ extension CropModeLabel on CropMode {
     CropMode.square => '1:1',
     CropMode.portrait45 => '4:5',
     CropMode.landscape169 => '16:9',
+  };
+
+  double? get ratio => switch (this) {
+    CropMode.original => null,
+    CropMode.square => 1.0,
+    CropMode.portrait45 => 4 / 5,
+    CropMode.landscape169 => 16 / 9,
   };
 }
 

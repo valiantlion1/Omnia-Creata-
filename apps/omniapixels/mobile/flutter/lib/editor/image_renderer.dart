@@ -25,6 +25,8 @@ Future<Uint8List> renderEditedImage({
     'vignette': edit.vignette,
     'rotationTurns': edit.rotationTurns,
     'cropMode': edit.cropMode.name,
+    'cropCenterX': edit.cropCenterX,
+    'cropCenterY': edit.cropCenterY,
     'markups': markups.map((markup) => markup.toRequestMap()).toList(),
     'upscale': upscale,
     'maxLongEdge': maxLongEdge,
@@ -39,6 +41,15 @@ Uint8List _renderImageBytes(Map<String, Object?> request) {
   }
 
   decoded = img.bakeOrientation(decoded);
+  final rotationTurns = request['rotationTurns']! as int;
+  if (rotationTurns != 0) {
+    decoded = img.copyRotate(
+      decoded,
+      angle: rotationTurns * 90,
+      interpolation: img.Interpolation.cubic,
+    );
+  }
+
   final cropMode = request['cropMode']! as String;
   if (cropMode != CropMode.original.name) {
     final ratio = switch (cropMode) {
@@ -48,17 +59,13 @@ Uint8List _renderImageBytes(Map<String, Object?> request) {
       _ => null,
     };
     if (ratio != null) {
-      decoded = _cropCenterRatio(decoded, ratio);
+      decoded = _cropRatio(
+        decoded,
+        ratio,
+        centerX: request['cropCenterX']! as double,
+        centerY: request['cropCenterY']! as double,
+      );
     }
-  }
-
-  final rotationTurns = request['rotationTurns']! as int;
-  if (rotationTurns != 0) {
-    decoded = img.copyRotate(
-      decoded,
-      angle: rotationTurns * 90,
-      interpolation: img.Interpolation.cubic,
-    );
   }
 
   final maxLongEdge = request['maxLongEdge'] as int?;
@@ -259,7 +266,12 @@ img.Image _resizeLongEdge(img.Image src, int maxLongEdge) {
   );
 }
 
-img.Image _cropCenterRatio(img.Image src, double ratio) {
+img.Image _cropRatio(
+  img.Image src,
+  double ratio, {
+  required double centerX,
+  required double centerY,
+}) {
   final currentRatio = src.width / src.height;
   var cropWidth = src.width;
   var cropHeight = src.height;
@@ -268,11 +280,20 @@ img.Image _cropCenterRatio(img.Image src, double ratio) {
 
   if (currentRatio > ratio) {
     cropWidth = (src.height * ratio).round().clamp(1, src.width);
-    cropX = ((src.width - cropWidth) / 2).round();
   } else {
     cropHeight = (src.width / ratio).round().clamp(1, src.height);
-    cropY = ((src.height - cropHeight) / 2).round();
   }
+
+  final maxX = src.width - cropWidth;
+  final maxY = src.height - cropHeight;
+  cropX = (src.width * centerX.clamp(0.0, 1.0) - cropWidth / 2)
+      .round()
+      .clamp(0, maxX)
+      .toInt();
+  cropY = (src.height * centerY.clamp(0.0, 1.0) - cropHeight / 2)
+      .round()
+      .clamp(0, maxY)
+      .toInt();
 
   return img.copyCrop(
     src,
