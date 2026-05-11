@@ -12,7 +12,7 @@ COPY version.json ./version.json
 COPY version.json /version.json
 
 # Build for production
-ARG VITE_API_BASE_URL=https://api.omniacreata.com
+ARG VITE_API_BASE_URL=
 ARG VITE_AUTH_REDIRECT_BASE_URL=
 ARG VITE_SUPABASE_URL=
 ARG VITE_SUPABASE_ANON_KEY=

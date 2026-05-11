@@ -5,14 +5,15 @@ import { studioSeoPlugin } from './tools/studioSeoPlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, fileURLToPath(new URL('..', import.meta.url)), '')
+  const env = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), '')
   const siteUrl = env.VITE_CANONICAL_SITE_URL || env.PUBLIC_WEB_BASE_URL || 'https://studio.omniacreata.com'
+  const allowIndexing = ['1', 'true', 'yes', 'public'].includes((env.VITE_STUDIO_ALLOW_INDEXING || '').trim().toLowerCase())
   const localFrontendHost = '127.0.0.1'
   const localFrontendPort = 5173
   const localApiBaseUrl = env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
   return {
-    envDir: '..',
-    plugins: [react(), studioSeoPlugin({ siteUrl })],
+    envDir: '.',
+    plugins: [react(), studioSeoPlugin({ siteUrl, allowIndexing })],
     resolve: {
       tsconfigPaths: true,
       alias: {

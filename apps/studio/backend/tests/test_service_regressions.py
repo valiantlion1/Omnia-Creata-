@@ -24,6 +24,7 @@ from studio_platform.models import (
     JobStatus,
     ManualReviewState,
     MediaAsset,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     PromptSnapshot,
     Project,
@@ -49,6 +50,10 @@ from studio_platform.llm import LLMResult
 from studio_platform.services.generation_broker import InMemoryGenerationBroker
 from studio_platform.services.generation_runtime import ExecutedGenerationBatch
 from studio_platform.store import SqliteStudioStateStore, StudioStateStore
+
+
+_ONE_PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg=="
+_ONE_PIXEL_DATA_URL = f"data:image/png;base64,{_ONE_PIXEL_PNG}"
 
 
 class _FailingEnqueueBroker(InMemoryGenerationBroker):
@@ -2093,8 +2098,11 @@ async def test_create_generation_persists_reference_asset_in_prompt_snapshot(tmp
         title="Reference",
         prompt="reference image",
         url="stored",
+        local_path=str(tmp_path / "reference-private-only.png"),
         metadata={},
     )
+    Path(asset.local_path).write_bytes(b"reference-private-only")
+    asset.metadata["visibility_effect"] = ModerationVisibilityEffect.PRIVATE_ONLY.value
 
     await store.mutate(
         lambda state: (
@@ -2124,6 +2132,76 @@ async def test_create_generation_persists_reference_asset_in_prompt_snapshot(tmp
     assert job.prompt_snapshot.workflow == "image_to_image"
     assert job.prompt_snapshot.reference_asset_id == asset.id
     assert job.queue_priority == "standard"
+
+    pending_tasks = list(service._tasks)
+    for task in pending_tasks:
+        task.cancel()
+    await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_create_generation_rejects_hidden_pending_review_reference_asset(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        monthly_credits_remaining=0,
+        monthly_credit_allowance=0,
+        extra_credits=60,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    image_path = tmp_path / "reference-pending-review.png"
+    image_path.write_bytes(b"pending-review-reference")
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Reported reference",
+        prompt="reported reference image",
+        url="stored",
+        local_path=str(image_path),
+        metadata={"visibility_effect": ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW.value},
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+        )
+    )
+
+    with pytest.raises(PermissionError, match="pending review"):
+        await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            prompt="Turn this into a cinematic poster",
+            negative_prompt="",
+            reference_asset_id=asset.id,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=24,
+            cfg_scale=6.0,
+            seed=42,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
 
     pending_tasks = list(service._tasks)
     for task in pending_tasks:
@@ -2206,6 +2284,75 @@ async def test_load_generation_reference_image_reads_local_asset_bytes(tmp_path:
 
 
 @pytest.mark.asyncio
+async def test_load_generation_reference_image_rejects_blocked_asset_after_queue(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+    image_path = tmp_path / "blocked-reference.png"
+    image_path.write_bytes(b"blocked-reference")
+    asset = MediaAsset(
+        id="asset-1",
+        workspace_id=workspace.id,
+        project_id=project.id,
+        identity_id=identity.id,
+        title="Blocked reference",
+        prompt="blocked reference image",
+        url="stored",
+        local_path=str(image_path),
+        metadata={"mime_type": "image/png", "protection_state": "blocked"},
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+            state.assets.__setitem__(asset.id, asset),
+        )
+    )
+
+    with pytest.raises(provider_module.ProviderFatalError, match="blocked"):
+        await service._load_generation_reference_image(
+            GenerationJob(
+                workspace_id=workspace.id,
+                project_id=project.id,
+                identity_id=identity.id,
+                model="flux-schnell",
+                estimated_cost=0.0,
+                credit_cost=0,
+                prompt_snapshot=PromptSnapshot(
+                    prompt="Use this reference",
+                    negative_prompt="",
+                    model="flux-schnell",
+                    workflow="image_to_image",
+                    reference_asset_id=asset.id,
+                    width=1024,
+                    height=1024,
+                    steps=24,
+                    cfg_scale=6.0,
+                    seed=42,
+                    aspect_ratio="1:1",
+                ),
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_import_asset_from_data_url_creates_reference_asset(tmp_path: Path):
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
@@ -2237,7 +2384,7 @@ async def test_import_asset_from_data_url_creates_reference_asset(tmp_path: Path
     asset = await service.import_asset_from_data_url(
         identity_id=identity.id,
         project_id=project.id,
-        data_url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==",
+        data_url=_ONE_PIXEL_DATA_URL,
         title="Reference upload",
     )
 
@@ -2284,7 +2431,7 @@ async def test_send_chat_message_allows_attachment_without_text(tmp_path: Path):
         attachments=[
             {
                 "kind": "image",
-                "url": "data:image/png;base64,aGVsbG8=",
+                "url": _ONE_PIXEL_DATA_URL,
                 "asset_id": None,
                 "label": "reference.png",
             }
@@ -2331,7 +2478,7 @@ async def test_send_chat_message_titles_new_conversation_from_attachment_seed(tm
         attachments=[
             {
                 "kind": "image",
-                "url": "data:image/png;base64,aGVsbG8=",
+                "url": _ONE_PIXEL_DATA_URL,
                 "asset_id": None,
                 "label": "brand-board.png",
             }
@@ -2340,6 +2487,167 @@ async def test_send_chat_message_titles_new_conversation_from_attachment_seed(tm
 
     assert result["conversation"]["title"] == "brand-board.png"
     assert result["conversation"]["message_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_send_chat_message_rejects_invalid_image_attachment_payload(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    conversation = await service.create_conversation(identity.id, title="Bad attachment", model="vision")
+    with pytest.raises(ValueError, match="not a valid image"):
+        await service.send_chat_message(
+            identity.id,
+            conversation.id,
+            "",
+            model="vision",
+            attachments=[
+                {
+                    "kind": "image",
+                    "url": "data:image/png;base64,aGVsbG8=",
+                    "asset_id": None,
+                    "label": "fake.png",
+                }
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_send_chat_message_rejects_hidden_pending_review_asset_attachment(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+    project = Project(
+        id="project-1",
+        workspace_id=workspace.id,
+        identity_id=identity.id,
+        title="Project One",
+    )
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+            state.projects.__setitem__(project.id, project),
+        )
+    )
+
+    asset = await service.import_asset_from_data_url(
+        identity_id=identity.id,
+        project_id=project.id,
+        data_url=_ONE_PIXEL_DATA_URL,
+        title="Pending review reference",
+    )
+
+    def hide_asset(state):
+        state.assets[asset.id].metadata["visibility_effect"] = ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW.value
+
+    await store.mutate(hide_asset)
+
+    conversation = await service.create_conversation(identity.id, title="Hidden asset", model="vision")
+    asset_payload = service.serialize_asset(asset, identity_id=identity.id)
+    with pytest.raises(PermissionError, match="pending review"):
+        await service.send_chat_message(
+            identity.id,
+            conversation.id,
+            "Use this as reference",
+            model="vision",
+            attachments=[
+                {
+                    "kind": "image",
+                    "url": asset_payload["url"],
+                    "asset_id": asset.id,
+                    "label": "hidden.png",
+                }
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_edit_chat_message_rejects_invalid_image_attachment_payload(tmp_path: Path):
+    store = StudioStateStore(tmp_path / "state.json")
+    service = StudioService(store, ProviderRegistry(), tmp_path / "media")
+    await service.initialize()
+
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
+        monthly_credits_remaining=1200,
+        monthly_credit_allowance=1200,
+    )
+    workspace = StudioWorkspace(id=identity.workspace_id, identity_id=identity.id, name="User One Studio")
+
+    await store.mutate(
+        lambda state: (
+            state.identities.__setitem__(identity.id, identity),
+            state.workspaces.__setitem__(workspace.id, workspace),
+        )
+    )
+
+    conversation = await service.create_conversation(identity.id, title="Edit attachment", model="vision")
+    first_turn = await service.send_chat_message(
+        identity.id,
+        conversation.id,
+        "Initial message",
+        model="vision",
+    )
+    user_message = ChatMessage.model_validate(first_turn["user_message"])
+
+    with pytest.raises(ValueError, match="not a valid image"):
+        await service.edit_chat_message(
+            identity.id,
+            conversation.id,
+            user_message.id,
+            "Updated message",
+            model="vision",
+            attachments=[
+                {
+                    "kind": "image",
+                    "url": "data:image/png;base64,aGVsbG8=",
+                    "asset_id": None,
+                    "label": "fake.png",
+                }
+            ],
+        )
 
 
 @pytest.mark.asyncio
@@ -2903,7 +3211,7 @@ async def test_chat_follow_up_edit_fallback_preserves_prior_blueprint_fields(tmp
         attachments=[
             {
                 "kind": "image",
-                "url": "data:image/png;base64,aGVsbG8=",
+                "url": _ONE_PIXEL_DATA_URL,
                 "label": "portrait.png",
             }
         ],

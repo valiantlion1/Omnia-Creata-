@@ -13,6 +13,7 @@ from studio_platform.models import (
     IdentityPlan,
     ManualReviewState,
     MediaAsset,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     Project,
     PublicPost,
@@ -921,6 +922,90 @@ async def test_create_share_rejects_blocked_asset_target(tmp_path: Path) -> None
     try:
         with pytest.raises(PermissionError, match="ready, truthful assets"):
             await service.create_share(identity.id, None, asset.id)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_share_rejects_review_routed_asset_target(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "review-routed-asset-share.png"
+    render_path.write_bytes(b"review-routed-asset-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("moderation_tier", "low"),
+            state.assets[asset.id].metadata.__setitem__(
+                "visibility_effect",
+                ModerationVisibilityEffect.PRIVATE_ONLY.value,
+            ),
+        )
+    )
+
+    try:
+        with pytest.raises(PermissionError, match="ready, truthful assets"):
+            await service.create_share(identity.id, None, asset.id)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_create_project_share_rejects_review_routed_assets(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, project, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "review-routed-project-share.png"
+    render_path.write_bytes(b"review-routed-project-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("library_state", "ready"),
+            state.assets[asset.id].metadata.__setitem__("moderation_tier", "low"),
+            state.assets[asset.id].metadata.__setitem__(
+                "visibility_effect",
+                ModerationVisibilityEffect.PRIVATE_ONLY.value,
+            ),
+        )
+    )
+
+    try:
+        with pytest.raises(PermissionError, match="ready, truthful assets"):
+            await service.create_share(identity.id, project.id, None)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_review_routed_asset_share_public_lookup_returns_not_found(tmp_path: Path) -> None:
+    service, store = await _build_service(tmp_path)
+    identity, _, _, asset = await _seed_identity_project_asset(store)
+    render_path = tmp_path / "review-routed-existing-share.png"
+    render_path.write_bytes(b"review-routed-existing-share")
+    await store.mutate(
+        lambda state: (
+            setattr(state.assets[asset.id], "local_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("thumbnail_path", str(render_path)),
+            state.assets[asset.id].metadata.__setitem__("library_state", "ready"),
+        )
+    )
+
+    try:
+        share, raw_token = await service.create_share(identity.id, None, asset.id)
+        await store.mutate(
+            lambda state: (
+                state.shares.__setitem__(share.id, share),
+                state.assets[asset.id].metadata.__setitem__("moderation_tier", "low"),
+                state.assets[asset.id].metadata.__setitem__(
+                    "visibility_effect",
+                    ModerationVisibilityEffect.PRIVATE_ONLY.value,
+                ),
+            )
+        )
+
+        with pytest.raises(KeyError):
+            await service.get_public_share(raw_token)
     finally:
         await service.shutdown()
 

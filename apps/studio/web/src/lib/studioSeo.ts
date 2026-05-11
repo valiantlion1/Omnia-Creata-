@@ -206,7 +206,10 @@ export function formatStudioDocumentTitle(title: string) {
   return `${normalizedTitle} - ${STUDIO_SITE_NAME}`
 }
 
-export function getStudioSeoPayload(pathname: string, options: { siteUrl?: string; override?: StudioSeoOverride } = {}): StudioSeoPayload {
+export function getStudioSeoPayload(
+  pathname: string,
+  options: { siteUrl?: string; allowIndexing?: boolean; override?: StudioSeoOverride } = {},
+): StudioSeoPayload {
   const resolved = resolveStudioSeoEntry(pathname)
   const normalizedSiteUrl = normalizeStudioSiteUrl(options.siteUrl)
   const requestedPath = resolved?.requestedPath ?? normalizePathname(pathname)
@@ -220,6 +223,8 @@ export function getStudioSeoPayload(pathname: string, options: { siteUrl?: strin
   const ogDescription = options.override?.ogDescription?.trim() || resolved?.entry.ogDescription || description
   const canonicalUrl = buildAbsoluteStudioUrl(canonicalPath, normalizedSiteUrl)
   const isCanonical = resolved?.isCanonical ?? true
+  const allowIndexing = options.allowIndexing ?? true
+  const robots = allowIndexing ? (isCanonical ? 'index,follow' : 'noindex,follow') : 'noindex,nofollow,noarchive'
 
   return {
     requestedPath,
@@ -232,7 +237,7 @@ export function getStudioSeoPayload(pathname: string, options: { siteUrl?: strin
     ogDescription,
     ogUrl: canonicalUrl,
     ogImageUrl: buildAbsoluteStudioUrl(STUDIO_DEFAULT_OG_IMAGE_PATH, normalizedSiteUrl),
-    robots: isCanonical ? 'index,follow' : 'noindex,follow',
+    robots,
     siteName: STUDIO_SITE_NAME,
     isCanonical,
     structuredDataJson:
@@ -246,9 +251,9 @@ export function getStudioSeoStaticPaths() {
   return STUDIO_SEO_ENTRIES.flatMap((entry) => [entry.path, ...(entry.aliases ?? [])])
 }
 
-export function renderStudioSitemap(siteUrl?: string) {
+export function renderStudioSitemap(siteUrl?: string, options: { allowIndexing?: boolean } = {}) {
   const normalizedSiteUrl = normalizeStudioSiteUrl(siteUrl)
-  const urls = STUDIO_SEO_ENTRIES.map((entry) => {
+  const urls = (options.allowIndexing === false ? [] : STUDIO_SEO_ENTRIES).map((entry) => {
     const canonicalUrl = buildAbsoluteStudioUrl(entry.path, normalizedSiteUrl)
     return `  <url>\n    <loc>${canonicalUrl}</loc>\n  </url>`
   }).join('\n')
@@ -256,7 +261,11 @@ export function renderStudioSitemap(siteUrl?: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
 }
 
-export function renderStudioRobots(siteUrl?: string) {
+export function renderStudioRobots(siteUrl?: string, options: { allowIndexing?: boolean } = {}) {
+  if (options.allowIndexing === false) {
+    return 'User-agent: *\nDisallow: /\n'
+  }
+
   const normalizedSiteUrl = normalizeStudioSiteUrl(siteUrl)
   return `User-agent: *\nAllow: /\n\nSitemap: ${buildAbsoluteStudioUrl('/sitemap.xml', normalizedSiteUrl)}\n`
 }

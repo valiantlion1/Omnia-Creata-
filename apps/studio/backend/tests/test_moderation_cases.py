@@ -15,7 +15,9 @@ from studio_platform.models import (
     PromptSnapshot,
     Project,
     PublicPost,
+    ShareLink,
     StudioWorkspace,
+    SubscriptionStatus,
     Visibility,
 )
 from studio_platform.service import StudioService
@@ -37,6 +39,7 @@ async def _seed_public_post(service: StudioService, tmp_path: Path) -> tuple[Omn
         display_name="Owner",
         username="owner1",
         plan=IdentityPlan.PRO,
+        subscription_status=SubscriptionStatus.ACTIVE,
         workspace_id="ws-owner-1",
         default_visibility=Visibility.PUBLIC,
     )
@@ -111,12 +114,15 @@ async def test_report_public_post_creates_hidden_review_case_and_private_post(tm
         )
         snapshot = await service.store.snapshot()
         updated_post = snapshot.posts[post.id]
+        updated_asset = snapshot.assets[post.cover_asset_id]
 
         assert case.source == ModerationCaseSource.PUBLIC_REPORT
         assert case.status == ModerationCaseStatus.OPEN
         assert case.target_identity_id == owner.id
         assert updated_post.visibility == Visibility.PRIVATE
         assert updated_post.visibility_effect == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW
+        assert updated_asset.metadata["visibility_effect"] == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW.value
+        assert not service.library.is_public_share_eligible_asset(updated_asset)
         assert case.id in updated_post.moderation_case_ids
     finally:
         await service.shutdown()
@@ -208,11 +214,42 @@ async def test_submit_appeal_can_link_owned_case_and_resolution_restores_visibil
             visibility_effect=ModerationVisibilityEffect.NONE,
         )
         snapshot = await service.store.snapshot()
+        updated_asset = snapshot.assets[post.cover_asset_id]
 
         assert appeal.source == ModerationCaseSource.APPEAL
         assert appeal.linked_case_id == report_case.id
         assert resolved.visibility_effect == ModerationVisibilityEffect.NONE
         assert snapshot.posts[post.id].visibility_effect == ModerationVisibilityEffect.NONE
         assert snapshot.posts[post.id].visibility == Visibility.PRIVATE
+        assert "visibility_effect" not in updated_asset.metadata
+        assert service.library.is_public_share_eligible_asset(updated_asset)
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_public_post_report_invalidates_existing_asset_share(tmp_path: Path) -> None:
+    service = await _build_service(tmp_path)
+    try:
+        _, viewer, _, post = await _seed_public_post(service, tmp_path)
+        share = ShareLink(
+            id="share-asset-1",
+            token="assetshare123456",
+            identity_id=post.identity_id,
+            asset_id=post.cover_asset_id,
+        )
+        await service.store.save_model("shares", share)
+
+        assert (await service.get_public_share(share.token))["asset"]["id"] == post.cover_asset_id
+
+        await service.report_public_post(
+            viewer.id,
+            post.id,
+            reason_code="unsafe_public",
+            detail="This should be hidden while review is open.",
+        )
+
+        with pytest.raises(KeyError):
+            await service.get_public_share(share.token)
     finally:
         await service.shutdown()

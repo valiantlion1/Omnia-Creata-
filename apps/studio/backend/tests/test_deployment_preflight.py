@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from studio_platform.services.deployment_preflight import build_deployment_preflight
+from studio_platform.services.deployment_preflight import build_deployment_preflight, load_dotenv_file
 
 
 def test_deployment_preflight_passes_for_launch_shaped_staging_env() -> None:
@@ -87,6 +87,19 @@ def test_deployment_preflight_warns_when_premium_provider_secrets_are_missing() 
     assert checks["premium_chat_lane"]["status"] == "warning"
     assert checks["premium_image_lane"]["status"] == "warning"
     assert checks["billing_backbone"]["status"] == "pass"
+
+
+def test_load_dotenv_file_tolerates_utf8_bom_on_first_key(tmp_path) -> None:
+    env_file = tmp_path / ".env.platform"
+    env_file.write_text(
+        "\ufeffENVIRONMENT=staging\nPUBLIC_WEB_BASE_URL=https://studio.omniacreata.com\n",
+        encoding="utf-8",
+    )
+
+    values = load_dotenv_file(env_file)
+
+    assert values["ENVIRONMENT"] == "staging"
+    assert values["PUBLIC_WEB_BASE_URL"] == "https://studio.omniacreata.com"
 
 
 def test_deployment_preflight_treats_placeholders_as_missing_for_selected_beta_lanes() -> None:

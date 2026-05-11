@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: web/Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.omniacreata.com}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?Set VITE_API_BASE_URL to a verified Studio API URL before building the web container}
     container_name: omnia-studio-web
     restart: unless-stopped
     ports:

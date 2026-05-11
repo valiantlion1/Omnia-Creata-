@@ -27,8 +27,8 @@ function replaceOrInsertTag(html: string, pattern: RegExp, replacement: string) 
   return html.replace('</head>', `  ${replacement}\n</head>`)
 }
 
-function applyStudioSeoHtml(html: string, pathname: string, siteUrl: string) {
-  const seo = getStudioSeoPayload(pathname, { siteUrl })
+function applyStudioSeoHtml(html: string, pathname: string, siteUrl: string, allowIndexing: boolean) {
+  const seo = getStudioSeoPayload(pathname, { siteUrl, allowIndexing })
   let nextHtml = html
 
   nextHtml = replaceOrInsertTag(nextHtml, /<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(seo.documentTitle)}</title>`)
@@ -114,8 +114,9 @@ function applyStudioSeoHtml(html: string, pathname: string, siteUrl: string) {
   return nextHtml
 }
 
-export function studioSeoPlugin(options: { siteUrl?: string } = {}): Plugin {
+export function studioSeoPlugin(options: { siteUrl?: string; allowIndexing?: boolean } = {}): Plugin {
   const siteUrl = normalizeStudioSiteUrl(options.siteUrl)
+  const allowIndexing = options.allowIndexing ?? false
   let rootDir = ''
   let buildOutDir = 'dist'
 
@@ -127,7 +128,7 @@ export function studioSeoPlugin(options: { siteUrl?: string } = {}): Plugin {
       buildOutDir = config.build.outDir
     },
     transformIndexHtml(html) {
-      return applyStudioSeoHtml(html, '/', siteUrl)
+      return applyStudioSeoHtml(html, '/', siteUrl, allowIndexing)
     },
     async closeBundle() {
       const distRoot = path.join(rootDir, buildOutDir)
@@ -139,11 +140,11 @@ export function studioSeoPlugin(options: { siteUrl?: string } = {}): Plugin {
 
         const outputPath = path.join(distRoot, ...routePath.split('/').filter(Boolean), 'index.html')
         await mkdir(path.dirname(outputPath), { recursive: true })
-        await writeFile(outputPath, applyStudioSeoHtml(baseHtml, routePath, siteUrl), 'utf8')
+        await writeFile(outputPath, applyStudioSeoHtml(baseHtml, routePath, siteUrl, allowIndexing), 'utf8')
       }
 
-      await writeFile(path.join(distRoot, 'robots.txt'), renderStudioRobots(siteUrl), 'utf8')
-      await writeFile(path.join(distRoot, 'sitemap.xml'), renderStudioSitemap(siteUrl), 'utf8')
+      await writeFile(path.join(distRoot, 'robots.txt'), renderStudioRobots(siteUrl, { allowIndexing }), 'utf8')
+      await writeFile(path.join(distRoot, 'sitemap.xml'), renderStudioSitemap(siteUrl, { allowIndexing }), 'utf8')
     },
   }
 }

@@ -1,0 +1,12 @@
+.env
+.env.*
+backend/.env
+backend/.env.*
+backend/logs/**
+backend/data/**
+backend/tmp_*/**
+backend/.pytest_cache/**
+deploy/.env*
+web/.env.local
+web/dist/**
+**/*.log

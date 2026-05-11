@@ -23,7 +23,19 @@ from ..asset_ops import (
 )
 from ..asset_storage import ResolvedAssetDelivery
 from ..entitlement_ops import ensure_clean_export_allowed, resolve_entitlements
-from ..models import GenerationJob, JobStatus, MediaAsset, OmniaIdentity, Project, PromptMemoryProfile, ShareLink, StudioStyle, Visibility, utc_now
+from ..models import (
+    GenerationJob,
+    JobStatus,
+    MediaAsset,
+    ModerationVisibilityEffect,
+    OmniaIdentity,
+    Project,
+    PromptMemoryProfile,
+    ShareLink,
+    StudioStyle,
+    Visibility,
+    utc_now,
+)
 from ..prompt_memory_ops import (
     build_prompt_memory_context,
     derive_display_title,
@@ -362,10 +374,23 @@ class LibraryService:
     def is_truthful_surface_asset(self, asset: MediaAsset) -> bool:
         return not self.is_demo_placeholder_asset(asset) and self.asset_has_renderable_variant(asset)
 
+    def asset_moderation_visibility_effect(self, asset: MediaAsset) -> ModerationVisibilityEffect:
+        raw_effect = str(asset.metadata.get("visibility_effect") or "").strip().lower()
+        try:
+            effect = ModerationVisibilityEffect(raw_effect)
+        except ValueError:
+            effect = ModerationVisibilityEffect.NONE
+        if effect != ModerationVisibilityEffect.NONE:
+            return effect
+        if str(asset.metadata.get("moderation_tier") or "").strip().lower() == "low":
+            return ModerationVisibilityEffect.PRIVATE_ONLY
+        return ModerationVisibilityEffect.NONE
+
     def is_public_share_eligible_asset(self, asset: MediaAsset) -> bool:
         return (
             asset.deleted_at is None
             and self.is_truthful_surface_asset(asset)
+            and self.asset_moderation_visibility_effect(asset) == ModerationVisibilityEffect.NONE
             and self.asset_protection_state(asset) != "blocked"
             and self.asset_library_state(asset) == "ready"
         )

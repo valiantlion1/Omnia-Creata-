@@ -8,10 +8,14 @@ from fastapi import FastAPI, Request
 
 import studio_platform.router as router_module
 from config.feature_flags import FEATURE_FLAGS, FLAG_STRICT_INPUT_SANITIZATION
+from config.env import get_settings
 from security.moderation_engine import AgeAmbiguity, ContextType, PromptRiskLevel, SexualIntent
 from security.auth import User, UserRole
 from security.rate_limit import InMemoryRateLimiter
 from studio_platform.models import (
+    ChatConversation,
+    ChatMessage,
+    ChatRole,
     GenerationJob,
     IdentityPlan,
     JobStatus,
@@ -70,6 +74,7 @@ def _build_generation_job(**overrides: object) -> GenerationJob:
 
 
 async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMemoryRateLimiter]:
+    get_settings().studio_access_mode = "open"
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     rate_limiter = InMemoryRateLimiter()
@@ -138,6 +143,147 @@ async def test_generation_endpoint_returns_structured_queue_full_response(
         assert response.json()["queue_full"] is True
         assert response.json()["estimated_wait_seconds"] == 90
         assert response.headers["X-Queue-Full"] == "true"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_chat_endpoint_rewrites_ambiguous_message_and_persists_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def rewrite(_: str):
+        return router_module.PromptModerationDecision(
+            result=router_module.ModerationResult.REVIEW,
+            action=router_module.ModerationAction.REWRITE,
+            risk_level=PromptRiskLevel.MEDIUM,
+            risk_score=42,
+            reason="age_ambiguity",
+            age_ambiguity=AgeAmbiguity.AMBIGUOUS,
+            sexual_intent=SexualIntent.MILD,
+            context_type=ContextType.SWIMWEAR,
+            rewrite_applied=True,
+            rewritten_prompt="adult woman in swimwear, summer fashion portrait",
+        )
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", rewrite)
+    captured_content: dict[str, str] = {}
+
+    async def fake_send_chat_message(
+        identity_id: str,
+        conversation_id: str,
+        content: str,
+        *,
+        model: str | None = None,
+        attachments: object | None = None,
+    ) -> dict[str, object]:
+        captured_content["content"] = content
+        conversation = ChatConversation(
+            id=conversation_id,
+            workspace_id="ws-user-1",
+            identity_id=identity_id,
+            title="Test chat",
+            model=model or "studio-assist",
+        )
+        user_message = ChatMessage(
+            conversation_id=conversation_id,
+            identity_id=identity_id,
+            role=ChatRole.USER,
+            content=content,
+        )
+        assistant_message = ChatMessage(
+            conversation_id=conversation_id,
+            identity_id=identity_id,
+            role=ChatRole.ASSISTANT,
+            content="Ready.",
+            parent_message_id=user_message.id,
+        )
+        return {
+            "conversation": conversation,
+            "user_message": user_message,
+            "assistant_message": assistant_message,
+        }
+
+    service.send_chat_message = fake_send_chat_message  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/conversations/conversation-1/messages",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "content": "girl with bikini",
+                "model": "think",
+                "attachments": [],
+            },
+        )
+
+    try:
+        assert response.status_code == 201
+        assert captured_content["content"] == "adult woman in swimwear, summer fashion portrait"
+        assert response.json()["user_message"]["content"] == "adult woman in swimwear, summer fashion portrait"
+
+        snapshot = await service.store.snapshot()
+        assert len(snapshot.moderation_audits) == 1
+        audit = next(iter(snapshot.moderation_audits.values()))
+        assert audit.surface == "chat_message"
+        assert audit.original_text == "girl with bikini"
+        assert audit.final_text == "adult woman in swimwear, summer fashion portrait"
+        assert audit.action == "rewrite"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_chat_endpoint_records_audit_before_hard_block(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+
+    async def hard_block(_: str):
+        return router_module.PromptModerationDecision(
+            result=router_module.ModerationResult.HARD_BLOCK,
+            action=router_module.ModerationAction.HARD_BLOCK,
+            risk_level=PromptRiskLevel.CRITICAL,
+            risk_score=95,
+            reason="sexual_minors",
+        )
+
+    monkeypatch.setattr(router_module, "check_prompt_safety", hard_block)
+    send_called = False
+
+    async def fake_send_chat_message(*_: object, **__: object) -> dict[str, object]:
+        nonlocal send_called
+        send_called = True
+        return {}
+
+    service.send_chat_message = fake_send_chat_message  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/conversations/conversation-1/messages",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "content": "blocked unsafe message",
+                "model": "think",
+                "attachments": [],
+            },
+        )
+
+    try:
+        assert response.status_code == 400
+        assert send_called is False
+
+        snapshot = await service.store.snapshot()
+        assert len(snapshot.moderation_audits) == 1
+        audit = next(iter(snapshot.moderation_audits.values()))
+        assert audit.surface == "chat_message"
+        assert audit.action == "hard_block"
+        assert audit.reason_code == "sexual_minors"
     finally:
         await service.shutdown()
 

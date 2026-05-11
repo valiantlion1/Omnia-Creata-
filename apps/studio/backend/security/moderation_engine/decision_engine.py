@@ -80,6 +80,24 @@ def decide_prompt_action(
             explanation=explanation,
         )
 
+    if age_ambiguity in {AgeAmbiguity.EXPLICIT_MINOR, AgeAmbiguity.IMPLIED_MINOR}:
+        return PromptModerationDecision(
+            result=ModerationResult.REVIEW,
+            action=ModerationAction.REVIEW,
+            risk_level=_max_risk_level(risk_level, PromptRiskLevel.HIGH),
+            risk_score=max(risk_score, 60),
+            reason=reason or "minor_signal",
+            provider_moderation="low",
+            provider_review_required=True,
+            age_ambiguity=age_ambiguity,
+            sexual_intent=sexual_intent,
+            context_type=context_type,
+            llm_used=llm_used,
+            llm_model=llm_model,
+            signals=tuple(signals),
+            explanation=explanation,
+        )
+
     if context_type in {ContextType.EXPLICIT_SEXUAL, ContextType.GRAPHIC_VIOLENCE, ContextType.SELF_HARM, ContextType.ILLEGAL}:
         return PromptModerationDecision(
             result=_block_result_for_reason(reason),

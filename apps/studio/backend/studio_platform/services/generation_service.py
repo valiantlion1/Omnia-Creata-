@@ -15,6 +15,7 @@ from ..models import (
     IdentityPlan,
     JobStatus,
     MediaAsset,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     PlanCatalogEntry,
     PromptSnapshot,
@@ -786,6 +787,7 @@ class GenerationService:
         reference_asset = None
         if reference_asset_id:
             reference_asset = await self.service.require_owned_model("assets", reference_asset_id, MediaAsset, identity_id)
+            self._assert_reference_asset_usable_for_generation(reference_asset)
         project = await self.service._resolve_generation_project(
             identity=identity,
             requested_project_id=project_id,
@@ -1006,6 +1008,30 @@ class GenerationService:
             flagged=False,
         )
         return job
+
+
+    def _assert_reference_asset_usable_for_generation(
+        self,
+        asset: MediaAsset,
+        *,
+        provider_error: bool = False,
+    ) -> None:
+        def fail(message: str) -> None:
+            if provider_error:
+                raise ProviderFatalError(message)
+            raise PermissionError(message)
+
+        if asset.deleted_at is not None:
+            fail("Reference image is no longer available for this generation")
+        if not self.service.library.asset_variant_exists(asset, "content"):
+            fail("Reference image file is not available for this generation")
+        if self.service.library.asset_protection_state(asset) == "blocked":
+            fail("Reference image is blocked and cannot be used for generation")
+        if self.service.library.asset_library_state(asset) in {"blocked", "failed", "generating"}:
+            fail("Reference image is not ready for generation")
+        visibility_effect = self.service.library.asset_moderation_visibility_effect(asset)
+        if visibility_effect == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW:
+            fail("Reference image is pending review and cannot be used for generation")
 
 
     async def _persist_generation_job_with_reservation(
@@ -1728,6 +1754,8 @@ class GenerationService:
 
 
     async def _read_asset_bytes(self, asset: MediaAsset, *, variant: str) -> tuple[bytes, str]:
+        if variant == "content":
+            self._assert_reference_asset_usable_for_generation(asset, provider_error=True)
         storage_key = self.service._resolve_asset_variant_storage_key(asset, variant)
         storage_kind = str(asset.metadata.get("storage_backend") or "").strip().lower()
         if storage_key and storage_kind:

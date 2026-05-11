@@ -18,6 +18,116 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.11.262`
+- Date: `2026-05-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The branded Studio domain is live, but Vercel-generated aliases should not remain as parallel user-facing entry points. Hidden beta traffic should converge on `studio.omniacreata.com` so auth redirects, analytics, noindex posture, and user trust stay on the branded host.
+- What:
+  `.262` adds an explicit root redirect for every `.vercel.app` host that reaches the Studio deployment to `https://studio.omniacreata.com/landing`, and expands the deep-path redirect to send matching paths to the branded Studio host. This closes the remaining bare-host gap where manually entering a Vercel app URL could still render the Studio landing shell directly.
+  Verification is focused on route/config safety: Studio `vercel.json` and `web/vercel.json` now contain both root and path host redirects for `.vercel.app` traffic; full live verification requires a fresh Vercel deployment because routing config is deployment-scoped.
+
+### `0.6.0-alpha` / build `2026.05.11.261`
+- Date: `2026-05-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Crash recovery moved the deployment checklist from memory back into current repo and live evidence. The platform preflight also exposed a Windows-specific env parsing issue: PowerShell-created UTF-8 env files can begin with a BOM character, which made the first key look missing even when it was present.
+- What:
+  `.261` hardens Studio deployment preflight so `.env.platform` / `.env.staging` files tolerate a UTF-8 BOM on the first key. It also adds `apps/studio/deploy/.env.platform` to the root git ignore list because that file is a secret-bearing local Render/Supabase checklist and must not be committed. A current redacted platform preflight using the configured local secrets now passes the canonical Vercel/Render/Supabase topology, Supabase/Postgres/JWT credentials, OpenAI protected-beta chat lane, Runware image lane, and disabled billing gate; the remaining hard blocker is `REDIS_URL`, which is expected to come from Render Key Value when the backend stack is provisioned.
+  Verification on `.261` is focused on deployment safety: from repo root, `python -m pytest apps/studio/backend/tests/test_deployment_preflight.py -q` passes with `7 passed`, and a redacted platform preflight against a temporary env file now correctly reads `ENVIRONMENT=staging` and reports only `REDIS_URL` as a critical missing secret.
+
+### `0.6.0-alpha` / build `2026.05.11.260`
+- Date: `2026-05-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio is now reachable on `studio.omniacreata.com`, but this is still a hidden production beta rather than a public launch. Search engines and crawlers should not treat the Studio surface as indexable while access is invite-only and payment/provider gates are still closed.
+- What:
+  `.260` makes Studio web builds fail closed for indexing. The Vite SEO plugin now defaults to hidden-beta indexing, canonical route metadata can emit `noindex,nofollow,noarchive`, generated `robots.txt` disallows all crawlers, hidden-beta builds emit an empty sitemap, and both Studio Vercel configs add an `X-Robots-Tag: noindex, nofollow, noarchive` header. It also adds a Studio `.vercelignore` so local secrets, logs, runtime data, and build leftovers are not sent with the Vercel deployment package. Public launch can still explicitly opt into indexing later with `VITE_STUDIO_ALLOW_INDEXING=true`.
+  Verification on `.260` is focused on the hidden-beta web indexing lock: from `apps/studio/web`, `npm run test:ci -- src/lib/__tests__/studioSeo.test.ts` passes with `4 passed`, `npm run type-check` passes, `npm run build` passes, built `dist/robots.txt` disallows all crawlers, built `dist/sitemap.xml` contains no public URL entries, and built `dist/index.html` contains `noindex,nofollow,noarchive`.
+
+### `0.6.0-alpha` / build `2026.05.10.259`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The authenticated-session gate from `.258` blocked unapproved users, but it still created a Studio identity/workspace before returning the hidden-beta access-request response. For a truly closed beta, unapproved sessions should stay as pending access requests until approved, not become full Studio identities first.
+- What:
+  `.259` moves the invite-only decision ahead of identity creation for authenticated sessions. Unapproved sessions now record the same access-request context and stop before `ensure_identity`; persisted owner/root/admin/local-access identities still bypass the public queue, and deleted-account sessions still return the deleted-account response instead of being converted into access requests.
+  Verification on `.259` is focused on the pre-bootstrap auth gate: from `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "auth_me_route or invite_only or access_request or get_current_user_records_pending_access_request"` passes with `8 passed, 83 deselected`, `python -m pytest tests/test_service_regressions.py -q -k "invite_only_access or privileged_overrides"` passes with `2 passed, 97 deselected`, and `python -m compileall studio_platform security` passes.
+
+### `0.6.0-alpha` / build `2026.05.10.258`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Hidden beta access must stay closed even when a request already carries a server-recognized authenticated session. OAuth and email/password entry already create pending access requests for unapproved users, but `/auth/me` also needed to re-check the same gate before bootstrapping an identity from an authenticated session.
+- What:
+  `.258` applies the invite-only access decision to `/auth/me` authenticated-session bootstrap. Unapproved authenticated sessions now receive the same clean access-request `403` response, a pending request is recorded with email, username, provider, country, referrer, host, masked IP, and user-agent context, while owner/root/admin/local-access identities still bypass the public queue.
+  Verification on `.258` is focused on the hidden-beta auth gate: from `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "auth_me_route or invite_only or access_request or get_current_user_records_pending_access_request"` passes with `8 passed, 83 deselected`, `python -m pytest tests/test_service_regressions.py -q -k "invite_only_access or privileged_overrides"` passes with `2 passed, 97 deselected`, and `python -m compileall studio_platform security` passes.
+
+### `0.6.0-alpha` / build `2026.05.10.257`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Chat attachments needed the same proof boundary as imported assets and generation references. A payload that only claims to be an image, or an owned asset already hidden pending review, should not reach assistant context or Chat-backed visual handoff as a trusted reference.
+- What:
+  `.257` adds a Chat attachment gate before assistant processing for both new messages and message edits. Raw `data:` image attachments are now decoded and verified as real PNG/JPEG/WebP/GIF payloads, `/v1/assets/...` references must include an owned asset id, and deleted, missing-file, blocked, failed/generating, or `hidden_pending_review` owned assets are rejected. `private_only` owner references remain usable for private creative continuation.
+  Verification on `.257` is focused on Chat attachment safety: from `apps/studio/backend`, `python -m pytest tests/test_service_regressions.py -q -k "chat_message or attachment or reference_asset or reference_image or import_asset_from_data_url"` passes with `11 passed, 88 deselected`, `python -m compileall studio_platform` passes, and `python -m pytest tests/test_service_regressions.py tests/test_versioning.py -q -k "chat_message or attachment or reference_asset or reference_image or import_asset_from_data_url or version"` passes with `14 passed, 88 deselected`.
+
+### `0.6.0-alpha` / build `2026.05.10.256`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Reference images needed the same moderation boundary as public/share surfaces. A reported or blocked asset should not be able to bypass review by being reused as a source image in Create or Chat-backed generation, but a private-only owner asset should still be usable so moderation does not over-block normal private work.
+- What:
+  `.256` adds a generation reference-image gate at both request admission and worker execution. Blocked, deleted, missing-file, failed/generating, or `hidden_pending_review` assets are rejected before they reach providers. `private_only` owner references remain allowed for private creative continuation.
+  Verification on `.256` is focused on reference safety: from `apps/studio/backend`, `python -m pytest tests/test_service_regressions.py -q -k "reference_asset or reference_image or import_asset_from_data_url"` passes with `5 passed, 91 deselected`, and `python -m compileall studio_platform` passes.
+
+### `0.6.0-alpha` / build `2026.05.10.255`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The public-report lane needed to propagate moderation state beyond the post record itself. A reported post was already hidden pending review, but its linked asset also needs to carry that visibility effect so existing or future asset-share paths cannot bypass the review state.
+- What:
+  `.255` propagates public-post report visibility effects onto the post's linked assets. When a report opens, the post is hidden pending review and its cover/asset set now receives `visibility_effect=hidden_pending_review`, which makes public asset share lookup fail through the `.254` share gate. When the moderation case is resolved back to `none`, the linked asset visibility effect is cleared unless the asset is still independently review-routed by its generation metadata.
+  Verification on `.255` is focused on moderation/share propagation: from `apps/studio/backend`, `python -m pytest tests/test_moderation_cases.py -q` passes with `4 passed`, and `python -m pytest tests/test_security_hardening.py -q -k "share or review_routed or blocked_asset or update_post"` passes with `17 passed, 15 deselected`.
+
+### `0.6.0-alpha` / build `2026.05.10.254`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The public/share layer needed to obey the same moderation boundary as the generation and public-post layers. A review-routed output should stay private until moderation is resolved; it should not become externally reachable only because the asset file itself is ready.
+- What:
+  `.254` makes asset share eligibility moderation-aware. Assets marked with `visibility_effect=private_only` or `moderation_tier=low` are no longer eligible for public asset share links or project share links, and existing public share lookups stop resolving if the linked asset later becomes review-routed. Normal ready, truthful, non-demo assets remain shareable.
+  Verification on `.254` is focused on share safety: from `apps/studio/backend`, `python -m pytest tests/test_security_hardening.py -q -k "share or review_routed or blocked_asset"` passes with `16 passed, 16 deselected`, and `python -m pytest tests/test_service_regressions.py -q -k "public_share or share_rejects or no_truthful_assets or blocked_public_post or nonshareable"` passes with `7 passed, 87 deselected`.
+
+### `0.6.0-alpha` / build `2026.05.10.253`
+- Date: `2026-05-10`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio's moderation engine needed one more launch-safety pass that matches the intended hidden-beta posture: not everything sensitive should be blocked, but sensitive requests also should not silently pass as ordinary safe prompts. Chat also needed the same audit/rewrite treatment that generation prompts already had.
+- What:
+  `.253` tightens the layered prompt decision path. Nonsexual explicit-minor prompts now route to `review` with low provider moderation instead of falling through as a silent allow, while sexualized minor prompts remain hard-blocked. Chat message and chat edit routes now record moderation audit entries, preserve hard-block behavior before assistant processing, and pass safe rewritten text into Chat when the decision engine produces a rewrite. This keeps the policy layered as `allow / allow_with_log / rewrite / review / hard_block` without turning every sensitive prompt into a permanent block.
+  Verification on `.253` is focused on the moderation path: from `apps/studio/backend`, `python -m pytest tests/test_moderation.py -q` passes with `6 passed`, the focused router moderation shard passes with `11 passed, 15 deselected`, and `python -m compileall security studio_platform` passes.
+
+### `0.6.0-alpha` / build `2026.05.09.252`
+- Date: `2026-05-09`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio's live web/auth gate needed a production-env cleanup before the hidden beta surface is treated as trustworthy. The frontend could still inherit local or stale API/Supabase settings during production-style builds, which made login failures look like user/auth bugs instead of deployment wiring issues.
+- What:
+  `.252` makes the Studio web build read its own `web/.env*` files plus Vercel environment variables instead of inheriting the parent local `.env` during production builds. Production web defaults now fail closed when no verified Studio API URL is configured, auth/canonical/public web URLs default to the current Vercel Studio host, root Vercel SPA rewrites keep direct routes like `/login` and `/create` reachable, and the Docker web build no longer bakes a dead API endpoint by default. Local Supabase env fallbacks were aligned so browser, backend, and service-role values all point at the new `tfvkhefnrruemjkvlwwl` project, and Vercel production env was refreshed for the Studio auth URL, canonical URL, public web URL, Supabase URL, and Supabase anon key. The API URL remains intentionally unset in Vercel until a real backend API deployment is reachable.
+  Verification on `.252` is focused on the web live-gate config: from `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and the built `dist` contains no stale public API host, no old Supabase project ref, and no localhost API/OAuth endpoints. Production deployment `dpl_C9FjS4zb7JZTXTP8fwrCcVvwvRVH` is `Ready` on `https://omniacreata-studio.vercel.app`; live route checks for `/`, `/login`, and `/create` return `200`, and the live bundle contains the current Supabase project ref plus the Vercel Studio redirect base while leaving API calls fail-closed. Vercel production env for `omniacreata-studio` no longer contains `VITE_API_BASE_URL`; `studio.omniacreata.com` is attached to Vercel but still needs the DNS `A` record before it can be used as the canonical Studio host.
+
 ### `0.6.0-alpha` / build `2026.05.09.251`
 - Date: `2026-05-09`
 - Codename: `Foundation`

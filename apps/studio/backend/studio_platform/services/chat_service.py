@@ -8,10 +8,13 @@ from ..models import (
     ChatFeedback,
     ChatMessage,
     ChatRole,
+    MediaAsset,
+    ModerationVisibilityEffect,
     OmniaIdentity,
     StudioState,
     utc_now,
 )
+from ..asset_import_ops import parse_data_url_image
 from ..conversation_ops import (
     apply_chat_exchange_to_state,
     apply_message_feedback_to_state,
@@ -138,6 +141,10 @@ class ChatService:
             attachments=attachment_models,
             plan_catalog=self.service.plan_catalog,
             billing_state=billing_state,
+        )
+        await self._validate_chat_attachments(
+            identity_id=identity.id,
+            attachments=attachment_models,
         )
         sanitized_content = content.strip()
         if not sanitized_content and not attachment_models:
@@ -318,6 +325,10 @@ class ChatService:
             attachments=attachment_models,
             plan_catalog=self.service.plan_catalog,
             billing_state=billing_state,
+        )
+        await self._validate_chat_attachments(
+            identity_id=identity.id,
+            attachments=attachment_models,
         )
         user_turn_count = count_user_turns(messages)
         message_limit = entitlements.chat_message_limit
@@ -515,6 +526,49 @@ class ChatService:
             suggested_actions=suggested_actions,
             metadata=metadata,
         )
+
+    async def _validate_chat_attachments(
+        self,
+        *,
+        identity_id: str,
+        attachments: List[ChatAttachment],
+    ) -> None:
+        for attachment in attachments:
+            if attachment.kind != "image":
+                continue
+            url = attachment.url.strip()
+            if url.startswith("data:"):
+                try:
+                    parse_data_url_image(url)
+                except ValueError as exc:
+                    raise ValueError("Chat image attachment is not a valid image") from exc
+
+            if attachment.asset_id:
+                try:
+                    asset = await self.service.require_owned_model(
+                        "assets",
+                        attachment.asset_id,
+                        MediaAsset,
+                        identity_id,
+                    )
+                except KeyError as exc:
+                    raise PermissionError("Chat image reference is not available") from exc
+                self._assert_chat_asset_attachment_usable(asset)
+            elif url.startswith("/v1/assets/"):
+                raise ValueError("Studio asset attachments must include an owned asset id")
+
+    def _assert_chat_asset_attachment_usable(self, asset: MediaAsset) -> None:
+        if asset.deleted_at is not None:
+            raise PermissionError("Chat image reference is no longer available")
+        if not self.service.library.asset_variant_exists(asset, "content"):
+            raise PermissionError("Chat image reference file is not available")
+        if self.service.library.asset_protection_state(asset) == "blocked":
+            raise PermissionError("Chat image reference is blocked and cannot be used")
+        if self.service.library.asset_library_state(asset) in {"blocked", "failed", "generating"}:
+            raise PermissionError("Chat image reference is not ready")
+        visibility_effect = self.service.library.asset_moderation_visibility_effect(asset)
+        if visibility_effect == ModerationVisibilityEffect.HIDDEN_PENDING_REVIEW:
+            raise PermissionError("Chat image reference is pending review and cannot be used")
 
     def _messages_before_turn(self, messages: List[ChatMessage], user_message_id: str) -> List[ChatMessage]:
         ordered = sorted(messages, key=lambda item: item.created_at)

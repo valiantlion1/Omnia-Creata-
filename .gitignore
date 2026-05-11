@@ -59,6 +59,7 @@ yarn-error.log*
 .env.local
 .env.*.local
 apps/studio/deploy/.env.staging
+apps/studio/deploy/.env.platform
 local.properties
 
 # Platform / package cache

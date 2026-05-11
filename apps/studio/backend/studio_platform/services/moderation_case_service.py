@@ -79,6 +79,34 @@ class ModerationCaseService:
             post.visibility = Visibility.PRIVATE
         post.updated_at = utc_now()
         state.posts[post.id] = post
+        self._apply_post_asset_visibility_effect_locked(
+            state=state,
+            post=post,
+            visibility_effect=visibility_effect,
+        )
+
+    def _apply_post_asset_visibility_effect_locked(
+        self,
+        *,
+        state: StudioState,
+        post: PublicPost,
+        visibility_effect: ModerationVisibilityEffect,
+    ) -> None:
+        asset_ids = set(post.asset_ids)
+        if post.cover_asset_id:
+            asset_ids.add(post.cover_asset_id)
+        for asset_id in asset_ids:
+            asset = state.assets.get(asset_id)
+            if asset is None:
+                continue
+            if visibility_effect == ModerationVisibilityEffect.NONE:
+                if str(asset.metadata.get("moderation_tier") or "").strip().lower() == "low":
+                    asset.metadata["visibility_effect"] = ModerationVisibilityEffect.PRIVATE_ONLY.value
+                else:
+                    asset.metadata.pop("visibility_effect", None)
+            else:
+                asset.metadata["visibility_effect"] = visibility_effect.value
+            state.assets[asset.id] = asset
 
     async def get_case(self, case_id: str) -> ModerationCase:
         case = await self.service.store.get_model("moderation_cases", case_id, ModerationCase)
@@ -296,6 +324,11 @@ class ModerationCaseService:
                         post.visibility = Visibility.PRIVATE
                     post.updated_at = now
                     state.posts[post.id] = post
+                    self._apply_post_asset_visibility_effect_locked(
+                        state=state,
+                        post=post,
+                        visibility_effect=resolved_effect,
+                    )
 
         await self.service.store.mutate(mutation)
         resolved = await self.get_case(case.id)

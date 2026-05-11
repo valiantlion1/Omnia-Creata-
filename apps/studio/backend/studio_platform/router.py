@@ -334,12 +334,53 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
     async def _ensure_identity_for_auth_user(auth_user: Optional[AuthUser], request: Request | None = None) -> AuthUser:
         current = _require_auth(auth_user)
         metadata = getattr(current, "metadata", {}) or {}
+        email = current.email or f"{current.id}@omnia.local"
+        display_name = getattr(current, "username", None) or current.email or "Omnia User"
+        username = metadata.get("username") or getattr(current, "username", None) or None
+        raw_auth_providers = metadata.get("auth_providers")
+        auth_providers = [
+            str(provider).strip().lower()
+            for provider in raw_auth_providers
+            if str(provider).strip()
+        ] if isinstance(raw_auth_providers, list) else []
+        auth_provider = str(metadata.get("auth_provider") or "").strip().lower() or None
+        if settings.invite_only_access_enabled:
+            tombstone = await service.get_deleted_identity_tombstone(current.id)
+            if tombstone is not None:
+                _raise_deleted_identity_session(
+                    DeletedIdentityError(current.id, deleted_at=tombstone.deleted_at)
+                )
+            try:
+                existing_identity = await service.get_identity(current.id)
+            except KeyError:
+                existing_identity = None
+            if existing_identity is None or not (
+                existing_identity.owner_mode or existing_identity.root_admin or existing_identity.local_access
+            ):
+                decision = await service.evaluate_access_gate(
+                    email=email,
+                    display_name=display_name,
+                    username=username,
+                    auth_provider=auth_provider,
+                    auth_providers=auth_providers,
+                    source="authenticated_session",
+                    country_code=_request_country_code(request) if request is not None else None,
+                    referrer=request.headers.get("referer") if request is not None else None,
+                    host_label=request.headers.get("host") if request is not None else None,
+                    client_ip=_request_client_ip(request) if request is not None else None,
+                    user_agent=request.headers.get("user-agent") if request is not None else None,
+                )
+                if not decision.get("allowed"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Studio access request received. We will review it before enabling Studio access.",
+                    )
         try:
             await service.ensure_identity(
                 user_id=current.id,
-                email=current.email or f"{current.id}@omnia.local",
-                display_name=getattr(current, "username", None) or current.email or "Omnia User",
-                username=metadata.get("username") or None,
+                email=email,
+                display_name=display_name,
+                username=username,
                 **_identity_consent_kwargs(metadata),
             )
         except DeletedIdentityError as exc:
@@ -828,7 +869,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             if has_auth_header:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
         if current_user is not None:
-            await _touch_access_session(request, current_user)
+            await _ensure_identity_for_auth_user(current_user, request=request)
         try:
             return await service.get_public_identity(current_user)
         except DeletedIdentityError as exc:
@@ -1363,6 +1404,15 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:message", limit=60, identifier=auth_user.id)
         moderation_decision = await check_prompt_safety(payload.content)
+        moderated_content = moderation_decision.rewritten_prompt or payload.content
+        if payload.content.strip() or moderation_decision.action != ModerationAction.ALLOW:
+            await service.record_prompt_moderation_audit(
+                surface="chat_message",
+                identity_id=auth_user.id,
+                original_text=payload.content,
+                final_text=moderated_content,
+                decision=moderation_decision,
+            )
         if moderation_decision.action == ModerationAction.HARD_BLOCK:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1372,7 +1422,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             result = await service.send_chat_message(
                 auth_user.id,
                 conversation_id,
-                payload.content,
+                moderated_content,
                 model=payload.model,
                 attachments=[attachment.model_dump(mode="json") for attachment in payload.attachments],
             )
@@ -1399,6 +1449,15 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
         auth_user = await _ensure_identity_for_auth_user(current_user)
         await _consume_rate_limit(request, "chat:edit-message", limit=24, identifier=auth_user.id)
         moderation_decision = await check_prompt_safety(payload.content)
+        moderated_content = moderation_decision.rewritten_prompt or payload.content
+        if payload.content.strip() or moderation_decision.action != ModerationAction.ALLOW:
+            await service.record_prompt_moderation_audit(
+                surface="chat_message_edit",
+                identity_id=auth_user.id,
+                original_text=payload.content,
+                final_text=moderated_content,
+                decision=moderation_decision,
+            )
         if moderation_decision.action == ModerationAction.HARD_BLOCK:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1409,7 +1468,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 auth_user.id,
                 conversation_id,
                 message_id,
-                payload.content,
+                moderated_content,
                 model=payload.model,
                 attachments=[attachment.model_dump(mode="json") for attachment in payload.attachments],
             )

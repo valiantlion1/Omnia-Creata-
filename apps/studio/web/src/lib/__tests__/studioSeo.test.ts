@@ -4,6 +4,7 @@ import {
   STUDIO_SITE_NAME,
   formatStudioDocumentTitle,
   getStudioSeoPayload,
+  renderStudioRobots,
   renderStudioSitemap,
 } from '@/lib/studioSeo'
 
@@ -30,5 +31,15 @@ describe('studioSeo', () => {
     expect(sitemap).toContain('<loc>https://studio.omniacreata.com/help</loc>')
     expect(sitemap).not.toContain('<loc>https://studio.omniacreata.com/privacy</loc>')
     expect(sitemap).not.toContain('<loc>https://studio.omniacreata.com/billing</loc>')
+  })
+
+  it('can render hidden-beta noindex metadata and robots output', () => {
+    const seo = getStudioSeoPayload('/landing', { allowIndexing: false })
+    const robots = renderStudioRobots(undefined, { allowIndexing: false })
+    const sitemap = renderStudioSitemap(undefined, { allowIndexing: false })
+
+    expect(seo.robots).toBe('noindex,nofollow,noarchive')
+    expect(robots).toBe('User-agent: *\nDisallow: /\n')
+    expect(sitemap).not.toContain('<loc>')
   })
 })

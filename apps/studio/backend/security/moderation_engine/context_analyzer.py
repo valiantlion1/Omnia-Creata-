@@ -45,7 +45,7 @@ def analyze_context(parsed: ParsedPrompt) -> ContextAnalysis:
     if has_explicit_minor:
         age_ambiguity = AgeAmbiguity.EXPLICIT_MINOR
         signals.append("explicit_minor_signal")
-        risk_score += 85
+        risk_score += 60
         reason_code = reason_code or "minor_signal"
     elif has_ambiguous_youth and (has_swimwear or has_lingerie or has_suggestive or has_explicit_sexual):
         age_ambiguity = AgeAmbiguity.AMBIGUOUS

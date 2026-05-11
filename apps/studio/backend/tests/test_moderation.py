@@ -51,6 +51,19 @@ async def test_moderation_hard_blocks_minor_sexualization() -> None:
 
 
 @pytest.mark.asyncio
+async def test_moderation_routes_nonsexual_minor_prompt_to_review_not_block() -> None:
+    decision = await moderate_generation_prompt(
+        "Warm documentary portrait of a child painting at a family art table."
+    )
+
+    assert decision.result == ModerationResult.REVIEW
+    assert decision.action == ModerationAction.REVIEW
+    assert decision.reason == "minor_signal"
+    assert decision.provider_moderation == "low"
+    assert decision.provider_review_required is True
+
+
+@pytest.mark.asyncio
 async def test_moderation_rewrites_ambiguous_swimwear_prompt_to_explicit_adult_fashion_prompt() -> None:
     decision = await moderate_generation_prompt("girl with bikini")
 

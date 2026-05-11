@@ -1129,7 +1129,14 @@ class StudioService(StudioServiceDelegatesMixin):
         model: str | None = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        return await self.chat.edit_chat_message(identity_id=identity_id, conversation_id=conversation_id, message_id=message_id, content=content)
+        return await self.chat.edit_chat_message(
+            identity_id=identity_id,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            content=content,
+            model=model,
+            attachments=attachments,
+        )
     async def regenerate_chat_message(
         self,
         identity_id: str,

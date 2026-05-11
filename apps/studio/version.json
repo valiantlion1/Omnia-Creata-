@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.05.09.251",
+  "build": "2026.05.11.262",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-05-09",
-  "notes": "Studio hidden-beta control pass: unapproved signup stays as an access request, guest account CTAs now say request access, and self-service account deletion uses a cancelable 30-day countdown before permanent deletion processing."
+  "releaseDate": "2026-05-11",
+  "notes": "Studio canonical host hardening pass: every Vercel app alias reaching the Studio deployment now redirects to studio.omniacreata.com/landing or the matching branded Studio path, keeping hidden beta traffic on the branded domain while preserving noindex production headers."
 }

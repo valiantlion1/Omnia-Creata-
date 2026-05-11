@@ -987,12 +987,15 @@ async def test_auth_me_route_rejects_invalid_or_expired_session_when_auth_header
 @pytest.mark.asyncio
 async def test_auth_me_route_bootstraps_identity_for_authenticated_user(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    settings.studio_access_mode = "open"
 
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/v1/auth/me", headers={"X-Test-User": "user-1"})
-
     try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/v1/auth/me", headers={"X-Test-User": "user-1"})
+
         assert response.status_code == 200
         payload = response.json()
         assert payload["guest"] is False
@@ -1003,6 +1006,66 @@ async def test_auth_me_route_bootstraps_identity_for_authenticated_user(tmp_path
         identity = await service.get_identity("user-1")
         assert identity.username == "user-1"
     finally:
+        settings.studio_access_mode = original_access_mode
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_auth_me_route_invite_only_blocks_unapproved_authenticated_session(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    settings = get_settings()
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+    settings.studio_owner_email = None
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get(
+                "/v1/auth/me",
+                headers={
+                    "X-Test-User": "local-token-user",
+                    "X-Test-Email": "LocalUser@Example.com",
+                    "X-Test-Username": "local-token-user",
+                    "X-Test-Auth-Provider": "email",
+                    "cf-connecting-ip": "203.0.113.44",
+                    "cf-ipcountry": "DE",
+                    "referer": "https://www.omniacreata.com/en",
+                    "user-agent": "Mozilla/5.0 Chrome/123",
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {
+            "detail": "Studio access request received. We will review it before enabling Studio access."
+        }
+        requests = await service.list_access_requests()
+        assert len(requests) == 1
+        pending = requests[0]
+        assert pending["email"] == "localuser@example.com"
+        assert pending["username"] == "local-token-user"
+        assert pending["auth_provider"] == "email"
+        assert pending["auth_providers"] == ["email"]
+        assert pending["source"] == "authenticated_session"
+        assert pending["country_code"] == "DE"
+        assert pending["referrer"] == "https://www.omniacreata.com/en"
+        assert pending["ip_label"] == "203.0.*.*"
+        with pytest.raises(KeyError):
+            await service.get_identity("local-token-user")
+    finally:
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
         await service.shutdown()
 
 
@@ -2001,10 +2064,8 @@ async def test_admin_telemetry_route_rejects_header_only_root_admin_claim(tmp_pa
 
     try:
         assert response.status_code == 403
-        identity = await service.get_identity("root-1")
-        assert identity.owner_mode is False
-        assert identity.root_admin is False
-        assert identity.local_access is False
+        with pytest.raises(KeyError):
+            await service.get_identity("root-1")
     finally:
         await service.shutdown()
 
@@ -2141,7 +2202,8 @@ async def test_admin_access_request_routes_require_persisted_root_admin_and_appr
 
         assert denied.status_code == 403
         assert listed.status_code == 200
-        assert listed.json()["requests"][0]["id"] == request_id
+        listed_request_ids = [item["id"] for item in listed.json()["requests"]]
+        assert request_id in listed_request_ids
         assert approved.status_code == 200
         approved_payload = approved.json()["request"]
         assert approved_payload["status"] == "approved"
