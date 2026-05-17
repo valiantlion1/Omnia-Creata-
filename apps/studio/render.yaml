@@ -10,7 +10,7 @@ services:
     rootDir: apps/studio/backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /v1/healthz
+    healthCheckPath: /v1/healthz/ready
     disk:
       name: studio-runtime
       mountPath: /var/data/studio

@@ -18,6 +18,16 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.17.270`
+- Date: `2026-05-17`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Render reported `omnia-studio-api` health check timeouts. Live checks showed the detailed `/v1/healthz` endpoint can still answer `200` but be slow under operator telemetry work, while the new `/v1/healthz/ready` route is not available on the still-live `.269` Render deployment yet and returns `502 / x-render-routing: no-deploy` until the `.270` backend deploy lands.
+- What:
+  `.270` switches the Render web service HTTP health check from `/v1/healthz` to the faster `/v1/healthz/ready` readiness endpoint while keeping `/v1/healthz` and `/v1/healthz/detail` available for richer runtime truth. The Render blueprint regression now locks that path alongside the live Studio CORS and allowed-host contract.
+  Verification is focused on this deploy-stability slice: local proof after the patch must pass for the focused Render blueprint regression and the deployment preflight shard, then live proof must recheck `/v1/healthz/ready` after Render has deployed `.270`.
+
 ### `0.6.0-alpha` / build `2026.05.17.269`
 - Date: `2026-05-17`
 - Codename: `Foundation`

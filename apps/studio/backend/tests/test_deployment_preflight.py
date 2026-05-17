@@ -203,6 +203,7 @@ def test_deployment_preflight_accepts_canonical_platform_env_with_external_postg
 def test_render_blueprint_declares_live_studio_cors_and_host_boundaries() -> None:
     render_yaml = (STUDIO_ROOT / "render.yaml").read_text(encoding="utf-8")
 
+    assert "healthCheckPath: /v1/healthz/ready" in render_yaml
     assert render_yaml.count("key: CORS_ORIGINS") >= 2
     assert render_yaml.count("value: https://studio.omniacreata.com") >= 2
     assert render_yaml.count("key: ALLOWED_HOSTS") >= 2

@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.05.17.269",
+  "build": "2026.05.17.270",
   "codename": "Foundation",
   "status": "prelaunch",
   "releaseDate": "2026-05-17",
-  "notes": "Studio now keeps the live Studio domain in the backend CORS boundary and Render blueprint, so public plan/model API reads stay available from studio.omniacreata.com even if deployment env drifts."
+  "notes": "Studio now uses the fast readiness endpoint for Render HTTP health checks, reducing false instance restarts when detailed operator health work briefly waits on broker or persistence telemetry."
 }
