@@ -18,6 +18,77 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.17.269`
+- Date: `2026-05-17`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The live Studio frontend now depends on the Render API for public plan/model truth, so the canonical Studio domain must remain an explicit CORS origin instead of relying only on dashboard memory.
+- What:
+  `.269` makes the backend CORS origin list keep `https://studio.omniacreata.com` and the configured public web URL available, records the same CORS/allowed-host boundary in `render.yaml`, and adds regression tests for the live origin preflight plus Render blueprint contract.
+  Verification is focused on the live API boundary and guest public surfaces: from `apps/studio/backend`, the focused CORS preflight shard passes with `2 passed, 23 deselected`, and the focused deployment preflight/blueprint shard passes with `2 passed, 6 deselected`. Live direct API checks for `/v1/public/plans` and `/v1/models` from `Origin: https://studio.omniacreata.com` return `200` with `access-control-allow-origin: https://studio.omniacreata.com`. Live browser proof passes for `/landing`, `/subscription`, `/login`, and `/signup` on desktop/mobile where checked: subscription renders Free/Creator/Pro after the Render API request, landing logo targets `https://omniacreata.com`, login/signup expose Turnstile verification and keep submit disabled before verification, and guest `/create` redirects to `/login?next=%2Fcreate`. A broader `python -m pytest tests/test_deployment_preflight.py tests/test_main_security_headers.py -q` run timed out before completion and is not counted as green.
+
+### `0.6.0-alpha` / build `2026.05.16.268`
+- Date: `2026-05-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  The Studio landing header signature mark looked like a brand/home affordance, but clicking it only reloaded the Studio landing route. Visitors should be able to use that mark as the bridge back to the main OmniaCreata website while the Studio CTAs continue to route deeper into Studio.
+- What:
+  `.268` changes the Studio landing header signature from a local `/landing` button into a normal link to `https://omniacreata.com`, with the same visual treatment and no broader landing redesign.
+  Verification is focused on the touched live surface: from `apps/studio/web`, `npm run type-check` passes and `npm run build` passes. Production web deploy `dpl_96QNPSsYHW64o79r3Yp4K52hns6c` is `Ready` and aliased to `https://studio.omniacreata.com`. Live browser proof after deploy passes for `/landing` desktop and mobile with zero failed routes, zero console errors, and zero console warnings; the live accessibility snapshot exposes the header logo as `Open Omnia Creata website` with URL `https://omniacreata.com`, and a real click navigates to `https://www.omniacreata.com/en`.
+
+### `0.6.0-alpha` / build `2026.05.16.267`
+- Date: `2026-05-16`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Local stable Studio proof was still too easy to fool: the app could boot healthy while inheriting the shared Studio Postgres settings, making `/auth/demo-login` hang on remote state, and the production-shaped preview build could render without a local API base URL. Hidden-beta local proof also needed the development demo identity to pass the invite-only gate without weakening staging or production.
+- What:
+  `.267` makes `ops/start-studio-local.ps1` force `ENVIRONMENT=development`, a runtime-local SQLite state store, and a local `VITE_API_BASE_URL` unless `STUDIO_LOCAL_USE_POSTGRES` is explicitly enabled. The local verifier now checks demo login, `/auth/me`, the frontend shell, and the frontend `/v1/public/plans` API path. Development-only demo login now marks the demo identity as `local_access`, while staging/production still reject the endpoint.
+  Verification is focused on local runtime truth plus signed-in Studio surface proof: from `apps/studio/backend`, `python -m pytest tests/test_router_security.py -q -k "demo_login"` passes with `3 passed, 89 deselected`, and `python -m compileall studio_platform security` passes. From `apps/studio/web`, `npm run type-check` passes, `npm run build` passes, and signed-in browser proof on `127.0.0.1:5173` passes with zero failed routes for `/create` desktop/mobile and `/chat` desktop/mobile. `ops/verify-studio-local.ps1` reports `status=pass` with backend version, health, demo-login, `/auth/me`, frontend shell, and frontend API checks green.
+  Production web deploy `dpl_3H7kDxFWsnkRewXCNvaT1Uup6Lqt` is `Ready` and aliased to `https://studio.omniacreata.com`. Live guest proof after deploy passes on `studio.omniacreata.com` for `/landing`, `/subscription`, `/login`, `/signup`, and `/help` on desktop/mobile with zero failed routes and zero console errors or warnings; guest `/create` desktop and `/chat` mobile correctly redirect to `/login?next=...`. Production `VITE_API_BASE_URL` remains unset, so live signed-in/API-backed flows are still intentionally fail-closed until a verified backend API host is configured.
+
+### `0.6.0-alpha` / build `2026.05.13.266`
+- Date: `2026-05-13`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Hidden beta should not leave prompt drafts, active Create resume state, or lightweight Chat visual continuity behind on shared browsers after sign-out, while still preserving normal consent/theme/sidebar preferences. Asset delivery tokens are still intentionally URL-scoped, so the existing no-store/log-redaction guard needs a focused regression lock.
+- What:
+  `.266` adds a browser-local privacy clear helper, wires it into Studio sign-out, exposes a Settings privacy action for clearing local prompt and Chat continuity, and adds targeted tests so asset delivery token query values stay redacted from diagnostic text.
+  Verification is focused on the touched privacy/security surface: from `apps/studio/web`, `npm run test:ci -- src/lib/__tests__/localPrivacy.test.ts src/components/__tests__/StudioShell.test.tsx src/pages/__tests__/Settings.test.tsx` passes with `13 passed`, `npm run type-check` passes, and `npm run build` passes; from `apps/studio/backend`, `python -m pytest tests/test_security_redaction.py -q` passes with `2 passed`; from the repo root, `npm run repo:check` passes after removing ignored local build/test artifacts.
+
+### `0.6.0-alpha` / build `2026.05.12.265`
+- Date: `2026-05-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio's deployment examples should not drift from the server catalog or the hidden-beta security contract. A founder/operator setting up Render, Vercel, Supabase, and Turnstile needs one consistent map rather than old local pricing values or missing CAPTCHA fields.
+- What:
+  `.265` aligns the backend local env example with the current launch catalog price defaults, adds the same Turnstile CAPTCHA variables to backend, frontend, staging, and platform env examples, makes the staging example include the public API/auth URL values that deployment preflight and OAuth setup expect, and documents launch-shaped CORS/allowed-host boundaries for the Render API.
+  Verification is focused on launch setup and the current Create/Chat contract: from `apps/studio/backend`, `python -m pytest tests/test_backend_spine_ops.py tests/test_chat_ops.py tests/test_billing_ops.py tests/test_router_generation.py -q` passes with `103 passed, 6 skipped`; `python -m pytest tests/test_launch_readiness.py -q` passes with `27 passed`; from `apps/studio/web`, `npm run test:ci -- src/pages/__tests__/Create.test.tsx src/pages/__tests__/Chat.test.tsx` passes with `4 passed`, `npm run type-check` passes, and `npm run build` passes. From the repo root, `npm run repo:check` passes after removing ignored local test/build artifacts.
+
+### `0.6.0-alpha` / build `2026.05.12.264`
+- Date: `2026-05-12`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio needs Create and Chat to match the actual product promise before hidden beta: Create should unlock model lanes through either paid plan level or available wallet credits, while Chat should behave like a subscription workspace rather than charging per message or per inline image.
+- What:
+  `.264` separates Create and Chat entitlement behavior without redesigning the main product flow. Create model validation now allows higher lanes when the user has enough wallet credits even if their plan is lower, and the model picker labels those lanes as credit-unlocked instead of fully locked. Chat visual generation now carries `source=chat`, requires subscription-level Chat access, records `source_surface=chat`, and settles generated images as subscription-included with zero credit spend. Chat's visual blueprint also chooses more context-aware image lanes for reference/edit, product/interior, cinematic/editorial, stylized, typography, brand, and premium requests instead of treating every visual turn as one default model.
+  Verification is focused on this contract: from `apps/studio/backend`, `python -m pytest tests/test_backend_spine_ops.py tests/test_chat_ops.py tests/test_billing_ops.py tests/test_router_generation.py -q` passes with `103 passed, 6 skipped`; the focused Chat regression shard passes with `5 passed, 94 deselected`; from `apps/studio/web`, `npm run test:ci -- src/pages/__tests__/Create.test.tsx src/pages/__tests__/Chat.test.tsx` passes with `4 passed`; and `npm run type-check` passes.
+
+### `0.6.0-alpha` / build `2026.05.11.263`
+- Date: `2026-05-11`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Studio needs a clean revenue path without pretending checkout is ready before a real non-Paddle provider is selected. Hidden beta can stay useful with checkout closed, but public paid launch must fail closed until subscriptions, credit packs, receipts, refunds, taxes, and webhook handling are proven.
+- What:
+  `.263` adds an explicit `payment_provider` launch-readiness check. `BILLING_BACKBONE_PROVIDER=none` is now a protected-beta-safe warning because paid checkout is intentionally closed, retired Paddle remains blocked, local demo checkout is development-only, and any future provider stays a public-paid warning until integration is verified end to end. Public paid platform readiness now stays blocked on `payment_provider` even when model/provider/economics checks are otherwise green.
+  Verification is focused on the revenue-readiness gate: from `apps/studio/backend`, `python -m pytest tests/test_launch_readiness.py -q` passes with `27 passed`.
+
 ### `0.6.0-alpha` / build `2026.05.11.262`
 - Date: `2026-05-11`
 - Codename: `Foundation`

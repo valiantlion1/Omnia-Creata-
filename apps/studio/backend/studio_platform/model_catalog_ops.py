@@ -319,7 +319,14 @@ def serialize_model_catalog_for_identity(
         model=model,
         identity_plan=effective_plan,
         providers=providers,
-        wallet_backed=effective_plan == IdentityPlan.FREE and max(int(identity.extra_credits or 0), 0) > 0,
+        wallet_backed=effective_plan == IdentityPlan.FREE and (
+            (
+                max(int(billing_state.extra_credits or 0), 0)
+                if billing_state is not None
+                else max(int(identity.extra_credits or 0), 0)
+            )
+            > 0
+        ),
     )
     serialized = model.model_dump(mode="json")
     serialized["label"] = creative_profile.label
@@ -340,15 +347,26 @@ def validate_model_for_identity(
     billing_state: BillingStateSnapshot | None = None,
 ) -> None:
     effective_plan = billing_state.effective_plan if billing_state is not None else identity.plan
-    if effective_plan == IdentityPlan.FREE and model.min_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO}:
-        required_label = "Creator" if model.min_plan == IdentityPlan.CREATOR else "Pro"
-        raise PermissionError(f"This model requires {required_label}")
-    if effective_plan == IdentityPlan.CREATOR and model.min_plan == IdentityPlan.PRO:
-        raise PermissionError("This model requires Pro")
     if effective_plan == IdentityPlan.GUEST:
         raise PermissionError("Guests cannot generate images")
     if model.owner_only and not (identity.owner_mode or identity.root_admin or identity.local_access):
         raise PermissionError("This model is not available for self-serve generation")
+    wallet_credits = (
+        max(int(billing_state.extra_credits or 0), 0)
+        if billing_state is not None
+        else max(int(identity.extra_credits or 0), 0)
+    )
+    wallet_spend = (
+        max(int(billing_state.available_to_spend or 0), 0)
+        if billing_state is not None
+        else wallet_credits
+    )
+    wallet_backed = wallet_credits > 0 or wallet_spend > 0
+    if effective_plan == IdentityPlan.FREE and model.min_plan in {IdentityPlan.CREATOR, IdentityPlan.PRO} and not wallet_backed:
+        required_label = "Creator" if model.min_plan == IdentityPlan.CREATOR else "Pro"
+        raise PermissionError(f"This model requires {required_label} or wallet credits")
+    if effective_plan == IdentityPlan.CREATOR and model.min_plan == IdentityPlan.PRO and not wallet_backed:
+        raise PermissionError("This model requires Pro or wallet credits")
 
 
 def validate_dimensions_for_model(

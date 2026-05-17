@@ -298,6 +298,7 @@ export type Generation = {
   session_status?: string
   library_state?: 'generating' | 'ready' | 'failed' | 'blocked'
   project_id: string
+  source_surface?: 'create' | 'chat'
   provider: string
   provider_rollout_tier?: string | null
   provider_billable?: boolean | null
@@ -1280,6 +1281,7 @@ export const studioApi = {
   },
   createGeneration: (payload: {
     project_id: string
+    source?: 'create' | 'chat'
     prompt: string
     negative_prompt: string
     reference_asset_id?: string | null

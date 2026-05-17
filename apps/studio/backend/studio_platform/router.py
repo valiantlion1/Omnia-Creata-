@@ -177,6 +177,7 @@ class PromptImproveRequest(BaseModel):
 class GenerationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     project_id: str
+    source: Literal["create", "chat"] = "create"
     prompt: str = Field(min_length=1, max_length=2000)
     negative_prompt: str = Field(default="", max_length=500)
     reference_asset_id: Optional[str] = None
@@ -662,13 +663,14 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
             role=UserRole.USER,
             is_active=True,
             is_verified=True,
-            metadata={"owner_mode": False, "local_access": False},
+            metadata={"owner_mode": False, "local_access": True},
         )
         identity = await service.ensure_identity(
             user_id=demo_user.id,
             email=demo_user.email,
             display_name=payload.display_name,
             desired_plan=payload.plan,
+            local_access=True,
         )
         tokens = create_user_tokens(demo_user)
         session_context = extract_unverified_session_context(tokens["access_token"])
@@ -1639,6 +1641,7 @@ def create_router(service: StudioService, rate_limiter: RateLimiter) -> APIRoute
                 negative_prompt=payload.negative_prompt,
                 reference_asset_id=payload.reference_asset_id,
                 model_id=payload.model,
+                source_surface=payload.source,
                 width=payload.width,
                 height=payload.height,
                 steps=payload.steps,

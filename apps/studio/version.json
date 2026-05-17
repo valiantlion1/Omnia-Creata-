@@ -3,9 +3,9 @@
   "brand": "OmniaCreata",
   "version": "0.6.0-alpha",
   "channel": "alpha",
-  "build": "2026.05.11.262",
+  "build": "2026.05.17.269",
   "codename": "Foundation",
   "status": "prelaunch",
-  "releaseDate": "2026-05-11",
-  "notes": "Studio canonical host hardening pass: every Vercel app alias reaching the Studio deployment now redirects to studio.omniacreata.com/landing or the matching branded Studio path, keeping hidden beta traffic on the branded domain while preserving noindex production headers."
+  "releaseDate": "2026-05-17",
+  "notes": "Studio now keeps the live Studio domain in the backend CORS boundary and Render blueprint, so public plan/model API reads stay available from studio.omniacreata.com even if deployment env drifts."
 }

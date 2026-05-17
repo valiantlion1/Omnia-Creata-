@@ -193,7 +193,7 @@ describe('CreatePage model picker', () => {
     )
   })
 
-  it('shows model family names and keeps higher-tier models locked on a free account', async () => {
+  it('shows model family names and unlocks higher-tier models when wallet credits are available', async () => {
     renderWithProviders(<CreatePage />, { route: '/create' })
 
     await waitFor(() => {
@@ -213,9 +213,9 @@ describe('CreatePage model picker', () => {
     expect(screen.queryByText(/nano-banana-2/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/\[klein\]|\[max\]/i)).not.toBeInTheDocument()
 
-    const premiumModelButton = screen.getByText(/^creator$/i).closest('button')
-    expect(premiumModelButton).toBeDisabled()
-    expect(screen.getByText(/^locked$/i)).toBeInTheDocument()
+    const premiumModelButton = screen.getByText(/^credit unlock$/i).closest('button')
+    expect(premiumModelButton).not.toBeDisabled()
+    expect(screen.queryByText(/^locked$/i)).not.toBeInTheDocument()
   })
 
   it('restores session settings from history and hides stale preview tiles when variation count changes', async () => {

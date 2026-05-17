@@ -388,6 +388,50 @@ async def test_generation_endpoint_returns_routing_metadata(tmp_path: Path, monk
 
 
 @pytest.mark.asyncio
+async def test_generation_endpoint_passes_chat_source_surface(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    monkeypatch.setattr(router_module, "check_prompt_safety", _safe_prompt)
+    captured: dict[str, object] = {}
+
+    async def fake_create_generation(**kwargs: object) -> GenerationJob:
+        captured.update(kwargs)
+        return _build_generation_job(source_surface=str(kwargs["source_surface"]))
+
+    service.create_generation = fake_create_generation  # type: ignore[method-assign]
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/generations",
+            headers={"X-Test-User": "user-1"},
+            json={
+                "project_id": "project-1",
+                "source": "chat",
+                "prompt": "editorial portrait",
+                "negative_prompt": "",
+                "model": "flux-schnell",
+                "width": 1024,
+                "height": 1024,
+                "steps": 28,
+                "cfg_scale": 6.5,
+                "seed": 1,
+                "aspect_ratio": "1:1",
+                "output_count": 1,
+            },
+        )
+
+    try:
+        assert response.status_code == 202
+        assert captured["source_surface"] == "chat"
+        assert response.json()["source_surface"] == "chat"
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_generation_capacity_uses_repository_status_counts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1119,7 +1119,7 @@ export default function ChatPage() {
       }
 
       const generation = await studioApi.createGeneration({
-        project_id: projectId, prompt: executionPlan.prompt, negative_prompt: executionPlan.negativePrompt, model: executionPlan.model,
+        project_id: projectId, source: 'chat', prompt: executionPlan.prompt, negative_prompt: executionPlan.negativePrompt, model: executionPlan.model,
         reference_asset_id: referenceAssetId,
         width: executionPlan.width, height: executionPlan.height, steps: executionPlan.steps, cfg_scale: executionPlan.cfgScale,
         seed: Math.floor(Math.random() * 1_000_000_000),

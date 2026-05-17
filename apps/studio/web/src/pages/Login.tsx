@@ -132,7 +132,7 @@ export default function LoginPage() {
         </div>
 
         <div className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="max-w-2xl">
+          <div className="min-w-0 max-w-2xl">
             <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Log in</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white font-display md:text-6xl md:leading-[1.02]">Pick up where you <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, rgb(var(--primary-light)), rgb(var(--accent)))' }}>left off</span>.</h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-zinc-300 md:text-base">
@@ -140,7 +140,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form className="space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.4)' }}>
+          <form className="min-w-0 space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', boxShadow: 'var(--border-glow), 0 24px 80px rgba(0,0,0,0.4)' }}>
             <button
               type="button"
               onClick={() => handleProvider('google')}

@@ -25,6 +25,7 @@ from studio_platform.service import StudioService
 from studio_platform.studio_model_contract import (
     STUDIO_DEFAULT_IMAGE_MODEL_ID,
     STUDIO_FAST_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
     STUDIO_SIGNATURE_MODEL_ID,
     STUDIO_STANDARD_MODEL_ID,
     normalize_studio_model_id,
@@ -132,7 +133,60 @@ def test_validate_model_for_identity_honors_effective_free_plan_when_subscriptio
         subscription_active=False,
     )
 
-    with pytest.raises(PermissionError, match="requires Pro"):
+    with pytest.raises(PermissionError, match="not available for self-serve"):
+        validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
+
+
+def test_validate_model_for_identity_allows_wallet_backed_free_generation() -> None:
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        extra_credits=24,
+    )
+    model = get_model_catalog_entry_or_raise(STUDIO_PREMIUM_MODEL_ID)
+    billing_state = BillingStateSnapshot(
+        gross_remaining=24,
+        reserved_total=0,
+        available_to_spend=24,
+        monthly_remaining=0,
+        monthly_allowance=0,
+        extra_credits=24,
+        unlimited=False,
+        effective_plan=IdentityPlan.FREE,
+        subscription_active=False,
+    )
+
+    validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
+
+
+def test_validate_model_for_identity_blocks_free_generation_without_wallet_credits() -> None:
+    identity = OmniaIdentity(
+        id="user-1",
+        email="user@example.com",
+        display_name="User One",
+        username="userone",
+        workspace_id="ws-user-1",
+        plan=IdentityPlan.FREE,
+        extra_credits=0,
+    )
+    model = get_model_catalog_entry_or_raise(STUDIO_PREMIUM_MODEL_ID)
+    billing_state = BillingStateSnapshot(
+        gross_remaining=0,
+        reserved_total=0,
+        available_to_spend=0,
+        monthly_remaining=0,
+        monthly_allowance=0,
+        extra_credits=0,
+        unlimited=False,
+        effective_plan=IdentityPlan.FREE,
+        subscription_active=False,
+    )
+
+    with pytest.raises(PermissionError, match="requires Creator or wallet credits"):
         validate_model_for_identity(identity=identity, model=model, billing_state=billing_state)
 
 

@@ -23,6 +23,7 @@ _STUDIO_ROOT = _BACKEND_DIR.parent
 _ENV_FILE = str(_STUDIO_ROOT / ".env")
 logger = logging.getLogger("omnia.studio.env")
 _DEVELOPMENT_JWT_FALLBACK = "dev-jwt-secret-0123456789abcdef0123456789abcdef"
+_CANONICAL_STUDIO_ORIGIN = "https://studio.omniacreata.com"
 
 
 def reveal_secret(value: SecretStr | str | None) -> str:
@@ -125,6 +126,16 @@ def is_launch_safe_public_url(value: str | None) -> bool:
         and "localhost" not in host
         and "127.0.0.1" not in host
     )
+
+
+def public_origin_from_url(value: str | None) -> str:
+    normalized = str(value or "").strip()
+    if not normalized or is_placeholder_secret_value(normalized):
+        return ""
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 class Environment(str, Enum):
@@ -334,7 +345,16 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins: List[str] = []
+        for origin in self.cors_origins.split(","):
+            normalized = origin.strip().rstrip("/")
+            if normalized and normalized not in origins:
+                origins.append(normalized)
+
+        for origin in (public_origin_from_url(self.public_web_base_url), _CANONICAL_STUDIO_ORIGIN):
+            if origin and origin not in origins:
+                origins.append(origin)
+        return origins
 
     @property
     def cors_allow_headers_list(self) -> List[str]:

@@ -90,6 +90,7 @@ class GenerationJob(BaseModel):
     title: str = "Untitled set"
     status: JobStatus = JobStatus.QUEUED
     provider: str = "pending"
+    source_surface: str = "create"
     queue_priority: str = "standard"
     model: str
     prompt_snapshot: PromptSnapshot

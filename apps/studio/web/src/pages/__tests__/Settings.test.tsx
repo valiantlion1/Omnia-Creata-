@@ -338,6 +338,26 @@ describe('SettingsPage credentials flow', () => {
     expect(await screen.findByText(/account deletion scheduled/i)).toBeInTheDocument()
   })
 
+  it('clears local prompt and chat continuity from privacy settings', async () => {
+    window.localStorage.setItem('omnia-prompt-history:user-1', '["portrait"]')
+    window.localStorage.setItem('omnia-create-active-session:user-1', 'run-1')
+    window.localStorage.setItem('oc-chat-visual-messages-v1', '[]')
+    window.localStorage.setItem('oc-chat-project-map-v1', '{}')
+    window.localStorage.setItem('oc-studio-cookie-preferences-v1', '{"analytics":false}')
+
+    renderWithProviders(<SettingsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /privacy/i }))
+    await userEvent.click(screen.getByRole('button', { name: /clear local history/i }))
+
+    expect(await screen.findByText(/local studio history cleared/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem('omnia-prompt-history:user-1')).toBeNull()
+    expect(window.localStorage.getItem('omnia-create-active-session:user-1')).toBeNull()
+    expect(window.localStorage.getItem('oc-chat-visual-messages-v1')).toBeNull()
+    expect(window.localStorage.getItem('oc-chat-project-map-v1')).toBeNull()
+    expect(window.localStorage.getItem('oc-studio-cookie-preferences-v1')).toBe('{"analytics":false}')
+  })
+
   it('cancels a pending account deletion from settings', async () => {
     mockState.auth.identity.deletion_request = {
       status: 'scheduled',

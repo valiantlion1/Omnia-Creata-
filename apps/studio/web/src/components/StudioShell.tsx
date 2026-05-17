@@ -27,6 +27,7 @@ import {
 
 import { LegalFooter } from '@/components/StudioPrimitives'
 import { InlineBadge } from '@/components/VerificationBadge'
+import { clearStudioLocalPrivateState } from '@/lib/localPrivacy'
 import { studioApi } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 
@@ -390,9 +391,17 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   }
 
   const handleSignOut = async () => {
-    await signOut()
+    let signedOut = false
+    try {
+      await signOut()
+      signedOut = true
+    } finally {
+      clearStudioLocalPrivateState()
+    }
     setMobileOpen(false)
-    navigate('/landing')
+    if (signedOut) {
+      navigate('/landing')
+    }
   }
 
   const rail = (collapsed: boolean) => (

@@ -160,6 +160,7 @@ async def _seed_identity_project(
     store: StudioStateStore,
     *,
     plan: IdentityPlan = IdentityPlan.FREE,
+    surface: str = "compose",
     monthly_remaining: int | None = None,
     monthly_allowance: int | None = None,
     extra_credits: int | None = None,
@@ -195,6 +196,7 @@ async def _seed_identity_project(
         workspace_id=workspace.id,
         identity_id=identity.id,
         title="Project One",
+        surface=surface,
     )
     await store.mutate(
         lambda state: (
@@ -387,14 +389,14 @@ async def test_public_plan_payload_exposes_launch_catalog_truth(tmp_path: Path) 
         assert creator["label"] == "Creator"
         assert creator["price_usd"] == 12
         assert creator["checkout_kind"] == CheckoutKind.CREATOR_MONTHLY.value
-        assert creator["availability"] == "self_serve"
+        assert creator["availability"] == "not_open"
         assert "max_resolution" not in creator
 
         assert pro["entitlement_plan"] == "pro"
         assert pro["label"] == "Pro"
         assert pro["price_usd"] == 29
         assert pro["checkout_kind"] == CheckoutKind.PRO_MONTHLY.value
-        assert pro["availability"] == "self_serve"
+        assert pro["availability"] == "not_open"
         assert "max_resolution" not in pro
 
         assert payload["wallet"]["free_account_can_buy_credit_packs"] is True
@@ -526,6 +528,71 @@ async def test_managed_generation_consumes_monthly_then_extra_credits(
         assert settled.credit_charge_policy == "managed_full"
         assert updated_identity.monthly_credits_remaining == 0
         assert updated_identity.extra_credits == 0
+    finally:
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_chat_generation_is_subscription_included_without_credit_spend(
+    tmp_path: Path,
+    _web_runtime_mode: None,
+) -> None:
+    providers = _registry_with(
+        _FakeProvider(
+            name="runware",
+            rollout_tier="primary",
+            billable=True,
+            workflows=("text_to_image",),
+        )
+    )
+    service, store, _ = await _build_service(tmp_path, providers=providers)
+    try:
+        identity, project = await _seed_identity_project(
+            store,
+            plan=IdentityPlan.CREATOR,
+            surface="chat",
+            monthly_remaining=400,
+            monthly_allowance=400,
+            extra_credits=0,
+            subscription_status=SubscriptionStatus.ACTIVE,
+        )
+        job = await service.create_generation(
+            identity_id=identity.id,
+            project_id=project.id,
+            source_surface="chat",
+            prompt="premium concept art for a cinematic market scene",
+            negative_prompt="",
+            reference_asset_id=None,
+            model_id="flux-schnell",
+            width=1024,
+            height=1024,
+            steps=28,
+            cfg_scale=6.5,
+            seed=29,
+            aspect_ratio="1:1",
+            output_count=1,
+        )
+
+        async def execute_job(queued_job: GenerationJob) -> ExecutedGenerationBatch:
+            return _executed_batch(
+                queued_job,
+                provider_name="runware",
+                provider_billable=True,
+            )
+
+        service.generation_runtime.execute_job = execute_job  # type: ignore[method-assign]
+        await service._process_generation(job.id)
+
+        snapshot = await store.snapshot()
+        settled = snapshot.generations[job.id]
+        updated_identity = snapshot.identities[identity.id]
+
+        assert job.source_surface == "chat"
+        assert job.reserved_credit_cost == 0
+        assert settled.final_credit_cost == 0
+        assert settled.credit_charge_policy == "chat_subscription_included"
+        assert updated_identity.monthly_credits_remaining == 400
+        assert not any(entry.entry_type == CreditEntryType.GENERATION_SPEND for entry in snapshot.credit_ledger.values())
     finally:
         await service.shutdown()
 
@@ -1827,7 +1894,7 @@ async def test_inactive_paid_subscription_cannot_start_pro_only_generation_lane(
             subscription_status=SubscriptionStatus.CANCELED,
         )
 
-        with pytest.raises(PermissionError, match="This model requires Pro"):
+        with pytest.raises(PermissionError, match="not available for self-serve"):
             await service.create_generation(
                 identity_id=identity.id,
                 project_id=project.id,

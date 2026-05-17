@@ -239,7 +239,7 @@ export default function SignupPage() {
         </div>
 
         <div className="grid flex-1 gap-12 py-12 lg:grid-cols-[0.92fr_1.08fr]">
-          <div className="max-w-2xl">
+          <div className="min-w-0 max-w-2xl">
             <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-600">Hidden beta access</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white md:text-6xl md:leading-[1.02]">
               Request Studio access.
@@ -263,7 +263,7 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <form className="space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <form className="min-w-0 space-y-5 rounded-[24px] border border-white/[0.08] p-6 md:p-8" onSubmit={handleSubmit} style={{ background: 'linear-gradient(180deg, rgba(14,14,22,0.7) 0%, rgba(10,10,16,0.9) 100%)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
             <div className="max-w-sm">
               <button
                 type="button"

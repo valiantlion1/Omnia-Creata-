@@ -216,3 +216,25 @@ def test_cors_preflight_allows_studio_display_mode_header(_restore_security_head
     assert response.status_code == 200
     allowed_headers = response.headers["Access-Control-Allow-Headers"].lower()
     assert "x-omnia-client-display-mode" in allowed_headers
+
+
+def test_cors_preflight_allows_canonical_live_studio_origin(_restore_security_header_settings):
+    settings.environment = Environment.STAGING
+    settings.enable_api_docs = False
+    settings.generation_runtime_mode = "web"
+    main_service._generation_runtime_mode = "web"
+    main_service.generation_broker = InMemoryGenerationBroker()
+    main_service._owns_generation_broker = False
+
+    with TestClient(app) as client:
+        response = client.options(
+            "/v1/public/plans",
+            headers={
+                "Origin": "https://studio.omniacreata.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == "https://studio.omniacreata.com"

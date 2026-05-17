@@ -66,8 +66,11 @@ $report = [ordered]@{
   checks = [ordered]@{
     backend_version_match = $false
     backend_health_present = $false
+    backend_demo_login_ok = $false
+    backend_auth_me_ok = $false
     frontend_login_ok = $false
     frontend_shell_ok = $false
+    frontend_api_proxy_ok = $false
   }
   failures = @()
   status = "blocked"
@@ -109,6 +112,21 @@ function Get-Page {
   )
 
   return Invoke-WebRequest -UseBasicParsing -Uri $Uri -TimeoutSec $TimeoutSeconds
+}
+
+function Post-Json {
+  param(
+    [string]$Uri,
+    [object]$Payload,
+    [int]$TimeoutSeconds = 8
+  )
+
+  return Invoke-RestMethod `
+    -Uri $Uri `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body ($Payload | ConvertTo-Json -Depth 8) `
+    -TimeoutSec $TimeoutSeconds
 }
 
 function Normalize-StudioShellText {
@@ -182,6 +200,37 @@ if (-not $health.status) {
 $report.checks.backend_health_present = $true
 
 try {
+  $demoLogin = Post-Json `
+    -Uri "http://127.0.0.1:8000/v1/auth/demo-login" `
+    -Payload @{
+      email = "studio-local-verify@example.com"
+      display_name = "Studio Local Verify"
+      plan = "free"
+    }
+} catch {
+  Fail-Verification "Studio backend demo login endpoint is unreachable or did not complete in time."
+}
+
+if ([string]::IsNullOrWhiteSpace($demoLogin.access_token)) {
+  Fail-Verification "Studio backend demo login did not return an access token."
+}
+$report.checks.backend_demo_login_ok = $true
+
+try {
+  $authMe = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/v1/auth/me" `
+    -Headers @{ Authorization = "Bearer $($demoLogin.access_token)" } `
+    -TimeoutSec 8
+} catch {
+  Fail-Verification "Studio backend authenticated session check failed after demo login."
+}
+
+if (-not $authMe.identity) {
+  Fail-Verification "Studio backend authenticated session check did not return an identity."
+}
+$report.checks.backend_auth_me_ok = $true
+
+try {
   $loginPage = Get-Page -Uri "http://127.0.0.1:5173/login"
 } catch {
   Fail-Verification "Studio frontend login page is unreachable."
@@ -192,6 +241,17 @@ if ($loginPage.StatusCode -ne 200 -or -not (Test-StudioShellDocument -Html $logi
 }
 $report.checks.frontend_login_ok = $true
 $report.checks.frontend_shell_ok = $true
+
+try {
+  $frontendPlans = Get-Json -Uri "http://127.0.0.1:5173/v1/public/plans"
+} catch {
+  Fail-Verification "Studio frontend local API path is unreachable."
+}
+
+if (-not $frontendPlans.plans) {
+  Fail-Verification "Studio frontend local API path did not return public plans."
+}
+$report.checks.frontend_api_proxy_ok = $true
 $report.status = "pass"
 $report.summary = "Studio local verification passed."
 Write-VerificationReport
@@ -200,7 +260,10 @@ Write-Host ""
 Write-Host "Studio local verification" -ForegroundColor Cyan
 Write-Host "Backend build:  $runningBuild" -ForegroundColor Green
 Write-Host "Backend health: $($health.status)" -ForegroundColor Green
+Write-Host "Demo login:     ok" -ForegroundColor Green
+Write-Host "Auth session:   ok" -ForegroundColor Green
 Write-Host "Frontend login: ok" -ForegroundColor Green
 Write-Host "Frontend shell: ok" -ForegroundColor Green
+Write-Host "Frontend API:   ok" -ForegroundColor Green
 Write-Host "Report path:    $reportPath" -ForegroundColor Green
 Write-Host ""

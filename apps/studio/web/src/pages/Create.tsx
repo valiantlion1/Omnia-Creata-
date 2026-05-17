@@ -384,9 +384,12 @@ function isModelLockedForPlan(
   model: ModelCatalogEntry,
   activePlan: IdentityPlan | null | undefined,
   canAccessAllModels: boolean,
+  availableCredits = 0,
+  requiredCredits = model.credit_cost,
 ) {
   if (canAccessAllModels) return false
-  return getPlanRank(activePlan) < getPlanRank(model.min_plan)
+  if (getPlanRank(activePlan) >= getPlanRank(model.min_plan)) return false
+  return availableCredits < Math.max(requiredCredits, 1)
 }
 
 function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
@@ -513,9 +516,23 @@ export default function CreatePage() {
   )
   const activeAccountTier = billingQuery.data?.account_tier ?? auth?.identity?.plan ?? 'free'
   const canAccessAllModels = Boolean(auth?.identity.owner_mode || auth?.identity.root_admin)
+  const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
+  const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
+  const runtimeCreditLabel = hasUnlimitedCredits ? 'Unlimited' : runtimeCredits.toLocaleString()
+  const isOutOfCredits = !hasUnlimitedCredits && runtimeCredits <= 0
   const accessibleModels = useMemo(
-    () => visibleModels.filter((entry) => !isModelLockedForPlan(entry, activeAccountTier, canAccessAllModels)),
-    [activeAccountTier, canAccessAllModels, visibleModels],
+    () =>
+      visibleModels.filter((entry) => {
+        const guide = creditGuideByModelId.get(entry.id)
+        return !isModelLockedForPlan(
+          entry,
+          activeAccountTier,
+          canAccessAllModels,
+          runtimeCredits,
+          resolveDisplayedCreditCost(entry, guide),
+        )
+      }),
+    [activeAccountTier, canAccessAllModels, creditGuideByModelId, runtimeCredits, visibleModels],
   )
   const selectedModel = useMemo(
     () => visibleModels.find((entry) => entry.id === selectedModelId) ?? accessibleModels[0] ?? visibleModels[0],
@@ -583,10 +600,6 @@ export default function CreatePage() {
     () => pendingGenerationJobs.map((job) => `${job.id}:${normalizeJobStatus(job.status)}`).join('|'),
     [pendingGenerationJobs],
   )
-  const runtimeCredits = billingQuery.data?.credits.available_to_spend ?? auth?.credits.remaining ?? 0
-  const hasUnlimitedCredits = Boolean(billingQuery.data?.credits.unlimited || ((auth?.identity.owner_mode || auth?.identity.root_admin) && auth?.plan.can_generate))
-  const runtimeCreditLabel = hasUnlimitedCredits ? 'Unlimited' : runtimeCredits.toLocaleString()
-  const isOutOfCredits = !hasUnlimitedCredits && runtimeCredits <= 0
   const orderedAspectOptions = useMemo(
     () =>
       aspectOrder.map((ratio) => ({
@@ -1447,9 +1460,16 @@ export default function CreatePage() {
                   <div className={`${modelPickerDirection === 'up' ? 'bottom-[calc(100%+8px)] origin-bottom' : 'top-[calc(100%+8px)] origin-top'} absolute left-0 z-50 w-[min(320px,calc(100vw-48px))] overflow-y-auto rounded-[20px] border border-white/[0.08] bg-[#0c0d11] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.8)] backdrop-blur-3xl`} style={{ maxHeight: 'min(360px, calc(100vh - 48px))' }}>
                     {visibleModels.slice(0, 6).map((entry) => {
                       const active = entry.id === selectedModel?.id
-                      const locked = isModelLockedForPlan(entry, activeAccountTier, canAccessAllModels)
                       const guide = creditGuideByModelId.get(entry.id)
                       const displayedCreditCost = resolveDisplayedCreditCost(entry, guide)
+                      const locked = isModelLockedForPlan(
+                        entry,
+                        activeAccountTier,
+                        canAccessAllModels,
+                        runtimeCredits,
+                        displayedCreditCost,
+                      )
+                      const walletUnlocked = !locked && getPlanRank(activeAccountTier) < getPlanRank(entry.min_plan)
                       return (
                         <button
                           key={entry.id}
@@ -1474,7 +1494,7 @@ export default function CreatePage() {
                               <span>{displayedCreditCost.toLocaleString()} credits</span>
                               {entry.min_plan !== 'free' ? (
                                 <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
-                                  {formatPlanLabel(entry.min_plan)}
+                                  {walletUnlocked ? 'Credit unlock' : formatPlanLabel(entry.min_plan)}
                                 </span>
                               ) : null}
                             </div>

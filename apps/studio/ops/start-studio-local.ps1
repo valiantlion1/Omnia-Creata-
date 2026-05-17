@@ -44,6 +44,9 @@ if ($env:STUDIO_LOG_DIRECTORY) {
 }
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
+$stateDir = Join-Path $runtimeRoot "state"
+New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+
 function Import-UserEnvironmentVariable {
   param([string]$Name)
 
@@ -79,6 +82,23 @@ foreach ($secretName in @(
   "STUDIO_ROOT_ADMIN_EMAILS"
 )) {
   Import-UserEnvironmentVariable -Name $secretName
+}
+
+$localPostgresOptInValue = ""
+if (-not [string]::IsNullOrWhiteSpace($env:STUDIO_LOCAL_USE_POSTGRES)) {
+  $localPostgresOptInValue = $env:STUDIO_LOCAL_USE_POSTGRES.Trim().ToLowerInvariant()
+}
+$localPostgresOptIn = @("1", "true", "yes", "postgres") -contains $localPostgresOptInValue
+$localStateStorePath = Join-Path $stateDir "studio-local.sqlite3"
+$env:ENVIRONMENT = "development"
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
+$env:VITE_AUTH_REDIRECT_BASE_URL = "http://127.0.0.1:5173"
+if (-not $localPostgresOptIn) {
+  $env:STATE_STORE_BACKEND = "sqlite"
+  $env:STATE_STORE_PATH = $localStateStorePath
+  $env:DATABASE_URL = ""
+} else {
+  Write-Warning "STUDIO_LOCAL_USE_POSTGRES is enabled. Local Studio will use the configured Postgres store."
 }
 
 $backendOut = Join-Path $logDir "backend.stdout.log"
@@ -204,6 +224,35 @@ function Test-CurrentBackendBuild {
   }
 }
 
+function Test-CurrentBackendDemoLogin {
+  try {
+    $payload = @{
+      email = "studio-local-startup@example.com"
+      display_name = "Studio Local Startup"
+      plan = "free"
+    } | ConvertTo-Json
+    $response = Invoke-RestMethod `
+      -Uri "http://127.0.0.1:8000/v1/auth/demo-login" `
+      -Method Post `
+      -ContentType "application/json" `
+      -Body $payload `
+      -TimeoutSec 8
+
+    if ([string]::IsNullOrWhiteSpace($response.access_token)) {
+      return $false
+    }
+
+    $authMe = Invoke-RestMethod `
+      -Uri "http://127.0.0.1:8000/v1/auth/me" `
+      -Headers @{ Authorization = "Bearer $($response.access_token)" } `
+      -TimeoutSec 8
+
+    return $null -ne $authMe.identity
+  } catch {
+    return $false
+  }
+}
+
 function Wait-BackendReady {
   param(
     [string]$ExpectedBuild,
@@ -264,6 +313,12 @@ Write-Host "Omnia Creata Studio local stack" -ForegroundColor Cyan
 Write-Host "Studio root: $studioRoot"
 Write-Host "Runtime root: $runtimeRoot"
 Write-Host "Logs: $logDir"
+Write-Host "Local API base: $($env:VITE_API_BASE_URL)"
+if ($localPostgresOptIn) {
+  Write-Host "Local state store: configured Postgres opt-in"
+} else {
+  Write-Host "Local state store: sqlite ($localStateStorePath)"
+}
 if ($expectedBuild) {
   Write-Host "Expected build: $expectedBuild"
 }
@@ -273,6 +328,11 @@ $restartBackend = $false
 if (Test-PortOpen -Port 8000) {
   if (-not (Test-CurrentBackendBuild -ExpectedBuild $expectedBuild)) {
     Write-Warning "Port 8000 is occupied by a stale or mismatched backend. Restarting the Studio backend."
+    Stop-ListeningProcesses -Port 8000
+    Start-Sleep -Seconds 2
+    $restartBackend = $true
+  } elseif (-not $localPostgresOptIn -and -not (Test-CurrentBackendDemoLogin)) {
+    Write-Warning "Port 8000 is occupied by a backend that cannot complete local demo login. Restarting with the local SQLite state store."
     Stop-ListeningProcesses -Port 8000
     Start-Sleep -Seconds 2
     $restartBackend = $true

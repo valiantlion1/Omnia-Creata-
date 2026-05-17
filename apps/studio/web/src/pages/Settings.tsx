@@ -29,6 +29,7 @@ import { InlineBadge } from '@/components/VerificationBadge'
 import { studioApi, type ActiveSessionsPayload, type HealthProvider, type HealthResponse, type ProfileDeletionRequest, type Visibility } from '@/lib/studioApi'
 import { useStudioAuth } from '@/lib/studioAuth'
 import { getCookiePreferenceSummary, useStudioCookiePreferences } from '@/lib/studioCookiePreferences'
+import { clearStudioLocalPrivateState } from '@/lib/localPrivacy'
 import { supabaseBrowser } from '@/lib/supabaseBrowser'
 import { usePageMeta } from '@/lib/usePageMeta'
 import { toUserFacingErrorMessage } from '@/lib/uiError'
@@ -989,6 +990,27 @@ export default function SettingsPage() {
     await endOtherSessionsMutation.mutateAsync()
   }
 
+  const handleSignOutCurrent = async () => {
+    try {
+      await signOut()
+    } finally {
+      clearStudioLocalPrivateState()
+    }
+  }
+
+  const handleClearLocalPrivateState = () => {
+    const result = clearStudioLocalPrivateState()
+    setNotice({
+      tone: result.failed ? 'warning' : 'success',
+      title: result.failed ? 'Local history could not be cleared' : 'Local Studio history cleared',
+      body: result.failed
+        ? 'Your browser blocked access to local storage. You can still clear site data from the browser settings.'
+        : result.removed > 0
+          ? 'Prompt history, active Create resume state, and lightweight Chat continuity were cleared from this browser.'
+          : 'No browser-only prompt or Chat continuity was stored on this device.',
+    })
+  }
+
   return (
     <AppPage className="max-w-[1480px] py-5 md:py-6">
       {/* Header */}
@@ -1077,7 +1099,7 @@ export default function SettingsPage() {
                         Edit Profile
                       </button>
                       {!auth?.guest && (
-                        <button onClick={signOut} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3.5 text-[14px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.12] hover:text-white hover:border-white/[0.2] hover:shadow-lg">
+                        <button onClick={() => void handleSignOutCurrent()} className="flex items-center justify-center gap-2.5 rounded-xl bg-white/[0.06] border border-white/[0.1] px-6 py-3.5 text-[14px] font-bold text-zinc-300 transition-all duration-300 hover:bg-white/[0.12] hover:text-white hover:border-white/[0.2] hover:shadow-lg">
                           <LogOut className="h-[16px] w-[16px]" /> Sign Out
                         </button>
                       )}
@@ -1241,6 +1263,20 @@ export default function SettingsPage() {
                           Manage cookies
                         </button>
                       </div>
+                    }
+                  />
+                  <SettingsRow
+                    icon={Trash2}
+                    title="Local prompt and chat history"
+                    description="Clear prompt history, active Create resume state, and lightweight Chat continuity saved only in this browser."
+                    action={
+                      <button
+                        type="button"
+                        onClick={handleClearLocalPrivateState}
+                        className="group flex w-full sm:w-auto items-center justify-center rounded-xl border border-white/[0.1] bg-white/[0.04] px-6 py-3 text-[13px] font-bold text-white transition-all duration-300 hover:bg-white/[0.08] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                      >
+                        Clear local history
+                      </button>
                     }
                   />
                 </SettingsCard>
@@ -1428,7 +1464,7 @@ export default function SettingsPage() {
         onClose={() => setActiveSessionsDialogOpen(false)}
         onRefresh={() => settingsBootstrapQuery.refetch()}
         onEndOtherSessions={handleEndOtherSessions}
-        onSignOutCurrent={signOut}
+        onSignOutCurrent={handleSignOutCurrent}
       />
     </AppPage>
   )

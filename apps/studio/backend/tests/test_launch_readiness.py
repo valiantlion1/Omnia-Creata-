@@ -523,10 +523,10 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
 
         assert readiness["status"] == "needs_attention"
         assert readiness["blocking_count"] == 0
-        assert readiness["warning_count"] == 1
+        assert readiness["warning_count"] == 2
         assert readiness["launch_gate"]["ready_for_protected_launch"] is True
         assert readiness["launch_gate"]["blocking_keys"] == []
-        assert readiness["launch_gate"]["warning_keys"] == ["provider_economics"]
+        assert readiness["launch_gate"]["warning_keys"] == ["provider_economics", "payment_provider"]
         assert readiness["launch_gate"]["blocking_reasons"] == []
         assert any(
             "provider_economics" in reason
@@ -566,6 +566,7 @@ def test_launch_readiness_report_can_be_ready_when_launch_inputs_are_present(tmp
         assert public_paid_phase["status"] == "blocked"
         assert "provider_mix" in public_paid_phase["blocking_keys"]
         assert "image_public_paid_usage" in public_paid_phase["blocking_keys"]
+        assert "payment_provider" in public_paid_phase["blocking_keys"]
         assert any(
             "proven managed backup lane" in reason
             for reason in public_paid_phase["blockers"]
@@ -1613,15 +1614,16 @@ def test_launch_readiness_keeps_protected_beta_stage_when_selected_lanes_are_pro
         assert readiness["provider_truth"]["status"] == "warning"
         assert readiness["provider_truth"]["mix"]["status"] == "pass"
         assert readiness["launch_gate"]["ready_for_protected_launch"] is True
-        assert readiness["platform_readiness"]["current_stage"] == "public_paid_platform"
-        assert readiness["platform_readiness"]["next_stage"] is None
+        assert readiness["platform_readiness"]["current_stage"] == "protected_beta"
+        assert readiness["platform_readiness"]["next_stage"] == "public_paid_platform"
         public_paid_phase = next(
             phase
             for phase in readiness["platform_readiness"]["phases"]
             if phase["id"] == "public_paid_platform"
         )
-        assert public_paid_phase["status"] == "needs_attention"
-        assert public_paid_phase["ready"] is True
+        assert public_paid_phase["status"] == "blocked"
+        assert public_paid_phase["ready"] is False
+        assert public_paid_phase["blocking_keys"] == ["payment_provider"]
         assert public_paid_phase["warning_keys"] == ["provider_economics"]
     finally:
         settings.studio_runtime_root = original_runtime_root
@@ -1916,7 +1918,7 @@ def test_launch_readiness_blocks_public_paid_when_captcha_keys_are_missing(tmp_p
         settings.turnstile_secret_key = original_turnstile_secret_key
 
 
-def test_launch_readiness_requires_current_build_economics_signoff_for_public_paid_ready(tmp_path: Path) -> None:
+def test_launch_readiness_requires_current_build_economics_signoff_and_payment_provider_for_public_paid_ready(tmp_path: Path) -> None:
     settings = get_settings()
     original_runtime_root = settings.studio_runtime_root
     original_environment = settings.environment
@@ -2036,8 +2038,10 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
             for phase in readiness["platform_readiness"]["phases"]
             if phase["id"] == "public_paid_platform"
         )
-        assert public_paid_phase["status"] == "ready"
-        assert public_paid_phase["ready"] is True
+        assert public_paid_phase["status"] == "blocked"
+        assert public_paid_phase["ready"] is False
+        assert public_paid_phase["blocking_keys"] == ["payment_provider"]
+        assert any("Paid checkout" in blocker for blocker in public_paid_phase["blockers"])
     finally:
         settings.studio_runtime_root = original_runtime_root
         settings.environment = original_environment
@@ -2052,7 +2056,7 @@ def test_launch_readiness_requires_current_build_economics_signoff_for_public_pa
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
 
 
-def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is_missing(tmp_path: Path) -> None:
+def test_launch_readiness_blocks_public_paid_on_payment_provider_even_when_economics_dossier_is_missing(tmp_path: Path) -> None:
     settings = get_settings()
     original_runtime_root = settings.studio_runtime_root
     original_environment = settings.environment
@@ -2168,8 +2172,9 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
             for phase in readiness["platform_readiness"]["phases"]
             if phase["id"] == "public_paid_platform"
         )
-        assert public_paid_phase["status"] == "needs_attention"
-        assert public_paid_phase["ready"] is True
+        assert public_paid_phase["status"] == "blocked"
+        assert public_paid_phase["ready"] is False
+        assert "payment_provider" in public_paid_phase["blocking_keys"]
         assert "provider_economics" in public_paid_phase["warning_keys"]
     finally:
         settings.studio_runtime_root = original_runtime_root
@@ -2185,7 +2190,7 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_dossier_is
         settings.public_paid_provider_economics_ready_note = original_public_paid_provider_economics_ready_note
 
 
-def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_missing(tmp_path: Path) -> None:
+def test_launch_readiness_blocks_public_paid_on_payment_provider_even_when_economics_note_is_missing(tmp_path: Path) -> None:
     settings = get_settings()
     original_runtime_root = settings.studio_runtime_root
     original_environment = settings.environment
@@ -2305,8 +2310,9 @@ def test_launch_readiness_keeps_public_paid_on_warning_when_economics_note_is_mi
             for phase in readiness["platform_readiness"]["phases"]
             if phase["id"] == "public_paid_platform"
         )
-        assert public_paid_phase["status"] == "needs_attention"
-        assert public_paid_phase["ready"] is True
+        assert public_paid_phase["status"] == "blocked"
+        assert public_paid_phase["ready"] is False
+        assert "payment_provider" in public_paid_phase["blocking_keys"]
         assert "provider_economics" in public_paid_phase["warning_keys"]
     finally:
         settings.studio_runtime_root = original_runtime_root
@@ -2456,8 +2462,8 @@ def test_launch_readiness_keeps_optional_provider_smoke_errors_as_public_paid_wa
         assert readiness["provider_truth"]["mix"]["status"] == "pass"
         assert readiness["provider_truth"]["economics"]["status"] == "pass"
         assert smoke_check["status"] == "warning"
-        assert public_paid_phase["status"] == "needs_attention"
-        assert public_paid_phase["blocking_keys"] == []
+        assert public_paid_phase["status"] == "blocked"
+        assert public_paid_phase["blocking_keys"] == ["payment_provider"]
         assert "provider_smoke" in public_paid_phase["warning_keys"]
         assert "provider_smoke" not in public_paid_phase["blocking_keys"]
     finally:

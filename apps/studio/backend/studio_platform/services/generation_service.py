@@ -765,6 +765,7 @@ class GenerationService:
         aspect_ratio: str,
         output_count: int = 1,
         source_prompt: str | None = None,
+        source_surface: str = "create",
         moderation_tier: str = "auto",
         moderation_reason: str | None = None,
         moderation_action: str = "allow",
@@ -788,16 +789,24 @@ class GenerationService:
         if reference_asset_id:
             reference_asset = await self.service.require_owned_model("assets", reference_asset_id, MediaAsset, identity_id)
             self._assert_reference_asset_usable_for_generation(reference_asset)
+        normalized_source_surface = str(source_surface or "create").strip().lower()
+        if normalized_source_surface not in {"create", "chat"}:
+            normalized_source_surface = "create"
         project = await self.service._resolve_generation_project(
             identity=identity,
             requested_project_id=project_id,
             reference_asset=reference_asset,
         )
         model = await self.service.get_model(model_id)
-        plan_config = self.service.plan_catalog[identity.plan]
+        billing_state = await self.service.billing._resolve_billing_state_for_identity(identity)
+        plan_config = self.service.plan_catalog[billing_state.effective_plan]
         if not plan_config.can_generate:
             raise PermissionError("Guests cannot generate images")
-        billing_state = await self.service.billing._resolve_billing_state_for_identity(identity)
+        if normalized_source_surface == "chat":
+            if project.surface != "chat":
+                raise PermissionError("Chat image generation must run inside a chat project")
+            if not plan_config.can_access_chat:
+                raise PermissionError("Studio Chat requires an active paid plan")
 
         self.service._validate_model_for_identity(identity, model, billing_state=billing_state)
         resolved_aspect_ratio = self.service._normalize_generation_aspect_ratio(aspect_ratio)
@@ -840,12 +849,12 @@ class GenerationService:
             aspect_ratio=resolved_aspect_ratio,
         )
         routing_decision = self.service.providers.plan_generation_route(
-            plan=identity.plan,
+            plan=billing_state.effective_plan,
             prompt=cleaned_prompt,
             model_id=model.id,
             workflow=admission_prompt_snapshot.workflow,
             has_reference_image=reference_asset is not None,
-            wallet_backed=identity.plan == IdentityPlan.FREE and billing_state.extra_credits > 0,
+            wallet_backed=billing_state.effective_plan == IdentityPlan.FREE and billing_state.extra_credits > 0,
         )
         compiled_request = compile_generation_request(
             prompt=cleaned_prompt,
@@ -922,7 +931,10 @@ class GenerationService:
             output_count=output_count,
             provider_estimated_cost=provider_estimated_cost,
             legacy_model=model,
-            unlimited_generation_access=self.service._has_unlimited_generation_access(identity),
+            unlimited_generation_access=(
+                self.service._has_unlimited_generation_access(identity)
+                or normalized_source_surface == "chat"
+            ),
         )
         job = create_generation_job_record(
             workspace_id=identity.workspace_id,
@@ -936,6 +948,7 @@ class GenerationService:
             pricing_lane=pricing_quote.pricing_lane,
             credit_cost=pricing_quote.credit_cost,
             output_count=output_count,
+            source_surface=normalized_source_surface,
             queue_priority=plan_config.queue_priority,
             provider=effective_provider,
             provider_rollout_tier=self.service.providers.provider_rollout_tier(effective_provider),
@@ -1289,6 +1302,7 @@ class GenerationService:
             execution = await self.service.generation_runtime.execute_job(execution_job)
             finished_at = utc_now()
             identity = await self.service.store.get_identity(job.identity_id)
+            chat_subscription_included = str(getattr(job, "source_surface", "") or "").strip().lower() == "chat"
             unlimited_access = bool(identity and self.service._has_unlimited_generation_access(identity))
             finalized_route = self.service.providers.finalize_generation_route(
                 GenerationRoutingDecision(
@@ -1304,7 +1318,10 @@ class GenerationService:
                 ),
                 provider_name=execution.provider_name or provider_label,
             )
-            if unlimited_access:
+            if chat_subscription_included:
+                credit_charge_policy = "chat_subscription_included"
+                final_credit_cost = 0
+            elif unlimited_access:
                 credit_charge_policy = "none"
                 final_credit_cost = 0
             else:

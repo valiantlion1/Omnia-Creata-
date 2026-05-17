@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 const mockState = vi.hoisted(() => ({
   auth: null as null | {
@@ -122,5 +123,51 @@ describe('StudioShell', () => {
     expect(screen.queryByLabelText('Open account from profile footer')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Open billing from profile footer')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Open FAQ from profile footer')).not.toBeInTheDocument()
+  })
+
+  it('clears browser-only prompt and chat continuity when signing out', async () => {
+    mockState.isAuthenticated = true
+    mockState.auth = {
+      guest: false,
+      identity: {
+        display_name: 'valiantlion',
+        plan: 'pro',
+        owner_mode: true,
+        root_admin: false,
+        avatar_url: null,
+      },
+      plan: {
+        label: 'Pro',
+        monthly_credits: 1200,
+        can_generate: true,
+      },
+      credits: {
+        remaining: 240,
+        monthly_remaining: 240,
+      },
+    }
+    window.localStorage.setItem('omnia-prompt-history:user-1', '["portrait"]')
+    window.localStorage.setItem('omnia-create-active-session:user-1', 'run-1')
+    window.localStorage.setItem('oc-chat-visual-messages-v1', '[]')
+    window.localStorage.setItem('oc-chat-project-map-v1', '{}')
+    window.localStorage.setItem('oc-studio-rail-collapsed', 'false')
+
+    renderWithProviders(
+      <StudioShell>
+        <div>Signed shell</div>
+      </StudioShell>,
+      { route: '/account' },
+    )
+
+    await userEvent.click(screen.getAllByTitle('Log out')[0])
+
+    await waitFor(() => {
+      expect(mockState.signOut).toHaveBeenCalledTimes(1)
+    })
+    expect(window.localStorage.getItem('omnia-prompt-history:user-1')).toBeNull()
+    expect(window.localStorage.getItem('omnia-create-active-session:user-1')).toBeNull()
+    expect(window.localStorage.getItem('oc-chat-visual-messages-v1')).toBeNull()
+    expect(window.localStorage.getItem('oc-chat-project-map-v1')).toBeNull()
+    expect(window.localStorage.getItem('oc-studio-rail-collapsed')).toBe('false')
   })
 })

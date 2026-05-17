@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from studio_platform.services.deployment_preflight import build_deployment_preflight, load_dotenv_file
+
+
+STUDIO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_deployment_preflight_passes_for_launch_shaped_staging_env() -> None:
@@ -193,3 +198,12 @@ def test_deployment_preflight_accepts_canonical_platform_env_with_external_postg
     assert checks["asset_storage_backend"]["status"] == "pass"
     assert checks["postgres_credentials_alignment"]["status"] == "pass"
     assert checks["billing_backbone"]["status"] == "pass"
+
+
+def test_render_blueprint_declares_live_studio_cors_and_host_boundaries() -> None:
+    render_yaml = (STUDIO_ROOT / "render.yaml").read_text(encoding="utf-8")
+
+    assert render_yaml.count("key: CORS_ORIGINS") >= 2
+    assert render_yaml.count("value: https://studio.omniacreata.com") >= 2
+    assert render_yaml.count("key: ALLOWED_HOSTS") >= 2
+    assert render_yaml.count("value: omnia-studio-api.onrender.com,studio.omniacreata.com") >= 2

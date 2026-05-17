@@ -54,6 +54,10 @@ from studio_platform.store import SqliteStudioStateStore, StudioStateStore
 
 
 async def _build_test_app(tmp_path: Path) -> tuple[FastAPI, StudioService, InMemoryRateLimiter]:
+    settings = get_settings()
+    settings.studio_access_mode = "open"
+    settings.studio_access_allowed_emails = ""
+
     store = StudioStateStore(tmp_path / "state.json")
     service = StudioService(store, ProviderRegistry(), tmp_path / "media")
     rate_limiter = InMemoryRateLimiter()
@@ -2064,8 +2068,9 @@ async def test_admin_telemetry_route_rejects_header_only_root_admin_claim(tmp_pa
 
     try:
         assert response.status_code == 403
-        with pytest.raises(KeyError):
-            await service.get_identity("root-1")
+        identity = await service.get_identity("root-1")
+        assert identity.owner_mode is False
+        assert identity.root_admin is False
     finally:
         await service.shutdown()
 
@@ -2364,6 +2369,61 @@ async def test_billing_checkout_route_rejects_tombstoned_authenticated_session(
 
 
 @pytest.mark.asyncio
+async def test_demo_login_keeps_local_access_through_invite_only_auth_me(tmp_path: Path) -> None:
+    app, service, _ = await _build_test_app(tmp_path)
+    app.dependency_overrides.pop(router_module.get_current_user, None)
+    settings = get_settings()
+    original_environment = settings.environment
+    original_enable_demo_auth = settings.enable_demo_auth
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
+    original_owner_email = settings.studio_owner_email
+    original_owner_emails = settings.studio_owner_emails
+    original_root_admin_emails = settings.studio_root_admin_emails
+    settings.environment = Environment.DEVELOPMENT
+    settings.enable_demo_auth = True
+    settings.studio_access_mode = "invite_only"
+    settings.studio_access_allowed_emails = ""
+    settings.studio_owner_email = None
+    settings.studio_owner_emails = ""
+    settings.studio_root_admin_emails = ""
+    setup_auth()
+
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            login_response = await client.post(
+                "/v1/auth/demo-login",
+                json={
+                    "email": "demo@example.com",
+                    "display_name": "Demo User",
+                    "plan": "free",
+                },
+            )
+
+            assert login_response.status_code == 200
+            login_payload = login_response.json()
+            assert login_payload["identity"]["identity"]["local_access"] is True
+
+            me_response = await client.get(
+                "/v1/auth/me",
+                headers={"Authorization": f"Bearer {login_payload['access_token']}"},
+            )
+
+        assert me_response.status_code == 200
+        assert me_response.json()["identity"]["local_access"] is True
+    finally:
+        settings.environment = original_environment
+        settings.enable_demo_auth = original_enable_demo_auth
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
+        settings.studio_owner_email = original_owner_email
+        settings.studio_owner_emails = original_owner_emails
+        settings.studio_root_admin_emails = original_root_admin_emails
+        await service.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_demo_login_refuses_pro_plan_outside_development(tmp_path: Path) -> None:
     app, service, _ = await _build_test_app(tmp_path)
     settings = get_settings()
@@ -2562,6 +2622,7 @@ async def test_login_accepts_verified_captcha_token_when_verification_is_enabled
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
     original_secret_key = settings.turnstile_secret_key
+    original_access_allowed_emails = settings.studio_access_allowed_emails
     login_calls: list[str] = []
     captcha_calls: list[dict[str, str | None]] = []
 
@@ -2603,6 +2664,7 @@ async def test_login_accepts_verified_captcha_token_when_verification_is_enabled
     settings.captcha_provider = "turnstile"
     settings.turnstile_site_key = "turnstile-site-key"
     settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.studio_access_allowed_emails = "login@example.com"
     monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
     monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
 
@@ -2632,6 +2694,7 @@ async def test_login_accepts_verified_captcha_token_when_verification_is_enabled
         settings.captcha_provider = original_provider
         settings.turnstile_site_key = original_site_key
         settings.turnstile_secret_key = original_secret_key
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         await service.shutdown()
 
 
@@ -2679,6 +2742,8 @@ async def test_login_lockout_persists_across_shared_sqlite_app_instances(
 ) -> None:
     settings = get_settings()
     original_enabled = settings.captcha_verification_enabled
+    original_access_mode = settings.studio_access_mode
+    original_access_allowed_emails = settings.studio_access_allowed_emails
     shared_db_path = tmp_path / "studio-state.sqlite3"
 
     store_one = SqliteStudioStateStore(shared_db_path)
@@ -2711,6 +2776,8 @@ async def test_login_lockout_persists_across_shared_sqlite_app_instances(
 
     monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
     settings.captcha_verification_enabled = False
+    settings.studio_access_mode = "open"
+    settings.studio_access_allowed_emails = ""
 
     payload = {
         "email": "lockout@example.com",
@@ -2734,6 +2801,8 @@ async def test_login_lockout_persists_across_shared_sqlite_app_instances(
         assert sign_in_calls == ["lockout@example.com"] * 5
     finally:
         settings.captcha_verification_enabled = original_enabled
+        settings.studio_access_mode = original_access_mode
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         await service_one.shutdown()
         await service_two.shutdown()
 
@@ -2873,6 +2942,7 @@ async def test_login_captcha_uses_forwarded_ip_only_for_trusted_proxy_client(
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
     original_secret_key = settings.turnstile_secret_key
+    original_access_allowed_emails = settings.studio_access_allowed_emails
     remote_ips: list[str | None] = []
 
     class FakeSession:
@@ -2904,6 +2974,7 @@ async def test_login_captcha_uses_forwarded_ip_only_for_trusted_proxy_client(
     settings.captcha_provider = "turnstile"
     settings.turnstile_site_key = "turnstile-site-key"
     settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.studio_access_allowed_emails = "login@example.com"
     monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
     monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
 
@@ -2927,6 +2998,7 @@ async def test_login_captcha_uses_forwarded_ip_only_for_trusted_proxy_client(
         settings.captcha_provider = original_provider
         settings.turnstile_site_key = original_site_key
         settings.turnstile_secret_key = original_secret_key
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         await service.shutdown()
 
 
@@ -2941,6 +3013,7 @@ async def test_login_captcha_ignores_forwarded_ip_for_untrusted_direct_client(
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
     original_secret_key = settings.turnstile_secret_key
+    original_access_allowed_emails = settings.studio_access_allowed_emails
     remote_ips: list[str | None] = []
 
     class FakeSession:
@@ -2972,6 +3045,7 @@ async def test_login_captcha_ignores_forwarded_ip_for_untrusted_direct_client(
     settings.captcha_provider = "turnstile"
     settings.turnstile_site_key = "turnstile-site-key"
     settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.studio_access_allowed_emails = "login@example.com"
     monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
     monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
 
@@ -2995,6 +3069,7 @@ async def test_login_captcha_ignores_forwarded_ip_for_untrusted_direct_client(
         settings.captcha_provider = original_provider
         settings.turnstile_site_key = original_site_key
         settings.turnstile_secret_key = original_secret_key
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         await service.shutdown()
 
 
@@ -3009,6 +3084,7 @@ async def test_login_captcha_ignores_invalid_forwarded_ip_from_trusted_proxy(
     original_provider = settings.captcha_provider
     original_site_key = settings.turnstile_site_key
     original_secret_key = settings.turnstile_secret_key
+    original_access_allowed_emails = settings.studio_access_allowed_emails
     remote_ips: list[str | None] = []
 
     class FakeSession:
@@ -3040,6 +3116,7 @@ async def test_login_captcha_ignores_invalid_forwarded_ip_from_trusted_proxy(
     settings.captcha_provider = "turnstile"
     settings.turnstile_site_key = "turnstile-site-key"
     settings.turnstile_secret_key = "turnstile-secret-key"
+    settings.studio_access_allowed_emails = "login@example.com"
     monkeypatch.setattr(router_module, "get_supabase_auth_client", lambda: FakeSupabaseAuthClient())
     monkeypatch.setattr(router_module, "verify_captcha_token", fake_verify_captcha_token)
 
@@ -3063,6 +3140,7 @@ async def test_login_captcha_ignores_invalid_forwarded_ip_from_trusted_proxy(
         settings.captcha_provider = original_provider
         settings.turnstile_site_key = original_site_key
         settings.turnstile_secret_key = original_secret_key
+        settings.studio_access_allowed_emails = original_access_allowed_emails
         await service.shutdown()
 
 

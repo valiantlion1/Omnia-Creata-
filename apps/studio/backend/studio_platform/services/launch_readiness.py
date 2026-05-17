@@ -31,6 +31,7 @@ _ALLOWED_PROTECTED_LAUNCH_WARNING_KEYS = {
     "chat_provider_lane",
     "image_provider_lane",
     "provider_economics",
+    "payment_provider",
     "deployment_verification",
     "abuse_hardening",
 }
@@ -536,6 +537,14 @@ def build_launch_readiness_report(
         provider_economics_check["status"],
         provider_economics_check["summary"],
         provider_economics_check["detail"],
+    )
+
+    payment_provider_check = _build_payment_provider_check(settings)
+    add_check(
+        "payment_provider",
+        payment_provider_check["status"],
+        payment_provider_check["summary"],
+        payment_provider_check["detail"],
     )
 
     smoke_check = _build_smoke_check(
@@ -1217,6 +1226,19 @@ def _build_public_paid_platform_phase(
             or "Current provider mix is not yet safe for a public paid platform."
         )
 
+    payment_provider_check = check_lookup.get("payment_provider")
+    if isinstance(payment_provider_check, dict):
+        payment_status = str(payment_provider_check.get("status") or "").strip().lower()
+        payment_summary = str(payment_provider_check.get("summary") or "").strip()
+        payment_detail = str(payment_provider_check.get("detail") or "").strip()
+        if payment_status != "pass":
+            blocking_keys.append("payment_provider")
+            blockers.append(
+                payment_summary
+                or payment_detail
+                or "Public paid checkout is not ready for self-serve customers yet."
+            )
+
     provider_health_check = check_lookup.get("provider_health_snapshot")
     if isinstance(provider_health_check, dict):
         provider_health_status = str(provider_health_check.get("status") or "").strip().lower()
@@ -1571,6 +1593,39 @@ def _build_launch_gate(
             deployment_verification_report=deployment_verification_report,
             provider_smoke_report=provider_smoke_report,
         ),
+    }
+
+
+def _build_payment_provider_check(settings: Settings) -> dict[str, str]:
+    provider = str(getattr(settings, "billing_backbone_provider", "none") or "none").strip().lower() or "none"
+    if provider in {"", "none"}:
+        return {
+            "status": "warning",
+            "summary": "Paid checkout is intentionally closed while OmniaCreata selects a new payment provider.",
+            "detail": "Hidden beta may continue with checkout closed, but public paid launch cannot accept money until a provider is selected, integrated, and tested.",
+        }
+    if provider == "paddle":
+        return {
+            "status": "blocked",
+            "summary": "Paddle billing is retired and must not be used.",
+            "detail": "Set BILLING_BACKBONE_PROVIDER=none for hidden beta or choose a new provider after integration work is complete.",
+        }
+    if provider == "demo":
+        if settings.environment == Environment.DEVELOPMENT:
+            return {
+                "status": "pass",
+                "summary": "Local demo checkout is available for development-only billing tests.",
+                "detail": "Demo checkout must stay out of staging and production.",
+            }
+        return {
+            "status": "blocked",
+            "summary": "Demo checkout cannot be used outside local development.",
+            "detail": "Production billing must use a real disclosed payment provider.",
+        }
+    return {
+        "status": "warning",
+        "summary": f"{provider} is selected as the future payment provider, but checkout is not integrated yet.",
+        "detail": "Public paid launch remains blocked until subscriptions, credit packs, webhooks, receipts, refunds, tax wording, and failure handling are verified end to end.",
     }
 
 

@@ -10,7 +10,17 @@ from .prompt_engineering import (
     compact_visual_prompt,
     compile_generation_request,
 )
-from .studio_model_contract import STUDIO_DEFAULT_IMAGE_MODEL_ID, STUDIO_QUICK_IMAGE_MODEL_ID
+from .studio_model_contract import (
+    STUDIO_CINEMATIC_IMAGE_MODEL_ID,
+    STUDIO_DEFAULT_IMAGE_MODEL_ID,
+    STUDIO_DESIGN_IMAGE_MODEL_ID,
+    STUDIO_IDEOGRAM_MODEL_ID,
+    STUDIO_MULTI_REFERENCE_MODEL_ID,
+    STUDIO_PREMIUM_MODEL_ID,
+    STUDIO_QUICK_IMAGE_MODEL_ID,
+    STUDIO_SEEDREAM_MODEL_ID,
+    STUDIO_TEXT_IMAGE_MODEL_ID,
+)
 
 
 @dataclass(slots=True)
@@ -709,7 +719,7 @@ def build_chat_generation_blueprint(
         premium_chat=premium_chat,
         context=context,
     )
-    model = _resolve_blueprint_model(intent, premium_chat=premium_chat, context=context)
+    model = _resolve_blueprint_model(intent, content=content, premium_chat=premium_chat, context=context)
     return ChatGenerationBlueprint(
         workflow=_resolve_blueprint_workflow(intent, context=context),
         prompt=candidate.prompt,
@@ -836,6 +846,7 @@ def _looks_like_follow_up_refinement(
 def _resolve_blueprint_model(
     intent: ChatIntent,
     *,
+    content: str = "",
     premium_chat: bool,
     context: ChatConversationContext | None = None,
 ) -> str:
@@ -844,6 +855,21 @@ def _resolve_blueprint_model(
         return str(prior_blueprint["model"])
     if not premium_chat:
         return STUDIO_QUICK_IMAGE_MODEL_ID
+    if intent.has_image_attachment or intent.recommended_workflow in {"edit", "image_to_image"}:
+        return STUDIO_MULTI_REFERENCE_MODEL_ID
+    if intent.prompt_profile in {"product_commercial", "interior_archviz"}:
+        return STUDIO_DESIGN_IMAGE_MODEL_ID
+    if intent.prompt_profile == "realistic_editorial":
+        return STUDIO_CINEMATIC_IMAGE_MODEL_ID
+    if intent.prompt_profile in {"stylized_illustration", "fantasy_concept"}:
+        return STUDIO_SEEDREAM_MODEL_ID
+    if intent.premium_intent:
+        return STUDIO_PREMIUM_MODEL_ID
+    cleaned_content = str(content or "").lower()
+    if any(marker in cleaned_content for marker in ("text", "logo", "typography", "poster", "type treatment")):
+        return STUDIO_TEXT_IMAGE_MODEL_ID
+    if "brand" in cleaned_content or "wordmark" in cleaned_content:
+        return STUDIO_IDEOGRAM_MODEL_ID
     return STUDIO_DEFAULT_IMAGE_MODEL_ID
 
 

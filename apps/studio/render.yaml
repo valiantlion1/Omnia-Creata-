@@ -26,6 +26,10 @@ services:
         sync: false
       - key: PUBLIC_API_BASE_URL
         sync: false
+      - key: CORS_ORIGINS
+        value: https://studio.omniacreata.com
+      - key: ALLOWED_HOSTS
+        value: omnia-studio-api.onrender.com,studio.omniacreata.com
       - key: STATE_STORE_BACKEND
         value: postgres
       - key: ASSET_STORAGE_BACKEND
@@ -91,6 +95,10 @@ services:
         sync: false
       - key: PUBLIC_API_BASE_URL
         sync: false
+      - key: CORS_ORIGINS
+        value: https://studio.omniacreata.com
+      - key: ALLOWED_HOSTS
+        value: omnia-studio-api.onrender.com,studio.omniacreata.com
       - key: STATE_STORE_BACKEND
         value: postgres
       - key: ASSET_STORAGE_BACKEND

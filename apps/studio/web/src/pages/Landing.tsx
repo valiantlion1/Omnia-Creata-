@@ -21,6 +21,8 @@ import marbleBust from '@/assets/landing/studio/marble-bust.png'
 import omniaSignature from '@/assets/landing/studio/omnia-signature.png'
 import portraitFloral from '@/assets/landing/studio/portrait-floral.png'
 
+const OMNIA_CREATA_SITE_URL = 'https://omniacreata.com'
+
 type StudioAsset = {
   src: string
   alt: string
@@ -392,18 +394,17 @@ export default function LandingPage() {
       />
 
       <header className="relative z-20 mx-auto flex max-w-[1560px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
-        <button
-          aria-label="Omnia Creata Studio home"
+        <a
+          aria-label="Open Omnia Creata website"
           className="group flex items-center"
-          onClick={() => navigate('/landing')}
-          type="button"
+          href={OMNIA_CREATA_SITE_URL}
         >
           <img
             src={omniaSignature}
             alt="Omnia Creata"
             className="h-16 w-[136px] object-contain drop-shadow-[0_14px_30px_rgba(227,177,89,0.28)] transition duration-300 group-hover:-translate-y-0.5 sm:h-20 sm:w-[170px]"
           />
-        </button>
+        </a>
 
         <nav className="hidden items-center gap-2 rounded-full border border-[#e6bb6d]/15 bg-black/25 p-1 text-sm text-[#d7ccbd] shadow-[0_18px_64px_rgba(0,0,0,0.26)] backdrop-blur-xl lg:flex">
           {[

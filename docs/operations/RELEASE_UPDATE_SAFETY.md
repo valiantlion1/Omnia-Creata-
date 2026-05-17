@@ -8,6 +8,8 @@ This note keeps Omnia Creata projects maintainable after launch. The goal is sim
 - Public websites live under `website`.
 - Cross-product code only moves to `packages` after at least two active products share the same stable contract.
 - Desktop Wiki material is strategy, decisions, research, and operating memory. It is not canonical application source.
+- Live update timing, maintenance-window rules, and public-site-vs-Studio deploy decisions live in
+  `docs/operations/DEPLOY_MAINTENANCE_SCHEDULE.md`.
 
 ## Before A Release
 
@@ -32,3 +34,7 @@ Every future update should answer three questions before shipping:
 1. What source files changed?
 2. What command proves the source still builds or behaves correctly?
 3. What generated/local artifacts were cleaned before handoff?
+
+Then answer one operational question:
+
+4. Does this update need maintenance mode, or can it ship as a normal deploy?
