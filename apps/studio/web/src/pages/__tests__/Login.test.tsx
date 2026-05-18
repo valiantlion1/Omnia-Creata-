@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const navigateMock = vi.fn()
 const signInMock = vi.fn()
+const completeOAuthSignInMock = vi.fn().mockResolvedValue(undefined)
 const consumeRedirectAfterAuthMock = vi.fn()
 
 vi.mock('react-router-dom', async () => {
@@ -19,7 +20,7 @@ vi.mock('@/lib/studioAuth', () => ({
     isAuthenticated: false,
     signIn: signInMock,
     signInWithProvider: vi.fn(),
-    completeOAuthSignIn: vi.fn().mockResolvedValue(undefined),
+    completeOAuthSignIn: completeOAuthSignInMock,
     consumeRedirectAfterAuth: consumeRedirectAfterAuthMock,
   }),
 }))
@@ -35,6 +36,8 @@ describe('LoginPage', () => {
   afterEach(() => {
     navigateMock.mockReset()
     signInMock.mockReset()
+    completeOAuthSignInMock.mockReset()
+    completeOAuthSignInMock.mockResolvedValue(undefined)
     consumeRedirectAfterAuthMock.mockReset()
   })
 
@@ -90,5 +93,24 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /log in/i }))
 
     expect(await screen.findByText(/Unable to log in right now/i)).toBeInTheDocument()
+  })
+
+  it('keeps OAuth users oriented when the backend wake takes longer than the first beat', async () => {
+    vi.useFakeTimers()
+    completeOAuthSignInMock.mockImplementationOnce(() => new Promise<void>(() => undefined))
+
+    try {
+      renderWithProviders(<LoginPage />, { route: '/login?oauth=1&next=%2Fcreate' })
+
+      expect(screen.getByText(/Completing Google sign-in/i)).toBeInTheDocument()
+
+      act(() => {
+        vi.advanceTimersByTime(6500)
+      })
+
+      expect(screen.getByText(/Waking Studio services. Keep this tab open./i)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

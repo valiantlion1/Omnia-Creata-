@@ -18,6 +18,16 @@ Use this ledger for human-readable release history:
 
 ## Current Build
 
+### `0.6.0-alpha` / build `2026.05.18.271`
+- Date: `2026-05-18`
+- Codename: `Foundation`
+- Status: `prelaunch`
+- Why:
+  Live Google sign-in on `studio.omniacreata.com` could feel broken while the free Render API instance was waking. Direct live checks showed the API timing out during wake, then answering `/v1/version`, `/v1/healthz/ready`, `/v1/public/plans`, and authenticated probes quickly once booted, so the frontend needed a clearer and more patient OAuth return path without pretending the service was permanently offline.
+- What:
+  `.271` adds a bounded API wake check before OAuth auth sync, gives `/auth/me` sync calls explicit timeouts, retries transient wake/offline states, and changes the login callback copy from a stuck generic spinner to an explicit `Waking Studio services. Keep this tab open.` state after the first few seconds.
+  Verification is focused on the touched live-behavior slice: the Login page regression now locks the slow OAuth callback message, and the frontend type-check/build must pass before deploy. Live proof after deploy should re-run the Google return path on `studio.omniacreata.com`; until then the deployed site still reflects the previous build.
+
 ### `0.6.0-alpha` / build `2026.05.17.270`
 - Date: `2026-05-17`
 - Codename: `Foundation`

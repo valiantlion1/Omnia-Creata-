@@ -1023,6 +1023,21 @@ export type HealthResponse = {
   counts?: Record<string, number>
 }
 
+export type StudioVersionPayload = {
+  product: string
+  brand: string
+  version: string
+  channel: string
+  build: string
+  codename: string
+  status: string
+  releaseDate: string
+  notes: string
+  apiVersion: string
+  bootBuild?: string
+  bootedAt?: string
+}
+
 export type PresetEntry = {
   id: string
   label: string
@@ -1136,7 +1151,11 @@ export type AdminTelemetryPayload = {
   blocked_injections_detail?: string
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+type StudioRequestInit = RequestInit & {
+  timeoutMs?: number
+}
+
+async function apiFetch<T>(path: string, init?: StudioRequestInit): Promise<T> {
   return apiFetchWithToken<T>(path, getStudioAccessToken(), init)
 }
 
@@ -1151,21 +1170,36 @@ function getClientDisplayMode() {
   return 'browser'
 }
 
-async function apiFetchWithToken<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
+async function apiFetchWithToken<T>(path: string, token: string | null, init?: StudioRequestInit): Promise<T> {
+  const { timeoutMs, ...fetchInit } = init ?? {}
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
   headers.set('X-Omnia-Client-Display-Mode', getClientDisplayMode())
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const url = buildApiUrl(path)
 
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  let signal = fetchInit.signal
+  if (!signal && typeof AbortController !== 'undefined' && typeof timeoutMs === 'number' && timeoutMs > 0) {
+    const controller = new AbortController()
+    signal = controller.signal
+    timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
+  }
+
   let response: Response
   try {
     response = await fetch(url, {
-      ...init,
+      ...fetchInit,
       headers,
+      signal,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Studio service is taking longer than expected. Keep this page open while it wakes up.')
+    }
     throw new Error('Studio service is offline right now. Try again in a moment.')
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
   }
 
   if (!response.ok) {
@@ -1189,7 +1223,8 @@ async function apiFetchWithToken<T>(path: string, token: string | null, init?: R
 
 export const studioApi = {
   getMe: () => apiFetch<AuthMeResponse>('/auth/me'),
-  getMeWithToken: (accessToken: string) => apiFetchWithToken<AuthMeResponse>('/auth/me', accessToken),
+  getMeWithToken: (accessToken: string, options?: { timeoutMs?: number }) =>
+    apiFetchWithToken<AuthMeResponse>('/auth/me', accessToken, options),
   signUp: (payload: SignupPayload) =>
     apiFetch<DemoLoginResponse>('/auth/signup', {
       method: 'POST',
@@ -1411,6 +1446,7 @@ export const studioApi = {
   getAdminTelemetry: () => apiFetch<AdminTelemetryPayload>('/admin/telemetry'),
   getHealth: () => apiFetch<HealthResponse>('/healthz'),
   getHealthDetail: () => apiFetch<HealthResponse>('/healthz/detail'),
+  getVersion: (options?: { timeoutMs?: number }) => apiFetch<StudioVersionPayload>('/version', options),
   getPublicPlans: () => apiFetch<PublicPlansPayload>('/public/plans'),
   listPublicPosts: (sort: 'trending' | 'newest' | 'top' | 'styles' = 'trending') =>
     apiFetch<{ posts: PublicPost[] }>(`/public/posts?sort=${encodeURIComponent(sort)}`),

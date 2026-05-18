@@ -36,6 +36,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [oauthCompleting, setOauthCompleting] = useState(false)
+  const [oauthSlow, setOauthSlow] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaResetKey, setCaptchaResetKey] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
@@ -45,6 +46,7 @@ export default function LoginPage() {
     if (!isAuthenticated) return
     setGoogleBusy(false)
     setOauthCompleting(false)
+    setOauthSlow(false)
     const storedRedirect = consumeRedirectAfterAuth()
     const redirect = explicitNextPath || storedRedirect || nextPath
     navigate(redirect, { replace: true })
@@ -56,17 +58,23 @@ export default function LoginPage() {
     let cancelled = false
     setGoogleBusy(true)
     setOauthCompleting(true)
+    setOauthSlow(false)
     setError(null)
+    const slowTimer = window.setTimeout(() => {
+      if (!cancelled) setOauthSlow(true)
+    }, 6000)
 
     completeOAuthSignIn().catch((oauthError) => {
       if (cancelled) return
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be completed.')
       setGoogleBusy(false)
       setOauthCompleting(false)
+      setOauthSlow(false)
     })
 
     return () => {
       cancelled = true
+      window.clearTimeout(slowTimer)
     }
   }, [completeOAuthSignIn, isOAuthCallback])
 
@@ -202,7 +210,11 @@ export default function LoginPage() {
             </div>
 
             {error ? <div className="text-sm text-rose-200">{error}</div> : null}
-            {oauthCompleting ? <div className="text-sm text-zinc-300">Completing Google sign-in...</div> : null}
+            {oauthCompleting ? (
+              <div className="text-sm text-zinc-300">
+                {oauthSlow ? 'Waking Studio services. Keep this tab open.' : 'Completing Google sign-in...'}
+              </div>
+            ) : null}
 
             {TURNSTILE_SITE_KEY ? (
               <TurnstileWidget

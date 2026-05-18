@@ -44,7 +44,10 @@ const StudioAuthContext = React.createContext<StudioAuthContextValue | null>(nul
 const AUTH_SNAPSHOT_KEY = 'oc-studio-auth-snapshot'
 const AUTH_ME_RETRY_DELAYS_MS = [0, 150, 400, 1000]
 const OAUTH_SESSION_RETRY_DELAYS_MS = [0, 150, 400, 1000, 2000]
-const OAUTH_AUTH_SYNC_RETRY_DELAYS_MS = [250, 750, 1500]
+const OAUTH_API_WAKE_RETRY_DELAYS_MS = [0, 1000, 2500, 5000, 10000, 15000, 20000, 30000]
+const OAUTH_API_WAKE_TIMEOUT_MS = 10000
+const OAUTH_AUTH_SYNC_TIMEOUT_MS = 15000
+const OAUTH_AUTH_SYNC_RETRY_DELAYS_MS = [250, 750, 1500, 3000, 6000]
 let oauthCompletionKeyInFlight: string | null = null
 let oauthCompletionPromiseInFlight: Promise<void> | null = null
 
@@ -165,7 +168,7 @@ export function buildOAuthRedirectUrl(nextPath = DEFAULT_STUDIO_REDIRECT_PATH) {
 function isRetryableOAuthAuthSyncError(error: unknown) {
   if (isRecoverableSessionError(error)) return true
   const message = error instanceof Error ? error.message : String(error ?? '')
-  return /offline right now|temporarily unavailable|request failed with 503|timed out|timeout/i.test(message)
+  return /offline right now|temporarily unavailable|request failed with 503|timed out|timeout|taking longer than expected|wakes up/i.test(message)
 }
 
 function isPendingAccessError(error: unknown) {
@@ -214,14 +217,14 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
   )
 
   const loadAuthPayloadForToken = React.useCallback(
-    async (accessToken: string) => {
+    async (accessToken: string, options?: { timeoutMs?: number }) => {
       let lastError: unknown = null
       for (const delayMs of AUTH_ME_RETRY_DELAYS_MS) {
         if (delayMs) {
           await wait(delayMs)
         }
         try {
-          const authPayload = await studioApi.getMeWithToken(accessToken)
+          const authPayload = await studioApi.getMeWithToken(accessToken, options)
           await persistAuthenticatedState(accessToken, authPayload)
           return authPayload
         } catch (error) {
@@ -235,6 +238,30 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
     },
     [persistAuthenticatedState],
   )
+
+  const waitForStudioApiForOAuth = React.useCallback(async () => {
+    let lastError: unknown = null
+    for (const delayMs of OAUTH_API_WAKE_RETRY_DELAYS_MS) {
+      if (delayMs) {
+        await wait(delayMs)
+      }
+      try {
+        await studioApi.getVersion({ timeoutMs: OAUTH_API_WAKE_TIMEOUT_MS })
+        logAuthTrace('oauth_callback_backend_awake', { delayMs })
+        return
+      } catch (error) {
+        lastError = error
+        logAuthTrace('oauth_callback_backend_wake_waiting', {
+          delayMs,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Studio service is still waking up. Please try again in a moment.')
+  }, [])
 
   React.useEffect(() => {
     let mounted = true
@@ -423,7 +450,8 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
 
       let authSyncError: unknown = null
       try {
-        await loadAuthPayloadForToken(session.access_token)
+        await waitForStudioApiForOAuth()
+        await loadAuthPayloadForToken(session.access_token, { timeoutMs: OAUTH_AUTH_SYNC_TIMEOUT_MS })
         logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'initial_session' })
       } catch (error) {
         authSyncError = error
@@ -446,7 +474,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
           }
 
           try {
-            await loadAuthPayloadForToken(data.session.access_token)
+            await loadAuthPayloadForToken(data.session.access_token, { timeoutMs: OAUTH_AUTH_SYNC_TIMEOUT_MS })
             authSyncError = null
             logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'session_retry', delayMs })
             break
@@ -462,7 +490,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
           const { data, error: refreshError } = await supabaseBrowser.auth.refreshSession()
           if (!refreshError && data.session?.access_token) {
             try {
-              await loadAuthPayloadForToken(data.session.access_token)
+              await loadAuthPayloadForToken(data.session.access_token, { timeoutMs: OAUTH_AUTH_SYNC_TIMEOUT_MS })
               authSyncError = null
               logAuthTrace('oauth_callback_backend_auth_synced', { strategy: 'refresh_session' })
             } catch (refreshLoadError) {
@@ -500,7 +528,7 @@ export function StudioAuthProvider({ children }: React.PropsWithChildren) {
         oauthCompletionPromiseInFlight = null
       }
     }
-  }, [loadAuthPayloadForToken])
+  }, [loadAuthPayloadForToken, waitForStudioApiForOAuth])
 
   const signOut = React.useCallback(async () => {
     await supabaseBrowser.auth.signOut()
